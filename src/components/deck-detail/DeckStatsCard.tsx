@@ -8,9 +8,10 @@ import { useDeckDetail } from './DeckDetailContext';
 import { Button } from '@/components/ui/button';
 import { Play, Info, Clock, HelpCircle } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { deriveAvgSecondsPerCard, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils';
+import { deriveAvgSecondsPerCard, calculateRealStudyTime, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
+import { useStudyPlan } from '@/hooks/useStudyPlan';
 import { supabase } from '@/integrations/supabase/client';
 
 interface DeckStatsCardProps {
@@ -20,23 +21,24 @@ interface DeckStatsCardProps {
 const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
   const {
     studyPending, isQuickReview, totalCards, deckId, navigate,
-    allCards,
+    cardCounts: serverCardCounts,
+    newCountToday, learningCount: ctxLearningCount, masteredToday,
+    dailyReviewLimit,
   } = useDeckDetail();
   const { user } = useAuth();
+  const { realStudyMetrics } = useStudyPlan();
 
-  // === Card classification by difficulty ===
-  const cardCounts = useMemo(() => {
-    let novo = 0, facil = 0, bom = 0, dificil = 0, errei = 0;
-    for (const c of allCards) {
-      if (c.state === 0) { novo++; continue; }
-      const d = c.difficulty ?? 5;
-      if (d <= 3) facil++;
-      else if (d <= 5) bom++;
-      else if (d <= 7) dificil++;
-      else errei++;
-    }
-    return { novo, facil, bom, dificil, errei };
-  }, [allCards]);
+  // === Card classification from server-side RPC (handles any deck size) ===
+  const diffCounts = useMemo(() => {
+    if (!serverCardCounts) return { novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
+    return {
+      novo: serverCardCounts.diff_novo ?? 0,
+      facil: serverCardCounts.diff_facil ?? 0,
+      bom: serverCardCounts.diff_bom ?? 0,
+      dificil: serverCardCounts.diff_dificil ?? 0,
+      errei: serverCardCounts.diff_errei ?? 0,
+    };
+  }, [serverCardCounts]);
 
   // === Question stats (always fetch so hooks are stable) ===
   const { data: questionData } = useQuery({
@@ -64,13 +66,6 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
         .select('question_id, is_correct, answered_at')
         .eq('user_id', user!.id)
         .in('question_id', qIds);
-      const latestByQ = new Map<string, boolean>();
-      for (const a of (attempts ?? []) as any[]) {
-        const prev = latestByQ.get(a.question_id);
-        if (prev === undefined) latestByQ.set(a.question_id, a.is_correct);
-        // Keep latest by checking all
-      }
-      // Re-do with proper latest logic
       const latestMap = new Map<string, { is_correct: boolean; answered_at: string }>();
       for (const a of (attempts ?? []) as any[]) {
         const prev = latestMap.get(a.question_id);
@@ -90,16 +85,23 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
   const isQMode = mode === 'questions';
   const qd = questionData ?? { total: 0, correct: 0, wrong: 0, unanswered: 0 };
 
-  // Progress
-  const total = isQMode ? qd.total : allCards.length;
+  // Progress — use server total, not paginated allCards.length
+  const serverTotal = serverCardCounts?.total ?? 0;
+  const total = isQMode ? qd.total : serverTotal;
   const progressPct = isQMode
     ? (qd.total > 0 ? Math.round((qd.correct / qd.total) * 100) : 0)
-    : (allCards.length > 0 ? Math.round(((allCards.length - cardCounts.novo) / allCards.length) * 100) : 0);
+    : (serverTotal > 0 ? Math.round(((serverTotal - diffCounts.novo) / serverTotal) * 100) : 0);
 
-  // Time estimate — based on ALL cards in the collection (not just today's due)
-  const avgSec = deriveAvgSecondsPerCard(DEFAULT_STUDY_METRICS);
-  const pendingForTime = isQMode ? qd.unanswered + qd.wrong : allCards.length;
-  const remainingMin = Math.ceil((pendingForTime * avgSec) / 60);
+  // Time estimate — based on today's due cards (capped by daily limits from context)
+  const dueNew = isQMode ? qd.unanswered + qd.wrong : newCountToday;
+  const dueLearning = isQMode ? 0 : ctxLearningCount;
+  const dueReview = isQMode ? 0 : masteredToday;
+  const pendingForTime = isQMode ? (qd.unanswered + qd.wrong) : (dueNew + dueLearning + dueReview);
+  const studyMetrics = realStudyMetrics ?? DEFAULT_STUDY_METRICS;
+  const remainingSeconds = isQMode
+    ? pendingForTime * deriveAvgSecondsPerCard(studyMetrics)
+    : calculateRealStudyTime(dueNew, dueLearning, dueReview, studyMetrics);
+  const remainingMin = Math.ceil(remainingSeconds / 60);
   const timeLabel = remainingMin >= 60
     ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
     : `${remainingMin}min`;
@@ -114,12 +116,12 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
         { pct: qd.wrong / qd.total, color: 'hsl(var(--destructive))', key: 'wrong' },
         { pct: qd.unanswered / qd.total, color: 'hsl(var(--muted))', key: 'unanswered' },
       ] : [])
-    : (allCards.length > 0 ? [
-        { pct: cardCounts.facil / allCards.length, color: 'hsl(var(--info))', key: 'facil' },
-        { pct: cardCounts.bom / allCards.length, color: 'hsl(var(--success))', key: 'bom' },
-        { pct: cardCounts.dificil / allCards.length, color: 'hsl(var(--warning))', key: 'dificil' },
-        { pct: cardCounts.errei / allCards.length, color: 'hsl(var(--destructive))', key: 'errei' },
-        { pct: cardCounts.novo / allCards.length, color: 'hsl(var(--muted))', key: 'novo' },
+    : (serverTotal > 0 ? [
+        { pct: diffCounts.facil / serverTotal, color: 'hsl(var(--info))', key: 'facil' },
+        { pct: diffCounts.bom / serverTotal, color: 'hsl(var(--success))', key: 'bom' },
+        { pct: diffCounts.dificil / serverTotal, color: 'hsl(var(--warning))', key: 'dificil' },
+        { pct: diffCounts.errei / serverTotal, color: 'hsl(var(--destructive))', key: 'errei' },
+        { pct: diffCounts.novo / serverTotal, color: 'hsl(var(--muted))', key: 'novo' },
       ] : []);
 
   let offset = 0;
@@ -239,39 +241,39 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
                         <div className="h-2.5 w-2.5 rounded-full bg-info" />
                         <span className="text-xs text-muted-foreground">Fácil</span>
                       </div>
-                      <span className="text-xs font-semibold text-foreground">{cardCounts.facil}</span>
+                      <span className="text-xs font-semibold text-foreground">{diffCounts.facil}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <div className="h-2.5 w-2.5 rounded-full bg-success" />
                         <span className="text-xs text-muted-foreground">Bom</span>
                       </div>
-                      <span className="text-xs font-semibold text-foreground">{cardCounts.bom}</span>
+                      <span className="text-xs font-semibold text-foreground">{diffCounts.bom}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <div className="h-2.5 w-2.5 rounded-full bg-warning" />
                         <span className="text-xs text-muted-foreground">Difícil</span>
                       </div>
-                      <span className="text-xs font-semibold text-foreground">{cardCounts.dificil}</span>
+                      <span className="text-xs font-semibold text-foreground">{diffCounts.dificil}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <div className="h-2.5 w-2.5 rounded-full bg-destructive" />
                         <span className="text-xs text-muted-foreground">Errei</span>
                       </div>
-                      <span className="text-xs font-semibold text-foreground">{cardCounts.errei}</span>
+                      <span className="text-xs font-semibold text-foreground">{diffCounts.errei}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <div className="h-2.5 w-2.5 rounded-full bg-muted" />
                         <span className="text-xs text-muted-foreground">Novo</span>
                       </div>
-                      <span className="text-xs font-semibold text-foreground">{cardCounts.novo}</span>
+                      <span className="text-xs font-semibold text-foreground">{diffCounts.novo}</span>
                     </div>
                     <div className="border-t border-border/50 pt-2 mt-2 flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">Total de cards</span>
-                      <span className="text-xs font-semibold text-foreground">{allCards.length}</span>
+                      <span className="text-xs font-semibold text-foreground">{serverTotal}</span>
                     </div>
                   </div>
                 </>

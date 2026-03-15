@@ -62,6 +62,13 @@ export async function fetchStudyQueue(
 
   const deckNewLimit = deckConfig?.daily_new_limit ?? 20;
   const reviewLimit = deckConfig?.daily_review_limit ?? 100;
+  const scopedDecks = activeDecks.filter(d => limitScopeIds.includes(d.id));
+  const folderNewLimit = folderId
+    ? scopedDecks.reduce((sum, d) => sum + (d.daily_new_limit ?? 20), 0)
+    : deckNewLimit;
+  const folderReviewLimit = folderId
+    ? scopedDecks.reduce((sum, d) => sum + (d.daily_review_limit ?? 100), 0)
+    : reviewLimit;
   const algorithmMode = deckConfig?.algorithm_mode || 'fsrs';
   const shuffle = deckConfig?.shuffle_cards ?? false;
 
@@ -74,11 +81,20 @@ export async function fetchStudyQueue(
       .order('created_at', { ascending: true });
     if (error) throw error;
     const cards = data ?? [];
-    const isLiveDeck = deckIds.some(id => {
-      const d = activeDecks.find(dd => dd.id === id);
-      return d?.is_live_deck || d?.source_turma_deck_id || d?.source_listing_id;
-    });
-    return { cards: shuffle ? shuffleArray(cards) : cards, algorithmMode, deckConfig, isLiveDeck };
+  const isLiveDeck = deckIds.some(id => {
+    const d = activeDecks.find(dd => dd.id === id);
+    if (d?.is_live_deck || d?.source_turma_deck_id || d?.source_listing_id) return true;
+    // Walk ancestors to check if any parent is linked
+    let parentId = d?.parent_deck_id;
+    while (parentId) {
+      const parent = activeDecks.find(dd => dd.id === parentId);
+      if (!parent) break;
+      if (parent.is_live_deck || parent.source_turma_deck_id || parent.source_listing_id) return true;
+      parentId = parent.parent_deck_id;
+    }
+    return false;
+  });
+  return { cards: shuffle ? shuffleArray(cards) : cards, algorithmMode, deckConfig, isLiveDeck };
   }
 
   // ─── Round 2: cards + allCardIds + plans + profile (parallel) ───
@@ -192,10 +208,13 @@ export async function fetchStudyQueue(
 
   const hasPlanActive = planDeckIdSet.size > 0;
   const deckRemaining = Math.max(0, deckNewLimit - newReviewedInHierarchy);
+  const folderRemaining = Math.max(0, folderNewLimit - newReviewedInHierarchy);
   const globalRemaining = Math.max(0, globalLimit - globalNewReviewedToday);
 
-  const effectiveNewLimit = hasPlanActive ? globalRemaining : deckRemaining;
-  const effectiveReviewLimit = Math.max(0, reviewLimit - reviewReviewedToday);
+  const effectiveNewLimit = folderId
+    ? Math.max(0, Math.min(folderRemaining, globalRemaining))
+    : (hasPlanActive ? globalRemaining : deckRemaining);
+  const effectiveReviewLimit = Math.max(0, (folderId ? folderReviewLimit : reviewLimit) - reviewReviewedToday);
 
   // --- Apply daily limits FIRST, then bury siblings among the surviving cards ---
   const buryNew = deckConfig?.bury_new_siblings !== false;
@@ -229,7 +248,16 @@ export async function fetchStudyQueue(
 
   const isLiveDeck = deckIds.some(id => {
     const d = activeDecks.find(dd => dd.id === id);
-    return d?.is_live_deck || d?.source_turma_deck_id || d?.source_listing_id;
+    if (d?.is_live_deck || d?.source_turma_deck_id || d?.source_listing_id) return true;
+    // Walk ancestors to check if any parent is linked
+    let parentId = d?.parent_deck_id;
+    while (parentId) {
+      const parent = activeDecks.find(dd => dd.id === parentId);
+      if (!parent) break;
+      if (parent.is_live_deck || parent.source_turma_deck_id || parent.source_listing_id) return true;
+      parentId = parent.parent_deck_id;
+    }
+    return false;
   });
   return { cards: queue, algorithmMode, deckConfig, isLiveDeck };
 }

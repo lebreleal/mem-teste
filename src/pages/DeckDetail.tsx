@@ -11,7 +11,7 @@ import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft, Settings, Layers, RefreshCw, Pencil, Check, MessageSquare, HelpCircle, ChevronRight, BookOpen, SquarePlus, RotateCcw, Brain, CheckCircle2, Info, Clock, Play } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { deriveAvgSecondsPerCard, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils';
+import { calculateRealStudyTime, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -21,10 +21,18 @@ import { toast } from '@/hooks/use-toast';
 const SuggestCorrectionModal = lazy(() => import('@/components/SuggestCorrectionModal'));
 const DeckQuestionsTab = lazy(() => import('@/components/deck-detail/DeckQuestionsTab'));
 
-/** Detect if a deck is linked to a community/marketplace source */
-function checkIsLinkedDeck(deck: any): boolean {
+/** Detect if a deck is linked to a community/marketplace source (including linked ancestors) */
+function checkIsLinkedDeck(deck: any, decks: any[]): boolean {
   if (!deck) return false;
-  return !!(deck.source_turma_deck_id || deck.source_listing_id || deck.is_live_deck);
+  if (deck.source_turma_deck_id || deck.source_listing_id || deck.is_live_deck) return true;
+  let parentId = deck.parent_deck_id;
+  while (parentId) {
+    const parent = decks.find((d: any) => d.id === parentId);
+    if (!parent) break;
+    if (parent.source_turma_deck_id || parent.source_listing_id || parent.is_live_deck) return true;
+    parentId = parent.parent_deck_id;
+  }
+  return false;
 }
 
 /** Resolve source deck ID from a linked deck — single unified query */
@@ -182,9 +190,8 @@ const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: stri
   const totalSession = totalDue + reviewedToday;
   const progressPct = totalSession > 0 ? Math.round((reviewedToday / totalSession) * 100) : 0;
 
-  // Estimated remaining time
-  const avgSec = deriveAvgSecondsPerCard(DEFAULT_STUDY_METRICS);
-  const remainingSeconds = totalDue * avgSec;
+  // Estimated remaining time using real study metrics
+  const remainingSeconds = calculateRealStudyTime(totalNew, totalLearning, totalReview, DEFAULT_STUDY_METRICS);
   const remainingMin = Math.ceil(remainingSeconds / 60);
   const timeLabel = remainingMin >= 60
     ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
@@ -350,13 +357,15 @@ const DeckDetailContent = () => {
   const location = useLocation();
   const queryClient = useQueryClient();
   const fromCommunity = (location.state as any)?.from === 'community';
+  const fromDashboardSala = (location.state as any)?.from === 'dashboard-sala';
+  const dashboardSalaFolderId = (location.state as any)?.folderId;
   const communityTurmaId = (location.state as any)?.turmaId;
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameName, setRenameName] = useState('');
   const [activeTab, setActiveTab] = useState('cards');
 
-  const isLinkedDeck = useMemo(() => checkIsLinkedDeck(deck), [deck]);
+  const isLinkedDeck = useMemo(() => checkIsLinkedDeck(deck, decks), [deck, decks]);
 
   // Resolve folder image for blurred hero background
   const folderImage = useMemo(() => {
@@ -384,7 +393,8 @@ const DeckDetailContent = () => {
 
   // Resolve back destination: folder name for label
   const backInfo = useMemo(() => {
-    if (fromCommunity && communityTurmaId) return { label: 'Turma', path: `/turmas/${communityTurmaId}` };
+    if (fromDashboardSala && dashboardSalaFolderId) return { label: 'Sala', path: `/dashboard?folder=${dashboardSalaFolderId}` };
+    if (fromCommunity && communityTurmaId) return { label: 'Sala', path: `/turmas/${communityTurmaId}` };
     let folderId = (deck as any)?.folder_id;
     if (!folderId && (deck as any)?.parent_deck_id && decks) {
       let current = deck as any;
@@ -395,7 +405,7 @@ const DeckDetailContent = () => {
     }
     if (folderId) return { label: 'Sala', path: `/dashboard?folder=${folderId}` };
     return { label: 'Dashboard', path: '/dashboard' };
-  }, [deck, decks, fromCommunity, communityTurmaId]);
+  }, [deck, decks, fromCommunity, fromDashboardSala, dashboardSalaFolderId, communityTurmaId]);
 
   // Unified source resolution: resolves source deck ID, owner name, and updatedAt in one query
   const { data: sourceData } = useQuery({
@@ -485,9 +495,11 @@ const DeckDetailContent = () => {
                   </Button>
                 </>
               )}
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/decks/${deckId}/settings`)}>
-                <Settings className="h-4 w-4" />
-              </Button>
+              {!isLinkedDeck && (
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/decks/${deckId}/settings`)}>
+                  <Settings className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           </div>
 

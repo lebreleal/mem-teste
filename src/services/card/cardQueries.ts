@@ -157,6 +157,11 @@ export interface DescendantCardCounts {
   mc_count: number;
   occlusion_count: number;
   frozen_count: number;
+  diff_novo: number;
+  diff_facil: number;
+  diff_bom: number;
+  diff_dificil: number;
+  diff_errei: number;
 }
 
 /** Count cards by state/type for a deck + all descendants (single SQL query). */
@@ -174,6 +179,11 @@ export async function fetchDescendantCardCounts(deckId: string): Promise<Descend
     mc_count: Number(row?.mc_count ?? 0),
     occlusion_count: Number(row?.occlusion_count ?? 0),
     frozen_count: Number(row?.frozen_count ?? 0),
+    diff_novo: Number(row?.diff_novo ?? 0),
+    diff_facil: Number(row?.diff_facil ?? 0),
+    diff_bom: Number(row?.diff_bom ?? 0),
+    diff_dificil: Number(row?.diff_dificil ?? 0),
+    diff_errei: Number(row?.diff_errei ?? 0),
   };
 }
 

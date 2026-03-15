@@ -2958,6 +2958,10 @@ export type Database = {
         Args: { p_deck_ids: string[] }
         Returns: undefined
       }
+      bootstrap_follower_decks: {
+        Args: { p_folder_id: string; p_turma_id: string; p_user_id: string }
+        Returns: Json
+      }
       count_cards_per_deck: {
         Args: { p_deck_ids: string[] }
         Returns: {

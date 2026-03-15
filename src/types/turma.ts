@@ -18,6 +18,7 @@ export interface Turma {
   owner_name?: string;
   cover_image_url?: string;
   subscription_price?: number;
+  share_slug?: string | null;
 }
 
 export interface TurmaMember {

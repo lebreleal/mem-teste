@@ -273,96 +273,70 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
 
   const allDeckIds = useMemo(() => [deckId, ...descendantIds], [deckId, descendantIds]);
 
+  // Detect community deck (belongs to another user) — RPCs filter by auth.uid(), so use direct queries instead
+  const isCommunityDeck = !!deck && !!user && (deck as any).user_id !== user.id;
+
   const CARDS_PAGE = 200;
   const [displayLimit, setDisplayLimit] = useState(CARDS_PAGE);
 
+  // Card counts: use RPC for own decks, direct query for community decks
+  // For community decks, all cards are "new" from the viewer's perspective (owner's state is irrelevant)
   const { data: cardCounts, isLoading: cardCountsLoading } = useQuery({
-    queryKey: ['card-counts', deckId],
-    queryFn: () => cardService.fetchDescendantCardCounts(deckId),
-    enabled: !!user && !!deckId,
+    queryKey: ['card-counts', deckId, isCommunityDeck],
+    queryFn: async () => {
+      if (isCommunityDeck) {
+        // Direct query — RLS allows viewing community deck cards
+        const cards = await cardService.fetchCards(deckId);
+        const total = cards.length;
+        // All cards are "new" from the viewer's perspective — they haven't studied any
+        return {
+          total,
+          new_count: total,
+          learning_count: 0,
+          review_count: 0,
+          basic_count: cards.filter((c: any) => c.card_type === 'basic').length,
+          cloze_count: cards.filter((c: any) => c.card_type === 'cloze').length,
+          mc_count: cards.filter((c: any) => c.card_type === 'multiple_choice').length,
+          occlusion_count: cards.filter((c: any) => c.card_type === 'occlusion').length,
+          frozen_count: 0,
+          diff_novo: total,
+          diff_facil: 0,
+          diff_bom: 0,
+          diff_dificil: 0,
+          diff_errei: 0,
+        } as cardService.DescendantCardCounts;
+      }
+      return cardService.fetchDescendantCardCounts(deckId);
+    },
+    enabled: !!user && !!deckId && !deckLoading,
   });
 
+  // Display cards: use RPC for own decks, direct query for community decks
+  // For community decks, override state/difficulty to show as "new" from viewer's perspective
   const { data: displayCards = [], isLoading: displayCardsLoading } = useQuery({
-    queryKey: ['cards-display', deckId, displayLimit],
-    queryFn: () => cardService.fetchDescendantCardsPage(deckId, displayLimit, 0),
-    enabled: !!user && !!deckId,
+    queryKey: ['cards-display', deckId, displayLimit, isCommunityDeck],
+    queryFn: async () => {
+      if (isCommunityDeck) {
+        const cards = await cardService.fetchCards(deckId);
+        // Reset state and difficulty so gauge shows 0% progress for the viewer
+        return cards.slice(0, displayLimit).map((c: any) => ({
+          ...c,
+          state: 0,
+          difficulty: 0,
+          stability: 0,
+          learning_step: 0,
+          last_reviewed_at: null,
+        })) as cardService.CardRow[];
+      }
+      return cardService.fetchDescendantCardsPage(deckId, displayLimit, 0);
+    },
+    enabled: !!user && !!deckId && !deckLoading,
   });
 
   const allCardsLoading = cardCountsLoading || displayCardsLoading;
   const allCards = displayCards;
 
-  // ─── Auto-sync: sync community decks (this deck + descendant community sub-decks) ───
-  const syncAttemptedRef = useRef(false);
-  useEffect(() => {
-    if (syncAttemptedRef.current) return;
-    if (!deck || !user || !decks.length) return;
-    syncAttemptedRef.current = true;
-
-    // Collect all community decks in this hierarchy that might need syncing
-    const communityDecksToSync: { deckId: string; sourceTurmaDeckId: string | null; isLiveDeck: boolean; name: string }[] = [];
-
-    const collectCommunityDecks = (id: string) => {
-      const d = id === deckId ? deck : decks.find(dk => dk.id === id);
-      if (!d) return;
-      const src = (d as any).source_turma_deck_id;
-      const live = !!(d as any).is_live_deck;
-      if (src || live) {
-        communityDecksToSync.push({ deckId: id, sourceTurmaDeckId: src, isLiveDeck: live, name: (d as any).name });
-      }
-      const children = decks.filter(dk => dk.parent_deck_id === id && !dk.is_archived);
-      for (const child of children) collectCommunityDecks(child.id);
-    };
-    collectCommunityDecks(deckId);
-
-    if (communityDecksToSync.length === 0) return;
-
-    (async () => {
-      try {
-        // Check which of these decks have 0 cards
-        const idsToCheck = communityDecksToSync.map(d => d.deckId);
-        const { data: cardCountsData } = await supabase.rpc('count_cards_per_deck', { p_deck_ids: idsToCheck });
-        const countMap = new Map<string, number>();
-        if (cardCountsData) {
-          for (const row of cardCountsData as any[]) countMap.set(row.deck_id, row.card_count);
-        }
-
-        const emptyDecks = communityDecksToSync.filter(d => !countMap.has(d.deckId) || countMap.get(d.deckId) === 0);
-        if (emptyDecks.length === 0) return;
-
-        let synced = false;
-        for (const communityDeck of emptyDecks) {
-          let sourceDeckId: string | null = null;
-          if (communityDeck.sourceTurmaDeckId) {
-            const { data: td } = await supabase.from('turma_decks').select('deck_id').eq('id', communityDeck.sourceTurmaDeckId).maybeSingle();
-            sourceDeckId = td?.deck_id ?? null;
-          }
-          if (!sourceDeckId && communityDeck.isLiveDeck) {
-            const { data: candidates } = await supabase.from('decks').select('id').eq('name', communityDeck.name).eq('is_public', true).neq('user_id', user.id).limit(1);
-            sourceDeckId = candidates?.[0]?.id ?? null;
-          }
-          if (!sourceDeckId) continue;
-
-          const BATCH = 500;
-          let offset = 0;
-          let hasMore = true;
-          while (hasMore) {
-            const { data: cards } = await supabase.from('cards').select('front_content, back_content, card_type').eq('deck_id', sourceDeckId).range(offset, offset + BATCH - 1).order('created_at', { ascending: true });
-            if (!cards || cards.length === 0) { hasMore = false; break; }
-            await supabase.from('cards').insert(cards.map((c: any) => ({ deck_id: communityDeck.deckId, front_content: c.front_content, back_content: c.back_content, card_type: c.card_type ?? 'basic', state: 0, stability: 0, difficulty: 0 })) as any);
-            if (cards.length < BATCH) hasMore = false;
-            else offset += BATCH;
-          }
-          synced = true;
-        }
-
-        if (synced) {
-          queryClient.invalidateQueries({ queryKey: ['card-counts', deckId] });
-          queryClient.invalidateQueries({ queryKey: ['cards-display', deckId] });
-          queryClient.invalidateQueries({ queryKey: ['decks'] });
-        }
-      } catch (e) { console.error('Auto-sync cards failed:', e); }
-    })();
-  }, [deck, user, decks, deckId, queryClient]);
+  // Legacy auto-sync removed — bootstrap_follower_decks RPC handles card copying now
 
   const loadMoreCards = useCallback(() => { setDisplayLimit(prev => prev + CARDS_PAGE); }, []);
 

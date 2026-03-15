@@ -113,6 +113,12 @@ interface DeckRowProps {
   expandedAccordionId?: string | null;
   onAccordionToggle?: (deckId: string) => void;
   questionCountMap?: Map<string, number>;
+  /** When true, hides all management actions (menu, play, drag). Used in public/community views. */
+  readOnly?: boolean;
+  /** When true, hides deck management menu (rename/move/archive/delete) but keeps study actions. */
+  disableManagementActions?: boolean;
+  /** Navigation state passed when clicking decks in readOnly mode (e.g. { from: 'community', turmaId }) */
+  readOnlyNavState?: Record<string, any>;
 }
 
 /** Aggregate 5-segment classification counts across deck + descendants */
@@ -147,6 +153,9 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   dragHandlers, hasPendingUpdate,
   expandedAccordionId, onAccordionToggle,
   questionCountMap,
+  readOnly = false,
+  disableManagementActions = false,
+  readOnlyNavState,
 }, ref) => {
   const navigate = useNavigate();
   const { isAdmin } = useIsAdmin();
@@ -181,14 +190,13 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
     if (hasChildren) {
       onAccordionToggle?.(deck.id);
     } else {
-      // Navigate to deck detail
-      navigate(`/decks/${deck.id}`);
+      navigate(`/decks/${deck.id}`, readOnlyNavState ? { state: readOnlyNavState } : undefined);
     }
   };
 
   const handleStudy = (e: React.MouseEvent, deckId: string) => {
     e.stopPropagation();
-    navigate(`/decks/${deckId}`);
+    navigate(`/decks/${deckId}`, readOnlyNavState ? { state: readOnlyNavState } : undefined);
   };
 
   return (
@@ -231,15 +239,9 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           <div className="flex items-center gap-2 mt-1">
             <p className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
               {hasChildren && (
-                <>
-                  <span>{subDecks.length} {subDecks.length === 1 ? 'deck' : 'decks'}</span>
-                  <span>·</span>
-                </>
+                <span>{subDecks.length} {subDecks.length === 1 ? 'deck' : 'decks'}</span>
               )}
-              <span className="inline-flex items-center gap-0.5">
-                <Layers className="h-3 w-3" />
-                {totalCards}
-              </span>
+              <span>{totalCards} {totalCards === 1 ? 'cartão' : 'cartões'}</span>
               {(() => {
                 const qCount = questionCountMap ? (() => {
                   const ids = [deck.id];
@@ -251,18 +253,12 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                   return ids.reduce((sum, id) => sum + (questionCountMap.get(id) ?? 0), 0);
                 })() : 0;
                 return qCount > 0 ? (
-                  <>
-                    <span>·</span>
-                    <span className="inline-flex items-center gap-0.5">
-                      <HelpCircle className="h-3 w-3" />
-                      {qCount}
-                    </span>
-                  </>
+                  <span>{qCount} {qCount === 1 ? 'questão' : 'questões'}</span>
                 ) : null;
               })()}
             </p>
           </div>
-          {!isErrorDeck && (
+          {!isErrorDeck && !readOnly && (
             <ClassificationBar
               facilPct={classPcts.facilPct}
               bomPct={classPcts.bomPct}
@@ -275,7 +271,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
         </div>
 
         {/* Actions on hover for loose decks, always when matéria expanded */}
-        {!isErrorDeck && !deckSelectionMode && (
+        {!isErrorDeck && !deckSelectionMode && !readOnly && (
           <div className={`flex items-center gap-1.5 shrink-0 transition-opacity duration-200 ${
             hasChildren && isExpanded
               ? 'opacity-100'
@@ -290,7 +286,9 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                 <Play className="h-3.5 w-3.5 fill-current" />
               </button>
             )}
-            <DeckMenu deck={deck} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
+            {!disableManagementActions && (
+              <DeckMenu deck={deck} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
+            )}
           </div>
         )}
 
@@ -311,48 +309,49 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
               <div
                 key={sub.id}
                 className="group/sub flex items-center gap-3 pl-10 pr-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors border-t border-border/30"
-                onClick={() => navigate(`/decks/${sub.id}`)}
+                onClick={() => navigate(`/decks/${sub.id}`, readOnlyNavState ? { state: readOnlyNavState } : undefined)}
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <h4 className="text-sm font-medium text-foreground truncate">{sub.name}</h4>
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-[11px] text-muted-foreground inline-flex items-center gap-0.5">
-                      <Layers className="h-3 w-3" />
-                      {sub.total_cards}
+                    <span className="text-[11px] text-muted-foreground">
+                      {sub.total_cards} {sub.total_cards === 1 ? 'cartão' : 'cartões'}
                     </span>
                     {questionCountMap && (questionCountMap.get(sub.id) ?? 0) > 0 && (
-                      <>
-                        <span className="text-[11px] text-muted-foreground">·</span>
-                        <span className="text-[11px] text-muted-foreground inline-flex items-center gap-0.5">
-                          <HelpCircle className="h-3 w-3" />
-                          {questionCountMap.get(sub.id)}
-                        </span>
-                      </>
+                      <span className="text-[11px] text-muted-foreground">
+                        {questionCountMap.get(sub.id)} {(questionCountMap.get(sub.id) ?? 0) === 1 ? 'questão' : 'questões'}
+                      </span>
                     )}
                   </div>
-                  <ClassificationBar
-                    facilPct={subClass.facilPct}
-                    bomPct={subClass.bomPct}
-                    dificilPct={subClass.dificilPct}
-                    erreiPct={subClass.erreiPct}
-                    novoPct={subClass.novoPct}
-                    className="mt-1"
-                  />
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover/sub:opacity-100 transition-opacity duration-200">
-                  {subHasDue && (
-                    <button
-                      onClick={(e) => handleStudy(e, sub.id)}
-                      className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                      aria-label="Estudar"
-                    >
-                      <Play className="h-3 w-3 fill-current" />
-                    </button>
+                  {!readOnly && (
+                    <ClassificationBar
+                      facilPct={subClass.facilPct}
+                      bomPct={subClass.bomPct}
+                      dificilPct={subClass.dificilPct}
+                      erreiPct={subClass.erreiPct}
+                      novoPct={subClass.novoPct}
+                      className="mt-1"
+                    />
                   )}
-                  <DeckMenu deck={sub} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
                 </div>
+                {!readOnly && (
+                  <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover/sub:opacity-100 transition-opacity duration-200">
+                    {subHasDue && (
+                      <button
+                        onClick={(e) => handleStudy(e, sub.id)}
+                        className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                        aria-label="Estudar"
+                      >
+                        <Play className="h-3 w-3 fill-current" />
+                      </button>
+                    )}
+                    {!disableManagementActions && (
+                      <DeckMenu deck={sub} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
+                    )}
+                  </div>
+                )}
                 <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 -rotate-90 group-hover/sub:hidden" />
               </div>
             );

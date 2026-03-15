@@ -2,14 +2,10 @@ import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Home, Compass, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useIsAdmin } from '@/hooks/useIsAdmin';
-import { useToast } from '@/hooks/use-toast';
 
 const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAdmin } = useIsAdmin();
-  const { toast } = useToast();
 
   const isActive = (path: string) => {
     // When inside a sala (folder param present), Home should NOT be active
@@ -18,11 +14,7 @@ const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
   };
 
   const handleExplorar = () => {
-    if (isAdmin) {
-      navigate('/explorar');
-    } else {
-      toast({ title: '🚧 Em desenvolvimento', description: 'A seção Explorar estará disponível em breve!' });
-    }
+    navigate('/turmas');
   };
 
   const items = [

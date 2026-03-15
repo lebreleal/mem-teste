@@ -262,9 +262,11 @@ const CardList = () => {
                 <ArrowUpRight className="h-3.5 w-3.5" /> Mover
               </Button>
             )}
-            <Button size="sm" variant="outline" className="gap-1.5 h-8 text-destructive hover:text-destructive" onClick={handleBulkDelete}>
-              <Trash2 className="h-3.5 w-3.5" /> Excluir
-            </Button>
+            {!isLinkedDeck && (
+              <Button size="sm" variant="outline" className="gap-1.5 h-8 text-destructive hover:text-destructive" onClick={handleBulkDelete}>
+                <Trash2 className="h-3.5 w-3.5" /> Excluir
+              </Button>
+            )}
           </div>
         </div>
       )}
@@ -616,10 +618,14 @@ const CardListContent = ({
                             <Flame className="mr-2 h-4 w-4" /> Descongelar
                           </DropdownMenuItem>
                         )}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={(e: any) => { e.stopPropagation(); setDeleteId(card.id); }}>
-                          <Trash2 className="mr-2 h-4 w-4" /> Excluir
-                        </DropdownMenuItem>
+                        {!isLinkedDeck && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={(e: any) => { e.stopPropagation(); setDeleteId(card.id); }}>
+                              <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                            </DropdownMenuItem>
+                          </>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}

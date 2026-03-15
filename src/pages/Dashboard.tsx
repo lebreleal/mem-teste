@@ -6,7 +6,7 @@ import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { getNewCardsForDayGlobal } from '@/hooks/useStudyPlan';
-import { Archive, ArchiveRestore, ChevronDown, ChevronLeft, Trash2, Play, SlidersHorizontal, MoreVertical, Pencil, ImageIcon, SquarePlus, RotateCcw, Layers, Clock, Info, User } from 'lucide-react';
+import { Archive, ArchiveRestore, ChevronDown, ChevronLeft, Trash2, Play, SlidersHorizontal, MoreVertical, Pencil, ImageIcon, SquarePlus, RotateCcw, Layers, Clock, Info, User, Compass, EyeOff, Share2, RefreshCw, LogOut } from 'lucide-react';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,8 +14,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Progress } from '@/components/ui/progress';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { deriveAvgSecondsPerCard, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils';
-import { useState, useMemo, useCallback, useEffect, lazy, Suspense } from 'react';
+
+import { useState, useMemo, useCallback, useEffect, useRef, lazy, Suspense } from 'react';
 import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useStudyPlan } from '@/hooks/useStudyPlan';
@@ -26,7 +26,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-
+import { calculateRealStudyTime } from '@/lib/studyUtils';
 
 /** Suspense fallback that shows global loading overlay while chunk loads */
 const SuspenseLoading = () => {
@@ -39,12 +39,14 @@ const SuspenseLoading = () => {
 
 const ImportCardsDialog = lazy(() => import('@/components/ImportCardsDialog'));
 const AICreateDeckDialog = lazy(() => import('@/components/AICreateDeckDialog'));
-
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 import { useDashboardState } from '@/components/dashboard/useDashboardState';
 import { useDashboardActions } from '@/hooks/useDashboardActions';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
 import DeckList from '@/components/dashboard/DeckList';
+import DeckRow from '@/components/dashboard/DeckRow';
 import SalaList from '@/components/dashboard/SalaList';
 import DashboardDialogs from '@/components/dashboard/DashboardDialogs';
 const PremiumModal = lazy(() => import('@/components/dashboard/PremiumModal'));
@@ -105,6 +107,187 @@ const Dashboard = () => {
     },
     staleTime: 60_000,
   });
+
+  // Fetch user's turma for publish toggle
+  const { data: userTurma, refetch: refetchTurma } = useQuery({
+    queryKey: ['user-turma', user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      const { data } = await supabase.from('turmas').select('id, name, is_private, share_slug').eq('owner_id', user.id).limit(1).maybeSingle();
+      return data as { id: string; name: string; is_private: boolean; share_slug: string | null } | null;
+    },
+    enabled: !!user,
+    staleTime: 60_000,
+  });
+
+  // Detect if current folder is a community-followed sala
+  const currentFolder = state.folders.find(f => f.id === state.currentFolderId);
+  const sourceTurmaId = currentFolder?.source_turma_id;
+  const isCommunityFolder = !!sourceTurmaId;
+
+  // Fetch turma info (owner name, cover) for community folders — lightweight query
+  const { data: communityTurmaInfo } = useQuery({
+    queryKey: ['community-folder-turma-info', sourceTurmaId],
+    queryFn: async () => {
+      const { data: turma } = await supabase.from('turmas').select('id, name, owner_id, cover_image_url').eq('id', sourceTurmaId!).single();
+      if (!turma) return null;
+      const { data: profiles } = await supabase.rpc('get_public_profiles' as any, { p_user_ids: [(turma as any).owner_id] });
+      const ownerName = (profiles as any)?.[0]?.name || 'Anônimo';
+      // Last updated from turma decks
+      const { data: turmaDecks } = await supabase.from('turma_decks').select('deck_id').eq('turma_id', sourceTurmaId!).eq('is_published', true);
+      const deckIds = (turmaDecks ?? []).map((td: any) => td.deck_id);
+      let lastUpdated = '';
+      if (deckIds.length > 0) {
+        const { data: deckDates } = await supabase.from('decks').select('updated_at').in('id', deckIds).order('updated_at', { ascending: false }).limit(1);
+        lastUpdated = (deckDates as any)?.[0]?.updated_at ?? '';
+      }
+      return { ownerName, lastUpdated, coverUrl: (turma as any).cover_image_url };
+    },
+    enabled: !!sourceTurmaId,
+    staleTime: 60_000,
+  });
+
+  // Auto-bootstrap: ensure local deck copies exist for community folders
+  const bootstrapDoneRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (!user || !isCommunityFolder || !sourceTurmaId || !state.currentFolderId) return;
+    if (bootstrapDoneRef.current.has(state.currentFolderId)) return;
+    bootstrapDoneRef.current.add(state.currentFolderId);
+    
+    // Check if local decks already exist in this folder
+    const localDecksInFolder = allDecks.filter(d => d.folder_id === state.currentFolderId && !d.is_archived);
+    if (localDecksInFolder.length > 0) {
+      // Decks exist — run incremental sync in background
+      import('@/services/followerBootstrap').then(({ syncFollowerDecks }) => {
+        syncFollowerDecks(user.id, state.currentFolderId!).then((newCards) => {
+          if (newCards > 0) {
+            queryClient.invalidateQueries({ queryKey: ['decks'] });
+            toast({ title: `${newCards} novos cartões sincronizados!` });
+          }
+        }).catch(console.error);
+      });
+      return;
+    }
+    
+    // No local decks — run full bootstrap
+    import('@/services/followerBootstrap').then(({ bootstrapFollowerDecks }) => {
+      bootstrapFollowerDecks(user.id, sourceTurmaId, state.currentFolderId!).then((result) => {
+        if (result.decks_created > 0) {
+          queryClient.invalidateQueries({ queryKey: ['decks'] });
+        }
+      }).catch((err) => {
+        console.error(err);
+        toast({ title: 'Erro ao carregar decks da sala. Tente recarregar a página.', variant: 'destructive' });
+      });
+    });
+  }, [user, isCommunityFolder, sourceTurmaId, state.currentFolderId]);
+
+
+  // Leave sala confirmation
+  const [leaveSalaConfirm, setLeaveSalaConfirm] = useState<{ folderId: string; turmaId: string } | null>(null);
+  const handleLeaveSala = async () => {
+    if (!user || !leaveSalaConfirm) return;
+    const { folderId, turmaId } = leaveSalaConfirm;
+    try {
+      // Cleanup local mirrored decks and cards first
+      const { cleanupFollowerDecks } = await import('@/services/followerBootstrap');
+      await cleanupFollowerDecks(user.id, folderId);
+      
+      await supabase.from('turma_members').delete().eq('turma_id', turmaId).eq('user_id', user.id);
+      await supabase.from('folders').update({ source_turma_id: null, source_turma_subject_id: null } as any).eq('id', folderId);
+      await supabase.from('folders').delete().eq('id', folderId);
+      queryClient.invalidateQueries({ queryKey: ['folders'] });
+      queryClient.invalidateQueries({ queryKey: ['turmas'] });
+      queryClient.invalidateQueries({ queryKey: ['turma-members'] });
+      queryClient.invalidateQueries({ queryKey: ['turma-role'] });
+      queryClient.invalidateQueries({ queryKey: ['discover-turmas'] });
+      queryClient.invalidateQueries({ queryKey: ['turma-public'] });
+      queryClient.invalidateQueries({ queryKey: ['decks'] });
+      state.setCurrentFolderId(null);
+      setSearchParams({}, { replace: true });
+      toast({ title: 'Sala removida do seu menu Início', description: 'Suas estatísticas e progresso ficam salvos por 30 dias.' });
+    } catch (e: any) {
+      toast({ title: 'Erro ao sair da sala', variant: 'destructive' });
+    } finally {
+      setLeaveSalaConfirm(null);
+    }
+  };
+
+  const [publishing, setPublishing] = useState(false);
+  const handleTogglePublish = useCallback(async () => {
+    if (!user || !state.currentFolderId) return;
+
+    setPublishing(true);
+    try {
+      let turmaId = userTurma?.id;
+      const currentFolder = state.folders.find(f => f.id === state.currentFolderId);
+      const folderName = currentFolder?.name ?? 'Minha Sala';
+      const folderImage = currentFolder?.image_url ?? null;
+
+      // Auto-create turma if user doesn't have one
+      if (!turmaId) {
+        const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+        const { data: newTurma, error: createErr } = await supabase.from('turmas').insert({
+          name: folderName,
+          description: '',
+          owner_id: user.id,
+          invite_code: inviteCode,
+          is_private: false,
+          cover_image_url: folderImage,
+        } as any).select('id').single();
+        if (createErr || !newTurma) throw createErr || new Error('Failed to create turma');
+        turmaId = (newTurma as any).id;
+        // Add owner as admin member
+        await supabase.from('turma_members').insert({
+          turma_id: turmaId,
+          user_id: user.id,
+          role: 'admin',
+        } as any);
+      } else {
+        const newPrivate = !userTurma!.is_private;
+        await supabase.from('turmas').update({ is_private: newPrivate, name: folderName, cover_image_url: folderImage } as any).eq('id', turmaId);
+        if (newPrivate) {
+          // Unpublishing
+          await refetchTurma();
+          queryClient.invalidateQueries({ queryKey: ['discover-turmas'] });
+          toast({ title: 'Sala despublicada' });
+          setPublishing(false);
+          return;
+        }
+      }
+
+      // Publishing: sync folder decks to turma_decks
+      const folderDecks = allDecks.filter(d => d.folder_id === state.currentFolderId && !d.is_archived && !d.parent_deck_id);
+      const { data: existingTurmaDecks } = await supabase.from('turma_decks').select('deck_id').eq('turma_id', turmaId!);
+      const existingIds = new Set((existingTurmaDecks ?? []).map((td: any) => td.deck_id));
+
+      const newDecks = folderDecks.filter(d => !existingIds.has(d.id));
+      if (newDecks.length > 0) {
+        await supabase.from('turma_decks').insert(
+          newDecks.map(d => ({
+            turma_id: turmaId,
+            deck_id: d.id,
+            shared_by: user.id,
+            price: 0,
+            price_type: 'free',
+            allow_download: true,
+            is_published: true,
+          }) as any)
+        );
+        await supabase.from('decks').update({ is_public: true } as any).in('id', newDecks.map(d => d.id));
+      }
+
+      await refetchTurma();
+      queryClient.invalidateQueries({ queryKey: ['discover-turmas'] });
+      toast({ title: '🌍 Sala publicada no Explorar!' });
+    } catch (err) {
+      console.error(err);
+      toast({ title: 'Erro ao publicar', variant: 'destructive' });
+    } finally {
+      setPublishing(false);
+    }
+  }, [user, userTurma, state.currentFolderId, state.folders, allDecks, refetchTurma, queryClient, toast]);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [detachTarget, setDetachTarget] = useState<{ id: string; name: string } | null>(null);
   const [detaching, setDetaching] = useState(false);
@@ -113,6 +296,10 @@ const Dashboard = () => {
   const [studySettingsOpen, setStudySettingsOpen] = useState(false);
   const [salaImageOpen, setSalaImageOpen] = useState(false);
   const [salaImageFile, setSalaImageFile] = useState<File | null>(null);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [shareSlugEdit, setShareSlugEdit] = useState('');
+  const [savingSlug, setSavingSlug] = useState(false);
+  
   const [pendingReviewData, setPendingReviewData] = useState<{
     pendingId: string;
     cards: GeneratedCard[];
@@ -277,7 +464,14 @@ const Dashboard = () => {
   // Sala-scoped study stats for the compact study card
   const salaStudyStats = useMemo(() => {
     if (!state.isInsideSala) return null;
-    let newCount = 0, learningCount = 0, reviewCount = 0, reviewedToday = 0, totalCards = 0;
+
+    let rawNewCount = 0;
+    let newCountTodayByDeckLimits = 0;
+    let learningCount = 0;
+    let reviewCount = 0;
+    let reviewedToday = 0;
+    let totalCards = 0;
+
     const collectTotalCards = (deckId: string): number => {
       const dk = allDecks.find(d => d.id === deckId);
       if (!dk) return 0;
@@ -286,19 +480,43 @@ const Dashboard = () => {
       for (const c of children) t += collectTotalCards(c.id);
       return t;
     };
+
+    const collectStudyStats = (deckId: string) => {
+      const dk = allDecks.find(d => d.id === deckId);
+      if (!dk || dk.is_archived) return;
+
+      const deckNewCount = dk.new_count ?? 0;
+      const deckLearningCount = dk.learning_count ?? 0;
+      const deckReviewCount = dk.review_count ?? 0;
+      const deckNewReviewedToday = dk.new_reviewed_today ?? 0;
+      const deckDailyNewLimit = dk.daily_new_limit ?? 20;
+
+      rawNewCount += deckNewCount;
+      learningCount += deckLearningCount;
+      reviewCount += deckReviewCount;
+      reviewedToday += dk.reviewed_today ?? 0;
+
+      const deckRemainingNewToday = Math.max(0, deckDailyNewLimit - deckNewReviewedToday);
+      newCountTodayByDeckLimits += Math.min(deckNewCount, deckRemainingNewToday);
+
+      const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
+      for (const c of children) collectStudyStats(c.id);
+    };
+
     for (const deck of state.currentDecks) {
-      const s = state.getAggregateStats(deck);
-      newCount += s.new_count;
-      learningCount += s.learning_count;
-      reviewCount += s.review_count;
-      reviewedToday += s.reviewed_today;
+      collectStudyStats(deck.id);
       totalCards += collectTotalCards(deck.id);
     }
-    const totalDue = newCount + learningCount + reviewCount;
+
+    // Inside a Sala, honor the per-deck limits configured in "Configurar Estudo"
+    const newCountToday = newCountTodayByDeckLimits;
+    const totalDue = newCountToday + learningCount + reviewCount;
     const totalSession = totalDue + reviewedToday;
     const progressPct = totalSession > 0 ? Math.round((reviewedToday / totalSession) * 100) : 0;
-    const avgSec = deriveAvgSecondsPerCard(DEFAULT_STUDY_METRICS);
-    const remainingMin = Math.ceil((totalDue * avgSec) / 60);
+
+    // Use per-state time estimation (new cards generate multiple interactions, reviews may lapse)
+    const remainingSeconds = calculateRealStudyTime(newCountToday, learningCount, reviewCount, realStudyMetrics);
+    const remainingMin = Math.ceil(remainingSeconds / 60);
     const timeLabel = remainingMin >= 60
       ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
       : `${remainingMin}min`;
@@ -310,8 +528,20 @@ const Dashboard = () => {
     const effectiveTotal = classifiedTotal > 0 ? classifiedTotal : totalCards;
     const masteredCount = effectiveTotal - ds.novo;
 
-    return { newCount, learningCount, reviewCount, reviewedToday, totalDue, progressPct, timeLabel, totalCards: effectiveTotal, masteredCount, ...ds };
-  }, [state.isInsideSala, state.currentDecks, state.getAggregateStats, allDecks, salaDifficultyStats]);
+    return {
+      newCount: rawNewCount,
+      newCountToday,
+      learningCount,
+      reviewCount,
+      reviewedToday,
+      totalDue,
+      progressPct,
+      timeLabel,
+      totalCards: effectiveTotal,
+      masteredCount,
+      ...ds,
+    };
+  }, [state.isInsideSala, state.currentDecks, allDecks, salaDifficultyStats, realStudyMetrics]);
 
   // Handle sala click: navigate into it
   const handleSalaClick = useCallback((folderId: string) => {
@@ -330,24 +560,25 @@ const Dashboard = () => {
       <main className="pb-24">
         {/* Inside a Sala: Hero banner with image, name, creator, time estimate */}
         {state.isInsideSala && (() => {
-          const currentFolder = state.folders.find(f => f.id === state.currentFolderId);
-          const folderName = currentFolder?.name ?? 'Sala';
-          const folderImage = currentFolder?.image_url;
-          const avatarUrl = user?.user_metadata?.avatar_url as string | undefined;
-          const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Você';
+          const cf = state.folders.find(f => f.id === state.currentFolderId);
+          const folderName = cf?.name ?? 'Sala';
+          const folderImage = cf?.image_url;
+          const isComm = isCommunityFolder;
+          const displayName = isComm ? (communityTurmaInfo?.ownerName ?? 'Criador') : (user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Você');
+          const avatarUrl = isComm ? undefined : (user?.user_metadata?.avatar_url as string | undefined);
+          const heroImage = isComm ? (communityTurmaInfo?.coverUrl || folderImage) : folderImage;
 
           return (
             <>
               {/* Hero banner */}
               <div className="relative bg-muted/50 overflow-hidden">
-                {/* Background image (blurred) */}
                 <div className="absolute inset-0">
-                  <img src={folderImage || defaultSalaIcon} alt="" className="w-full h-full object-cover opacity-30 blur-sm" />
+                  <img src={heroImage || defaultSalaIcon} alt="" className="w-full h-full object-cover opacity-30 blur-sm" />
                   <div className="absolute inset-0 bg-gradient-to-b from-background/60 to-background" />
                 </div>
 
                 <div className="relative px-4 pt-3 pb-4">
-                  {/* Top bar: back + actions */}
+                  {/* Top bar */}
                   <div className="flex items-center justify-between mb-3">
                     <button
                       onClick={() => state.setCurrentFolderId(null)}
@@ -356,85 +587,155 @@ const Dashboard = () => {
                       <ChevronLeft className="h-4 w-4" />
                       <span>Dashboard</span>
                     </button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted/60 transition-colors text-muted-foreground hover:text-foreground">
-                          <MoreVertical className="h-4 w-4" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48">
-                        <DropdownMenuItem onClick={() => {
-                          if (currentFolder) { state.setRenameTarget({ type: 'folder', id: currentFolder.id, name: currentFolder.name }); state.setRenameName(currentFolder.name); }
-                        }}>
-                          <Pencil className="h-4 w-4 mr-2" /> Renomear sala
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setSalaImageOpen(true)}>
-                          <ImageIcon className="h-4 w-4 mr-2" /> Mudar imagem
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={async () => {
-                          await state.archiveFolder.mutateAsync(state.currentFolderId!);
-                          state.setCurrentFolderId(null);
-                          setSearchParams({}, { replace: true });
-                        }}>
-                          <Archive className="h-4 w-4 mr-2" /> Arquivar sala
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          onClick={() => {
-                            if (currentFolder) state.setDeleteTarget({ type: 'folder', id: currentFolder.id, name: currentFolder.name });
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" /> Excluir sala
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <div className="flex items-center gap-1.5">
+                      {!isComm && (
+                        <>
+                          {/* Share button — only for own salas */}
+                          <button
+                            onClick={async () => {
+                              let turmaId = userTurma?.id;
+                              let slug = userTurma?.share_slug;
+                              if (!turmaId) {
+                                const cFolder = state.folders.find(f => f.id === state.currentFolderId);
+                                const fName = cFolder?.name ?? 'Minha Sala';
+                                const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+                                const { data: newTurma } = await supabase.from('turmas').insert({
+                                  name: fName, description: '', owner_id: user!.id,
+                                  invite_code: inviteCode, is_private: true,
+                                } as any).select('id, share_slug').single();
+                                if (newTurma) {
+                                  turmaId = (newTurma as any).id;
+                                  slug = (newTurma as any).share_slug;
+                                  await supabase.from('turma_members').insert({ turma_id: turmaId, user_id: user!.id, role: 'admin' } as any);
+                                  await refetchTurma();
+                                }
+                              }
+                              if (!slug && turmaId) {
+                                const generated = turmaId.substring(0, 8);
+                                await supabase.from('turmas').update({ share_slug: generated } as any).eq('id', turmaId);
+                                slug = generated;
+                                await refetchTurma();
+                              }
+                              setShareSlugEdit(slug || turmaId?.substring(0, 8) || '');
+                              setShareModalOpen(true);
+                            }}
+                            className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted/60 transition-colors text-muted-foreground hover:text-foreground"
+                            aria-label="Compartilhar link da sala"
+                          >
+                            <Share2 className="h-4 w-4" />
+                          </button>
+
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted/60 transition-colors text-muted-foreground hover:text-foreground">
+                                <MoreVertical className="h-4 w-4" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                              <DropdownMenuItem onClick={() => {
+                                if (cf) { state.setRenameTarget({ type: 'folder', id: cf.id, name: cf.name }); state.setRenameName(cf.name); }
+                              }}>
+                                <Pencil className="h-4 w-4 mr-2" /> Renomear sala
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setSalaImageOpen(true)}>
+                                <ImageIcon className="h-4 w-4 mr-2" /> Mudar imagem
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={handleTogglePublish} disabled={publishing}>
+                                {userTurma?.is_private === false ? (
+                                  <><EyeOff className="h-4 w-4 mr-2" /> Despublicar</>
+                                ) : (
+                                  <><Compass className="h-4 w-4 mr-2" /> Publicar no Explorar</>
+                                )}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={async () => {
+                                await state.archiveFolder.mutateAsync(state.currentFolderId!);
+                                state.setCurrentFolderId(null);
+                                setSearchParams({}, { replace: true });
+                              }}>
+                                <Archive className="h-4 w-4 mr-2" /> Arquivar sala
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => {
+                                  if (cf) state.setDeleteTarget({ type: 'folder', id: cf.id, name: cf.name });
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" /> Excluir sala
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </>
+                      )}
+                      {isComm && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted/60 transition-colors text-muted-foreground hover:text-foreground">
+                              <MoreVertical className="h-4 w-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => setLeaveSalaConfirm({ folderId: state.currentFolderId!, turmaId: sourceTurmaId! })}
+                            >
+                              <LogOut className="h-4 w-4 mr-2" /> Sair da sala
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </div>
                   </div>
 
-                  {/* Sala image + name + edit */}
+                  {/* Sala image + name */}
                   <div className="flex items-center gap-3 mb-2">
-                    {/* Sala image with change-image overlay */}
                     <div className="relative shrink-0">
-                      <img src={folderImage || defaultSalaIcon} alt={folderName} className="h-14 w-14 rounded-xl object-cover border border-border/30 shadow-sm" />
-                      <button
-                        onClick={() => setSalaImageOpen(true)}
-                        className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-background border border-border shadow-sm text-muted-foreground hover:text-foreground transition-colors"
-                        aria-label="Trocar imagem da sala"
-                      >
-                        <ImageIcon className="h-3 w-3" />
-                      </button>
+                      <img src={heroImage || defaultSalaIcon} alt={folderName} className="h-14 w-14 rounded-xl object-cover border border-border/30 shadow-sm" />
+                      {!isComm && (
+                        <button
+                          onClick={() => setSalaImageOpen(true)}
+                          className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-background border border-border shadow-sm text-muted-foreground hover:text-foreground transition-colors"
+                          aria-label="Trocar imagem da sala"
+                        >
+                          <ImageIcon className="h-3 w-3" />
+                        </button>
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
                         <h1 className="text-lg font-display font-bold text-foreground truncate">{folderName}</h1>
-                        <button
-                          onClick={() => {
-                            if (currentFolder) { state.setRenameTarget({ type: 'folder', id: currentFolder.id, name: currentFolder.name }); state.setRenameName(currentFolder.name); }
-                          }}
-                          className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
+                        {!isComm && (
+                          <button
+                            onClick={() => {
+                              if (cf) { state.setRenameTarget({ type: 'folder', id: cf.id, name: cf.name }); state.setRenameName(cf.name); }
+                            }}
+                            className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                       </div>
                       <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-xs text-muted-foreground">Por:</span>
-                        <span className="text-xs font-medium text-foreground">{userName}</span>
-                        <div className="h-5 w-5 rounded-full overflow-hidden bg-muted shrink-0">
-                          {avatarUrl ? (
+                        <span className="text-xs text-muted-foreground">Por</span>
+                        <span className="text-xs font-medium text-foreground">{displayName}</span>
+                        {!isComm && avatarUrl && (
+                          <div className="h-5 w-5 rounded-full overflow-hidden bg-muted shrink-0">
                             <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center">
-                              <User className="h-3 w-3 text-muted-foreground" />
-                            </div>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </div>
+                      {isComm && communityTurmaInfo?.lastUpdated && (
+                        <div className="flex items-center gap-1 mt-0.5 text-[11px] text-muted-foreground">
+                          <RefreshCw className="h-2.5 w-2.5" />
+                          {(() => { try { return formatDistanceToNow(new Date(communityTurmaInfo.lastUpdated), { addSuffix: true, locale: ptBR }); } catch { return ''; } })()}
+                        </div>
+                      )}
                     </div>
                   </div>
 
                   {/* Time estimate with info tooltip */}
                   {salaStudyStats && salaStudyStats.totalDue > 0 && (
                     <div className="flex items-center gap-1.5 mt-1">
-                      <span className="text-xs text-muted-foreground">Estimativa: ~{salaStudyStats.timeLabel}</span>
+                      <span className="text-xs text-muted-foreground">~{salaStudyStats.timeLabel} restantes hoje</span>
                       <Popover>
                         <PopoverTrigger asChild>
                           <button className="text-muted-foreground hover:text-foreground transition-colors">
@@ -442,7 +743,7 @@ const Dashboard = () => {
                           </button>
                         </PopoverTrigger>
                         <PopoverContent side="top" className="text-xs w-56 p-2">
-                          Tempo estimado para revisar todos os cartões pendentes desta sala, com base na sua velocidade média de estudo.
+                          Tempo de estudo restante para completar os cartões novos e revisões configurados nos ajustes de hoje, com base na sua velocidade média de estudo.
                         </PopoverContent>
                       </Popover>
                     </div>
@@ -615,14 +916,14 @@ const Dashboard = () => {
           />
         )}
 
-        {/* Inside Sala: Deck List */}
+        {/* Inside Sala: Deck List (unified for own + community folders) */}
         {state.isInsideSala && (
           <DeckList
             isLoading={state.isLoading}
             currentDecks={state.currentDecks}
             searchQuery={searchQuery}
-            deckSelectionMode={state.deckSelectionMode}
-            selectedDeckIds={state.selectedDeckIds}
+            deckSelectionMode={isCommunityFolder ? false : state.deckSelectionMode}
+            selectedDeckIds={isCommunityFolder ? new Set<string>() : state.selectedDeckIds}
             expandedDecks={state.expandedDecks}
             toggleExpand={state.toggleExpand}
             toggleDeckSelection={state.toggleDeckSelection}
@@ -630,13 +931,13 @@ const Dashboard = () => {
             getAggregateStats={state.getAggregateStats}
             getCommunityLinkId={state.getCommunityLinkId}
             navigateToCommunity={actions.handleNavigateCommunity}
-            onCreateSubDeck={(deckId) => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(deckId); }}
-            onRenameDeck={(d) => { state.setRenameTarget({ type: 'deck', id: d.id, name: d.name }); state.setRenameName(d.name); }}
-            onMoveDeck={(d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(d.folder_id || state.currentFolderId); state.setMoveParentDeckId(null); }}
-            onArchiveDeck={(id) => state.archiveDeck.mutate(id)}
-            onDeleteDeck={(d) => actions.handleDeleteDeckRequest(d)}
-            onDetachCommunityDeck={(d) => setDetachTarget({ id: d.id, name: d.name })}
-            onReorderDecks={(reordered) => state.reorderDecks.mutate(reordered.map(d => d.id))}
+            onCreateSubDeck={isCommunityFolder ? () => {} : (deckId) => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(deckId); }}
+            onRenameDeck={isCommunityFolder ? () => {} : (d) => { state.setRenameTarget({ type: 'deck', id: d.id, name: d.name }); state.setRenameName(d.name); }}
+            onMoveDeck={isCommunityFolder ? () => {} : (d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(d.folder_id || state.currentFolderId); state.setMoveParentDeckId(null); }}
+            onArchiveDeck={isCommunityFolder ? () => {} : (id) => state.archiveDeck.mutate(id)}
+            onDeleteDeck={isCommunityFolder ? () => {} : (d) => actions.handleDeleteDeckRequest(d)}
+            onDetachCommunityDeck={isCommunityFolder ? undefined : (d) => setDetachTarget({ id: d.id, name: d.name })}
+            onReorderDecks={isCommunityFolder ? undefined : (reordered) => state.reorderDecks.mutate(reordered.map(d => d.id))}
             onPendingClick={handlePendingClick}
             decksWithPendingUpdates={state.decksWithPendingUpdates}
           />
@@ -836,6 +1137,8 @@ const Dashboard = () => {
             folders={state.folders}
             decks={state.decks}
             getAggregateStats={state.getAggregateStats}
+            globalNewRemaining={state.globalNewRemaining}
+            avgSecondsPerCard={avgSecondsPerCard}
           />
         )}
       </Suspense>
@@ -925,6 +1228,84 @@ const Dashboard = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Share link modal */}
+      <Dialog open={shareModalOpen} onOpenChange={setShareModalOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Compartilhar sala</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">Slug do link</label>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground shrink-0">{window.location.origin}/c/</span>
+                <input
+                  type="text"
+                  value={shareSlugEdit}
+                  onChange={(e) => setShareSlugEdit(e.target.value.replace(/[^a-zA-Z0-9-_]/g, '').toLowerCase())}
+                  className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
+                  placeholder="meu-link"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={async () => {
+                  const link = `${window.location.origin}/c/${shareSlugEdit}`;
+                  await navigator.clipboard.writeText(link);
+                  toast({ title: '🔗 Link copiado!' });
+                }}
+              >
+                Copiar link
+              </Button>
+              <Button
+                className="flex-1"
+                disabled={savingSlug || !shareSlugEdit}
+                onClick={async () => {
+                  if (!userTurma?.id || !shareSlugEdit) return;
+                  setSavingSlug(true);
+                  try {
+                    await supabase.from('turmas').update({ share_slug: shareSlugEdit } as any).eq('id', userTurma.id);
+                    await refetchTurma();
+                    toast({ title: 'Link atualizado!' });
+                    setShareModalOpen(false);
+                  } catch {
+                    toast({ title: 'Erro ao salvar', variant: 'destructive' });
+                  } finally {
+                    setSavingSlug(false);
+                  }
+                }}
+              >
+                {savingSlug ? 'Salvando...' : 'Salvar'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Leave Sala Confirmation */}
+      <AlertDialog open={!!leaveSalaConfirm} onOpenChange={(open) => { if (!open) setLeaveSalaConfirm(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sair da sala?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <span>Tem certeza que deseja sair desta sala?</span>
+              <span className="block text-sm font-medium text-foreground/80 mt-2">
+                📊 Suas estatísticas e progresso de estudo ficam salvos por 30 dias. Se voltar a entrar nesse período, tudo estará como antes.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleLeaveSala} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Sair da sala
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <BottomNav />
     </div>

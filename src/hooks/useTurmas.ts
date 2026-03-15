@@ -56,13 +56,3 @@ export const useTurmaRanking = (turmaId: string) => {
     staleTime: 60_000,
   });
 };
-
-export const usePublicDecks = (searchQuery: string) => {
-  const { user } = useAuth();
-  return useQuery({
-    queryKey: ['public-decks', searchQuery],
-    queryFn: () => turmaService.fetchPublicDecks(searchQuery),
-    enabled: !!user,
-    staleTime: 30_000,
-  });
-};

@@ -1,6 +1,6 @@
 /**
  * StudySalaSheet — lets user pick which Sala (folder) to study from.
- * Shows each sala with its due count, clicking navigates to study.
+ * Shows each sala with its daily-limited due count and mastery %.
  */
 
 import { useMemo } from 'react';
@@ -19,9 +19,11 @@ interface StudySalaSheetProps {
   folders: Folder[];
   decks: DeckWithStats[];
   getAggregateStats: (deck: DeckWithStats) => { new_count: number; learning_count: number; review_count: number; reviewed_today: number };
+  globalNewRemaining: number;
+  avgSecondsPerCard: number;
 }
 
-const StudySalaSheet = ({ open, onOpenChange, folders, decks, getAggregateStats }: StudySalaSheetProps) => {
+const StudySalaSheet = ({ open, onOpenChange, folders, decks, getAggregateStats, globalNewRemaining }: StudySalaSheetProps) => {
   const navigate = useNavigate();
 
   const rootFolders = useMemo(
@@ -31,14 +33,16 @@ const StudySalaSheet = ({ open, onOpenChange, folders, decks, getAggregateStats 
   );
 
   const folderStats = useMemo(() => {
-    const map = new Map<string, { totalDue: number; totalCards: number; masteredCards: number }>();
+    const map = new Map<string, { totalNew: number; totalLearning: number; totalReview: number; totalCards: number; masteredCards: number }>();
     for (const f of rootFolders) {
       const folderDecks = decks.filter(d => d.folder_id === f.id && !d.parent_deck_id && !d.is_archived);
-      let totalDue = 0, totalCards = 0, masteredCards = 0;
+      let totalNew = 0, totalLearning = 0, totalReview = 0, totalCards = 0, masteredCards = 0;
       const collectAll = (deckList: DeckWithStats[]) => {
         for (const d of deckList) {
           const s = getAggregateStats(d);
-          totalDue += s.new_count + s.learning_count + s.review_count;
+          totalNew += s.new_count;
+          totalLearning += s.learning_count;
+          totalReview += s.review_count;
           totalCards += d.total_cards;
           masteredCards += d.mastered_cards;
           const subs = decks.filter(x => x.parent_deck_id === d.id && !x.is_archived);
@@ -46,10 +50,35 @@ const StudySalaSheet = ({ open, onOpenChange, folders, decks, getAggregateStats 
         }
       };
       collectAll(folderDecks);
-      map.set(f.id, { totalDue, totalCards, masteredCards });
+      map.set(f.id, { totalNew, totalLearning, totalReview, totalCards, masteredCards });
     }
     return map;
   }, [rootFolders, decks, getAggregateStats]);
+
+  // Distribute globalNewRemaining proportionally across folders
+  const folderDailyDue = useMemo(() => {
+    const result = new Map<string, number>();
+    const entries: { id: string; newCount: number; learningReview: number }[] = [];
+    let totalRawNew = 0;
+
+    for (const f of rootFolders) {
+      const stats = folderStats.get(f.id);
+      const rawNew = stats?.totalNew ?? 0;
+      const lr = (stats?.totalLearning ?? 0) + (stats?.totalReview ?? 0);
+      entries.push({ id: f.id, newCount: rawNew, learningReview: lr });
+      totalRawNew += rawNew;
+    }
+
+    for (const e of entries) {
+      const cappedNew = totalRawNew > 0
+        ? Math.round((e.newCount / totalRawNew) * globalNewRemaining)
+        : 0;
+      const finalNew = Math.min(cappedNew, e.newCount);
+      result.set(e.id, finalNew + e.learningReview);
+    }
+
+    return result;
+  }, [rootFolders, folderStats, globalNewRemaining]);
 
   const handleStudySala = (folderId: string) => {
     onOpenChange(false);
@@ -63,9 +92,9 @@ const StudySalaSheet = ({ open, onOpenChange, folders, decks, getAggregateStats 
 
   const totalDue = useMemo(() => {
     let sum = 0;
-    folderStats.forEach(s => { sum += s.totalDue; });
+    folderDailyDue.forEach(v => { sum += v; });
     return sum;
-  }, [folderStats]);
+  }, [folderDailyDue]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -86,7 +115,7 @@ const StudySalaSheet = ({ open, onOpenChange, folders, decks, getAggregateStats 
         <div className="flex-1 overflow-y-auto divide-y divide-border/50">
           {rootFolders.map(folder => {
             const stats = folderStats.get(folder.id);
-            const due = stats?.totalDue ?? 0;
+            const due = folderDailyDue.get(folder.id) ?? 0;
             const masteryPct = (stats?.totalCards ?? 0) > 0
               ? Math.round(((stats?.masteredCards ?? 0) / stats!.totalCards) * 1000) / 10
               : 0;

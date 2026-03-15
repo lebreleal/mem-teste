@@ -83,32 +83,46 @@ export async function fetchTurmaBySlug(slug: string): Promise<Turma | null> {
 
 // ── Discover ──
 
-export async function fetchDiscoverTurmas(userId: string, searchQuery: string): Promise<(Turma & { member_count: number; owner_name: string })[]> {
-  let query = supabase.from('turmas').select('*').eq('is_private', false);
-  const q = searchQuery.trim();
-  if (q) query = query.or(`name.ilike.%${q}%,description.ilike.%${q}%`);
-  const { data: turmas } = await query.order('created_at', { ascending: false }).limit(50);
-  
-  let tagMatchedTurmaIds = new Set<string>();
-  if (q) {
-    const { data: matchingTags } = await supabase.from('tags').select('id').ilike('name', `%${q}%`);
-    if (matchingTags && matchingTags.length > 0) {
-      const tagIds = matchingTags.map((t: any) => t.id);
-      const { data: deckTagRows } = await supabase.from('deck_tags').select('deck_id').in('tag_id', tagIds);
-      if (deckTagRows && deckTagRows.length > 0) {
-        const deckIds = deckTagRows.map((r: any) => r.deck_id);
-        const { data: decksWithCommunity } = await supabase.from('decks').select('community_id').in('id', deckIds).not('community_id', 'is', null);
-        (decksWithCommunity ?? []).forEach((d: any) => { if (d.community_id) tagMatchedTurmaIds.add(d.community_id); });
-      }
-    }
-  }
+export async function fetchDiscoverTurmas(_userId: string, searchQuery: string): Promise<(Turma & { member_count: number; owner_name: string; deck_count: number; card_count: number; question_count: number; last_updated: string })[]> {
+  // Only published/public Salas
+  const { data: publicTurmas } = await supabase
+    .from('turmas')
+    .select('*')
+    .or('is_private.eq.false,share_slug.not.is.null')
+    .order('created_at', { ascending: false })
+    .limit(200);
 
-  const nameMatchedIds = new Set((turmas ?? []).map((t: any) => t.id));
-  const extraIds = [...tagMatchedTurmaIds].filter(id => !nameMatchedIds.has(id));
-  let allTurmas = [...(turmas ?? [])];
-  if (extraIds.length > 0) {
-    const { data: extraTurmas } = await supabase.from('turmas').select('*').eq('is_private', false).in('id', extraIds.slice(0, 50));
-    if (extraTurmas) allTurmas.push(...extraTurmas);
+  let allTurmas = [...(publicTurmas ?? [])];
+  const q = searchQuery.trim().toLowerCase();
+
+  if (q && allTurmas.length > 0) {
+    const bySalaText = allTurmas.filter((t: any) =>
+      String(t.name ?? '').toLowerCase().includes(q) ||
+      String(t.description ?? '').toLowerCase().includes(q)
+    );
+
+    const bySalaIds = new Set(bySalaText.map((t: any) => t.id));
+
+    // Match by published deck names inside Salas
+    const { data: matchedDecks } = await supabase
+      .from('decks')
+      .select('id')
+      .ilike('name', `%${q}%`)
+      .limit(300);
+
+    if (matchedDecks && matchedDecks.length > 0) {
+      const deckIds = matchedDecks.map((d: any) => d.id);
+      const { data: links } = await supabase
+        .from('turma_decks')
+        .select('turma_id, deck_id')
+        .eq('is_published', true)
+        .in('deck_id', deckIds);
+
+      const matchTurmaIds = new Set((links ?? []).map((l: any) => l.turma_id));
+      allTurmas = bySalaText.concat(allTurmas.filter((t: any) => matchTurmaIds.has(t.id) && !bySalaIds.has(t.id)));
+    } else {
+      allTurmas = bySalaText;
+    }
   }
 
   if (allTurmas.length === 0) return [];
@@ -118,135 +132,86 @@ export async function fetchDiscoverTurmas(userId: string, searchQuery: string): 
   const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
 
   const turmaIds = allTurmas.map((t: any) => t.id);
-  const { data: members } = await supabase.from('turma_members').select('turma_id').in('turma_id', turmaIds);
-  const countMap = new Map<string, number>();
-  (members ?? []).forEach((m: any) => countMap.set(m.turma_id, (countMap.get(m.turma_id) ?? 0) + 1));
 
-  // Fetch total card counts per turma
+  const { data: members } = await supabase
+    .from('turma_members')
+    .select('turma_id')
+    .in('turma_id', turmaIds);
+
+  const memberCountMap = new Map<string, number>();
+  (members ?? []).forEach((m: any) => memberCountMap.set(m.turma_id, (memberCountMap.get(m.turma_id) ?? 0) + 1));
+
+  // Total cards from published decks of each Sala
   const { data: turmaDecks } = await supabase
     .from('turma_decks')
     .select('turma_id, deck_id')
     .in('turma_id', turmaIds)
     .eq('is_published', true);
+
   const allDeckIds = (turmaDecks ?? []).map((td: any) => td.deck_id);
-  let cardCountMap = new Map<string, number>();
+  const cardCountMap = new Map<string, number>();
+  const deckCountMap = new Map<string, number>();
+
+  // Count decks per turma
+  (turmaDecks ?? []).forEach((td: any) => {
+    deckCountMap.set(td.turma_id, (deckCountMap.get(td.turma_id) ?? 0) + 1);
+  });
+
   if (allDeckIds.length > 0) {
     const { data: countRows } = await supabase.rpc('count_cards_per_deck', { p_deck_ids: allDeckIds });
     const deckCardMap = new Map((countRows ?? []).map((r: any) => [r.deck_id, Number(r.card_count)]));
+
     (turmaDecks ?? []).forEach((td: any) => {
       const cards = deckCardMap.get(td.deck_id) ?? 0;
       cardCountMap.set(td.turma_id, (cardCountMap.get(td.turma_id) ?? 0) + cards);
     });
   }
 
-  return allTurmas.map((t: any) => ({
-    ...t, member_count: countMap.get(t.id) ?? 0, card_count: cardCountMap.get(t.id) ?? 0,
-    owner_name: profileMap.get(t.owner_id) ?? 'Anônimo',
-    avg_rating: t.avg_rating ?? 0, rating_count: t.rating_count ?? 0,
-  }));
-}
-
-// ── Public Decks Discovery ──
-
-export interface PublicDeckItem {
-  id: string;
-  name: string;
-  card_count: number;
-  owner_name: string;
-  owner_id: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export async function fetchPublicDecks(searchQuery: string): Promise<PublicDeckItem[]> {
-  let query = supabase.from('decks').select('id, name, user_id, parent_deck_id, created_at, updated_at').eq('is_public', true);
-  const q = searchQuery.trim();
-  if (q) query = query.ilike('name', `%${q}%`);
-  const { data: decks } = await query.order('created_at', { ascending: false }).limit(200);
-
-  let tagMatchedDeckIds = new Set<string>();
-  if (q) {
-    const { data: matchingTags } = await supabase.from('tags').select('id').ilike('name', `%${q}%`);
-    if (matchingTags && matchingTags.length > 0) {
-      const tagIds = matchingTags.map((t: any) => t.id);
-      const { data: deckTagRows } = await supabase.from('deck_tags').select('deck_id').in('tag_id', tagIds);
-      (deckTagRows ?? []).forEach((r: any) => tagMatchedDeckIds.add(r.deck_id));
-      const { data: cardTagRows } = await supabase.from('card_tags').select('card_id').in('tag_id', tagIds);
-      if (cardTagRows && cardTagRows.length > 0) {
-        const cardIds = cardTagRows.map((r: any) => r.card_id);
-        const { data: cards } = await supabase.from('cards').select('deck_id').in('id', cardIds.slice(0, 500));
-        (cards ?? []).forEach((c: any) => tagMatchedDeckIds.add(c.deck_id));
-      }
+  // Question counts per turma
+  const questionCountMap = new Map<string, number>();
+  if (allDeckIds.length > 0) {
+    const { data: qRows } = await supabase
+      .from('deck_questions')
+      .select('deck_id')
+      .in('deck_id', allDeckIds);
+    const perDeck = new Map<string, number>();
+    for (const r of qRows ?? []) {
+      perDeck.set(r.deck_id, (perDeck.get(r.deck_id) ?? 0) + 1);
     }
-  }
-
-  const nameMatchedIds = new Set((decks ?? []).map((d: any) => d.id));
-  const extraIds = [...tagMatchedDeckIds].filter(id => !nameMatchedIds.has(id));
-
-  let allDecks = [...(decks ?? [])];
-  if (extraIds.length > 0) {
-    const { data: extraDecks } = await supabase.from('decks')
-      .select('id, name, user_id, parent_deck_id, created_at, updated_at')
-      .eq('is_public', true)
-      .in('id', extraIds.slice(0, 100));
-    if (extraDecks) allDecks.push(...extraDecks);
-  }
-
-  if (allDecks.length === 0) return [];
-
-  const ownerIds = [...new Set(allDecks.map((d: any) => d.user_id))];
-  const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: ownerIds });
-  const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
-
-  const childrenMap = new Map<string, string[]>();
-  const deckMap = new Map(allDecks.map((d: any) => [d.id, d]));
-  allDecks.forEach((d: any) => {
-    if (d.parent_deck_id && deckMap.has(d.parent_deck_id)) {
-      const list = childrenMap.get(d.parent_deck_id) ?? [];
-      list.push(d.id);
-      childrenMap.set(d.parent_deck_id, list);
-    }
-  });
-
-  const allFetchedIds = new Set(allDecks.map((d: any) => d.id));
-  let parentIds = [...allFetchedIds];
-  while (parentIds.length > 0) {
-    const { data: children } = await supabase.from('decks').select('id, parent_deck_id, updated_at').in('parent_deck_id', parentIds);
-    const newChildren = (children ?? []).filter((c: any) => !allFetchedIds.has(c.id));
-    if (newChildren.length === 0) break;
-    newChildren.forEach((c: any) => {
-      allFetchedIds.add(c.id);
-      const list = childrenMap.get(c.parent_deck_id) ?? [];
-      list.push(c.id);
-      childrenMap.set(c.parent_deck_id, list);
+    (turmaDecks ?? []).forEach((td: any) => {
+      const qc = perDeck.get(td.deck_id) ?? 0;
+      if (qc > 0) questionCountMap.set(td.turma_id, (questionCountMap.get(td.turma_id) ?? 0) + qc);
     });
-    parentIds = newChildren.map((c: any) => c.id);
   }
 
-  const allDeckIds = [...allFetchedIds];
-  const { data: countRows } = await supabase.rpc('count_cards_per_deck', { p_deck_ids: allDeckIds });
-  const directCountMap = new Map<string, number>();
-  (countRows ?? []).forEach((r: any) => directCountMap.set(r.deck_id, Number(r.card_count)));
+  // Last updated: use max updated_at from decks
+  const lastUpdatedMap = new Map<string, string>();
+  if (allDeckIds.length > 0) {
+    const { data: deckDates } = await supabase
+      .from('decks')
+      .select('id, updated_at')
+      .in('id', allDeckIds);
+    const deckDateMap = new Map((deckDates ?? []).map((d: any) => [d.id, d.updated_at]));
+    (turmaDecks ?? []).forEach((td: any) => {
+      const dt = deckDateMap.get(td.deck_id);
+      if (dt) {
+        const current = lastUpdatedMap.get(td.turma_id);
+        if (!current || dt > current) lastUpdatedMap.set(td.turma_id, dt);
+      }
+    });
+  }
 
-  const collectSubtreeCount = (id: string): number => {
-    let count = directCountMap.get(id) ?? 0;
-    for (const childId of (childrenMap.get(id) ?? [])) {
-      count += collectSubtreeCount(childId);
-    }
-    return count;
-  };
-
-  return allDecks
-    .filter((d: any) => !d.parent_deck_id)
-    .map((d: any) => ({
-      id: d.id,
-      name: d.name,
-      card_count: collectSubtreeCount(d.id),
-      owner_name: profileMap.get(d.user_id) ?? 'Anônimo',
-      owner_id: d.user_id,
-      created_at: d.created_at,
-      updated_at: d.updated_at,
-    }));
+  return allTurmas.map((t: any) => ({
+    ...t,
+    member_count: memberCountMap.get(t.id) ?? 0,
+    deck_count: deckCountMap.get(t.id) ?? 0,
+    card_count: cardCountMap.get(t.id) ?? 0,
+    question_count: questionCountMap.get(t.id) ?? 0,
+    last_updated: lastUpdatedMap.get(t.id) ?? t.created_at ?? '',
+    owner_name: profileMap.get(t.owner_id) ?? 'Anônimo',
+    avg_rating: t.avg_rating ?? 0,
+    rating_count: t.rating_count ?? 0,
+  }));
 }
 
 // ── Community Preview ──
