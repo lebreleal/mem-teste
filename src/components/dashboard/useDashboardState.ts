@@ -201,24 +201,24 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
   const totalArchived = isInsideSala ? archivedDecks.length : archivedFolders.length;
 
   const getSubDecks = (parentId: string) =>
-    decks.filter(d => d.parent_deck_id === parentId && !d.is_archived);
+    (childrenIndex.get(parentId) ?? []).filter(d => !d.is_archived);
 
   // For community link detection, include archived sub-decks too
   const getAllSubDecks = (parentId: string) =>
-    decks.filter(d => d.parent_deck_id === parentId);
+    childrenIndex.get(parentId) ?? [];
 
-  /** Memoized aggregate stats map — O(n) build, O(1) lookups */
+  /** Memoized aggregate stats map — O(n) build with Map lookups, O(1) reads */
   const aggregateMap = useMemo(() => {
     const map = new Map<string, { new_count: number; learning_count: number; review_count: number; newReviewed: number; newGraduated: number; reviewed: number }>();
     const compute = (deckId: string) => {
       if (map.has(deckId)) return map.get(deckId)!;
-      const deck = decks.find(d => d.id === deckId);
+      const deck = deckMap.get(deckId);
       if (!deck) {
         const empty = { new_count: 0, learning_count: 0, review_count: 0, newReviewed: 0, newGraduated: 0, reviewed: 0 };
         map.set(deckId, empty);
         return empty;
       }
-      const subs = decks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
+      const subs = (childrenIndex.get(deckId) ?? []).filter(d => !d.is_archived);
       let n = deck.new_count, l = deck.learning_count, r = deck.review_count;
       let newReviewed = deck.new_reviewed_today ?? 0;
       let newGraduated = deck.new_graduated_today ?? 0;
@@ -234,7 +234,7 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
     };
     for (const d of decks) compute(d.id);
     return map;
-  }, [decks]);
+  }, [decks, deckMap, childrenIndex]);
 
   const getRawAggregateStats = (deck: DeckWithStats) => {
     return aggregateMap.get(deck.id) ?? { new_count: 0, learning_count: 0, review_count: 0, newReviewed: 0, newGraduated: 0, reviewed: 0 };
