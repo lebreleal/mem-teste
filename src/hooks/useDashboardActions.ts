@@ -105,8 +105,10 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
 
     let finalName = trimmed;
     if (state.createType === 'deck') {
-      const siblings = state.createParentDeckId
-        ? state.decks.filter(d => d.parent_deck_id === state.createParentDeckId && !d.is_archived)
+      const isMateria = state.createParentDeckId === '__materia__';
+      const actualParent = isMateria ? null : state.createParentDeckId;
+      const siblings = actualParent
+        ? state.decks.filter(d => d.parent_deck_id === actualParent && !d.is_archived)
         : state.decks.filter(d => d.folder_id === state.currentFolderId && !d.parent_deck_id && !d.is_archived);
       finalName = getUniqueName(trimmed, siblings.map(d => d.name));
     } else {
