@@ -241,67 +241,8 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
     }
   };
 
-  const [downloadingDeck, setDownloadingDeck] = useState<string | null>(null);
-  const handleDownloadDeck = useCallback(async (deck: PublishedDeck) => {
-    if (!user) { navigate('/auth'); return; }
-    setDownloadingDeck(deck.turmaDeckId);
-    try {
-      if (!isMember) {
-        await supabase.from('turma_members').insert({ turma_id: turmaId, user_id: user.id } as any).single();
-      }
 
-      const { data: existingFolders } = await supabase.from('folders')
-        .select('id').eq('user_id', user.id).eq('source_turma_id', turmaId);
-      let folderId: string | null = null;
-      if (existingFolders && existingFolders.length > 0) {
-        folderId = existingFolders[0].id;
-      } else {
-        const { data: newFolder } = await supabase.from('folders')
-          .insert({ user_id: user.id, name: turma?.name || 'Sala', section: 'community', source_turma_id: turmaId } as any)
-          .select().single();
-        folderId = (newFolder as any)?.id ?? null;
-      }
 
-      await downloadDeck(deck.turmaDeckId, deck.deckId, deck.name, folderId);
-      queryClient.invalidateQueries({ queryKey: ['user-downloaded-turma-decks'] });
-      queryClient.invalidateQueries({ queryKey: ['decks'] });
-      queryClient.invalidateQueries({ queryKey: ['folders'] });
-      toast({ title: `✅ "${deck.name}" adicionado à sua coleção!` });
-    } catch (e: any) {
-      if (e.code === '23505') {
-        toast({ title: 'Deck já baixado' });
-      } else {
-        toast({ title: 'Erro ao baixar deck', variant: 'destructive' });
-      }
-    } finally {
-      setDownloadingDeck(null);
-    }
-  }, [user, turmaId, turma, isMember, downloadDeck, queryClient, toast, navigate]);
-
-  /* ── Download button for a deck ── */
-  const DownloadBtn = ({ deck }: { deck: PublishedDeck }) => {
-    const isDownloaded = downloadedDeckIds.has(deck.turmaDeckId);
-    const isDownloading = downloadingDeck === deck.turmaDeckId;
-    if (isDownloaded) {
-      return (
-        <span className="flex items-center gap-1 text-xs text-success font-medium shrink-0">
-          <Check className="h-3.5 w-3.5" /> Baixado
-        </span>
-      );
-    }
-    return (
-      <Button
-        variant="outline"
-        size="sm"
-        className="h-8 text-xs gap-1.5 shrink-0"
-        disabled={isDownloading}
-        onClick={(e) => { e.stopPropagation(); handleDownloadDeck(deck); }}
-      >
-        <Download className="h-3.5 w-3.5" />
-        {isDownloading ? '...' : 'Baixar'}
-      </Button>
-    );
-  };
 
   return (
     <div className="min-h-screen bg-background">
