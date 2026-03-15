@@ -151,16 +151,15 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
 
   const { data: salaDecks = [], isLoading: decksLoading } = useSalaDecks(turmaId);
 
-  // Member count
-  const { data: memberCount = 0 } = useQuery({
-    queryKey: ['turma-member-count', turmaId],
-    queryFn: async () => {
-      const { count } = await supabase.from('turma_members').select('id', { count: 'exact', head: true }).eq('turma_id', turmaId);
-      return count ?? 0;
-    },
-    enabled: !!turmaId,
-    staleTime: 60_000,
-  });
+  // Last updated date from deck data
+  const lastUpdated = useMemo(() => {
+    if (salaDecks.length === 0) return null;
+    let latest = '';
+    for (const d of salaDecks) {
+      if (d.updated_at && d.updated_at > latest) latest = d.updated_at;
+    }
+    return latest || null;
+  }, [salaDecks]);
 
   // Question counts per deck
   const allDeckIds = useMemo(() => salaDecks.map(d => d.id), [salaDecks]);
