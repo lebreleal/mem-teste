@@ -3,6 +3,10 @@
  * Reuses the EXACT same DeckRow component from the Dashboard in readOnly mode.
  * No data duplication — reads the owner's decks directly via turma_decks RLS.
  */
+// @ts-ignore
+import { formatDistanceToNow } from 'date-fns';
+// @ts-ignore
+import { ptBR } from 'date-fns/locale';
 
 import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -11,7 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { TurmaDetailProvider, useTurmaDetail } from '@/components/turma-detail/TurmaDetailContext';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
-import { ChevronLeft, Users, Star, Heart, FolderOpen, Share2, Layers, Play, Plus } from 'lucide-react';
+import { ChevronLeft, Star, FolderOpen, Share2, Play, Plus, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
@@ -147,16 +151,15 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
 
   const { data: salaDecks = [], isLoading: decksLoading } = useSalaDecks(turmaId);
 
-  // Member count
-  const { data: memberCount = 0 } = useQuery({
-    queryKey: ['turma-member-count', turmaId],
-    queryFn: async () => {
-      const { count } = await supabase.from('turma_members').select('id', { count: 'exact', head: true }).eq('turma_id', turmaId);
-      return count ?? 0;
-    },
-    enabled: !!turmaId,
-    staleTime: 60_000,
-  });
+  // Last updated date from deck data
+  const lastUpdated = useMemo(() => {
+    if (salaDecks.length === 0) return null;
+    let latest = '';
+    for (const d of salaDecks) {
+      if (d.updated_at && d.updated_at > latest) latest = d.updated_at;
+    }
+    return latest || null;
+  }, [salaDecks]);
 
   // Question counts per deck
   const allDeckIds = useMemo(() => salaDecks.map(d => d.id), [salaDecks]);
@@ -341,11 +344,16 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
                 <span className="text-xs text-muted-foreground">Por</span>
                 <span className="text-xs font-medium text-foreground">{ownerName}</span>
               </div>
-              <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">
-                <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {memberCount} seguidores</span>
+              <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
                 {ratingCount > 0 && (
                   <span className="flex items-center gap-1">
                     <Star className="h-3 w-3 text-warning fill-warning" /> {rating.toFixed(1)}
+                  </span>
+                )}
+                {lastUpdated && (
+                  <span className="flex items-center gap-1">
+                    <RefreshCw className="h-2.5 w-2.5" />
+                    {(() => { try { return formatDistanceToNow(new Date(lastUpdated), { addSuffix: true, locale: ptBR }); } catch { return ''; } })()}
                   </span>
                 )}
               </div>
