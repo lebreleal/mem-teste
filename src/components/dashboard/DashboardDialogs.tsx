@@ -50,7 +50,7 @@ interface DashboardDialogsProps {
   movableDecks: MovableDeck[];
   folders: Folder[];
   decks: { id: string; name: string; parent_deck_id: string | null; folder_id: string | null }[];
-  onMoveSubmit: () => void;
+  onMoveSubmit: (overrideParentDeckId?: string | null) => void;
   onCreateFolderInMove: () => void;
 
   // Delete
