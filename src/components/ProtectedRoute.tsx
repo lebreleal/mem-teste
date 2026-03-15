@@ -59,7 +59,17 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   // Listen for events from other components
   useEffect(() => {
     const pomodoroHandler = () => setShowPomodoro(true);
-    const addMenuHandler = () => setShowAddMenu(true);
+    const addMenuHandler = () => {
+      // On dashboard root (not inside a sala): go directly to create-sala
+      if (isOnDashboard && !isInsideSala) {
+        navigate('/dashboard?action=create-sala');
+        return;
+      }
+      // Inside a community folder: do nothing
+      if (isCommunityFolder) return;
+      // Otherwise open the add menu
+      setShowAddMenu(true);
+    };
     window.addEventListener('open-pomodoro', pomodoroHandler);
     window.addEventListener('open-add-menu', addMenuHandler);
     return () => {
