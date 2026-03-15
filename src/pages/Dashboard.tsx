@@ -500,11 +500,12 @@ const Dashboard = () => {
       reviewCount += deckReviewCount;
       reviewedToday += dk.reviewed_today ?? 0;
 
-      // Track review limits per root deck for capping
+      // Track review limits from root decks, but accumulate actual reviews from ALL decks
       if (isRoot) {
         totalDailyReviewLimit += dk.daily_review_limit ?? 100;
-        totalReviewReviewedToday += Math.max(0, (dk.reviewed_today ?? 0) - deckNewGraduatedToday);
       }
+      // Sum review-reviewed-today from every deck (not just roots) so cap works correctly
+      totalReviewReviewedToday += Math.max(0, (dk.reviewed_today ?? 0) - deckNewGraduatedToday);
 
       const deckRemainingNewToday = Math.max(0, deckDailyNewLimit - deckNewReviewedToday);
       newCountTodayByDeckLimits += Math.min(deckNewCount, deckRemainingNewToday);

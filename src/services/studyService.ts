@@ -280,7 +280,8 @@ export async function fetchStudyQueue(
   const buryLearning = deckConfig?.bury_learning_siblings !== false;
 
   let allLearning = cards.filter(c => c.state === 1 || c.state === 3);
-  let allNew = cards.filter(c => c.state === 0);
+  // Exclude new cards from decks whose new-card limit is 0 (reviews/learning still play)
+  let allNew = cards.filter(c => c.state === 0 && !zeroNewLimitDeckIds.has(c.deck_id));
   let allReview = cards.filter(c => c.state === 2);
 
   allNew = allNew.slice(0, effectiveNewLimit);

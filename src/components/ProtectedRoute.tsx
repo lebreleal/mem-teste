@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useQueryClient } from '@tanstack/react-query';
 import BottomNav from '@/components/BottomNav';
 import PomodoroFloater from '@/components/PomodoroFloater';
 import ImpersonationBanner from '@/components/ImpersonationBanner';
@@ -19,8 +20,22 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
+  const queryClient = useQueryClient();
   const isOnDashboard = location.pathname === '/dashboard';
-  const isInsideSala = isOnDashboard && !!searchParams.get('folder');
+  const folderId = searchParams.get('folder');
+  const isInsideSala = isOnDashboard && !!folderId;
+
+  // Check if current folder is a community (followed) sala
+  const isCommunityFolder = useMemo(() => {
+    if (!folderId) return false;
+    // Try to find folder in React Query cache
+    const foldersCache = queryClient.getQueryData<any[]>(['folders']);
+    if (foldersCache) {
+      const folder = foldersCache.find((f: any) => f.id === folderId);
+      if (folder) return !!folder.source_turma_id;
+    }
+    return false;
+  }, [folderId, queryClient]);
   const showNavRoutes = ['/dashboard', '/turmas', '/profile', '/desempenho'];
   const hideNavPatterns = ['/study/', '/exam/', '/lessons/'];
   const showNav = showNavRoutes.some(r => location.pathname === r || location.pathname.startsWith(r + '/'))
