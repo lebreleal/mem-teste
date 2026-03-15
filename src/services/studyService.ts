@@ -353,30 +353,6 @@ export async function submitCardReview(
       last_reviewed_at: nowIso,
     };
 
-    let movedToError = false;
-    let returnedFromError = false;
-    let originDeckName: string | null = null;
-
-    if (isRatingFail && !isInErrorDeck) {
-      const errorDeckId = await getOrCreateErrorDeck(userId);
-      updatePayload.origin_deck_id = card.deck_id;
-      updatePayload.deck_id = errorDeckId;
-      movedToError = true;
-    }
-
-    if (newState === 2 && isInErrorDeck) {
-      updatePayload.deck_id = card.origin_deck_id;
-      updatePayload.origin_deck_id = null;
-      returnedFromError = true;
-
-      const { data: originDeck } = await supabase
-        .from('decks')
-        .select('name')
-        .eq('id', card.origin_deck_id)
-        .single();
-      originDeckName = originDeck?.name ?? null;
-    }
-
     const [updateResult, logResult] = await Promise.all([
       supabase.from('cards').update(updatePayload).eq('id', card.id),
       supabase.from('review_logs').insert({
@@ -399,9 +375,9 @@ export async function submitCardReview(
       difficulty: 0,
       scheduled_date: nowIso,
       interval_days: 1,
-      movedToError,
-      returnedFromError,
-      originDeckName,
+      movedToError: false,
+      returnedFromError: false,
+      originDeckName: null,
     };
   }
 
