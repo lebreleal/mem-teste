@@ -137,7 +137,8 @@ const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: stri
   const totalLearning = getLearningCount(parentDeckId);
   const dailyReviewLimit = parentDeck?.daily_review_limit ?? 100;
   const rawReview = getReviewCount(parentDeckId);
-  const totalReview = Math.min(rawReview, dailyReviewLimit);
+  const reviewReviewedToday = Math.max(0, reviewedToday - totalNewGraduatedToday);
+  const totalReview = Math.max(0, Math.min(rawReview, dailyReviewLimit - reviewReviewedToday));
   const totalDue = totalNew + totalLearning + totalReview;
 
   // Fetch question counts for all descendant deck IDs
