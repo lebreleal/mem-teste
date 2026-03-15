@@ -347,7 +347,9 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                         <Play className="h-3 w-3 fill-current" />
                       </button>
                     )}
-                    <DeckMenu deck={sub} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
+                    {!disableManagementActions && (
+                      <DeckMenu deck={sub} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
+                    )}
                   </div>
                 )}
                 <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 -rotate-90 group-hover/sub:hidden" />
