@@ -938,6 +938,7 @@ const Dashboard = () => {
           const noopD = (_d: any) => {};
           const noopS = (_s: string) => {};
           const getCLinkId = (_d: any) => null as string | null;
+          const [commAccordionId, setCommAccordionId] = useState<string | null>(null);
           
           if (cRootDecks.length === 0) {
             return (
@@ -950,13 +951,32 @@ const Dashboard = () => {
           }
 
           return (
-            <CommunityDeckList
-              rootDecks={cRootDecks}
-              getSubDecks={cGetSubDecks}
-              getAggregateStats={cGetAggStats}
-              getCommunityLinkId={getCLinkId}
-              turmaId={sourceTurmaId!}
-            />
+            <div className="divide-y divide-border/50">
+              {cRootDecks.map((deck: any) => (
+                <DeckRow
+                  key={deck.id}
+                  deck={deck}
+                  readOnly
+                  readOnlyNavState={{ from: 'community', turmaId: sourceTurmaId }}
+                  deckSelectionMode={false}
+                  selectedDeckIds={new Set()}
+                  toggleDeckSelection={noopS}
+                  getSubDecks={cGetSubDecks}
+                  getAggregateStats={cGetAggStats}
+                  getCommunityLinkId={getCLinkId}
+                  navigateToCommunity={noopS}
+                  onCreateSubDeck={noopS}
+                  onRename={noopD}
+                  onMove={noopD}
+                  onArchive={noopS}
+                  onDelete={noopD}
+                  expandedDecks={new Set()}
+                  toggleExpand={noopS}
+                  expandedAccordionId={commAccordionId}
+                  onAccordionToggle={(id) => setCommAccordionId(prev => prev === id ? null : id)}
+                />
+              ))}
+            </div>
           );
         })()}
 
