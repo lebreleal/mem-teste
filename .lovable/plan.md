@@ -1,157 +1,120 @@
-# Sistema ALEKS — Grafo de Pré-requisitos entre Conceitos
 
-## Implementado
 
-### 1. Coluna `parent_concept_id` em `global_concepts`
-- `ALTER TABLE global_concepts ADD parent_concept_id uuid REFERENCES global_concepts(id) ON DELETE SET NULL`
-- Índice criado para queries eficientes
+## Análise Completa: Sistema Explorar e Salas
 
-### 2. `conceptHierarchyService.ts` reescrito para grafo de conceitos
-- `buildHierarchyDiagnostic` navega `parent_concept_id` (ancestors/descendants/siblings) em vez de `parent_deck_id`
-- ConceptNode agora inclui `depth` (profundidade no grafo) e `parent_concept_id`
-- Removidas dependências de deck hierarchy (getAncestorDeckIds, getSiblingDeckIds, etc.)
+---
 
-### 3. Cascade automático no erro (`useGlobalConcepts.ts`)
-- Quando rating = 1 (Again) e conceito tem parent_concept_id, chama `cascadeOnError`
-- `cascadeOnError` caminha ancestrais e reagenda os que estão em state 0/3 ou stability < 5
+### 1. COMO FUNCIONA HOJE
 
-### 4. Fronteira de aprendizagem "Prontos para aprender" (`Concepts.tsx`)
-- `fetchReadyToLearnConcepts`: conceitos em state=0 cujo parent está em state=2 (dominado)
-- Seção visual com badges clicáveis na aba "Meus"
+#### Criação de uma Sala (Dono)
+- O usuário cria uma **pasta (folder)** no Dashboard. Essa pasta é a "Sala".
+- Dentro dela, cria decks e adiciona cartões normalmente.
+- Para publicar no Explorar, usa o menu "3 pontos" → "Publicar no Explorar". Isso:
+  - Cria (ou atualiza) um registro na tabela `turmas` vinculado ao `owner_id`.
+  - Sincroniza os decks da pasta para `turma_decks` com `is_published = true`.
+  - Marca os decks como `is_public = true`.
+- O dono estuda normalmente seus próprios decks — as estatísticas (state, difficulty, stability) vivem na tabela `cards` nos registros dele.
 
-### 5. Auto-linking de pré-requisitos via IA (`generate-questions`)
-- Prompt atualizado para retornar campo `prerequisites` (0-2 Knowledge Components)
-- Tool schema inclui `prerequisites` como campo obrigatório
-- `linkQuestionsToConcepts` agora seta `parent_concept_id` automaticamente com o primeiro pré-requisito
+#### Seguidor Entra na Sala (Explorar)
+- No Explorar, o usuário vê salas públicas (tabela `turmas` com `is_private = false`).
+- Ao clicar "Entrar", o sistema:
+  - Insere um registro em `turma_members` (user_id + turma_id).
+  - Cria uma **pasta local (folder)** com `source_turma_id` apontando para a turma.
+- Essa pasta aparece no Dashboard do seguidor como uma "Sala seguida".
 
-### 6. ErrorNotebook atualizado para grafo de conceitos
-- Breadcrumb mostra caminho de pré-requisitos (conceitos, não decks)
-- "Lacunas Fundacionais" → "Pré-requisitos Fracos"
-- Suporta múltiplos source concepts
+#### Visualização dos Decks da Sala Seguida (Dashboard)
+- Quando o seguidor entra na sala no Dashboard, o sistema busca os **decks originais do dono** via `turma_decks` → `decks`.
+- Os decks são renderizados em modo **readOnly** (sem opções de editar, mover, excluir).
+- As contagens de cards (novo, fácil, bom, difícil, errei) são calculadas a partir dos **cards originais do dono**.
 
-### 7. Donut Chart de Progresso por Categoria
-- Gráfico de rosca (Recharts) na aba "Meus" agrupando conceitos por `category`
-- Cada fatia = uma grande área médica, colorida por % de domínio
-- Clicar na fatia filtra a lista por aquela categoria
-- Exibe % total de domínio no centro
+#### Estudo
+- O botão "ESTUDAR" navega para `/study/folder/{folderId}`.
+- O `studyService.fetchStudyQueue` busca decks onde `user_id = userId` e `folder_id` pertence à hierarquia da pasta.
+- Como a pasta do seguidor NÃO contém decks próprios (apenas referencia os do dono), **a fila de estudo retorna vazia**.
 
-### 8. Fronteira Enforced (Conceitos Bloqueados)
-- Conceitos cujo `parent_concept_id` aponta para conceito com `state !== 2` ficam bloqueados
-- UI: opacity reduzida, ícone de cadeado, tooltip "Domine {prereq} primeiro"
-- Conceitos bloqueados não podem ser estudados diretamente
+#### Estatísticas no Detalhe do Deck
+- `DeckDetailContext` detecta `isCommunityDeck` (deck pertence a outro user).
+- Para community decks, força `state = 0` em todos os cards → gauge mostra 0%.
+- Tem lógica de auto-sync que copia cards para decks locais se estiverem vazios.
 
-### 9. Auto-mapeamento de Pré-requisitos via IA
-- Botão "Mapear pré-requisitos com IA" na página de Conceitos
-- Edge function `map-prerequisites` usa Lovable AI (gemini-2.5-flash) com tool calling
-- Analisa todos os conceitos do usuário e retorna pares `{ concept, prerequisite }`
-- Atualiza `parent_concept_id` em batch (não sobrescreve mapeamentos manuais)
+---
 
-### 10. Avaliação Diagnóstica Inicial (Knowledge Check)
-- Botão "Diagnóstico Inicial" na página de Conceitos
-- Seleciona ~20 conceitos distribuídos por profundidade no grafo
-- Para cada conceito, busca uma questão vinculada
-- Se acerta 2x consecutivas → marca conceito como dominado (state=2, stability=10)
-- Se erra → marca como fraco (state=0) para revisão futura
-- Exibe resultado final com contagem de acertos/erros
+### 2. INCONSISTÊNCIAS E BUGS IDENTIFICADOS
 
-### 11. Princípios de Neurociência Aplicados (Learning Science)
+#### BUG CRÍTICO 1: Estatísticas da Sala Seguida Mostram Dados do Dono
+**Localização**: `Dashboard.tsx` linhas 148-182
 
-#### Rating Automático Binário (StudyMode)
-- Removidos botões manuais "Errei/Bom/Fácil"
-- Sistema atribui rating=3 (correto) ou rating=1 (incorreto) automaticamente
-- Base: Dunning-Kruger — alunos são maus autoavaliadores
+O gauge circular e as contagens na sala seguida buscam os **cards originais do dono** via query direta:
+```
+supabase.from('cards').select('deck_id, state, difficulty').in('deck_id', batch)
+```
+Como os cards pertencem ao dono, `state` e `difficulty` refletem o progresso do dono (ex: 14% mastered), não do seguidor (que deveria ser 0%).
 
-#### Mastery Threshold (MASTERY_THRESHOLD = 2)
-- Exige 2 acertos consecutivos para confirmar domínio de um conceito
-- Aplicado tanto no StudyMode quanto no DiagnosticMode
-- Base: Bloom 1968 (mastery learning), reduz falso positivo de 25% (chute em 4 alternativas)
+**Impacto**: O seguidor vê o progresso de estudo do dono como se fosse seu.
 
-#### Interleaved Practice (ErrorNotebook)
-- Botão "Estudar todos (prática intercalada)" embaralha todos os conceitos fracos
-- Fisher-Yates shuffle garante aleatoriedade uniforme
-- Base: Rohrer & Taylor 2007 (+20-40% retenção vs blocked practice)
+#### BUG CRÍTICO 2: Botões Estudar/Estatísticas/Ajustes Não Funcionam
+**Localização**: `Dashboard.tsx` linhas 757-881
 
-#### Elaborative Interrogation (StudyMode)
-- Após erro, campo de texto: "Por que a alternativa X está correta?"
-- Aluno tenta explicar antes de ver a explicação da IA
-- Opcional (pode pular), mas ativa encoding profundo
-- Base: Chi et al. 1994, Dunlosky et al. 2013 (+30% retenção)
+Para salas seguidas, o botão ESTUDAR navega para `/study/folder/{folderId}`. O `studyService` busca decks com `user_id = userId` na pasta. Como a pasta do seguidor **não tem decks próprios** (apenas exibe os do dono via `communityTurmaInfo`), a fila de estudo retorna vazia.
 
-#### Confidence-Based Assessment (StudyMode)
-- Após acertar, pergunta "Você tinha certeza?"
-- Se "Chutei" → não incrementa streak, exige mais uma questão
-- Impede que chutes sortudos confirmem domínio
-- Base: Hunt 2003, Dunlosky & Rawson 2012 (calibração metacognitiva)
+O botão de Ajustes (`StudySettingsSheet`) provavelmente abre, mas não encontra decks para configurar.
 
-## Correções Arquiteturais — Unificação Cards ↔ Temas
+**Impacto**: Seguidor não consegue estudar nem configurar a sala.
 
-### 12. Card Review → Concept Mastery Sync (Fase 1a)
-- `Study.tsx` → `executeReview()` agora chama `getCardConcepts` + `updateConceptMastery` após cada review
-- Se rating≥3: incrementa correct_count do tema vinculado
-- Se rating=1: incrementa wrong_count do tema vinculado
-- Execução non-blocking (fire-and-forget) para não impactar performance do estudo
+#### BUG CRÍTICO 3: Conflito entre Duas Abordagens de Sincronização
+Existem **duas lógicas conflitantes**:
 
-### 13. Temas Due → Flashcard Retrieval (Fase 1b)
-- `DashboardDueThemes.tsx` agora navega para `/study/{deckId}` ao clicar em um tema
-- Busca deck vinculado via `question_concepts` → `deck_questions` → `deck_id`
-- Fallback para `/conceitos` se não houver deck vinculado
-- Removido StudyMode inline — temas due sugerem flashcards (recall real > recognition)
+1. **Dashboard**: Exibe decks do dono diretamente (readOnly), sem criar cópias locais.
+2. **DeckDetailContext**: Quando o seguidor clica num deck, tenta auto-sync (copiar cards do dono para um deck local).
 
-### 14. Auto-trigger Diagnóstico Inicial (Fase 2a)
-- Novo componente `DiagnosticBanner.tsx` no Dashboard
-- Aparece automaticamente quando 10+ conceitos existem sem `last_reviewed_at`
-- Botão "Iniciar diagnóstico" abre `DiagnosticMode` inline
-- Dismissível com persistência em localStorage
+Mas o seguidor **não tem decks locais** na pasta seguida! O auto-sync no `DeckDetailContext` cria cards em decks que não existem na pasta do seguidor. Resultado: dados inconsistentes entre Dashboard e detalhe do deck.
 
-### 15. Auto-trigger Mapeamento de Pré-requisitos (Fase 2b)
-- Função `tryAutoMapPrerequisites` adicionada em `globalConceptService.ts`
-- Chamada automaticamente após `linkQuestionsToConcepts` (fire-and-forget)
-- Só executa se >80% dos conceitos não têm `parent_concept_id` (first-time scenario)
-- Guard contra execução duplicada via `_autoMapInFlight` Set
+#### BUG 4: `salaDifficultyStats` Usa Cards do Dono
+**Localização**: `Dashboard.tsx` linhas 429-463
 
-### 16. Daily Theme Limit (Fase 3a)
-- Constante `DAILY_NEW_THEME_LIMIT = 5` em `useGlobalConcepts.ts`
-- `newThemeRemaining` calculado com base em temas revisados hoje pela primeira vez
-- Exposto no hook para UI consumir (banners, limites)
+A query `sala-difficulty-stats` busca cards com `in('deck_id', salaDeckIds)` onde `salaDeckIds` vem de `state.currentDecks`. Para salas seguidas, `currentDecks` está vazio (nenhum deck do seguidor nessa pasta), então a query retorna zeros. Mas quando retorna dados, são do dono.
 
-## Arquivos Modificados
-| Arquivo | Mudança |
-|---|---|
-| Supabase migration | `parent_concept_id` + index |
-| `src/services/conceptHierarchyService.ts` | Reescrito: grafo de conceitos |
-| `src/services/globalConceptService.ts` | `parent_concept_id` no tipo, `cascadeOnError`, `fetchReadyToLearnConcepts`, `linkQuestionsToConcepts` com prerequisites, `mapPrerequisitesViaAI`, `fetchDiagnosticConcepts`, `markConceptMastered`, `markConceptWeak`, `tryAutoMapPrerequisites` |
-| `src/hooks/useGlobalConcepts.ts` | Cascade automático no rating=1, `DAILY_NEW_THEME_LIMIT`, `newThemeRemaining` |
-| `src/pages/Concepts.tsx` | Donut chart, fronteira enforced, botão diagnóstico, botão mapear prereqs |
-| `src/pages/ErrorNotebook.tsx` | Interleaved practice, botão "Estudar todos" com shuffle |
-| `src/components/concepts/StudyMode.tsx` | Rating binário automático, mastery threshold, elaborative interrogation, confidence check |
-| `src/components/concepts/DiagnosticMode.tsx` | Mastery threshold de 2 questões, useEffect fix |
-| `src/components/deck-detail/DeckQuestionsTab.tsx` | Passa prerequisites no linking |
-| `supabase/functions/generate-questions/index.ts` | Campo prerequisites no schema + prompt |
-| `supabase/functions/map-prerequisites/index.ts` | Nova edge function para IA mapear pré-requisitos |
-| `supabase/config.toml` | Adicionada config map-prerequisites |
-| `src/pages/Study.tsx` | Sync card review → concept mastery |
-| `src/components/dashboard/DashboardDueThemes.tsx` | Navega para deck ao invés de StudyMode |
-| `src/components/dashboard/DiagnosticBanner.tsx` | **Novo** — Auto-trigger diagnóstico |
-| `src/pages/Dashboard.tsx` | Adicionado DiagnosticBanner |
+#### BUG 5: Ao Sair da Sala, Não Limpa os Cards Copiados
+**Localização**: `Dashboard.tsx` linhas 194-215
 
-### 17. Edição de Conceitos no EditQuestionDialog
-- EditQuestionDialog expandido com: chips de conceitos removíveis, busca debounced em `global_concepts`, criação inline de novos conceitos
-- Clique no chip abre editor inline (nome + descrição) com `updateConceptMeta`
-- Campo de explicação editável
-- Ao salvar, sincroniza `question_concepts` via `linkQuestionsToConcepts`
+O `handleLeaveSala` deleta `turma_members` e a pasta, mas se o auto-sync do `DeckDetailContext` criou cópias de cards em decks locais, esses decks/cards ficam órfãos no banco.
 
-### 18. Reuso Inteligente de Conceitos pela IA
-- `generate-questions` e `ai-tutor` (type `question-concepts`) agora buscam conceitos do deck via `get_deck_concept_names` RPC
-- Fallback: top 100 conceitos do usuário por uso
-- Lista curta injetada no prompt: "REUTILIZE estes conceitos se aplicável"
-- Custo: ~500 tokens extras (~centavos)
-- RPC `get_deck_concept_names` criada: `question_concepts → deck_questions → global_concepts` filtrado por deck_id e user_id, LIMIT 200
+#### INCONSISTÊNCIA 6: Modelo Híbrido Não Definido
+O sistema oscila entre dois modelos:
+- **Modelo A (Referência)**: Seguidor vê decks do dono sem cópia. Estudo acontece nos cards originais.
+- **Modelo B (Cópia Local)**: Seguidor tem cópias próprias dos decks/cards com progresso independente.
 
-### 19. Descrição Contextual por Questão (context_description)
-- **Arquitetura**: `context_description` vive em `question_concepts` (junção), não em `global_concepts`
-  - **Conceito** = Knowledge Component reutilizável entre questões/usuários (nome curto, 2-6 palavras)
-  - **context_description** = como esse conceito se aplica NESTA questão específica (15-30 palavras)
-- Dados limpos: todos os `global_concepts` e `question_concepts` foram deletados para recomeço limpo
-- AI prompts atualizados: IA agora gera descrições contextuais ("Nesta questão, aplicar X permite Y") em vez de definições genéricas
-- UI (`ConceptMasterySection`): busca `context_description` de `question_concepts` em vez de `global_concepts.description`
-- `linkQuestionsToConcepts`: agora insere `context_description` no upsert de `question_concepts`
+Atualmente, o Dashboard usa Modelo A (exibe originais) mas o DeckDetail tenta Modelo B (copia cards). Isso gera todas as inconsistências acima.
+
+#### INCONSISTÊNCIA 7: `salaStudyStats` Calcula Stats com `allDecks` do Seguidor
+**Localização**: `Dashboard.tsx` linhas 466-545
+
+O `salaStudyStats` itera sobre `state.currentDecks` usando `allDecks` (decks do seguidor). Para salas seguidas, `currentDecks` é vazio porque o seguidor não tem decks na pasta. Logo, `salaStudyStats` retorna tudo zero. Mas o gauge separado (`communityTurmaInfo`) mostra dados do dono.
+
+---
+
+### 3. COMO DEVERIA FUNCIONAR (Modelo Correto)
+
+O modelo correto é o **Modelo B (Cópia Local)** com as seguintes regras:
+
+1. **Ao seguir uma sala**: O sistema cria a pasta local E **cria cópias locais dos decks** (com `source_turma_deck_id` apontando pro original) E copia os cards com `state = 0`.
+2. **Estatísticas**: Sempre calculadas a partir dos cards/decks **locais do seguidor**. Progresso 100% independente.
+3. **Gauge/Gráficos**: Refletem os cards locais do seguidor, não do dono.
+4. **Estudo**: Funciona nos decks locais do seguidor — a fila de estudo encontra os decks na pasta.
+5. **Atualizações do dono**: Novos cards adicionados pelo dono são sincronizados (adicionados como `state = 0`) nos decks locais dos seguidores.
+6. **Edição**: Seguidor NÃO pode editar os cards (readOnly).
+7. **Ao sair**: Remove pasta, decks locais, cards locais. Stats no `review_logs` ficam 30 dias.
+
+---
+
+### 4. O QUE PRECISA SER CORRIGIDO
+
+1. **Bootstrap de decks locais**: Quando o seguidor entra na sala, criar decks locais (mirror) com `source_turma_deck_id` na pasta do seguidor, e copiar todos os cards com `state = 0`.
+2. **Dashboard**: Usar os decks locais do seguidor (não os do dono) para renderizar a lista, calcular stats e alimentar o gauge.
+3. **Estudo**: Como os decks locais pertencem ao seguidor (`user_id = auth.uid()`), o `studyService` já vai funcionar.
+4. **Remover lógica duplicada**: Eliminar o bloco `isCommunityFolder && communityTurmaInfo` no Dashboard e usar o mesmo `DeckList` para todos os casos.
+5. **Sync de atualizações**: Implementar sincronização incremental (novos cards do dono → copiar para seguidores).
+6. **Cleanup ao sair**: Deletar decks locais e cards ao sair da sala.
+
+Essa é uma refatoração significativa que requer mudanças no Dashboard, no fluxo de follow, e potencialmente uma migration/RPC para o bootstrap.
+
