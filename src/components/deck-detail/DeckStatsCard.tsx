@@ -20,23 +20,21 @@ interface DeckStatsCardProps {
 const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
   const {
     studyPending, isQuickReview, totalCards, deckId, navigate,
-    allCards,
+    cardCounts: serverCardCounts,
   } = useDeckDetail();
   const { user } = useAuth();
 
-  // === Card classification by difficulty ===
-  const cardCounts = useMemo(() => {
-    let novo = 0, facil = 0, bom = 0, dificil = 0, errei = 0;
-    for (const c of allCards) {
-      if (c.state === 0) { novo++; continue; }
-      const d = c.difficulty ?? 5;
-      if (d <= 3) facil++;
-      else if (d <= 5) bom++;
-      else if (d <= 7) dificil++;
-      else errei++;
-    }
-    return { novo, facil, bom, dificil, errei };
-  }, [allCards]);
+  // === Card classification from server-side RPC (handles any deck size) ===
+  const diffCounts = useMemo(() => {
+    if (!serverCardCounts) return { novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
+    return {
+      novo: serverCardCounts.diff_novo ?? 0,
+      facil: serverCardCounts.diff_facil ?? 0,
+      bom: serverCardCounts.diff_bom ?? 0,
+      dificil: serverCardCounts.diff_dificil ?? 0,
+      errei: serverCardCounts.diff_errei ?? 0,
+    };
+  }, [serverCardCounts]);
 
   // === Question stats (always fetch so hooks are stable) ===
   const { data: questionData } = useQuery({
@@ -64,13 +62,6 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
         .select('question_id, is_correct, answered_at')
         .eq('user_id', user!.id)
         .in('question_id', qIds);
-      const latestByQ = new Map<string, boolean>();
-      for (const a of (attempts ?? []) as any[]) {
-        const prev = latestByQ.get(a.question_id);
-        if (prev === undefined) latestByQ.set(a.question_id, a.is_correct);
-        // Keep latest by checking all
-      }
-      // Re-do with proper latest logic
       const latestMap = new Map<string, { is_correct: boolean; answered_at: string }>();
       for (const a of (attempts ?? []) as any[]) {
         const prev = latestMap.get(a.question_id);
@@ -90,15 +81,16 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
   const isQMode = mode === 'questions';
   const qd = questionData ?? { total: 0, correct: 0, wrong: 0, unanswered: 0 };
 
-  // Progress
-  const total = isQMode ? qd.total : allCards.length;
+  // Progress — use server total, not paginated allCards.length
+  const serverTotal = serverCardCounts?.total ?? 0;
+  const total = isQMode ? qd.total : serverTotal;
   const progressPct = isQMode
     ? (qd.total > 0 ? Math.round((qd.correct / qd.total) * 100) : 0)
-    : (allCards.length > 0 ? Math.round(((allCards.length - cardCounts.novo) / allCards.length) * 100) : 0);
+    : (serverTotal > 0 ? Math.round(((serverTotal - diffCounts.novo) / serverTotal) * 100) : 0);
 
   // Time estimate — based on ALL cards in the collection (not just today's due)
   const avgSec = deriveAvgSecondsPerCard(DEFAULT_STUDY_METRICS);
-  const pendingForTime = isQMode ? qd.unanswered + qd.wrong : allCards.length;
+  const pendingForTime = isQMode ? qd.unanswered + qd.wrong : serverTotal;
   const remainingMin = Math.ceil((pendingForTime * avgSec) / 60);
   const timeLabel = remainingMin >= 60
     ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
@@ -114,12 +106,12 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
         { pct: qd.wrong / qd.total, color: 'hsl(var(--destructive))', key: 'wrong' },
         { pct: qd.unanswered / qd.total, color: 'hsl(var(--muted))', key: 'unanswered' },
       ] : [])
-    : (allCards.length > 0 ? [
-        { pct: cardCounts.facil / allCards.length, color: 'hsl(var(--info))', key: 'facil' },
-        { pct: cardCounts.bom / allCards.length, color: 'hsl(var(--success))', key: 'bom' },
-        { pct: cardCounts.dificil / allCards.length, color: 'hsl(var(--warning))', key: 'dificil' },
-        { pct: cardCounts.errei / allCards.length, color: 'hsl(var(--destructive))', key: 'errei' },
-        { pct: cardCounts.novo / allCards.length, color: 'hsl(var(--muted))', key: 'novo' },
+    : (serverTotal > 0 ? [
+        { pct: diffCounts.facil / serverTotal, color: 'hsl(var(--info))', key: 'facil' },
+        { pct: diffCounts.bom / serverTotal, color: 'hsl(var(--success))', key: 'bom' },
+        { pct: diffCounts.dificil / serverTotal, color: 'hsl(var(--warning))', key: 'dificil' },
+        { pct: diffCounts.errei / serverTotal, color: 'hsl(var(--destructive))', key: 'errei' },
+        { pct: diffCounts.novo / serverTotal, color: 'hsl(var(--muted))', key: 'novo' },
       ] : []);
 
   let offset = 0;
