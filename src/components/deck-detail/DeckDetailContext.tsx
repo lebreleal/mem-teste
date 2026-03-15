@@ -280,17 +280,20 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const [displayLimit, setDisplayLimit] = useState(CARDS_PAGE);
 
   // Card counts: use RPC for own decks, direct query for community decks
+  // For community decks, all cards are "new" from the viewer's perspective (owner's state is irrelevant)
   const { data: cardCounts, isLoading: cardCountsLoading } = useQuery({
     queryKey: ['card-counts', deckId, isCommunityDeck],
     queryFn: async () => {
       if (isCommunityDeck) {
         // Direct query — RLS allows viewing community deck cards
         const cards = await cardService.fetchCards(deckId);
+        const total = cards.length;
+        // All cards are "new" from the viewer's perspective — they haven't studied any
         return {
-          total: cards.length,
-          new_count: cards.filter((c: any) => c.state === 0).length,
-          learning_count: cards.filter((c: any) => c.state === 1 || c.state === 3).length,
-          review_count: cards.filter((c: any) => c.state === 2 && new Date(c.scheduled_date) <= new Date()).length,
+          total,
+          new_count: total,
+          learning_count: 0,
+          review_count: 0,
           basic_count: cards.filter((c: any) => c.card_type === 'basic').length,
           cloze_count: cards.filter((c: any) => c.card_type === 'cloze').length,
           mc_count: cards.filter((c: any) => c.card_type === 'multiple_choice').length,
