@@ -1333,32 +1333,31 @@ const Dashboard = () => {
           </SheetHeader>
           <div className="flex flex-col gap-1">
             <button
-              className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted"
+              className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
               onClick={() => { setSalaAddMenuOpen(false); state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
             >
-              <span className="text-sm font-medium text-foreground">Criar baralho</span>
-              <span className="block text-xs text-muted-foreground mt-0.5">Um baralho de flashcards para estudar</span>
+              <SquarePlus className="h-5 w-5 text-primary shrink-0" />
+              <div>
+                <span className="text-sm font-medium text-foreground">Criar deck</span>
+                <span className="block text-xs text-muted-foreground mt-0.5">Criar manualmente ou com IA</span>
+              </div>
             </button>
             <button
-              className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted"
+              className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
               onClick={() => { setSalaAddMenuOpen(false); state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId('__materia__'); }}
             >
-              <span className="text-sm font-medium text-foreground">Criar matéria</span>
-              <span className="block text-xs text-muted-foreground mt-0.5">Agrupa baralhos relacionados em uma pasta organizacional</span>
+              <Layers className="h-5 w-5 text-primary shrink-0" />
+              <div>
+                <span className="text-sm font-medium text-foreground">Criar matéria</span>
+                <span className="block text-xs text-muted-foreground mt-0.5">Organiza seus decks por tema</span>
+              </div>
             </button>
             <button
-              className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted"
-              onClick={() => { setSalaAddMenuOpen(false); state.setAiDeckOpen(true); }}
-            >
-              <span className="text-sm font-medium text-foreground">Criar com IA</span>
-              <span className="block text-xs text-muted-foreground mt-0.5">Gere flashcards automaticamente a partir de um tema</span>
-            </button>
-            <button
-              className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted"
+              className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
               onClick={() => { setSalaAddMenuOpen(false); state.setImportOpen(true); state.setImportDeckId(null); state.setImportDeckName(''); }}
             >
+              <Archive className="h-5 w-5 text-primary shrink-0" />
               <span className="text-sm font-medium text-foreground">Importar cartões</span>
-              <span className="block text-xs text-muted-foreground mt-0.5">Importe de arquivos Anki, CSV ou texto</span>
             </button>
           </div>
         </SheetContent>
