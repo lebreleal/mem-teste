@@ -513,9 +513,8 @@ const Dashboard = () => {
                             slug = generated;
                             await refetchTurma();
                           }
-                          const link = `${window.location.origin}/c/${slug || turmaId}`;
-                          await navigator.clipboard.writeText(link);
-                          toast({ title: '🔗 Link copiado!' });
+                          setShareSlugEdit(slug || turmaId?.substring(0, 8) || '');
+                          setShareModalOpen(true);
                         }}
                         className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted/60 transition-colors text-muted-foreground hover:text-foreground"
                         aria-label="Compartilhar link da sala"
