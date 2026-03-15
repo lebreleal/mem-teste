@@ -150,6 +150,12 @@ export async function fetchDiscoverTurmas(_userId: string, searchQuery: string):
 
   const allDeckIds = (turmaDecks ?? []).map((td: any) => td.deck_id);
   const cardCountMap = new Map<string, number>();
+  const deckCountMap = new Map<string, number>();
+
+  // Count decks per turma
+  (turmaDecks ?? []).forEach((td: any) => {
+    deckCountMap.set(td.turma_id, (deckCountMap.get(td.turma_id) ?? 0) + 1);
+  });
 
   if (allDeckIds.length > 0) {
     const { data: countRows } = await supabase.rpc('count_cards_per_deck', { p_deck_ids: allDeckIds });
@@ -164,6 +170,7 @@ export async function fetchDiscoverTurmas(_userId: string, searchQuery: string):
   return allTurmas.map((t: any) => ({
     ...t,
     member_count: memberCountMap.get(t.id) ?? 0,
+    deck_count: deckCountMap.get(t.id) ?? 0,
     card_count: cardCountMap.get(t.id) ?? 0,
     owner_name: profileMap.get(t.owner_id) ?? 'Anônimo',
     avg_rating: t.avg_rating ?? 0,

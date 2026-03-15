@@ -1,115 +1,69 @@
 /**
- * Explorar Decks — lista apenas Salas publicadas.
- * Busca por nome da Sala ou por nome de deck publicado dentro da Sala.
+ * Explorar Salas — lista Salas publicadas.
+ * Layout idêntico ao SalaCard do Dashboard, mas com "por: criador" no lugar de %.
  */
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDiscoverTurmas, type Turma } from '@/hooks/useTurmas';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Search, Sparkles, Layers } from 'lucide-react';
+import { ArrowLeft, Search, Sparkles, Layers, ChevronRight, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
-const formatCount = (n: number) => {
-  if (n >= 1000) return `${(n / 1000).toFixed(0)} mil`;
-  return String(n);
+const formatRelative = (d: string) => {
+  try { return formatDistanceToNow(new Date(d), { addSuffix: true, locale: ptBR }); } catch { return ''; }
 };
-
-/** Map of keywords → cover image paths (same visual language from recommendations) */
-const COVER_MAP: Record<string, string> = {
-  medic: '/deck-covers/medicina.webp',
-  saúde: '/deck-covers/medicina.webp',
-  saude: '/deck-covers/medicina.webp',
-  anato: '/deck-covers/medicina.webp',
-  fisiolog: '/deck-covers/medicina.webp',
-  cardio: '/deck-covers/medicina.webp',
-  farmaco: '/deck-covers/medicina.webp',
-  patolog: '/deck-covers/medicina.webp',
-  neuro: '/deck-covers/neurociencia.webp',
-  psico: '/deck-covers/neurociencia.webp',
-  direit: '/deck-covers/direito.webp',
-  jurí: '/deck-covers/direito.webp',
-  constitu: '/deck-covers/direito.webp',
-  penal: '/deck-covers/direito.webp',
-  civil: '/deck-covers/direito.webp',
-  matemát: '/deck-covers/matematica.webp',
-  matemat: '/deck-covers/matematica.webp',
-  cálcul: '/deck-covers/matematica.webp',
-  calcul: '/deck-covers/matematica.webp',
-  álgebr: '/deck-covers/matematica.webp',
-  algebr: '/deck-covers/matematica.webp',
-  biolog: '/deck-covers/biologia.webp',
-  genétic: '/deck-covers/biologia.webp',
-  genetic: '/deck-covers/biologia.webp',
-  ecolog: '/deck-covers/biologia.webp',
-  físic: '/deck-covers/fisica.webp',
-  fisic: '/deck-covers/fisica.webp',
-  mecânic: '/deck-covers/fisica.webp',
-  mecanica: '/deck-covers/fisica.webp',
-  termodin: '/deck-covers/fisica.webp',
-  inglês: '/deck-covers/idiomas.webp',
-  ingles: '/deck-covers/idiomas.webp',
-  english: '/deck-covers/idiomas.webp',
-  german: '/deck-covers/idiomas.webp',
-  french: '/deck-covers/idiomas.webp',
-  espanhol: '/deck-covers/idiomas.webp',
-  idioma: '/deck-covers/idiomas.webp',
-  program: '/deck-covers/programacao.webp',
-  código: '/deck-covers/programacao.webp',
-  codigo: '/deck-covers/programacao.webp',
-  python: '/deck-covers/programacao.webp',
-  java: '/deck-covers/programacao.webp',
-  react: '/deck-covers/programacao.webp',
-  química: '/deck-covers/quimica.webp',
-  quimica: '/deck-covers/quimica.webp',
-  orgânic: '/deck-covers/quimica.webp',
-  organica: '/deck-covers/quimica.webp',
-  bioquímic: '/deck-covers/quimica.webp',
-  bioquimic: '/deck-covers/quimica.webp',
-};
-
-function getCoverForName(name: string): string {
-  const lower = name.toLowerCase();
-  for (const [keyword, path] of Object.entries(COVER_MAP)) {
-    if (lower.includes(keyword)) return path;
-  }
-  return '/deck-covers/geral.webp';
-}
 
 const SalaCard = ({
   sala,
   onClick,
 }: {
-  sala: Turma & { member_count?: number; card_count?: number; owner_name?: string };
+  sala: Turma & { member_count?: number; card_count?: number; deck_count?: number; owner_name?: string };
   onClick: () => void;
 }) => {
-  const cover = sala.cover_image_url || getCoverForName(sala.name);
+  const cover = sala.cover_image_url || defaultSalaIcon;
 
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-3 w-full rounded-xl border border-border/50 bg-card p-3 shadow-sm hover:shadow-md transition-shadow text-left"
+      className="w-full flex items-center gap-3 px-4 py-4 text-left transition-all hover:bg-muted/50 active:bg-muted/70"
     >
       <img
         src={cover}
         alt={sala.name}
-        className="h-12 w-12 rounded-lg object-cover shrink-0"
+        className="h-10 w-10 rounded-xl object-cover shrink-0"
         loading="lazy"
         decoding="async"
       />
+
       <div className="flex-1 min-w-0">
-        <h3 className="text-sm font-semibold text-foreground truncate">{sala.name}</h3>
-        <div className="flex items-center gap-3 mt-0.5">
+        <h3 className="font-display font-semibold text-foreground truncate">{sala.name}</h3>
+        <div className="flex items-center gap-2 mt-0.5">
+          <p className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
+            {(sala.deck_count ?? 0) > 0 && <span>{sala.deck_count} {(sala.deck_count ?? 0) === 1 ? 'deck' : 'decks'}</span>}
+            {(sala.card_count ?? 0) > 0 && (
+              <>
+                <span>·</span>
+                <span className="inline-flex items-center gap-0.5">
+                  <Layers className="h-3 w-3" />
+                  {sala.card_count}
+                </span>
+              </>
+            )}
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5 mt-0.5">
           {sala.owner_name && (
-            <span className="text-xs text-muted-foreground truncate">por {sala.owner_name}</span>
+            <span className="text-[11px] text-muted-foreground">por: <span className="font-medium text-foreground">{sala.owner_name}</span></span>
           )}
-          <span className="flex items-center gap-1 text-xs text-muted-foreground">
-            <Layers className="h-3 w-3" />
-            {formatCount(sala.card_count ?? 0)}
-          </span>
         </div>
       </div>
+
+      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
     </button>
   );
 };
@@ -137,7 +91,7 @@ const Turmas = () => {
           <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <h1 className="font-display text-xl font-bold text-foreground">Explorar Decks</h1>
+          <h1 className="font-display text-xl font-bold text-foreground">Explorar Salas</h1>
         </div>
       </header>
 
@@ -161,7 +115,7 @@ const Turmas = () => {
             ))}
           </div>
         ) : (salas?.length ?? 0) > 0 ? (
-          <div className="space-y-2">
+          <div className="divide-y divide-border/50 rounded-xl border border-border/50 bg-card shadow-sm">
             {salas!.map((sala) => (
               <SalaCard
                 key={sala.id}

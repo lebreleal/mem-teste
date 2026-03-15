@@ -1,38 +1,26 @@
 /**
- * TurmaDetail page — Classe view.
- * Owner sees full management, followers see read-only content.
+ * TurmaDetail page — Sala view (follows Dashboard Sala layout).
+ * Owner sees full management, followers see read-only content with download.
  * Non-members see public preview with "Seguir" button.
  */
 
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TurmaDetailProvider, useTurmaDetail } from '@/components/turma-detail/TurmaDetailContext';
-
-import TurmaHeader from '@/components/turma-detail/TurmaHeader';
-import TurmaSubHeader from '@/components/turma-detail/TurmaSubHeader';
-import ContentTab from '@/components/turma-detail/ContentTab';
-import {
-  CreateSubjectDialog,
-  EditSubjectDialog,
-} from '@/components/turma-detail/TurmaDialogs';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import {
-  ArrowLeft, Users, Star, Crown, BookOpen,
-  Info, Layers, Globe, Lock, Heart, Check,
-  FolderOpen, FileText, Clock, ShieldCheck, User,
-  ChevronLeft, Play, Download, ChevronRight,
+  ChevronLeft, Users, Star, BookOpen,
+  Layers, Heart, Check, FolderOpen, Download,
 } from 'lucide-react';
-import { useTurmas } from '@/hooks/useTurmas';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 
-// ─── Public Classe View (visitor / non-follower) ───
-// Uses same visual layout as the dashboard Sala view
-const PublicClasseView = () => {
+// ─── Shared deck list + follow logic ───
+const SalaView = ({ isFollower }: { isFollower: boolean }) => {
   const ctx = useTurmaDetail();
   const { turma, turmaId, isMember, members } = ctx;
   const navigate = useNavigate();
@@ -62,7 +50,7 @@ const PublicClasseView = () => {
         .from('decks')
         .select('id, name')
         .in('id', deckIds);
-      
+
       const { data: countRows } = await supabase.rpc('count_cards_per_deck', { p_deck_ids: deckIds });
       const countMap = new Map((countRows ?? []).map((r: any) => [r.deck_id, Number(r.card_count)]));
       const deckMap = new Map((decks ?? []).map((d: any) => [d.id, d.name]));
@@ -94,60 +82,16 @@ const PublicClasseView = () => {
     staleTime: 30_000,
   });
 
-  // Full preview data for member count
-  const { data: fullPreview } = useQuery({
-    queryKey: ['community-full-preview', turmaId],
+  // Member count
+  const { data: memberCount = 0 } = useQuery({
+    queryKey: ['turma-member-count', turmaId],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_community_full_preview' as any, { p_turma_id: turmaId });
-      if (error) throw error;
-      return data as any;
+      const { count } = await supabase.from('turma_members').select('id', { count: 'exact', head: true }).eq('turma_id', turmaId);
+      return count ?? 0;
     },
     enabled: !!turmaId,
     staleTime: 60_000,
   });
-  const memberCount = fullPreview?.member_count ?? 0;
-
-  // Follow classe = join + create linked folder + download first deck
-  const handleFollow = async () => {
-    if (!user) { navigate('/auth'); return; }
-    setFollowing(true);
-    try {
-      await supabase.from('turma_members').insert({ turma_id: turmaId, user_id: user.id } as any);
-
-      const { data: existingFolders } = await supabase.from('folders')
-        .select('id').eq('user_id', user.id).eq('source_turma_id', turmaId);
-
-      let folderId: string | null = null;
-      if (existingFolders && existingFolders.length > 0) {
-        folderId = existingFolders[0].id;
-      } else {
-        const { data: newFolder } = await supabase.from('folders')
-          .insert({ user_id: user.id, name: turma?.name || 'Classe', section: 'community', source_turma_id: turmaId } as any)
-          .select().single();
-        folderId = (newFolder as any)?.id ?? null;
-      }
-
-      // Auto-download first published deck
-      if (publishedDecks.length > 0) {
-        await downloadDeck(publishedDecks[0].turmaDeckId, publishedDecks[0].deckId, publishedDecks[0].name, folderId);
-      }
-
-      queryClient.invalidateQueries({ queryKey: ['turma-role', turmaId, user.id] });
-      queryClient.invalidateQueries({ queryKey: ['turma-members', turmaId] });
-      queryClient.invalidateQueries({ queryKey: ['decks'] });
-      queryClient.invalidateQueries({ queryKey: ['folders'] });
-      toast({ title: '✅ Seguindo classe! O primeiro deck foi adicionado à sua coleção.' });
-    } catch (e: any) {
-      if (e.code === '23505' || e.message?.includes('already') || e.message?.includes('já')) {
-        queryClient.invalidateQueries({ queryKey: ['turma-role', turmaId, user.id] });
-        toast({ title: 'Você já segue esta classe' });
-      } else {
-        toast({ title: 'Erro ao seguir', variant: 'destructive' });
-      }
-    } finally {
-      setFollowing(false);
-    }
-  };
 
   const downloadDeck = useCallback(async (turmaDeckId: string, deckId: string, deckName: string, folderId?: string | null) => {
     if (!user) return;
@@ -173,17 +117,56 @@ const PublicClasseView = () => {
     } as any);
   }, [user, turmaId]);
 
+  // Follow = join + create linked folder + download first deck
+  const handleFollow = async () => {
+    if (!user) { navigate('/auth'); return; }
+    setFollowing(true);
+    try {
+      await supabase.from('turma_members').insert({ turma_id: turmaId, user_id: user.id } as any);
+
+      const { data: existingFolders } = await supabase.from('folders')
+        .select('id').eq('user_id', user.id).eq('source_turma_id', turmaId);
+
+      let folderId: string | null = null;
+      if (existingFolders && existingFolders.length > 0) {
+        folderId = existingFolders[0].id;
+      } else {
+        const { data: newFolder } = await supabase.from('folders')
+          .insert({ user_id: user.id, name: turma?.name || 'Sala', section: 'community', source_turma_id: turmaId } as any)
+          .select().single();
+        folderId = (newFolder as any)?.id ?? null;
+      }
+
+      if (publishedDecks.length > 0) {
+        await downloadDeck(publishedDecks[0].turmaDeckId, publishedDecks[0].deckId, publishedDecks[0].name, folderId);
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['turma-role', turmaId, user.id] });
+      queryClient.invalidateQueries({ queryKey: ['turma-members', turmaId] });
+      queryClient.invalidateQueries({ queryKey: ['decks'] });
+      queryClient.invalidateQueries({ queryKey: ['folders'] });
+      toast({ title: '✅ Seguindo sala! O primeiro deck foi adicionado à sua coleção.' });
+    } catch (e: any) {
+      if (e.code === '23505' || e.message?.includes('already') || e.message?.includes('já')) {
+        queryClient.invalidateQueries({ queryKey: ['turma-role', turmaId, user.id] });
+        toast({ title: 'Você já segue esta sala' });
+      } else {
+        toast({ title: 'Erro ao seguir', variant: 'destructive' });
+      }
+    } finally {
+      setFollowing(false);
+    }
+  };
+
   const [downloadingDeck, setDownloadingDeck] = useState<string | null>(null);
   const handleDownloadDeck = useCallback(async (deck: typeof publishedDecks[0]) => {
     if (!user) { navigate('/auth'); return; }
     setDownloadingDeck(deck.turmaDeckId);
     try {
-      // Ensure user is member
       if (!isMember) {
         await supabase.from('turma_members').insert({ turma_id: turmaId, user_id: user.id } as any).single();
       }
 
-      // Get or create linked folder
       const { data: existingFolders } = await supabase.from('folders')
         .select('id').eq('user_id', user.id).eq('source_turma_id', turmaId);
       let folderId: string | null = null;
@@ -191,7 +174,7 @@ const PublicClasseView = () => {
         folderId = existingFolders[0].id;
       } else {
         const { data: newFolder } = await supabase.from('folders')
-          .insert({ user_id: user.id, name: turma?.name || 'Classe', section: 'community', source_turma_id: turmaId } as any)
+          .insert({ user_id: user.id, name: turma?.name || 'Sala', section: 'community', source_turma_id: turmaId } as any)
           .select().single();
         folderId = (newFolder as any)?.id ?? null;
       }
@@ -233,7 +216,7 @@ const PublicClasseView = () => {
             </button>
           </div>
 
-          {/* Sala image + name + creator — same structure as Dashboard */}
+          {/* Sala image + name + creator */}
           <div className="flex items-center gap-3 mb-2">
             <img src={coverUrl || defaultSalaIcon} alt={turma?.name} className="h-14 w-14 rounded-xl object-cover border border-border/30 shadow-sm" />
             <div className="flex-1 min-w-0">
@@ -255,8 +238,8 @@ const PublicClasseView = () => {
         </div>
       </div>
 
-      {/* Follow CTA — same style as Dashboard ESTUDAR button */}
-      {!isMember && (
+      {/* Follow CTA for non-members */}
+      {!isFollower && (
         <div className="flex items-center gap-4 px-4 py-3 max-w-md mx-auto md:max-w-lg">
           <Button
             onClick={handleFollow}
@@ -278,7 +261,7 @@ const PublicClasseView = () => {
           </div>
         )}
 
-        {/* Deck list — same visual as DeckList in Dashboard */}
+        {/* Deck list — same visual as Dashboard DeckList */}
         <div className="px-4">
           {decksLoading ? (
             <div className="space-y-1">
@@ -290,17 +273,16 @@ const PublicClasseView = () => {
               <p className="text-sm text-muted-foreground">Nenhum deck publicado</p>
             </div>
           ) : (
-            <div className="rounded-xl border border-border/50 bg-card shadow-sm divide-y divide-border/50">
+            <div className="divide-y divide-border/50">
               {publishedDecks.map((deck) => {
                 const isDownloaded = downloadedDeckIds.has(deck.turmaDeckId);
                 const isDownloading = downloadingDeck === deck.turmaDeckId;
                 return (
                   <div
                     key={deck.turmaDeckId}
-                    className="flex items-center gap-3 px-5 py-4 cursor-pointer hover:bg-muted/30 transition-colors"
-                    onClick={() => !isDownloaded && handleDownloadDeck(deck)}
+                    className="flex items-center gap-3 py-3.5"
                   >
-                    {/* Deck icon — same as DeckRow */}
+                    {/* Deck icon — matches DeckRow style */}
                     <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">
                       <BookOpen className="h-4 w-4" />
                     </div>
@@ -320,7 +302,7 @@ const PublicClasseView = () => {
                         size="sm"
                         className="h-8 text-xs gap-1.5 shrink-0"
                         disabled={isDownloading}
-                        onClick={(e) => { e.stopPropagation(); handleDownloadDeck(deck); }}
+                        onClick={() => handleDownloadDeck(deck)}
                       >
                         <Download className="h-3.5 w-3.5" />
                         {isDownloading ? 'Baixando...' : 'Baixar'}
@@ -336,106 +318,31 @@ const PublicClasseView = () => {
     </div>
   );
 };
-const MemberClasseView = () => {
-  const ctx = useTurmaDetail();
-  const {
-    turmaId, turma, members, turmaDecks, turmaExams,
-    isAdmin, canEdit, user,
-    hasSubscription, isSubscriber, activeSubscription, subscriptionPrice, subscribing, handleSubscribe,
-    mutations, updateTurma,
-    showSettings, setShowSettings,
-    showAddSubject, setShowAddSubject,
-    newName, setNewName, newDesc, setNewDesc,
-    editingSubject, setEditingSubject,
-    editItemName, setEditItemName,
-    handleCreateSubject,
-    toast,
-  } = ctx;
-
-  return (
-    <div className="min-h-screen bg-background">
-      <TurmaHeader />
-
-      <TurmaSubHeader
-        turmaId={turmaId}
-        turmaName={turma.name}
-        ownerName={turma.owner_name}
-        createdAt={turma.created_at}
-        inviteCode={turma.invite_code}
-        shareSlug={turma.share_slug}
-        isAdmin={isAdmin}
-        hasSubscription={hasSubscription}
-        hasExclusiveContent={
-          turmaDecks.some((d: any) => d.price_type && d.price_type !== 'free') ||
-          turmaExams.some((e: any) => e.subscribers_only)
-        }
-        isSubscriber={isSubscriber}
-        activeSubscription={activeSubscription}
-        subscriptionPrice={subscriptionPrice}
-        subscribing={subscribing}
-        onSubscribe={handleSubscribe}
-        onShowSettings={() => setShowSettings(true)}
-        members={members}
-        userId={user?.id}
-        mutations={mutations}
-      />
-
-      <main className="container mx-auto px-4 py-6 max-w-2xl">
-        <ContentTab />
-      </main>
-
-
-      <CreateSubjectDialog
-        open={showAddSubject} onOpenChange={setShowAddSubject}
-        name={newName} onNameChange={setNewName}
-        desc={newDesc} onDescChange={setNewDesc}
-        onSubmit={handleCreateSubject} isPending={mutations.createSubject.isPending}
-      />
-      <EditSubjectDialog
-        open={!!editingSubject} onOpenChange={open => !open && setEditingSubject(null)}
-        name={editItemName} onNameChange={setEditItemName}
-        onSubmit={() => {
-          mutations.updateSubject.mutate({ id: editingSubject!.id, name: editItemName.trim() }, {
-            onSuccess: () => { setEditingSubject(null); toast({ title: 'Nome atualizado!' }); },
-            onError: () => toast({ title: 'Erro ao atualizar', variant: 'destructive' }),
-          });
-        }}
-        isPending={mutations.updateSubject.isPending}
-      />
-    </div>
-  );
-};
 
 // ─── Router: show preview for non-members, member view otherwise ───
 const TurmaDetailInner = () => {
-  const { turma, isMember, isLoading, turmaId, toast, navigate } = useTurmaDetail();
+  const { turma, isMember, isLoading, turmaId } = useTurmaDetail();
   const { user } = useAuth();
-  const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   if (isLoading || !turma) {
     return (
       <div className="min-h-screen bg-background">
-        <div className="sticky top-0 z-10 border-b border-border/50 bg-background/80 backdrop-blur-sm">
-          <div className="container mx-auto flex items-center justify-between px-4 py-3">
-            <div className="flex items-center gap-2">
-              <Skeleton className="h-8 w-16 rounded-full" />
-              <Skeleton className="h-8 w-16 rounded-full" />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Skeleton className="h-9 w-9 rounded-full" />
-              <Skeleton className="h-9 w-9 rounded-full" />
-            </div>
-          </div>
-        </div>
-        <div className="border-b border-border/30 bg-card/50">
-          <div className="container mx-auto px-4 py-3">
-            <div className="flex items-center gap-3">
-              <Skeleton className="h-8 w-8 rounded-md" />
-              <Skeleton className="h-6 w-40" />
+        <div className="relative bg-muted/50 overflow-hidden">
+          <div className="px-4 pt-3 pb-4">
+            <Skeleton className="h-5 w-20 mb-3" />
+            <div className="flex items-center gap-3 mb-2">
+              <Skeleton className="h-14 w-14 rounded-xl" />
+              <div className="flex-1 space-y-1.5">
+                <Skeleton className="h-5 w-40" />
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-3 w-32" />
+              </div>
             </div>
           </div>
         </div>
-        <div className="container mx-auto px-4 max-w-2xl py-6 space-y-3">
+        <div className="px-4 py-3"><Skeleton className="h-11 w-full rounded-full" /></div>
+        <div className="px-4 space-y-1">
           {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
         </div>
       </div>
@@ -448,11 +355,9 @@ const TurmaDetailInner = () => {
     return null;
   }
 
-  // Non-member → show public classe view with "Seguir" button
-  if (!isMember) return <PublicClasseView />;
-
-  // Member → full view
-  return <MemberClasseView />;
+  // Both members and non-members see the same sala layout
+  // Members get download buttons, non-members get "Seguir" CTA
+  return <SalaView isFollower={isMember} />;
 };
 
 const TurmaDetail = () => (
