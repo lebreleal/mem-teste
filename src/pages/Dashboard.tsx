@@ -6,7 +6,7 @@ import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { getNewCardsForDayGlobal } from '@/hooks/useStudyPlan';
-import { Archive, ArchiveRestore, ChevronDown, ChevronLeft, Trash2, Play, SlidersHorizontal, MoreVertical, Pencil, ImageIcon, SquarePlus, RotateCcw, Layers, Clock, Info, User, Compass, EyeOff, Share2, RefreshCw, LogOut } from 'lucide-react';
+import { Archive, ArchiveRestore, ChevronDown, ChevronLeft, Trash2, Play, SlidersHorizontal, MoreVertical, Pencil, ImageIcon, SquarePlus, RotateCcw, Layers, Clock, Info, User, Compass, EyeOff, Share2, RefreshCw, LogOut, Sparkles } from 'lucide-react';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,10 +16,11 @@ import { Progress } from '@/components/ui/progress';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 import { useState, useMemo, useCallback, useEffect, useRef, lazy, Suspense } from 'react';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useStudyPlan } from '@/hooks/useStudyPlan';
-import { useDecks } from '@/hooks/useDecks';
+// useDecks removed — state.decks from useDashboardState is the single source of truth
 import { supabase } from '@/integrations/supabase/client';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -70,11 +71,18 @@ const Dashboard = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { plans, allDeckIds, avgSecondsPerCard, realStudyMetrics, metrics, globalCapacity } = useStudyPlan();
-  const { decks: allDecks } = useDecks();
+  // planRootIds computed after state is created (uses state.decks)
+  const planRootIdsRef = useRef<Set<string> | undefined>(undefined);
+
+  const planDeckOrderEarly = useMemo(() => plans.flatMap(p => p.deck_ids ?? []), [plans]);
+  const state = useDashboardState(planRootIdsRef.current, planDeckOrderEarly);
+
+  // Compute planRootIds using state.decks (single source) — update ref for next render
   const planRootIds = useMemo(() => {
-    if (plans.length === 0 || !allDecks) return undefined;
+    if (plans.length === 0 || state.decks.length === 0) return undefined;
+    const deckMap = state.deckMap;
     const getRootIdLocal = (deckId: string): string | null => {
-      const d = allDecks.find(x => x.id === deckId);
+      const d = deckMap.get(deckId);
       if (!d) return null;
       if (!d.parent_deck_id) return d.id;
       return getRootIdLocal(d.parent_deck_id);
@@ -85,10 +93,10 @@ const Dashboard = () => {
       if (rootId) rootIds.add(rootId);
     }
     return rootIds;
-  }, [plans, allDeckIds, allDecks]);
+  }, [plans, allDeckIds, state.decks, state.deckMap]);
 
-  const planDeckOrderEarly = useMemo(() => plans.flatMap(p => p.deck_ids ?? []), [plans]);
-  const state = useDashboardState(planRootIds, planDeckOrderEarly);
+  // Keep ref in sync for the next render cycle
+  planRootIdsRef.current = planRootIds;
   const { isPremium, refreshStatus } = useSubscription();
   const { missions } = useMissions();
   const { isAdmin } = useIsAdmin();
@@ -129,18 +137,23 @@ const Dashboard = () => {
   const { data: communityTurmaInfo } = useQuery({
     queryKey: ['community-folder-turma-info', sourceTurmaId],
     queryFn: async () => {
-      const { data: turma } = await supabase.from('turmas').select('id, name, owner_id, cover_image_url').eq('id', sourceTurmaId!).single();
+      // Fetch turma + turma_decks in parallel
+      const [turmaRes, turmaDecksRes] = await Promise.all([
+        supabase.from('turmas').select('id, name, owner_id, cover_image_url').eq('id', sourceTurmaId!).single(),
+        supabase.from('turma_decks').select('deck_id').eq('turma_id', sourceTurmaId!).eq('is_published', true),
+      ]);
+      const turma = turmaRes.data;
       if (!turma) return null;
-      const { data: profiles } = await supabase.rpc('get_public_profiles' as any, { p_user_ids: [(turma as any).owner_id] });
-      const ownerName = (profiles as any)?.[0]?.name || 'Anônimo';
-      // Last updated from turma decks
-      const { data: turmaDecks } = await supabase.from('turma_decks').select('deck_id').eq('turma_id', sourceTurmaId!).eq('is_published', true);
-      const deckIds = (turmaDecks ?? []).map((td: any) => td.deck_id);
-      let lastUpdated = '';
-      if (deckIds.length > 0) {
-        const { data: deckDates } = await supabase.from('decks').select('updated_at').in('id', deckIds).order('updated_at', { ascending: false }).limit(1);
-        lastUpdated = (deckDates as any)?.[0]?.updated_at ?? '';
-      }
+      const deckIds = (turmaDecksRes.data ?? []).map((td: any) => td.deck_id);
+      // Fetch profiles + deck dates in parallel
+      const [profilesRes, deckDatesRes] = await Promise.all([
+        supabase.rpc('get_public_profiles' as any, { p_user_ids: [(turma as any).owner_id] }),
+        deckIds.length > 0
+          ? supabase.from('decks').select('updated_at').in('id', deckIds).order('updated_at', { ascending: false }).limit(1)
+          : Promise.resolve({ data: [] }),
+      ]);
+      const ownerName = (profilesRes.data as any)?.[0]?.name || 'Anônimo';
+      const lastUpdated = (deckDatesRes.data as any)?.[0]?.updated_at ?? '';
       return { ownerName, lastUpdated, coverUrl: (turma as any).cover_image_url };
     },
     enabled: !!sourceTurmaId,
@@ -149,27 +162,30 @@ const Dashboard = () => {
 
   // Auto-bootstrap: ensure local deck copies exist for community folders
   const bootstrapDoneRef = useRef(new Set<string>());
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout>>();
   useEffect(() => {
     if (!user || !isCommunityFolder || !sourceTurmaId || !state.currentFolderId) return;
     if (bootstrapDoneRef.current.has(state.currentFolderId)) return;
     bootstrapDoneRef.current.add(state.currentFolderId);
     
     // Check if local decks already exist in this folder
-    const localDecksInFolder = allDecks.filter(d => d.folder_id === state.currentFolderId && !d.is_archived);
+    const localDecksInFolder = state.decks.filter(d => d.folder_id === state.currentFolderId && !d.is_archived);
     if (localDecksInFolder.length > 0) {
-      // Decks exist — run incremental sync in background
-      import('@/services/followerBootstrap').then(({ syncFollowerDecks }) => {
-        syncFollowerDecks(user.id, state.currentFolderId!).then((newCards) => {
-          if (newCards > 0) {
-            queryClient.invalidateQueries({ queryKey: ['decks'] });
-            toast({ title: `${newCards} novos cartões sincronizados!` });
-          }
-        }).catch(console.error);
-      });
+      // Decks exist — debounce incremental sync (2s delay, non-blocking)
+      syncTimerRef.current = setTimeout(() => {
+        import('@/services/followerBootstrap').then(({ syncFollowerDecks }) => {
+          syncFollowerDecks(user.id, state.currentFolderId!).then((newCards) => {
+            if (newCards > 0) {
+              queryClient.invalidateQueries({ queryKey: ['decks'] });
+              toast({ title: `${newCards} novos cartões sincronizados!` });
+            }
+          }).catch(console.error);
+        });
+      }, 2000);
       return;
     }
     
-    // No local decks — run full bootstrap
+    // No local decks — run full bootstrap (immediate)
     import('@/services/followerBootstrap').then(({ bootstrapFollowerDecks }) => {
       bootstrapFollowerDecks(user.id, sourceTurmaId, state.currentFolderId!).then((result) => {
         if (result.decks_created > 0) {
@@ -180,6 +196,7 @@ const Dashboard = () => {
         toast({ title: 'Erro ao carregar decks da sala. Tente recarregar a página.', variant: 'destructive' });
       });
     });
+    return () => { if (syncTimerRef.current) clearTimeout(syncTimerRef.current); };
   }, [user, isCommunityFolder, sourceTurmaId, state.currentFolderId]);
 
 
@@ -257,7 +274,7 @@ const Dashboard = () => {
       }
 
       // Publishing: sync folder decks to turma_decks
-      const folderDecks = allDecks.filter(d => d.folder_id === state.currentFolderId && !d.is_archived && !d.parent_deck_id);
+      const folderDecks = state.decks.filter(d => d.folder_id === state.currentFolderId && !d.is_archived && !d.parent_deck_id);
       const { data: existingTurmaDecks } = await supabase.from('turma_decks').select('deck_id').eq('turma_id', turmaId!);
       const existingIds = new Set((existingTurmaDecks ?? []).map((td: any) => td.deck_id));
 
@@ -286,7 +303,7 @@ const Dashboard = () => {
     } finally {
       setPublishing(false);
     }
-  }, [user, userTurma, state.currentFolderId, state.folders, allDecks, refetchTurma, queryClient, toast]);
+  }, [user, userTurma, state.currentFolderId, state.folders, state.decks, refetchTurma, queryClient, toast]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [detachTarget, setDetachTarget] = useState<{ id: string; name: string } | null>(null);
@@ -335,6 +352,19 @@ const Dashboard = () => {
       setSearchParams((prev) => { const p = new URLSearchParams(prev); p.delete('action'); return p; }, { replace: true });
     }
   }, [searchParams]);
+
+  // Listen for "+" button inside own sala → open add menu sheet
+  const [salaAddMenuOpen, setSalaAddMenuOpen] = useState(false);
+  const [addMenuStep, setAddMenuStep] = useState<'main' | 'create-deck'>('main');
+  useEffect(() => {
+    const handler = () => {
+      if (state.isInsideSala && !isCommunityFolder) {
+        setSalaAddMenuOpen(true);
+      }
+    };
+    window.addEventListener('open-sala-add-menu', handler);
+    return () => window.removeEventListener('open-sala-add-menu', handler);
+  }, [state.isInsideSala, isCommunityFolder]);
 
   // Handle payment return
   useEffect(() => {
@@ -411,59 +441,42 @@ const Dashboard = () => {
     return total;
   }, [state.currentDecks, state.allRootDecks, state.isInsideSala, state.getAggregateStats]);
 
-  // Collect all deck IDs in the current sala (including nested sub-decks)
+  // Collect all deck IDs in the current sala (including nested sub-decks) — O(1) via childrenIndex
   const salaDeckIds = useMemo(() => {
     if (!state.isInsideSala) return [] as string[];
     const ids: string[] = [];
+    const childrenIndex = state.childrenIndex;
     const collect = (deckId: string) => {
       ids.push(deckId);
-      const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
-      for (const c of children) collect(c.id);
+      const children = childrenIndex.get(deckId) ?? [];
+      for (const c of children) { if (!c.is_archived) collect(c.id); }
     };
     for (const deck of state.currentDecks) collect(deck.id);
     return ids;
-  }, [state.isInsideSala, state.currentDecks, allDecks]);
+  }, [state.isInsideSala, state.currentDecks, state.childrenIndex]);
 
-  // Fetch difficulty-based classification for the sala's cards
-  const { data: salaDifficultyStats } = useQuery({
-    queryKey: ['sala-difficulty-stats', salaDeckIds.join(',')],
-    queryFn: async () => {
-      if (salaDeckIds.length === 0) return { novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
-      let novo = 0, facil = 0, bom = 0, dificil = 0, errei = 0;
-      const BATCH = 200;
-      const PAGE = 1000;
-      for (let i = 0; i < salaDeckIds.length; i += BATCH) {
-        const batch = salaDeckIds.slice(i, i + BATCH);
-        // Paginate to get ALL cards (Supabase default limit is 1000)
-        let from = 0;
-        while (true) {
-          const { data } = await supabase
-            .from('cards')
-            .select('state, difficulty')
-            .in('deck_id', batch)
-            .range(from, from + PAGE - 1);
-          if (!data || data.length === 0) break;
-          for (const c of data) {
-            if (c.state === 0) { novo++; continue; }
-            const d = c.difficulty ?? 5;
-            if (d <= 3) facil++;
-            else if (d <= 5) bom++;
-            else if (d <= 7) dificil++;
-            else errei++;
-          }
-          if (data.length < PAGE) break;
-          from += PAGE;
-        }
-      }
-      return { novo, facil, bom, dificil, errei };
-    },
-    enabled: salaDeckIds.length > 0,
-    staleTime: 30_000,
-  });
+  // Compute difficulty stats from already-loaded deck data (no extra query) — O(n) via deckMap
+  const salaDifficultyStats = useMemo(() => {
+    if (salaDeckIds.length === 0) return { novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
+    const deckMap = state.deckMap;
+    let novo = 0, facil = 0, bom = 0, dificil = 0, errei = 0;
+    for (const id of salaDeckIds) {
+      const dk = deckMap.get(id);
+      if (!dk) continue;
+      novo += dk.class_novo ?? 0;
+      facil += dk.class_facil ?? 0;
+      bom += dk.class_bom ?? 0;
+      dificil += dk.class_dificil ?? 0;
+      errei += dk.class_errei ?? 0;
+    }
+    return { novo, facil, bom, dificil, errei };
+  }, [salaDeckIds, state.deckMap]);
 
   // Sala-scoped study stats for the compact study card
   const salaStudyStats = useMemo(() => {
     if (!state.isInsideSala) return null;
+    const deckMap = state.deckMap;
+    const childrenIndex = state.childrenIndex;
 
     let rawNewCount = 0;
     let newCountTodayByDeckLimits = 0;
@@ -473,75 +486,81 @@ const Dashboard = () => {
     let totalCards = 0;
 
     const collectTotalCards = (deckId: string): number => {
-      const dk = allDecks.find(d => d.id === deckId);
+      const dk = deckMap.get(deckId);
       if (!dk) return 0;
       let t = dk.total_cards;
-      const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
-      for (const c of children) t += collectTotalCards(c.id);
+      for (const c of (childrenIndex.get(deckId) ?? [])) { if (!c.is_archived) t += collectTotalCards(c.id); }
       return t;
     };
 
-    const collectStudyStats = (deckId: string) => {
-      const dk = allDecks.find(d => d.id === deckId);
+    let totalDailyReviewLimit = 0;
+    let totalReviewReviewedToday = 0;
+
+    const collectHierarchyNew = (parentId: string): { newCount: number; newReviewed: number } => {
+      let nc = 0, nr = 0;
+      for (const c of (childrenIndex.get(parentId) ?? [])) {
+        if (c.is_archived) continue;
+        nc += c.new_count ?? 0;
+        nr += c.new_reviewed_today ?? 0;
+        const sub = collectHierarchyNew(c.id);
+        nc += sub.newCount;
+        nr += sub.newReviewed;
+      }
+      return { newCount: nc, newReviewed: nr };
+    };
+
+    const collectStudyStats = (deckId: string, isRoot: boolean) => {
+      const dk = deckMap.get(deckId);
       if (!dk || dk.is_archived) return;
 
-      const deckNewCount = dk.new_count ?? 0;
-      const deckLearningCount = dk.learning_count ?? 0;
-      const deckReviewCount = dk.review_count ?? 0;
-      const deckNewReviewedToday = dk.new_reviewed_today ?? 0;
-      const deckDailyNewLimit = dk.daily_new_limit ?? 20;
-
-      rawNewCount += deckNewCount;
-      learningCount += deckLearningCount;
-      reviewCount += deckReviewCount;
+      learningCount += dk.learning_count ?? 0;
+      reviewCount += dk.review_count ?? 0;
       reviewedToday += dk.reviewed_today ?? 0;
+      const deckNewGraduatedToday = dk.new_graduated_today ?? 0;
+      totalReviewReviewedToday += Math.max(0, (dk.reviewed_today ?? 0) - deckNewGraduatedToday);
 
-      const deckRemainingNewToday = Math.max(0, deckDailyNewLimit - deckNewReviewedToday);
-      newCountTodayByDeckLimits += Math.min(deckNewCount, deckRemainingNewToday);
+      if (isRoot) {
+        totalDailyReviewLimit += dk.daily_review_limit ?? 100;
+        let hierarchyNewCount = dk.new_count ?? 0;
+        let hierarchyNewReviewed = dk.new_reviewed_today ?? 0;
+        const childNew = collectHierarchyNew(deckId);
+        hierarchyNewCount += childNew.newCount;
+        hierarchyNewReviewed += childNew.newReviewed;
+        rawNewCount += hierarchyNewCount;
+        const remaining = Math.max(0, (dk.daily_new_limit ?? 20) - hierarchyNewReviewed);
+        newCountTodayByDeckLimits += Math.min(hierarchyNewCount, remaining);
+      }
 
-      const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
-      for (const c of children) collectStudyStats(c.id);
+      for (const c of (childrenIndex.get(deckId) ?? [])) { if (!c.is_archived) collectStudyStats(c.id, false); }
     };
 
     for (const deck of state.currentDecks) {
-      collectStudyStats(deck.id);
+      collectStudyStats(deck.id, true);
       totalCards += collectTotalCards(deck.id);
     }
 
-    // Inside a Sala, honor the per-deck limits configured in "Configurar Estudo"
     const newCountToday = newCountTodayByDeckLimits;
-    const totalDue = newCountToday + learningCount + reviewCount;
+    const cappedReviewCount = Math.max(0, Math.min(reviewCount, totalDailyReviewLimit - totalReviewReviewedToday));
+    const totalDue = newCountToday + learningCount + cappedReviewCount;
     const totalSession = totalDue + reviewedToday;
     const progressPct = totalSession > 0 ? Math.round((reviewedToday / totalSession) * 100) : 0;
 
-    // Use per-state time estimation (new cards generate multiple interactions, reviews may lapse)
-    const remainingSeconds = calculateRealStudyTime(newCountToday, learningCount, reviewCount, realStudyMetrics);
+    const remainingSeconds = calculateRealStudyTime(newCountToday, learningCount, cappedReviewCount, realStudyMetrics);
     const remainingMin = Math.ceil(remainingSeconds / 60);
     const timeLabel = remainingMin >= 60
       ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
       : `${remainingMin}min`;
 
-    // Difficulty-based classification — use sum of classifications as authoritative total
     const ds = salaDifficultyStats ?? { novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
     const classifiedTotal = ds.novo + ds.facil + ds.bom + ds.dificil + ds.errei;
-    // Use classified total when available (more accurate), fallback to deck stats
     const effectiveTotal = classifiedTotal > 0 ? classifiedTotal : totalCards;
     const masteredCount = effectiveTotal - ds.novo;
 
     return {
-      newCount: rawNewCount,
-      newCountToday,
-      learningCount,
-      reviewCount,
-      reviewedToday,
-      totalDue,
-      progressPct,
-      timeLabel,
-      totalCards: effectiveTotal,
-      masteredCount,
-      ...ds,
+      newCount: rawNewCount, newCountToday, learningCount, reviewCount, reviewedToday,
+      totalDue, progressPct, timeLabel, totalCards: effectiveTotal, masteredCount, ...ds,
     };
-  }, [state.isInsideSala, state.currentDecks, allDecks, salaDifficultyStats, realStudyMetrics]);
+  }, [state.isInsideSala, state.currentDecks, state.deckMap, state.childrenIndex, salaDifficultyStats, realStudyMetrics]);
 
   // Handle sala click: navigate into it
   const handleSalaClick = useCallback((folderId: string) => {
@@ -1306,6 +1325,77 @@ const Dashboard = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Add menu sheet for own sala */}
+      <Sheet open={salaAddMenuOpen} onOpenChange={(v) => { setSalaAddMenuOpen(v); if (!v) setAddMenuStep('main'); }}>
+        <SheetContent side="bottom" className="rounded-t-2xl px-4 pb-8 pt-4">
+          <SheetHeader className="mb-4">
+            <SheetTitle className="text-base font-bold">
+              {addMenuStep === 'main' ? 'Adicionar' : 'Criar deck'}
+            </SheetTitle>
+          </SheetHeader>
+
+          {addMenuStep === 'main' && (
+            <div className="flex flex-col gap-1">
+              <button
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
+                onClick={() => setAddMenuStep('create-deck')}
+              >
+                <SquarePlus className="h-5 w-5 text-primary shrink-0" />
+                <div>
+                  <span className="text-sm font-medium text-foreground">Criar deck</span>
+                  <span className="block text-xs text-muted-foreground mt-0.5">Criar manualmente ou com IA</span>
+                </div>
+              </button>
+              <button
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
+                onClick={() => { setSalaAddMenuOpen(false); setAddMenuStep('main'); state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId('__materia__'); }}
+              >
+                <Layers className="h-5 w-5 text-primary shrink-0" />
+                <div>
+                  <span className="text-sm font-medium text-foreground">Criar matéria</span>
+                  <span className="block text-xs text-muted-foreground mt-0.5">Organiza seus decks por tema</span>
+                </div>
+              </button>
+              <button
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
+                onClick={() => { setSalaAddMenuOpen(false); setAddMenuStep('main'); state.setImportOpen(true); state.setImportDeckId(null); state.setImportDeckName(''); }}
+              >
+                <Archive className="h-5 w-5 text-primary shrink-0" />
+                <span className="text-sm font-medium text-foreground">Importar cartões</span>
+              </button>
+            </div>
+          )}
+
+          {addMenuStep === 'create-deck' && (
+            <div className="flex flex-col gap-1">
+              <button
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
+                onClick={() => { setSalaAddMenuOpen(false); setAddMenuStep('main'); state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
+              >
+                <Pencil className="h-5 w-5 text-primary shrink-0" />
+                <div>
+                  <span className="text-sm font-medium text-foreground">Criar manualmente</span>
+                  <span className="block text-xs text-muted-foreground mt-0.5">Defina nome e adicione cartões</span>
+                </div>
+              </button>
+              <button
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
+                onClick={() => { setSalaAddMenuOpen(false); setAddMenuStep('main'); state.setAiDeckOpen(true); }}
+              >
+                <Sparkles className="h-5 w-5 text-primary shrink-0" />
+                <div>
+                  <span className="text-sm font-medium text-foreground">Criar com IA</span>
+                  <span className="block text-xs text-muted-foreground mt-0.5">A partir do seu material de estudo</span>
+                </div>
+              </button>
+              <Button variant="ghost" size="sm" className="mt-2 self-start text-xs gap-1" onClick={() => setAddMenuStep('main')}>
+                <ChevronLeft className="h-3.5 w-3.5" /> Voltar
+              </Button>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
 
       <BottomNav />
     </div>

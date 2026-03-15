@@ -54,7 +54,7 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
     const order: string[] = [];
 
     for (const d of salaDecks) {
-      const subs = getSubDecks(d.id);
+      const subs = getSubDecks(d.id).filter(s => s.folder_id === currentFolderId);
       const isMateria = subs.length > 0;
       const isErrorNotebook = d.name.startsWith(ERROR_NOTEBOOK_PREFIX);
 
@@ -247,7 +247,7 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
         <Switch checked={item.isEnabled} onCheckedChange={() => toggleEnabled(item.id)} />
       </div>
 
-      {item.isEnabled && renderNewLimitControl(item)}
+      {item.isEnabled && !item.isSubDeck && renderNewLimitControl(item)}
     </div>
   );
 

@@ -38,22 +38,84 @@ export async function fetchStudyQueue(
       : Promise.resolve({ data: [] as any[] }),
   ]);
 
-  const activeDecks = (decksResult.data ?? []).filter(d => !d.is_archived);
+  let activeDecks = (decksResult.data ?? []).filter(d => !d.is_archived);
+  const foldersData = foldersResult.data ?? [];
 
-  let deckIds: string[];
-  let deckConfig: any;
-  let limitScopeIds: string[];
+  // Builds a set of deck IDs whose new-card limit is 0 (used to exclude their NEW cards only, not reviews)
+  const zeroNewLimitDeckIds = new Set<string>();
+  const buildZeroLimitSet = (deckIdToCheck: string) => {
+    let current = activeDecks.find(d => d.id === deckIdToCheck);
+    while (current) {
+      if ((current.daily_new_limit ?? 20) <= 0) {
+        zeroNewLimitDeckIds.add(deckIdToCheck);
+        return;
+      }
+      if (!current.parent_deck_id) break;
+      current = activeDecks.find(d => d.id === current!.parent_deck_id);
+    }
+  };
+
+  let deckIds: string[] = [];
+  let deckConfig: any = {};
+  let limitScopeIds: string[] = [];
+  let folderLimitDecks: typeof activeDecks = [];
 
   if (folderId) {
-    const rootDeckIds = collectFolderDeckIds(activeDecks, foldersResult.data ?? [], folderId);
+    const collectRootDeckIds = () => collectFolderDeckIds(activeDecks, foldersData, folderId);
+    let rootDeckIds = collectRootDeckIds();
+
+    // Follower room safety: if folder came from Explorar and local decks are missing, bootstrap on demand.
+    if (rootDeckIds.length === 0) {
+      const { data: folderMeta } = await supabase
+        .from('folders')
+        .select('source_turma_id')
+        .eq('id', folderId)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if ((folderMeta as any)?.source_turma_id) {
+        await supabase.rpc('bootstrap_follower_decks' as any, {
+          p_user_id: userId,
+          p_turma_id: (folderMeta as any).source_turma_id,
+          p_folder_id: folderId,
+        });
+
+        const { data: refreshedDecks, error: refreshError } = await supabase
+          .from('decks')
+          .select(DECK_SELECT_COLS)
+          .eq('user_id', userId);
+        if (refreshError) throw refreshError;
+
+        activeDecks = (refreshedDecks ?? []).filter(d => !d.is_archived);
+        rootDeckIds = collectRootDeckIds();
+      }
+    }
+
     const allDescendants = rootDeckIds.flatMap(id => collectDescendantIds(activeDecks, id));
     deckIds = [...new Set([...rootDeckIds, ...allDescendants])];
-    const firstDeck = activeDecks.find(d => deckIds.includes(d.id));
-    deckConfig = firstDeck ?? {};
+
+    // Guard: if still no decks after bootstrap, return empty queue
+    if (deckIds.length === 0) {
+      return { cards: [], algorithmMode: 'fsrs', deckConfig: {}, isLiveDeck: false };
+    }
+
+    // Mark decks with zero new-card limit (their reviews still participate)
+    deckIds.forEach(buildZeroLimitSet);
+
+    const rootDecks = rootDeckIds
+      .map(id => activeDecks.find(d => d.id === id))
+      .filter((d): d is (typeof activeDecks)[number] => !!d);
+
+    folderLimitDecks = rootDecks;
+    deckConfig = rootDecks[0] ?? {};
     limitScopeIds = deckIds;
   } else {
     const descendantIds = collectDescendantIds(activeDecks, deckId);
     deckIds = [deckId, ...descendantIds];
+
+    // Mark decks with zero new-card limit
+    deckIds.forEach(buildZeroLimitSet);
+
     const rootId = findRootAncestorId(activeDecks, deckId);
     deckConfig = activeDecks.find(d => d.id === rootId) ?? {};
     const rootDescendants = collectDescendantIds(activeDecks, rootId);
@@ -62,13 +124,14 @@ export async function fetchStudyQueue(
 
   const deckNewLimit = deckConfig?.daily_new_limit ?? 20;
   const reviewLimit = deckConfig?.daily_review_limit ?? 100;
-  const scopedDecks = activeDecks.filter(d => limitScopeIds.includes(d.id));
+
   const folderNewLimit = folderId
-    ? scopedDecks.reduce((sum, d) => sum + (d.daily_new_limit ?? 20), 0)
+    ? folderLimitDecks.reduce((sum, d) => sum + (d.daily_new_limit ?? 20), 0)
     : deckNewLimit;
   const folderReviewLimit = folderId
-    ? scopedDecks.reduce((sum, d) => sum + (d.daily_review_limit ?? 100), 0)
+    ? folderLimitDecks.reduce((sum, d) => sum + (d.daily_review_limit ?? 100), 0)
     : reviewLimit;
+
   const algorithmMode = deckConfig?.algorithm_mode || 'fsrs';
   const shuffle = deckConfig?.shuffle_cards ?? false;
 
@@ -222,7 +285,8 @@ export async function fetchStudyQueue(
   const buryLearning = deckConfig?.bury_learning_siblings !== false;
 
   let allLearning = cards.filter(c => c.state === 1 || c.state === 3);
-  let allNew = cards.filter(c => c.state === 0);
+  // Exclude new cards from decks whose new-card limit is 0 (reviews/learning still play)
+  let allNew = cards.filter(c => c.state === 0 && !zeroNewLimitDeckIds.has(c.deck_id));
   let allReview = cards.filter(c => c.state === 2);
 
   allNew = allNew.slice(0, effectiveNewLimit);

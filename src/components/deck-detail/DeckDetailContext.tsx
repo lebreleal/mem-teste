@@ -259,6 +259,36 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     enabled: !!user && !!deckId,
   });
 
+  // Count review cards actually due today (scheduled_date <= now), not ALL review-state cards
+  const { data: reviewDueToday } = useQuery({
+    queryKey: ['review-due-count', deckId],
+    queryFn: async () => {
+      const nowISO = new Date().toISOString();
+      // Collect all descendant deck IDs
+      const allIds: string[] = [deckId];
+      let frontier = [deckId];
+      const decksList = decks ?? [];
+      while (frontier.length > 0) {
+        const nextFrontier: string[] = [];
+        for (const fid of frontier) {
+          const children = decksList.filter(d => d.parent_deck_id === fid && !d.is_archived);
+          for (const child of children) { allIds.push(child.id); nextFrontier.push(child.id); }
+        }
+        frontier = nextFrontier;
+      }
+      const { count, error } = await supabase
+        .from('cards')
+        .select('id', { count: 'exact', head: true })
+        .in('deck_id', allIds)
+        .eq('state', 2)
+        .lte('scheduled_date', nowISO);
+      if (error) throw error;
+      return count ?? 0;
+    },
+    enabled: !!user && !!deckId && decks.length > 0,
+    staleTime: 30_000,
+  });
+
   const descendantIds = useMemo(() => {
     if (!decks.length || !deckId) return [];
     const result: string[] = [];
@@ -437,7 +467,8 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     : isPlanControlled
       ? Math.max(0, Math.min(stats?.new_count ?? 0, globalRemaining))
       : Math.max(0, Math.min(stats?.new_count ?? 0, deckRemaining));
-  const reviewDue = Math.max(0, Math.min(stats?.review_count ?? 0, dailyReviewLimit - reviewReviewedToday));
+  const reviewDueCount = reviewDueToday ?? (stats?.review_count ?? 0);
+  const reviewDue = Math.max(0, Math.min(reviewDueCount, dailyReviewLimit - reviewReviewedToday));
   const masteredToday = isQuickReview ? Math.max(0, totalCards - (stats?.new_count ?? 0) - learningCount) : reviewDue;
   const totalDue = isQuickReview ? totalCards : newCountToday + learningCount + masteredToday;
   const studyPending = totalDue;

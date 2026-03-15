@@ -1,34 +1,45 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useQueryClient } from '@tanstack/react-query';
 import BottomNav from '@/components/BottomNav';
 import PomodoroFloater from '@/components/PomodoroFloater';
 import ImpersonationBanner from '@/components/ImpersonationBanner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Timer, Play, BookOpen, Brain, Download, FolderPlus } from 'lucide-react';
+import { Timer, Play } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import {
-  Sheet, SheetContent, SheetHeader, SheetTitle,
-} from '@/components/ui/sheet';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
+  const queryClient = useQueryClient();
   const isOnDashboard = location.pathname === '/dashboard';
-  const isInsideSala = isOnDashboard && !!searchParams.get('folder');
+  const folderId = searchParams.get('folder');
+  const isInsideSala = isOnDashboard && !!folderId;
+
+  // Check if current folder is a community (followed) sala
+  const isCommunityFolder = useMemo(() => {
+    if (!folderId || !user) return false;
+    // Use the correct cache key that matches useFolders
+    const foldersCache = queryClient.getQueryData<any[]>(['folders', user.id]);
+    if (foldersCache) {
+      const folder = foldersCache.find((f: any) => f.id === folderId);
+      if (folder) return !!folder.source_turma_id;
+    }
+    return false;
+  }, [folderId, queryClient, user]);
   const showNavRoutes = ['/dashboard', '/turmas', '/profile', '/desempenho'];
   const hideNavPatterns = ['/study/', '/exam/', '/lessons/'];
   const showNav = showNavRoutes.some(r => location.pathname === r || location.pathname.startsWith(r + '/'))
     && !hideNavPatterns.some(p => location.pathname.includes(p));
   const { toast } = useToast();
 
-  // Add menu state
-  const [showAddMenu, setShowAddMenu] = useState(false);
+  // Pomodoro state (add menu removed — "+" only triggers create-sala on dashboard root)
 
   // Pomodoro state
   const [showPomodoro, setShowPomodoro] = useState(false);
@@ -44,14 +55,25 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   // Listen for events from other components
   useEffect(() => {
     const pomodoroHandler = () => setShowPomodoro(true);
-    const addMenuHandler = () => setShowAddMenu(true);
+    const addMenuHandler = () => {
+      // "+" only works on dashboard (not on other pages) and not inside community folders
+      if (!isOnDashboard) return;
+      if (isInsideSala && isCommunityFolder) return;
+      if (!isInsideSala) {
+        // On dashboard root: go directly to create-sala
+        navigate('/dashboard?action=create-sala');
+      } else {
+        // Inside own sala: dispatch event for dashboard to handle adding content
+        window.dispatchEvent(new CustomEvent('open-sala-add-menu'));
+      }
+    };
     window.addEventListener('open-pomodoro', pomodoroHandler);
     window.addEventListener('open-add-menu', addMenuHandler);
     return () => {
       window.removeEventListener('open-pomodoro', pomodoroHandler);
       window.removeEventListener('open-add-menu', addMenuHandler);
     };
-  }, []);
+  }, [isOnDashboard, isInsideSala, isCommunityFolder, navigate]);
 
   const startPomodoro = (forceIsBreak?: boolean) => {
     // Always clear any existing interval first to prevent stacking
@@ -114,41 +136,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
       {showNav && <BottomNav />}
 
-      {/* Add menu sheet */}
-      <Sheet open={showAddMenu} onOpenChange={setShowAddMenu}>
-        <SheetContent side="bottom" className="rounded-t-2xl pb-8">
-          <SheetHeader>
-            <SheetTitle className="text-base">Adicionar</SheetTitle>
-          </SheetHeader>
-          <div className="grid gap-2 pt-4">
-            {/* At dashboard root (not inside a classe): show "Criar Classe" */}
-            {isOnDashboard && !isInsideSala && (
-              <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=create-sala'); }}>
-                <FolderPlus className="h-5 w-5 text-primary" /> Criar classe
-              </Button>
-            )}
-            {/* Inside a classe or not on dashboard: show deck actions */}
-            {(!isOnDashboard || isInsideSala) && (
-              <>
-                {isInsideSala && (
-                  <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=create-deck' + (isInsideSala ? `&folder=${searchParams.get('folder')}` : '')); }}>
-                    <BookOpen className="h-5 w-5 text-primary" /> Criar matéria
-                  </Button>
-                )}
-                <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=create-deck' + (isInsideSala ? `&folder=${searchParams.get('folder')}` : '')); }}>
-                  <BookOpen className="h-5 w-5 text-primary" /> Criar deck
-                </Button>
-                <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=ai-deck' + (isInsideSala ? `&folder=${searchParams.get('folder')}` : '')); }}>
-                  <Brain className="h-5 w-5" style={{ color: 'hsl(var(--energy-purple))' }} /> Criar com IA
-                </Button>
-                <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=import' + (isInsideSala ? `&folder=${searchParams.get('folder')}` : '')); }}>
-                  <Download className="h-5 w-5 text-muted-foreground" /> Importar cartões
-                </Button>
-              </>
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
+      {/* Add menu removed — "+" now only triggers create-sala on dashboard root */}
 
       {/* Floating Pomodoro Timer */}
       {pomodoroActive && (

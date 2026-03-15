@@ -74,7 +74,7 @@ function getDeckTodayStats(deck: DeckWithStats, aggregateMap: Map<string, Aggreg
   const reviewAvailable = Math.max(0, Math.min(raw.review_count, dailyReviewLimit - reviewReviewedToday));
   const learningAvailable = raw.learning_count;
   const pendingToday = newAvailable + reviewAvailable + learningAvailable;
-  const studiedToday = raw.reviewed;
+  const studiedToday = raw.reviewed + raw.newReviewed;
   return { newAvailable, reviewAvailable, learningAvailable, pendingToday, studiedToday };
 }
 

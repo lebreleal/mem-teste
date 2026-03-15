@@ -13,11 +13,11 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowLeft, ArrowUpRight, ChevronRight, CirclePlus, Search, Layers, GraduationCap, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, ChevronRight, CirclePlus, Search, Layers, RefreshCw } from 'lucide-react';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 import type { BreadcrumbItem } from './useDashboardState';
 
-interface Folder { id: string; name: string; parent_id: string | null; is_archived: boolean; image_url?: string | null }
+interface Folder { id: string; name: string; parent_id: string | null; is_archived: boolean; image_url?: string | null; source_turma_id?: string | null }
 interface MovableDeck { id: string; name: string; parent_deck_id: string | null }
 
 interface DashboardDialogsProps {
@@ -50,7 +50,7 @@ interface DashboardDialogsProps {
   movableDecks: MovableDeck[];
   folders: Folder[];
   decks: { id: string; name: string; parent_deck_id: string | null; folder_id: string | null }[];
-  onMoveSubmit: () => void;
+  onMoveSubmit: (overrideParentDeckId?: string | null) => void;
   onCreateFolderInMove: () => void;
 
   // Delete
@@ -92,34 +92,36 @@ const FolderBrowser = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const q = searchQuery.toLowerCase().trim();
+  const ownFolders = folders.filter(f => !f.source_turma_id);
+  const ownMovable = movableFolders.filter(f => !f.source_turma_id);
   const filteredFolders = q
-    ? folders.filter(f => !f.is_archived && f.name.toLowerCase().includes(q))
-    : movableFolders;
+    ? ownFolders.filter(f => !f.is_archived && f.name.toLowerCase().includes(q))
+    : ownMovable;
 
   return (
-    <div className="space-y-3">
-      <div className="relative">
+    <div className="space-y-3 min-w-0">
+      <div className="relative min-w-0">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Buscar sala..." className="pl-9 h-9 text-sm" />
       </div>
-      <div className="max-h-64 overflow-y-auto rounded-lg border border-border divide-y divide-border">
+      <div className="max-h-64 w-full min-w-0 overflow-y-auto overflow-x-hidden rounded-lg border border-border divide-y divide-border">
         {moveBrowseFolderId && !q && (
           <button onClick={() => {
             const parent = folders.find(f => f.id === moveBrowseFolderId);
             setMoveBrowseFolderId(parent?.parent_id ?? null);
-          }} className="flex w-full items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors">
+          }} className="flex w-full max-w-full min-w-0 items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors">
             <ArrowLeft className="h-4 w-4 text-muted-foreground shrink-0" />
-            <span className="text-muted-foreground">Voltar</span>
+            <span className="text-muted-foreground truncate">Voltar</span>
           </button>
         )}
         {filteredFolders.map(f => (
           <button
             key={f.id}
             onClick={() => { setMoveBrowseFolderId(f.id); setSearchQuery(''); }}
-            className="flex w-full items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors"
+            className="flex w-full max-w-full min-w-0 items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors"
           >
             <img src={f.image_url || defaultSalaIcon} alt={f.name} className="h-8 w-8 rounded-lg object-cover shrink-0" />
-            <span className="flex-1 text-left font-medium truncate">{f.name}</span>
+            <span className="flex-1 min-w-0 text-left font-medium truncate">{f.name}</span>
             <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
           </button>
         ))}
@@ -129,9 +131,9 @@ const FolderBrowser = ({
           </div>
         )}
       </div>
-      <div className="flex gap-2 pt-1">
-        <Button variant="outline" size="sm" onClick={onCancel} className="flex-1">Cancelar</Button>
-        <Button size="sm" onClick={onMoveSubmit} className="flex-1">{submitLabel}</Button>
+      <div className="flex gap-2 pt-1 min-w-0">
+        <Button variant="outline" size="sm" onClick={onCancel} className="flex-1 min-w-0">Cancelar</Button>
+        <Button size="sm" onClick={onMoveSubmit} className="flex-1 min-w-0">{submitLabel}</Button>
       </div>
     </div>
   );
@@ -157,7 +159,7 @@ const DeckMoveDialog = ({
   setMoveParentDeckId: (v: string | null) => void;
   folders: Folder[];
   decks: { id: string; name: string; parent_deck_id: string | null; folder_id: string | null }[];
-  onMoveSubmit: () => void;
+  onMoveSubmit: (overrideParentDeckId?: string | null) => void;
 }) => {
   const [switchSala, setSwitchSala] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -188,10 +190,10 @@ const DeckMoveDialog = ({
     );
   }, [currentFolderId, decks, excludeIds]);
 
-  // All salas for switch mode
+  // All own salas for switch mode (exclude community/followed folders)
   const allSalas = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    return folders.filter(f => !f.is_archived && !f.parent_id && (q ? f.name.toLowerCase().includes(q) : true));
+    return folders.filter(f => !f.is_archived && !f.parent_id && !f.source_turma_id && (q ? f.name.toLowerCase().includes(q) : true));
   }, [folders, searchQuery]);
 
   const handleClose = () => {
@@ -202,14 +204,11 @@ const DeckMoveDialog = ({
   };
 
   const handleMoveToRoot = () => {
-    // Move to root of current sala (remove parent_deck_id)
-    setMoveParentDeckId(null);
-    onMoveSubmit();
+    onMoveSubmit(null);
   };
 
   const handleMoveToMateria = (materiaId: string) => {
-    setMoveParentDeckId(materiaId);
-    onMoveSubmit();
+    onMoveSubmit(materiaId);
   };
 
   const handleMoveToSala = (salaId: string) => {
@@ -220,13 +219,13 @@ const DeckMoveDialog = ({
   };
 
   const handleMoveConfirmSala = () => {
-    onMoveSubmit();
+    onMoveSubmit(null);
   };
 
   // Phase: switching sala
   if (switchSala) {
     return (
-      <div className="space-y-3">
+      <div className="space-y-3 min-w-0">
         <button
           onClick={() => { setSwitchSala(false); setSearchQuery(''); }}
           className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -235,19 +234,19 @@ const DeckMoveDialog = ({
           <span>Voltar</span>
         </button>
         <p className="text-sm text-muted-foreground">Selecione a sala de destino:</p>
-        <div className="relative">
+        <div className="relative min-w-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Buscar sala..." className="pl-9 h-9 text-sm" />
         </div>
-        <div className="max-h-56 overflow-y-auto rounded-lg border border-border divide-y divide-border">
+        <div className="max-h-56 w-full min-w-0 overflow-y-auto overflow-x-hidden rounded-lg border border-border divide-y divide-border">
           {allSalas.map(f => (
             <button
               key={f.id}
               onClick={() => handleMoveToSala(f.id)}
-              className={`flex w-full items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors ${f.id === currentFolderId ? 'bg-primary/5' : ''}`}
+              className={`flex w-full max-w-full min-w-0 items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors ${f.id === currentFolderId ? 'bg-primary/5' : ''}`}
             >
               <img src={f.image_url || defaultSalaIcon} alt={f.name} className="h-8 w-8 rounded-lg object-cover shrink-0" />
-              <span className="flex-1 text-left font-medium truncate">{f.name}</span>
+              <span className="flex-1 min-w-0 text-left font-medium truncate">{f.name}</span>
               {f.id === currentFolderId && <span className="text-xs text-primary font-medium shrink-0">Atual</span>}
             </button>
           ))}
@@ -262,8 +261,8 @@ const DeckMoveDialog = ({
   // If we already switched to a new sala, show confirmation
   if (currentFolderId && currentDeck && currentDeck.folder_id !== currentFolderId) {
     return (
-      <div className="space-y-3">
-        <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border/50">
+      <div className="space-y-3 min-w-0">
+        <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border/50 min-w-0">
           <img src={currentFolder?.image_url || defaultSalaIcon} alt={currentFolder?.name} className="h-10 w-10 rounded-lg object-cover shrink-0" />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-foreground truncate">{currentFolder?.name}</p>
@@ -280,17 +279,16 @@ const DeckMoveDialog = ({
           );
           if (materiasInNewFolder.length === 0) return null;
           return (
-            <div className="space-y-1">
+            <div className="space-y-1 min-w-0">
               <p className="text-xs text-muted-foreground font-medium px-1">Mover para dentro de uma matéria:</p>
-              <div className="max-h-40 overflow-y-auto rounded-lg border border-border divide-y divide-border">
+              <div className="max-h-40 w-full min-w-0 overflow-y-auto overflow-x-hidden rounded-lg border border-border divide-y divide-border">
                 {materiasInNewFolder.map(m => (
                   <button
                     key={m.id}
                     onClick={() => handleMoveToMateria(m.id)}
-                    className="flex w-full items-center gap-3 px-4 py-2.5 text-sm hover:bg-muted/50 transition-colors"
+                    className="flex w-full max-w-full min-w-0 items-center gap-3 px-4 py-2.5 text-sm hover:bg-muted/50 transition-colors"
                   >
-                    <GraduationCap className="h-4 w-4 text-primary shrink-0" />
-                    <span className="flex-1 text-left truncate">{m.name}</span>
+                    <span className="flex-1 min-w-0 text-left truncate">{m.name}</span>
                   </button>
                 ))}
               </div>
@@ -298,9 +296,9 @@ const DeckMoveDialog = ({
           );
         })()}
 
-        <div className="flex gap-2 pt-1">
-          <Button variant="outline" size="sm" onClick={() => { setMoveBrowseFolderId(currentDeck?.folder_id ?? null); }} className="flex-1">Voltar</Button>
-          <Button size="sm" onClick={handleMoveConfirmSala} className="flex-1">Mover para esta sala</Button>
+        <div className="flex gap-2 pt-1 min-w-0">
+          <Button variant="outline" size="sm" onClick={() => { setMoveBrowseFolderId(currentDeck?.folder_id ?? null); }} className="flex-1 min-w-0">Voltar</Button>
+          <Button size="sm" onClick={handleMoveConfirmSala} className="flex-1 min-w-0">Mover para esta sala</Button>
         </div>
       </div>
     );
@@ -308,27 +306,26 @@ const DeckMoveDialog = ({
 
   // Default phase: within current sala
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 min-w-0">
       {/* Current sala context */}
       {currentFolder && (
-        <div className="flex items-center gap-2 px-1">
+        <div className="flex items-center gap-2 px-1 min-w-0">
           <img src={currentFolder.image_url || defaultSalaIcon} alt={currentFolder.name} className="h-6 w-6 rounded-md object-cover shrink-0" />
-          <span className="text-sm font-medium text-foreground truncate">{currentFolder.name}</span>
+          <span className="text-sm font-medium text-foreground truncate min-w-0">{currentFolder.name}</span>
         </div>
       )}
 
       {!isMateria && materiasInFolder.length > 0 && (
-        <div className="space-y-1">
+        <div className="space-y-1 min-w-0">
           <p className="text-xs text-muted-foreground font-medium px-1">Mover para uma matéria:</p>
-          <div className="max-h-48 overflow-y-auto rounded-lg border border-border divide-y divide-border">
+          <div className="max-h-48 w-full min-w-0 overflow-y-auto overflow-x-hidden rounded-lg border border-border divide-y divide-border">
             {materiasInFolder.map(m => (
               <button
                 key={m.id}
                 onClick={() => handleMoveToMateria(m.id)}
-                className={`flex w-full items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors ${currentDeck?.parent_deck_id === m.id ? 'bg-primary/5' : ''}`}
+                className={`flex w-full max-w-full min-w-0 items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors ${currentDeck?.parent_deck_id === m.id ? 'bg-primary/5' : ''}`}
               >
-                <GraduationCap className="h-4 w-4 text-primary shrink-0" />
-                <span className="flex-1 text-left font-medium truncate">{m.name}</span>
+                <span className="flex-1 min-w-0 text-left font-medium truncate">{m.name}</span>
                 {currentDeck?.parent_deck_id === m.id && <span className="text-xs text-primary font-medium shrink-0">Atual</span>}
               </button>
             ))}
@@ -338,9 +335,9 @@ const DeckMoveDialog = ({
 
       {/* Move to root of sala (if currently inside a matéria) */}
       {currentDeck?.parent_deck_id && (
-        <Button variant="outline" size="sm" onClick={handleMoveToRoot} className="w-full gap-2 text-sm">
+        <Button variant="outline" size="sm" onClick={handleMoveToRoot} className="w-full max-w-full gap-2 text-sm">
           <Layers className="h-4 w-4" />
-          Mover para raiz da sala
+          Tirar da matéria (mover para a sala)
         </Button>
       )}
 
@@ -351,12 +348,12 @@ const DeckMoveDialog = ({
       )}
 
       {/* Switch sala button */}
-      <Button variant="outline" size="sm" onClick={() => setSwitchSala(true)} className="w-full gap-2 text-sm">
+      <Button variant="outline" size="sm" onClick={() => setSwitchSala(true)} className="w-full max-w-full gap-2 text-sm">
         <RefreshCw className="h-4 w-4" />
         Trocar de sala
       </Button>
 
-      <Button variant="ghost" size="sm" onClick={handleClose} className="w-full text-muted-foreground">
+      <Button variant="ghost" size="sm" onClick={handleClose} className="w-full max-w-full text-muted-foreground">
         Cancelar
       </Button>
     </div>
@@ -379,18 +376,27 @@ const DashboardDialogs = (props: DashboardDialogsProps) => {
       <Dialog open={!!props.createType} onOpenChange={open => { if (!open) { props.setCreateType(null); props.setCreateParentDeckId(null); } }}>
         <DialogContent className="sm:max-w-md max-w-[calc(100vw-2rem)]">
           <DialogHeader>
-            <DialogTitle className="font-display">
-              {props.createType === 'folder' ? 'Nova Sala' : props.createParentDeckId ? 'Novo Sub-deck' : 'Novo Baralho'}
+            <DialogTitle className="font-display text-center">
+              {props.createType === 'folder' ? 'Criar nova Sala' : props.createParentDeckId === '__materia__' ? 'Nova Matéria' : props.createParentDeckId ? 'Novo Sub-deck' : 'Novo Deck'}
             </DialogTitle>
+            {props.createType === 'folder' && (
+              <p className="text-sm text-muted-foreground text-center pt-1">
+                Uma sala organiza seus decks e matérias em um só lugar. (ex: "Medicina 2026", "Concurso Federal", "Residência Cardio")
+              </p>
+            )}
           </DialogHeader>
           <form onSubmit={e => { e.preventDefault(); props.onCreateSubmit(); }} className="space-y-4">
             <div className="space-y-2">
-              <Label>Nome</Label>
-              <Input value={props.createName} onChange={e => props.setCreateName(e.target.value)} placeholder={props.createType === 'folder' ? 'Ex: Medicina' : 'Ex: Vocabulário'} autoFocus maxLength={100} />
+              {props.createType !== 'folder' && <Label>Nome</Label>}
+              <Input value={props.createName} onChange={e => props.setCreateName(e.target.value)} placeholder={props.createType === 'folder' ? "ex: 'Residência 2026'" : 'Ex: Vocabulário'} autoFocus maxLength={100} />
             </div>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => { props.setCreateType(null); props.setCreateParentDeckId(null); }}>Cancelar</Button>
-              <Button type="submit" disabled={!props.createName.trim() || props.isCreating}>Criar</Button>
+            <div className={props.createType === 'folder' ? 'flex justify-center' : 'flex justify-end gap-2'}>
+              {props.createType !== 'folder' && (
+                <Button type="button" variant="outline" onClick={() => { props.setCreateType(null); props.setCreateParentDeckId(null); }}>Cancelar</Button>
+              )}
+              <Button type="submit" disabled={!props.createName.trim() || props.isCreating} className={props.createType === 'folder' ? 'px-8' : ''}>
+                {props.createType === 'folder' ? 'PRÓXIMO' : 'Criar'}
+              </Button>
             </div>
           </form>
         </DialogContent>
@@ -412,36 +418,40 @@ const DashboardDialogs = (props: DashboardDialogsProps) => {
 
       {/* Move Dialog (single item) */}
       <Dialog open={!!props.moveTarget} onOpenChange={open => { if (!open) { props.setMoveTarget(null); props.setMoveParentDeckId(null); } }}>
-        <DialogContent className="sm:max-w-md max-w-[calc(100vw-2rem)] w-full overflow-hidden">
-          <DialogHeader>
-            <DialogTitle className="font-display flex items-center gap-2 min-w-0 overflow-hidden">
-              <ArrowUpRight className="h-5 w-5 shrink-0" />
-              <span className="truncate block">{`Mover "${props.moveTarget?.name}"`}</span>
+        <DialogContent className="!w-[calc(100vw-1rem)] !max-w-[40rem] p-4 sm:p-6 overflow-x-hidden">
+          <DialogHeader className="min-w-0 pr-9">
+            <DialogTitle className="font-display flex items-start gap-2 min-w-0">
+              <ArrowUpRight className="h-5 w-5 shrink-0 mt-0.5" />
+              <span className="min-w-0 text-base leading-snug break-words">
+                Mover "{props.moveTarget?.name}"
+              </span>
             </DialogTitle>
           </DialogHeader>
-          {props.moveTarget?.type === 'deck' ? (
-            <DeckMoveDialog
-              moveTarget={props.moveTarget}
-              setMoveTarget={props.setMoveTarget}
-              moveBrowseFolderId={props.moveBrowseFolderId}
-              setMoveBrowseFolderId={props.setMoveBrowseFolderId}
-              moveParentDeckId={props.moveParentDeckId}
-              setMoveParentDeckId={props.setMoveParentDeckId}
-              folders={props.folders}
-              decks={props.decks}
-              onMoveSubmit={props.onMoveSubmit}
-            />
-          ) : (
-            <FolderBrowser
-              folders={props.folders}
-              movableFolders={props.movableFolders}
-              moveBrowseFolderId={props.moveBrowseFolderId}
-              setMoveBrowseFolderId={props.setMoveBrowseFolderId}
-              onMoveSubmit={props.onMoveSubmit}
-              onCancel={() => { props.setMoveTarget(null); props.setMoveParentDeckId(null); }}
-              submitLabel={getMoveSubmitLabel()}
-            />
-          )}
+          <div className="min-w-0">
+            {props.moveTarget?.type === 'deck' ? (
+              <DeckMoveDialog
+                moveTarget={props.moveTarget}
+                setMoveTarget={props.setMoveTarget}
+                moveBrowseFolderId={props.moveBrowseFolderId}
+                setMoveBrowseFolderId={props.setMoveBrowseFolderId}
+                moveParentDeckId={props.moveParentDeckId}
+                setMoveParentDeckId={props.setMoveParentDeckId}
+                folders={props.folders}
+                decks={props.decks}
+                onMoveSubmit={props.onMoveSubmit}
+              />
+            ) : (
+              <FolderBrowser
+                folders={props.folders}
+                movableFolders={props.movableFolders}
+                moveBrowseFolderId={props.moveBrowseFolderId}
+                setMoveBrowseFolderId={props.setMoveBrowseFolderId}
+                onMoveSubmit={props.onMoveSubmit}
+                onCancel={() => { props.setMoveTarget(null); props.setMoveParentDeckId(null); }}
+                submitLabel={getMoveSubmitLabel()}
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 

@@ -6,7 +6,7 @@
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import { Brain } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { useAIDeckFlow } from '@/components/ai-deck/useAIDeckFlow';
 import UploadStep from '@/components/ai-deck/UploadStep';
 import LoadingPagesStep from '@/components/ai-deck/LoadingPagesStep';
@@ -39,7 +39,7 @@ const AICreateDeckDialog = ({ open, onOpenChange, folderId, existingDeckId, exis
 
   const stepTitle: Record<string, string> = {
     pages: 'Selecione as páginas',
-    config: 'Configurações de IA',
+    config: 'Configurações',
     review: 'Revisar Cartões',
   };
 
@@ -60,8 +60,8 @@ const AICreateDeckDialog = ({ open, onOpenChange, folderId, existingDeckId, exis
       <DialogContent className="sm:max-w-3xl max-h-[90dvh] sm:max-h-[90vh] flex flex-col p-4 sm:p-6" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle className="font-display flex items-center gap-2">
-            <Brain className="h-5 w-5" style={{ color: 'hsl(var(--energy-purple))' }} />
-            {stepTitle[flow.step] || 'Criar Baralho com IA'}
+            <Sparkles className="h-5 w-5" style={{ color: 'hsl(var(--energy-purple))' }} />
+            {stepTitle[flow.step] || 'Criar Deck com IA'}
           </DialogTitle>
         </DialogHeader>
 

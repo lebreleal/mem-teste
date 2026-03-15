@@ -68,8 +68,10 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
 
   const doCreate = useCallback((name: string) => {
     if (state.createType === 'deck') {
+      const isMateria = state.createParentDeckId === '__materia__';
+      const actualParentDeckId = isMateria ? null : state.createParentDeckId;
       state.createDeck.mutate(
-        { name, folderId: state.createParentDeckId ? null : state.currentFolderId, parentDeckId: state.createParentDeckId, algorithmMode: defaultAlgorithm },
+        { name, folderId: actualParentDeckId ? null : state.currentFolderId, parentDeckId: actualParentDeckId, algorithmMode: defaultAlgorithm },
         {
           onSuccess: () => {
             state.setCreateType(null); state.setCreateName('');
@@ -103,8 +105,10 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
 
     let finalName = trimmed;
     if (state.createType === 'deck') {
-      const siblings = state.createParentDeckId
-        ? state.decks.filter(d => d.parent_deck_id === state.createParentDeckId && !d.is_archived)
+      const isMateria = state.createParentDeckId === '__materia__';
+      const actualParent = isMateria ? null : state.createParentDeckId;
+      const siblings = actualParent
+        ? state.decks.filter(d => d.parent_deck_id === actualParent && !d.is_archived)
         : state.decks.filter(d => d.folder_id === state.currentFolderId && !d.parent_deck_id && !d.is_archived);
       finalName = getUniqueName(trimmed, siblings.map(d => d.name));
     } else {
@@ -161,20 +165,21 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
     }
   }, [state, queryClient, toast]);
 
-  const handleMoveSubmit = useCallback(() => {
+  const handleMoveSubmit = useCallback((overrideParentDeckId?: string | null) => {
     if (!state.moveTarget) {
       console.warn('[Move] No moveTarget set');
       return;
     }
     if (state.moveTarget.type === 'deck') {
-      const targetFolderId = state.moveParentDeckId ? null : state.moveBrowseFolderId;
-      let folderId = targetFolderId;
-      if (state.moveParentDeckId) {
-        const parentDeck = state.decks.find(d => d.id === state.moveParentDeckId);
-        folderId = parentDeck?.folder_id ?? null;
+      // Use override if provided (avoids React async state race condition)
+      const effectiveParentDeckId = overrideParentDeckId !== undefined ? overrideParentDeckId : (state.moveParentDeckId ?? null);
+      let folderId = state.moveBrowseFolderId;
+      if (effectiveParentDeckId) {
+        const parentDeck = state.decks.find(d => d.id === effectiveParentDeckId);
+        folderId = parentDeck?.folder_id ?? state.moveBrowseFolderId;
       }
       state.moveDeck.mutate(
-        { id: state.moveTarget.id, folderId, parentDeckId: state.moveParentDeckId ?? null },
+        { id: state.moveTarget.id, folderId, parentDeckId: effectiveParentDeckId },
         {
           onSuccess: () => {
             state.setMoveTarget(null);

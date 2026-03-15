@@ -13,7 +13,7 @@ import AIModelSelector from '@/components/AIModelSelector';
 import FlashCard from '@/components/FlashCard';
 import SessionProgressStrip, { type DeckSessionStats } from '@/components/SessionProgressStrip';
 import MilestoneToast from '@/components/MilestoneToast';
-import SessionCompleteSummary from '@/components/SessionCompleteSummary';
+// SessionCompleteSummary removed — using simple inline completion screen
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, CheckCircle2, Brain, Moon, Sun, Timer, RefreshCw, Info, AlertTriangle, ChevronRight } from 'lucide-react';
 import {
@@ -106,9 +106,11 @@ const Study = () => {
   const deckStatsRef = useRef<Map<string, DeckSessionStats>>(new Map());
   const [deckStatsSnapshot, setDeckStatsSnapshot] = useState<DeckSessionStats[]>([]);
 
-  // Elapsed time ticker
+  // Elapsed time ticker — stopped via sessionDoneRef
+  const sessionDoneRef = useRef(false);
   useEffect(() => {
     const interval = setInterval(() => {
+      if (sessionDoneRef.current) return;
       setSessionElapsed(Date.now() - sessionStartRef.current);
     }, 1000);
     return () => clearInterval(interval);
@@ -294,8 +296,8 @@ const Study = () => {
   useEffect(() => {
     return () => {
       queryClient.removeQueries({ queryKey: studyQueueKey });
-      queryClient.invalidateQueries({ queryKey: ['study-stats'] });
-      queryClient.invalidateQueries({ queryKey: ['activity-full'] });
+      // Invalidate all study-related queries so dashboard shows fresh data
+      invalidateStudyQueries(queryClient);
     };
   }, [queryClient, studyQueueKey]);
 
@@ -949,15 +951,18 @@ const Study = () => {
   }
 
   if (!currentCard && !allWaiting && reviewCount > 0) {
+    if (!sessionDoneRef.current) {
+      sessionDoneRef.current = true;
+      setTimeout(() => goBack(), 1500);
+    }
     return (
-      <SessionCompleteSummary
-        reviewCount={reviewCount}
-        correctCount={correctCount}
-        wrongCount={wrongCount}
-        elapsedMs={sessionElapsed}
-        deckStats={deckStatsSnapshot}
-        onGoBack={goBack}
-      />
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
+        <div className="animate-fade-in text-center space-y-3">
+          <CheckCircle2 className="h-12 w-12 text-primary mx-auto" />
+          <h1 className="font-display text-xl font-bold text-foreground">Seção completa!</h1>
+          <p className="text-sm text-muted-foreground">{reviewCount} cards estudados</p>
+        </div>
+      </div>
     );
   }
 

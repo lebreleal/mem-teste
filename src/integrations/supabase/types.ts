@@ -3017,6 +3017,19 @@ export type Database = {
         }
         Returns: Json
       }
+      get_all_user_card_counts: {
+        Args: { p_user_id: string }
+        Returns: {
+          bom: number
+          deck_id: string
+          dificil: number
+          errei: number
+          facil: number
+          mastered: number
+          novo: number
+          total: number
+        }[]
+      }
       get_all_user_deck_stats: {
         Args: { p_tz_offset_minutes?: number; p_user_id: string }
         Returns: {
