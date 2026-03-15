@@ -20,6 +20,8 @@ interface SalaInfo {
   masteredCards: number;
   questionCount: number;
   dueCount: number;
+  ownerName?: string;
+  lastUpdated?: string;
 }
 
 interface SalaListProps {
@@ -83,11 +85,79 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
     return deckIds.reduce((sum, id) => sum + (questionCounts.get(id) ?? 0), 0);
   };
 
+  // Identify community-followed folders
+  const communityFolderIds = folders
+    .filter(f => !f.parent_id && !f.is_archived && f.source_turma_id)
+    .map(f => ({ folderId: f.id, turmaId: f.source_turma_id! }));
+
+  // Fetch owner names and last updated for community folders
+  const turmaIds = communityFolderIds.map(c => c.turmaId);
+  const { data: communityMeta } = useQuery({
+    queryKey: ['sala-list-community-meta', turmaIds.join(',')],
+    queryFn: async () => {
+      if (turmaIds.length === 0) return new Map<string, { ownerName: string; lastUpdated: string; coverUrl: string | null; deckCount: number; cardCount: number }>();
+      const { data: turmas } = await supabase.from('turmas').select('id, owner_id, cover_image_url').in('id', turmaIds);
+      if (!turmas) return new Map();
+      const ownerIds = [...new Set((turmas as any[]).map(t => t.owner_id))];
+      const { data: profiles } = await supabase.rpc('get_public_profiles' as any, { p_user_ids: ownerIds });
+      const profileMap = new Map((profiles as any[] ?? []).map((p: any) => [p.id, p.name]));
+      // Fetch published deck info per turma
+      const { data: turmaDecks } = await supabase.from('turma_decks').select('turma_id, deck_id').in('turma_id', turmaIds).eq('is_published', true);
+      const deckIdsByTurma = new Map<string, string[]>();
+      for (const td of (turmaDecks ?? []) as any[]) {
+        const arr = deckIdsByTurma.get(td.turma_id) ?? [];
+        arr.push(td.deck_id);
+        deckIdsByTurma.set(td.turma_id, arr);
+      }
+      const allTDeckIds = (turmaDecks ?? []).map((td: any) => td.deck_id);
+      let lastUpdatedMap = new Map<string, string>();
+      let cardCountMap = new Map<string, number>();
+      if (allTDeckIds.length > 0) {
+        const { data: tDecks } = await supabase.from('decks').select('id, updated_at').in('id', allTDeckIds);
+        for (const d of (tDecks ?? []) as any[]) {
+          // Find which turma this deck belongs to
+          for (const [tid, dids] of deckIdsByTurma.entries()) {
+            if (dids.includes(d.id)) {
+              const cur = lastUpdatedMap.get(tid) ?? '';
+              if (d.updated_at > cur) lastUpdatedMap.set(tid, d.updated_at);
+            }
+          }
+        }
+        const { data: cardCounts } = await supabase.from('cards').select('deck_id').in('deck_id', allTDeckIds);
+        const countByDeck = new Map<string, number>();
+        for (const c of (cardCounts ?? []) as any[]) {
+          countByDeck.set(c.deck_id, (countByDeck.get(c.deck_id) ?? 0) + 1);
+        }
+        for (const [tid, dids] of deckIdsByTurma.entries()) {
+          let total = 0;
+          for (const did of dids) total += countByDeck.get(did) ?? 0;
+          cardCountMap.set(tid, total);
+        }
+      }
+      const result = new Map<string, { ownerName: string; lastUpdated: string; coverUrl: string | null; deckCount: number; cardCount: number }>();
+      for (const t of turmas as any[]) {
+        result.set(t.id, {
+          ownerName: profileMap.get(t.owner_id) || 'Anônimo',
+          lastUpdated: lastUpdatedMap.get(t.id) ?? '',
+          coverUrl: t.cover_image_url,
+          deckCount: deckIdsByTurma.get(t.id)?.length ?? 0,
+          cardCount: cardCountMap.get(t.id) ?? 0,
+        });
+      }
+      return result;
+    },
+    enabled: turmaIds.length > 0,
+    staleTime: 60_000,
+  });
+
   // Build sala info for each real folder
   const realSalas: SalaInfo[] = folders
     .filter(f => !f.parent_id && !f.is_archived)
     .sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0) || a.name.localeCompare(b.name))
     .map(f => {
+      const isCommunity = !!f.source_turma_id;
+      const meta = isCommunity && communityMeta ? communityMeta.get(f.source_turma_id!) : undefined;
+
       const folderDecks = rootDecks.filter(d => d.folder_id === f.id);
       let totalCards = 0, masteredCards = 0, dueCount = 0;
       for (const d of folderDecks) {
@@ -106,15 +176,18 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
         dueCount += stats.new_count + stats.learning_count + stats.review_count;
       }
       const allIds = collectAllDeckIds(folderDecks, decks);
+
       return {
         id: f.id,
         name: f.name,
-        imageUrl: f.image_url,
-        deckCount: countAllDecks(folderDecks, decks),
-        totalCards,
-        masteredCards,
+        imageUrl: isCommunity && meta?.coverUrl ? meta.coverUrl : f.image_url,
+        deckCount: isCommunity && meta ? meta.deckCount : countAllDecks(folderDecks, decks),
+        totalCards: isCommunity && meta ? meta.cardCount : totalCards,
+        masteredCards: isCommunity ? 0 : masteredCards,
         questionCount: getQuestionCount(allIds),
         dueCount,
+        ownerName: meta?.ownerName,
+        lastUpdated: meta?.lastUpdated,
       };
     });
 
@@ -159,6 +232,8 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
           questionCount={sala.questionCount}
           dueCount={sala.dueCount}
           imageUrl={sala.imageUrl}
+          ownerName={sala.ownerName}
+          lastUpdated={sala.lastUpdated}
           onClick={() => onSalaClick(sala.id)}
         />
       ))}
