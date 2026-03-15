@@ -33,7 +33,7 @@ export async function bootstrapFollowerDecks(
  * Compares origin_deck_id on follower's cards to find missing ones.
  */
 export async function syncFollowerDecks(userId: string, folderId: string): Promise<number> {
-  // Get all local mirror decks in this folder
+  // Get all local mirror decks in this folder (root-level, with source_turma_deck_id)
   const { data: localDecks } = await supabase
     .from('decks')
     .select('id, source_turma_deck_id, parent_deck_id')
@@ -44,10 +44,12 @@ export async function syncFollowerDecks(userId: string, folderId: string): Promi
   if (!localDecks || localDecks.length === 0) return 0;
 
   let totalNewCards = 0;
+  const allProcessedDeckIds: string[] = [];
+  const PAGE = 1000;
 
   for (const localDeck of localDecks) {
     const sourceTurmaDeckId = (localDeck as any).source_turma_deck_id;
-    if (!sourceTurmaDeckId) continue; // sub-deck, handled via parent
+    if (!sourceTurmaDeckId) continue;
 
     // Find the original deck_id from turma_decks
     const { data: td } = await supabase
@@ -59,60 +61,125 @@ export async function syncFollowerDecks(userId: string, folderId: string): Promi
 
     const sourceDeckId = (td as any).deck_id;
 
-    // Get all origin_deck_ids already in the local deck (paginated to avoid 1000-row limit)
-    const existingOriginIds = new Set<string>();
-    let existingOffset = 0;
-    const PAGE = 1000;
-    while (true) {
-      const { data: existingBatch } = await supabase
-        .from('cards')
-        .select('origin_deck_id')
-        .eq('deck_id', localDeck.id)
-        .not('origin_deck_id', 'is', null)
-        .range(existingOffset, existingOffset + PAGE - 1);
-      if (!existingBatch || existingBatch.length === 0) break;
-      for (const c of existingBatch) existingOriginIds.add((c as any).origin_deck_id);
-      if (existingBatch.length < PAGE) break;
-      existingOffset += PAGE;
-    }
+    // Sync root deck
+    const rootNew = await _syncCardsBetween(sourceDeckId, localDeck.id);
+    totalNewCards += rootNew;
+    allProcessedDeckIds.push(localDeck.id);
 
-    // Get source cards not yet copied (paginated)
-    const allSourceCards: any[] = [];
-    let sourceOffset = 0;
-    while (true) {
-      const { data: sourceBatch } = await supabase
-        .from('cards')
-        .select('id, front_content, back_content, card_type')
-        .eq('deck_id', sourceDeckId)
-        .range(sourceOffset, sourceOffset + PAGE - 1);
-      if (!sourceBatch || sourceBatch.length === 0) break;
-      allSourceCards.push(...sourceBatch);
-      if (sourceBatch.length < PAGE) break;
-      sourceOffset += PAGE;
-    }
-    const sourceCards = allSourceCards;
+    // --- Sub-deck sync ---
+    // Get source sub-decks
+    const { data: sourceSubDecks } = await supabase
+      .from('decks')
+      .select('id, name')
+      .eq('parent_deck_id', sourceDeckId);
 
-    const newCards = (sourceCards ?? []).filter((c: any) => !existingOriginIds.has(c.id));
-    
-    if (newCards.length > 0) {
-      const inserts = newCards.map((c: any) => ({
-        deck_id: localDeck.id,
-        front_content: c.front_content,
-        back_content: c.back_content,
-        card_type: c.card_type ?? 'basic',
-        origin_deck_id: c.id,
-      }));
-      
-      // Insert in batches of 500
-      for (let i = 0; i < inserts.length; i += 500) {
-        const batch = inserts.slice(i, i + 500);
-        await supabase.from('cards').insert(batch as any);
+    if (sourceSubDecks && sourceSubDecks.length > 0) {
+      // Get local sub-decks
+      const { data: localSubDecks } = await supabase
+        .from('decks')
+        .select('id, name, parent_deck_id')
+        .eq('parent_deck_id', localDeck.id)
+        .eq('user_id', userId);
+
+      const localSubMap = new Map((localSubDecks ?? []).map((d: any) => [d.name, d.id]));
+
+      for (const srcSub of sourceSubDecks) {
+        let localSubId = localSubMap.get((srcSub as any).name);
+
+        if (!localSubId) {
+          // Create missing local sub-deck
+          const { data: newSub } = await supabase
+            .from('decks')
+            .insert({
+              user_id: userId,
+              name: (srcSub as any).name,
+              folder_id: folderId,
+              parent_deck_id: localDeck.id,
+              daily_new_limit: 20,
+              daily_review_limit: 9999,
+            } as any)
+            .select('id')
+            .single();
+          if (newSub) localSubId = (newSub as any).id;
+        }
+
+        if (localSubId) {
+          const subNew = await _syncCardsBetween((srcSub as any).id, localSubId);
+          totalNewCards += subNew;
+          allProcessedDeckIds.push(localSubId);
+        }
       }
-      totalNewCards += newCards.length;
+    }
+  }
+
+  // Update synced_at on ALL processed decks so the red dot disappears
+  if (allProcessedDeckIds.length > 0) {
+    const now = new Date().toISOString();
+    for (let i = 0; i < allProcessedDeckIds.length; i += 200) {
+      const batch = allProcessedDeckIds.slice(i, i + 200);
+      await supabase
+        .from('decks')
+        .update({ synced_at: now })
+        .in('id', batch);
     }
   }
 
   return totalNewCards;
+}
+
+/** Internal: sync missing cards from sourceDeckId → localDeckId. Returns count of new cards. */
+async function _syncCardsBetween(sourceDeckId: string, localDeckId: string): Promise<number> {
+  const PAGE = 1000;
+
+  // Get all origin_deck_ids already in the local deck
+  const existingOriginIds = new Set<string>();
+  let existingOffset = 0;
+  while (true) {
+    const { data: existingBatch } = await supabase
+      .from('cards')
+      .select('origin_deck_id')
+      .eq('deck_id', localDeckId)
+      .not('origin_deck_id', 'is', null)
+      .range(existingOffset, existingOffset + PAGE - 1);
+    if (!existingBatch || existingBatch.length === 0) break;
+    for (const c of existingBatch) existingOriginIds.add((c as any).origin_deck_id);
+    if (existingBatch.length < PAGE) break;
+    existingOffset += PAGE;
+  }
+
+  // Get source cards
+  const allSourceCards: any[] = [];
+  let sourceOffset = 0;
+  while (true) {
+    const { data: sourceBatch } = await supabase
+      .from('cards')
+      .select('id, front_content, back_content, card_type')
+      .eq('deck_id', sourceDeckId)
+      .range(sourceOffset, sourceOffset + PAGE - 1);
+    if (!sourceBatch || sourceBatch.length === 0) break;
+    allSourceCards.push(...sourceBatch);
+    if (sourceBatch.length < PAGE) break;
+    sourceOffset += PAGE;
+  }
+
+  const newCards = allSourceCards.filter((c: any) => !existingOriginIds.has(c.id));
+
+  if (newCards.length > 0) {
+    const inserts = newCards.map((c: any) => ({
+      deck_id: localDeckId,
+      front_content: c.front_content,
+      back_content: c.back_content,
+      card_type: c.card_type ?? 'basic',
+      origin_deck_id: c.id,
+    }));
+
+    for (let i = 0; i < inserts.length; i += 500) {
+      const batch = inserts.slice(i, i + 500);
+      await supabase.from('cards').insert(batch as any);
+    }
+  }
+
+  return newCards.length;
 }
 
 /**
