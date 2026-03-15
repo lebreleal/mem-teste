@@ -56,10 +56,16 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     const pomodoroHandler = () => setShowPomodoro(true);
     const addMenuHandler = () => {
-      // "+" only works on dashboard root (not inside any sala, not on other pages)
-      if (!isOnDashboard || isInsideSala) return;
-      // On dashboard root: go directly to create-sala
-      navigate('/dashboard?action=create-sala');
+      // "+" only works on dashboard (not on other pages) and not inside community folders
+      if (!isOnDashboard) return;
+      if (isInsideSala && isCommunityFolder) return;
+      if (!isInsideSala) {
+        // On dashboard root: go directly to create-sala
+        navigate('/dashboard?action=create-sala');
+      } else {
+        // Inside own sala: dispatch event for dashboard to handle adding content
+        window.dispatchEvent(new CustomEvent('open-sala-add-menu'));
+      }
     };
     window.addEventListener('open-pomodoro', pomodoroHandler);
     window.addEventListener('open-add-menu', addMenuHandler);

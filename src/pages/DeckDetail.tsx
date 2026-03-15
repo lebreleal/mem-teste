@@ -283,6 +283,9 @@ const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: stri
                       </div>
                       <span className="text-xs font-semibold text-foreground">~{timeLabel}</span>
                     </div>
+                    <p className="text-[10px] text-muted-foreground/70 leading-tight">
+                      Tempo de estudo restante para completar os cartões novos e revisões configurados nos ajustes de hoje, com base na sua velocidade média de estudo.
+                    </p>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
