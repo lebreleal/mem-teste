@@ -311,8 +311,11 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
         }
       }
     }
-    // Navigate to Dashboard — follower's local decks live there after bootstrap
-    navigate('/dashboard');
+    // Navigate to Dashboard — open the sala folder directly
+    const { data: folderData } = await supabase.from('folders')
+      .select('id').eq('user_id', user.id).eq('source_turma_id', turmaId).limit(1);
+    const targetFolderId = folderData?.[0]?.id;
+    navigate(targetFolderId ? `/dashboard?folder=${targetFolderId}` : '/dashboard');
   };
 
   // Classification bar for overall progress
