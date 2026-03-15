@@ -59,20 +59,38 @@ export async function syncFollowerDecks(userId: string, folderId: string): Promi
 
     const sourceDeckId = (td as any).deck_id;
 
-    // Get all origin_deck_ids already in the local deck
-    const { data: existingCards } = await supabase
-      .from('cards')
-      .select('origin_deck_id')
-      .eq('deck_id', localDeck.id)
-      .not('origin_deck_id', 'is', null);
+    // Get all origin_deck_ids already in the local deck (paginated to avoid 1000-row limit)
+    const existingOriginIds = new Set<string>();
+    let existingOffset = 0;
+    const PAGE = 1000;
+    while (true) {
+      const { data: existingBatch } = await supabase
+        .from('cards')
+        .select('origin_deck_id')
+        .eq('deck_id', localDeck.id)
+        .not('origin_deck_id', 'is', null)
+        .range(existingOffset, existingOffset + PAGE - 1);
+      if (!existingBatch || existingBatch.length === 0) break;
+      for (const c of existingBatch) existingOriginIds.add((c as any).origin_deck_id);
+      if (existingBatch.length < PAGE) break;
+      existingOffset += PAGE;
+    }
 
-    const existingOriginIds = new Set((existingCards ?? []).map((c: any) => c.origin_deck_id));
-
-    // Get source cards not yet copied
-    const { data: sourceCards } = await supabase
-      .from('cards')
-      .select('id, front_content, back_content, card_type')
-      .eq('deck_id', sourceDeckId);
+    // Get source cards not yet copied (paginated)
+    const allSourceCards: any[] = [];
+    let sourceOffset = 0;
+    while (true) {
+      const { data: sourceBatch } = await supabase
+        .from('cards')
+        .select('id, front_content, back_content, card_type')
+        .eq('deck_id', sourceDeckId)
+        .range(sourceOffset, sourceOffset + PAGE - 1);
+      if (!sourceBatch || sourceBatch.length === 0) break;
+      allSourceCards.push(...sourceBatch);
+      if (sourceBatch.length < PAGE) break;
+      sourceOffset += PAGE;
+    }
+    const sourceCards = allSourceCards;
 
     const newCards = (sourceCards ?? []).filter((c: any) => !existingOriginIds.has(c.id));
     

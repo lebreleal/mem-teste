@@ -309,12 +309,8 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
         }
       }
     }
-    const firstWithCards = salaDecks.find(d => d.total_cards > 0 && !salaDecks.some(s => s.parent_deck_id === d.id));
-    if (firstWithCards) {
-      navigate(`/decks/${firstWithCards.id}`, { state: { from: 'community', turmaId } });
-    } else if (rootDecks.length > 0) {
-      navigate(`/decks/${rootDecks[0].id}`, { state: { from: 'community', turmaId } });
-    }
+    // Navigate to Dashboard — follower's local decks live there after bootstrap
+    navigate('/dashboard');
   };
 
   // Classification bar for overall progress
