@@ -467,7 +467,8 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     : isPlanControlled
       ? Math.max(0, Math.min(stats?.new_count ?? 0, globalRemaining))
       : Math.max(0, Math.min(stats?.new_count ?? 0, deckRemaining));
-  const reviewDue = Math.max(0, Math.min(stats?.review_count ?? 0, dailyReviewLimit - reviewReviewedToday));
+  const reviewDueCount = reviewDueToday ?? (stats?.review_count ?? 0);
+  const reviewDue = Math.max(0, Math.min(reviewDueCount, dailyReviewLimit - reviewReviewedToday));
   const masteredToday = isQuickReview ? Math.max(0, totalCards - (stats?.new_count ?? 0) - learningCount) : reviewDue;
   const totalDue = isQuickReview ? totalCards : newCountToday + learningCount + masteredToday;
   const studyPending = totalDue;
