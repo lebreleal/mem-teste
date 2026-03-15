@@ -83,7 +83,7 @@ export async function fetchTurmaBySlug(slug: string): Promise<Turma | null> {
 
 // ── Discover ──
 
-export async function fetchDiscoverTurmas(_userId: string, searchQuery: string): Promise<(Turma & { member_count: number; owner_name: string })[]> {
+export async function fetchDiscoverTurmas(_userId: string, searchQuery: string): Promise<(Turma & { member_count: number; owner_name: string; deck_count: number; card_count: number; question_count: number; last_updated: string })[]> {
   // Only published/public Salas
   const { data: publicTurmas } = await supabase
     .from('turmas')
@@ -167,11 +167,47 @@ export async function fetchDiscoverTurmas(_userId: string, searchQuery: string):
     });
   }
 
+  // Question counts per turma
+  const questionCountMap = new Map<string, number>();
+  if (allDeckIds.length > 0) {
+    const { data: qRows } = await supabase
+      .from('deck_questions')
+      .select('deck_id')
+      .in('deck_id', allDeckIds);
+    const perDeck = new Map<string, number>();
+    for (const r of qRows ?? []) {
+      perDeck.set(r.deck_id, (perDeck.get(r.deck_id) ?? 0) + 1);
+    }
+    (turmaDecks ?? []).forEach((td: any) => {
+      const qc = perDeck.get(td.deck_id) ?? 0;
+      if (qc > 0) questionCountMap.set(td.turma_id, (questionCountMap.get(td.turma_id) ?? 0) + qc);
+    });
+  }
+
+  // Last updated: use max updated_at from decks
+  const lastUpdatedMap = new Map<string, string>();
+  if (allDeckIds.length > 0) {
+    const { data: deckDates } = await supabase
+      .from('decks')
+      .select('id, updated_at')
+      .in('id', allDeckIds);
+    const deckDateMap = new Map((deckDates ?? []).map((d: any) => [d.id, d.updated_at]));
+    (turmaDecks ?? []).forEach((td: any) => {
+      const dt = deckDateMap.get(td.deck_id);
+      if (dt) {
+        const current = lastUpdatedMap.get(td.turma_id);
+        if (!current || dt > current) lastUpdatedMap.set(td.turma_id, dt);
+      }
+    });
+  }
+
   return allTurmas.map((t: any) => ({
     ...t,
     member_count: memberCountMap.get(t.id) ?? 0,
     deck_count: deckCountMap.get(t.id) ?? 0,
     card_count: cardCountMap.get(t.id) ?? 0,
+    question_count: questionCountMap.get(t.id) ?? 0,
+    last_updated: lastUpdatedMap.get(t.id) ?? t.created_at ?? '',
     owner_name: profileMap.get(t.owner_id) ?? 'Anônimo',
     avg_rating: t.avg_rating ?? 0,
     rating_count: t.rating_count ?? 0,
