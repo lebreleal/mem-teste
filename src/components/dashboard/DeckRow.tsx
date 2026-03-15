@@ -193,7 +193,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
 
   const handleStudy = (e: React.MouseEvent, deckId: string) => {
     e.stopPropagation();
-    navigate(`/decks/${deckId}`);
+    navigate(`/decks/${deckId}`, readOnlyNavState ? { state: readOnlyNavState } : undefined);
   };
 
   return (
