@@ -248,7 +248,16 @@ export async function fetchStudyQueue(
 
   const isLiveDeck = deckIds.some(id => {
     const d = activeDecks.find(dd => dd.id === id);
-    return d?.is_live_deck || d?.source_turma_deck_id || d?.source_listing_id;
+    if (d?.is_live_deck || d?.source_turma_deck_id || d?.source_listing_id) return true;
+    // Walk ancestors to check if any parent is linked
+    let parentId = d?.parent_deck_id;
+    while (parentId) {
+      const parent = activeDecks.find(dd => dd.id === parentId);
+      if (!parent) break;
+      if (parent.is_live_deck || parent.source_turma_deck_id || parent.source_listing_id) return true;
+      parentId = parent.parent_deck_id;
+    }
+    return false;
   });
   return { cards: queue, algorithmMode, deckConfig, isLiveDeck };
 }
