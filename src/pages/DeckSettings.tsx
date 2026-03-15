@@ -285,7 +285,18 @@ const DeckSettings = () => {
     });
   };
 
-  const isCommunityDeck = !!(sourceTurmaDeckId || communityId);
+  const isCommunityDeck = useMemo(() => {
+    if (sourceTurmaDeckId || sourceListingId || communityId) return true;
+    if (!deckId) return false;
+    let parentId = decks.find(d => d.id === deckId)?.parent_deck_id;
+    while (parentId) {
+      const parent = decks.find(d => d.id === parentId) as any;
+      if (!parent) break;
+      if (parent.source_turma_deck_id || parent.source_listing_id || parent.is_live_deck || parent.community_id) return true;
+      parentId = parent.parent_deck_id;
+    }
+    return false;
+  }, [sourceTurmaDeckId, sourceListingId, communityId, deckId, decks]);
 
   const handleDetachDeck = async () => {
     if (!deckId) return;
