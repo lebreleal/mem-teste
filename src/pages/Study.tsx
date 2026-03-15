@@ -1166,8 +1166,10 @@ const Study = () => {
                   clearLeechInterruption();
                   return;
                 }
-                // Find the card by ID in the queue (it may have moved after the review was submitted)
-                const targetCard = localQueue.find(c => c.id === leechInterruption.cardId) ?? currentCard;
+                // Use stored snapshot first, then try queue, then current card
+                const targetCard = leechInterruption.cardSnapshot
+                  ?? localQueue.find(c => c.id === leechInterruption.cardId)
+                  ?? currentCard;
                 if (!targetCard) {
                   clearLeechInterruption();
                   return;
