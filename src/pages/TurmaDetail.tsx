@@ -1,49 +1,142 @@
 /**
- * TurmaDetail page — Sala view for community/shared salas.
- * Uses the EXACT same layout as the Dashboard (matérias expand/collapse, classification bar).
- * Caderno de Erros is always filtered out (private per user).
+ * TurmaDetail page — Public/community Sala view.
+ * Reuses the EXACT same DeckRow component from the Dashboard in readOnly mode.
+ * No data duplication — reads the owner's decks directly via turma_decks RLS.
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TurmaDetailProvider, useTurmaDetail } from '@/components/turma-detail/TurmaDetailContext';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
-import {
-  ChevronLeft, ChevronDown, Users, Star,
-  Layers, Heart, FolderOpen, HelpCircle, Plus, Minus,
-} from 'lucide-react';
+import { ChevronLeft, Users, Star, Heart, FolderOpen } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
+import DeckRow from '@/components/dashboard/DeckRow';
+import type { DeckWithStats } from '@/types/deck';
 
-interface PublishedDeck {
-  turmaDeckId: string;
-  deckId: string;
-  name: string;
-  cardCount: number;
-  questionCount: number;
-  parentDeckId: string | null;
+/**
+ * Fetches the owner's published decks (+ their sub-decks) as DeckWithStats,
+ * reading directly from the owner's data via turma_decks RLS.
+ * NO duplication — same cards, same decks, same DB rows.
+ */
+function useSalaDecks(turmaId: string) {
+  return useQuery<DeckWithStats[]>({
+    queryKey: ['sala-decks', turmaId],
+    queryFn: async () => {
+      // 1. Get published turma_decks
+      const { data: turmaDecks } = await supabase
+        .from('turma_decks')
+        .select('id, deck_id, is_published')
+        .eq('turma_id', turmaId)
+        .eq('is_published', true);
+
+      if (!turmaDecks || turmaDecks.length === 0) return [];
+
+      const rootDeckIds = turmaDecks.map((td: any) => td.deck_id);
+
+      // 2. Fetch root decks + their children (sub-decks)
+      const { data: childDecks } = await supabase
+        .from('decks')
+        .select('id')
+        .in('parent_deck_id', rootDeckIds)
+        .eq('is_archived', false);
+
+      const allDeckIds = [...rootDeckIds, ...(childDecks ?? []).map((d: any) => d.id)];
+
+      // 3. Fetch full deck rows
+      const { data: decks } = await supabase
+        .from('decks')
+        .select('*')
+        .in('id', allDeckIds);
+
+      if (!decks) return [];
+
+      // 4. Fetch card stats (state + difficulty for classification bar)
+      const cardCountMap = new Map<string, { total: number; mastered: number; novo: number; facil: number; bom: number; dificil: number; errei: number }>();
+      const PAGE = 1000;
+
+      for (let i = 0; i < allDeckIds.length; i += 200) {
+        const batch = allDeckIds.slice(i, i + 200);
+        let offset = 0;
+        let hasMore = true;
+        while (hasMore) {
+          const { data: cards } = await supabase
+            .from('cards')
+            .select('id, deck_id, state, difficulty')
+            .in('deck_id', batch)
+            .order('id', { ascending: true })
+            .range(offset, offset + PAGE - 1);
+          if (cards) {
+            for (const c of cards as any[]) {
+              const entry = cardCountMap.get(c.deck_id) ?? { total: 0, mastered: 0, novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
+              entry.total++;
+              if (c.state >= 2) entry.mastered++;
+              if (c.state === 0) {
+                entry.novo++;
+              } else {
+                const d = c.difficulty ?? 5;
+                if (d <= 3) entry.facil++;
+                else if (d <= 5) entry.bom++;
+                else if (d <= 7) entry.dificil++;
+                else entry.errei++;
+              }
+              cardCountMap.set(c.deck_id, entry);
+            }
+          }
+          hasMore = (cards?.length ?? 0) === PAGE;
+          offset += PAGE;
+        }
+      }
+
+      // 5. Map to DeckWithStats (read-only, so study stats are zeroed for the viewer)
+      return decks
+        .filter((d: any) => !d.name?.includes('Caderno de Erros'))
+        .map((d: any) => {
+          const cc = cardCountMap.get(d.id) ?? { total: 0, mastered: 0, novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
+          return {
+            id: d.id,
+            name: d.name,
+            created_at: d.created_at,
+            updated_at: d.updated_at,
+            folder_id: d.folder_id,
+            parent_deck_id: rootDeckIds.includes(d.id) ? null : d.parent_deck_id,
+            is_archived: d.is_archived,
+            new_count: cc.novo,
+            learning_count: 0,
+            review_count: 0,
+            reviewed_today: 0,
+            new_reviewed_today: 0,
+            new_graduated_today: 0,
+            daily_new_limit: d.daily_new_limit,
+            daily_review_limit: d.daily_review_limit,
+            total_cards: cc.total,
+            mastered_cards: cc.mastered,
+            class_novo: cc.novo,
+            class_facil: cc.facil,
+            class_bom: cc.bom,
+            class_dificil: cc.dificil,
+            class_errei: cc.errei,
+          } satisfies DeckWithStats;
+        })
+        .sort((a: DeckWithStats, b: DeckWithStats) => {
+          // Matérias first, then loose decks
+          const aHasChildren = decks.some((d: any) => d.parent_deck_id === a.id);
+          const bHasChildren = decks.some((d: any) => d.parent_deck_id === b.id);
+          if (aHasChildren && !bHasChildren) return -1;
+          if (!aHasChildren && bHasChildren) return 1;
+          return 0;
+        });
+    },
+    enabled: !!turmaId,
+    staleTime: 60_000,
+  });
 }
 
-/* ── Classification bar (same as DeckRow) ── */
-const ClassificationBar = ({ facilPct, bomPct, dificilPct, erreiPct, novoPct, className = '' }: {
-  facilPct: number; bomPct: number; dificilPct: number; erreiPct: number; novoPct: number; className?: string;
-}) => (
-  <div className={`relative h-1 w-full overflow-hidden rounded-full bg-muted/30 ${className}`}>
-    <div className="absolute inset-y-0 left-0 flex w-full">
-      {facilPct > 0 && <div className="h-full transition-all duration-500 rounded-l-full" style={{ width: `${facilPct}%`, backgroundColor: 'hsl(var(--info))' }} />}
-      {bomPct > 0 && <div className="h-full transition-all duration-500" style={{ width: `${bomPct}%`, backgroundColor: 'hsl(var(--success))' }} />}
-      {dificilPct > 0 && <div className="h-full transition-all duration-500" style={{ width: `${dificilPct}%`, backgroundColor: 'hsl(var(--warning))' }} />}
-      {erreiPct > 0 && <div className="h-full transition-all duration-500" style={{ width: `${erreiPct}%`, backgroundColor: 'hsl(var(--destructive))' }} />}
-      {novoPct > 0 && <div className="h-full bg-muted transition-all duration-500 rounded-r-full" style={{ width: `${novoPct}%` }} />}
-    </div>
-  </div>
-);
-
-// ─── Shared deck list + follow logic ───
+// ─── Sala View (public, read-only) ───
 const SalaView = ({ isFollower }: { isFollower: boolean }) => {
   const ctx = useTurmaDetail();
   const { turma, turmaId, isMember } = ctx;
@@ -58,82 +151,7 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
   const rating = Number(turma?.avg_rating ?? 0);
   const ratingCount = turma?.rating_count ?? 0;
 
-  // Fetch published decks + their sub-decks
-  const { data: publishedDecks = [], isLoading: decksLoading } = useQuery({
-    queryKey: ['turma-published-decks', turmaId],
-    queryFn: async () => {
-      const { data: turmaDecks } = await supabase
-        .from('turma_decks')
-        .select('id, deck_id, is_published')
-        .eq('turma_id', turmaId)
-        .eq('is_published', true);
-      if (!turmaDecks || turmaDecks.length === 0) return [];
-
-      const rootDeckIds = turmaDecks.map((td: any) => td.deck_id);
-
-      // Also fetch child decks (sub-decks of published decks)
-      const { data: childDecks } = await supabase
-        .from('decks')
-        .select('id, name, parent_deck_id')
-        .in('parent_deck_id', rootDeckIds)
-        .eq('is_archived', false);
-
-      const allChildIds = (childDecks ?? []).map((d: any) => d.id);
-      const allDeckIds = [...rootDeckIds, ...allChildIds];
-
-      const { data: decks } = await supabase
-        .from('decks')
-        .select('id, name, parent_deck_id')
-        .in('id', allDeckIds);
-
-      const { data: countRows } = await supabase.rpc('count_cards_per_deck', { p_deck_ids: allDeckIds });
-      const countMap = new Map((countRows ?? []).map((r: any) => [r.deck_id, Number(r.card_count)]));
-      const deckMap = new Map((decks ?? []).map((d: any) => [d.id, d]));
-
-      // Question counts
-      const { data: qRows } = await supabase
-        .from('deck_questions')
-        .select('deck_id')
-        .in('deck_id', allDeckIds);
-      const qCountMap = new Map<string, number>();
-      for (const r of qRows ?? []) {
-        qCountMap.set(r.deck_id, (qCountMap.get(r.deck_id) ?? 0) + 1);
-      }
-
-      // Build results: root decks from turma_decks + their children
-      const results: PublishedDeck[] = [];
-
-      for (const td of turmaDecks) {
-        const dk = deckMap.get(td.deck_id);
-        if (!dk || dk.name?.includes('Caderno de Erros')) continue;
-        results.push({
-          turmaDeckId: td.id,
-          deckId: td.deck_id,
-          name: dk.name ?? 'Sem nome',
-          cardCount: countMap.get(td.deck_id) ?? 0,
-          questionCount: qCountMap.get(td.deck_id) ?? 0,
-          parentDeckId: null, // root level in turma
-        });
-      }
-
-      // Add child decks
-      for (const child of (childDecks ?? [])) {
-        if (child.name?.includes('Caderno de Erros')) continue;
-        results.push({
-          turmaDeckId: `child-${child.id}`,
-          deckId: child.id,
-          name: child.name ?? 'Sem nome',
-          cardCount: countMap.get(child.id) ?? 0,
-          questionCount: qCountMap.get(child.id) ?? 0,
-          parentDeckId: child.parent_deck_id,
-        });
-      }
-
-      return results;
-    },
-    enabled: !!turmaId,
-    staleTime: 60_000,
-  });
+  const { data: salaDecks = [], isLoading: decksLoading } = useSalaDecks(turmaId);
 
   // Member count
   const { data: memberCount = 0 } = useQuery({
@@ -146,91 +164,74 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
     staleTime: 60_000,
   });
 
-  // Build hierarchy
-  const { rootDecks, subDeckMap, aggregateStats } = useMemo(() => {
-    const publishedIds = new Set(publishedDecks.map(d => d.deckId));
-    const roots: PublishedDeck[] = [];
-    const subs = new Map<string, PublishedDeck[]>();
-
-    for (const deck of publishedDecks) {
-      if (deck.parentDeckId && publishedIds.has(deck.parentDeckId)) {
-        const list = subs.get(deck.parentDeckId) ?? [];
-        list.push(deck);
-        subs.set(deck.parentDeckId, list);
-      } else {
-        roots.push(deck);
+  // Question counts per deck
+  const allDeckIds = useMemo(() => salaDecks.map(d => d.id), [salaDecks]);
+  const { data: questionCountMap } = useQuery({
+    queryKey: ['sala-question-counts', turmaId, allDeckIds.join(',')],
+    queryFn: async () => {
+      if (allDeckIds.length === 0) return new Map<string, number>();
+      const { data } = await supabase.from('deck_questions').select('deck_id').in('deck_id', allDeckIds);
+      const counts = new Map<string, number>();
+      for (const row of data ?? []) {
+        counts.set(row.deck_id, (counts.get(row.deck_id) ?? 0) + 1);
       }
-    }
+      return counts;
+    },
+    enabled: allDeckIds.length > 0,
+    staleTime: 60_000,
+  });
 
-    const stats = new Map<string, { cards: number; questions: number; subCount: number }>();
-    for (const root of roots) {
-      const children = subs.get(root.deckId) ?? [];
-      const totalCards = root.cardCount + children.reduce((s, c) => s + c.cardCount, 0);
-      const totalQ = root.questionCount + children.reduce((s, c) => s + c.questionCount, 0);
-      stats.set(root.deckId, { cards: totalCards, questions: totalQ, subCount: children.length });
-    }
+  // ── DeckRow helpers (read-only — no-op callbacks) ──
+  const rootDecks = useMemo(
+    () => salaDecks.filter(d => !d.parent_deck_id),
+    [salaDecks],
+  );
 
-    return { rootDecks: roots, subDeckMap: subs, aggregateStats: stats };
-  }, [publishedDecks]);
+  const getSubDecks = useCallback(
+    (parentId: string) => salaDecks.filter(d => d.parent_deck_id === parentId),
+    [salaDecks],
+  );
 
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const getAggregateStats = useCallback(
+    (deck: DeckWithStats) => ({
+      new_count: deck.new_count,
+      learning_count: deck.learning_count,
+      review_count: deck.review_count,
+      reviewed_today: deck.reviewed_today,
+    }),
+    [],
+  );
 
-  const downloadDeck = useCallback(async (turmaDeckId: string, deckId: string, deckName: string, folderId?: string | null) => {
-    if (!user) return;
-    const { data: existing } = await supabase.from('decks')
-      .select('id').eq('user_id', user.id).eq('source_turma_deck_id', turmaDeckId);
-    if (existing && existing.length > 0) return;
+  const noop = useCallback(() => {}, []);
+  const noopDeck = useCallback((_d: DeckWithStats) => {}, []);
+  const noopStr = useCallback((_s: string) => {}, []);
+  const getCommunityLinkId = useCallback((_d: DeckWithStats) => null as string | null, []);
 
-    const { data: originalDeck } = await supabase.from('decks')
-      .select('algorithm_mode, daily_new_limit, daily_review_limit')
-      .eq('id', deckId).single();
-    const od = originalDeck as any;
+  const [expandedDecks] = useState(new Set<string>());
+  const [expandedAccordionId, setExpandedAccordionId] = useState<string | null>(null);
 
-    await supabase.from('decks').insert({
-      name: deckName,
-      user_id: user.id,
-      folder_id: folderId ?? null,
-      algorithm_mode: od?.algorithm_mode ?? 'fsrs',
-      daily_new_limit: od?.daily_new_limit ?? 20,
-      daily_review_limit: od?.daily_review_limit ?? 9999,
-      source_turma_deck_id: turmaDeckId,
-      is_live_deck: true,
-      community_id: turmaId,
-    } as any);
-  }, [user, turmaId]);
-
-  // Follow = join + create linked folder + download first deck
+  // Follow = join turma_members (shortcut in dashboard)
   const handleFollow = async () => {
     if (!user) { navigate('/auth'); return; }
     setFollowing(true);
     try {
       await supabase.from('turma_members').insert({ turma_id: turmaId, user_id: user.id } as any);
 
+      // Create a folder shortcut in the user's dashboard
       const { data: existingFolders } = await supabase.from('folders')
         .select('id').eq('user_id', user.id).eq('source_turma_id', turmaId);
 
-      let folderId: string | null = null;
-      if (existingFolders && existingFolders.length > 0) {
-        folderId = existingFolders[0].id;
-      } else {
-        const { data: newFolder } = await supabase.from('folders')
-          .insert({ user_id: user.id, name: turma?.name || 'Sala', section: 'community', source_turma_id: turmaId } as any)
-          .select().single();
-        folderId = (newFolder as any)?.id ?? null;
-      }
-
-      if (publishedDecks.length > 0) {
-        await downloadDeck(publishedDecks[0].turmaDeckId, publishedDecks[0].deckId, publishedDecks[0].name, folderId);
+      if (!existingFolders || existingFolders.length === 0) {
+        await supabase.from('folders')
+          .insert({ user_id: user.id, name: turma?.name || 'Sala', section: 'community', source_turma_id: turmaId } as any);
       }
 
       queryClient.invalidateQueries({ queryKey: ['turma-role', turmaId, user.id] });
       queryClient.invalidateQueries({ queryKey: ['turma-members', turmaId] });
-      queryClient.invalidateQueries({ queryKey: ['decks'] });
       queryClient.invalidateQueries({ queryKey: ['folders'] });
-      toast({ title: '✅ Seguindo sala! O primeiro deck foi adicionado à sua coleção.' });
+      toast({ title: '✅ Seguindo sala! Ela aparece agora no seu menu Início.' });
     } catch (e: any) {
-      if (e.code === '23505' || e.message?.includes('already') || e.message?.includes('já')) {
-        queryClient.invalidateQueries({ queryKey: ['turma-role', turmaId, user.id] });
+      if (e.code === '23505') {
         toast({ title: 'Você já segue esta sala' });
       } else {
         toast({ title: 'Erro ao seguir', variant: 'destructive' });
@@ -242,7 +243,7 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Hero banner — identical to Dashboard */}
+      {/* Hero banner */}
       <div className="relative bg-muted/50 overflow-hidden">
         <div className="absolute inset-0">
           <img src={coverUrl || defaultSalaIcon} alt="" className="w-full h-full object-cover opacity-30 blur-sm" />
@@ -281,7 +282,7 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
         </div>
       </div>
 
-      {/* Follow CTA for non-members */}
+      {/* Follow CTA */}
       {!isFollower && (
         <div className="flex items-center gap-4 px-4 py-3 max-w-md mx-auto md:max-w-lg">
           <Button
@@ -304,7 +305,7 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
           </div>
         )}
 
-        {/* Deck list — EXACT same layout as Dashboard DeckRow */}
+        {/* Deck list — SAME DeckRow component from Dashboard, readOnly mode */}
         {decksLoading ? (
           <div className="divide-y divide-border/50">
             {[1, 2, 3].map(i => (
@@ -325,122 +326,30 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
           </div>
         ) : (
           <div className="divide-y divide-border/50">
-            {rootDecks.map((deck) => {
-              const children = subDeckMap.get(deck.deckId) ?? [];
-              const stats = aggregateStats.get(deck.deckId);
-              const isMateria = children.length > 0;
-              const isExpanded = expandedId === deck.deckId;
-              const totalCards = stats?.cards ?? deck.cardCount;
-              const totalQ = stats?.questions ?? deck.questionCount;
-
-              // For simple decks (no children) — same as DeckRow loose deck
-              if (!isMateria) {
-                return (
-                  <div
-                    key={deck.turmaDeckId}
-                    className="group flex items-center gap-3 px-4 py-4 transition-all hover:bg-muted/50"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-display font-semibold text-foreground truncate">{deck.name}</h3>
-                      <div className="flex items-center gap-2 mt-1">
-                        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                          <span className="inline-flex items-center gap-0.5">
-                            <Layers className="h-3 w-3" />
-                            {deck.cardCount}
-                          </span>
-                          {deck.questionCount > 0 && (
-                            <>
-                              <span>·</span>
-                              <span className="inline-flex items-center gap-0.5">
-                                <HelpCircle className="h-3 w-3" />
-                                {deck.questionCount}
-                              </span>
-                            </>
-                          )}
-                        </p>
-                      </div>
-                      <ClassificationBar facilPct={0} bomPct={0} dificilPct={0} erreiPct={0} novoPct={100} className="mt-1.5" />
-                    </div>
-                    <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 -rotate-90" />
-                  </div>
-                );
-              }
-
-              // Matéria (parent deck with sub-decks) — same as DeckRow with children
-              return (
-                <div key={deck.turmaDeckId}>
-                  <div
-                    className="group flex items-center gap-3 px-4 py-4 cursor-pointer transition-all hover:bg-muted/50"
-                    onClick={() => setExpandedId(isExpanded ? null : deck.deckId)}
-                  >
-                    {/* +/- expand icon — same as Dashboard */}
-                    {isExpanded
-                      ? <Minus className="h-4 w-4 text-muted-foreground shrink-0" />
-                      : <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
-                    }
-
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-display font-semibold text-foreground truncate">{deck.name}</h3>
-                      <div className="flex items-center gap-2 mt-1">
-                        <p className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
-                          <span>{children.length} {children.length === 1 ? 'deck' : 'decks'}</span>
-                          <span>·</span>
-                          <span className="inline-flex items-center gap-0.5">
-                            <Layers className="h-3 w-3" />
-                            {totalCards}
-                          </span>
-                          {totalQ > 0 && (
-                            <>
-                              <span>·</span>
-                              <span className="inline-flex items-center gap-0.5">
-                                <HelpCircle className="h-3 w-3" />
-                                {totalQ}
-                              </span>
-                            </>
-                          )}
-                        </p>
-                      </div>
-                      <ClassificationBar facilPct={0} bomPct={0} dificilPct={0} erreiPct={0} novoPct={100} className="mt-1.5" />
-                    </div>
-                  </div>
-
-                  {/* Sub-decks (expanded) — same as DeckRow sub-decks */}
-                  {isExpanded && (
-                    <div className="bg-muted/30">
-                      {children.map(sub => (
-                        <div
-                          key={sub.turmaDeckId}
-                          className="group/sub flex items-center gap-3 pl-10 pr-4 py-3 transition-colors hover:bg-muted/50 border-t border-border/30"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <h4 className="text-sm font-medium text-foreground truncate">{sub.name}</h4>
-                            </div>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <span className="text-[11px] text-muted-foreground inline-flex items-center gap-0.5">
-                                <Layers className="h-3 w-3" />
-                                {sub.cardCount}
-                              </span>
-                              {sub.questionCount > 0 && (
-                                <>
-                                  <span className="text-[11px] text-muted-foreground">·</span>
-                                  <span className="text-[11px] text-muted-foreground inline-flex items-center gap-0.5">
-                                    <HelpCircle className="h-3 w-3" />
-                                    {sub.questionCount}
-                                  </span>
-                                </>
-                              )}
-                            </div>
-                            <ClassificationBar facilPct={0} bomPct={0} dificilPct={0} erreiPct={0} novoPct={100} className="mt-1" />
-                          </div>
-                          <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 -rotate-90" />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            {rootDecks.map(deck => (
+              <DeckRow
+                key={deck.id}
+                deck={deck}
+                readOnly
+                deckSelectionMode={false}
+                selectedDeckIds={new Set()}
+                toggleDeckSelection={noopStr}
+                getSubDecks={getSubDecks}
+                getAggregateStats={getAggregateStats}
+                getCommunityLinkId={getCommunityLinkId}
+                navigateToCommunity={noopStr}
+                onCreateSubDeck={noopStr}
+                onRename={noopDeck}
+                onMove={noopDeck}
+                onArchive={noopStr}
+                onDelete={noopDeck}
+                expandedDecks={expandedDecks}
+                toggleExpand={noopStr}
+                expandedAccordionId={expandedAccordionId}
+                onAccordionToggle={(id) => setExpandedAccordionId(prev => prev === id ? null : id)}
+                questionCountMap={questionCountMap}
+              />
+            ))}
           </div>
         )}
       </main>
@@ -477,11 +386,6 @@ const TurmaDetailInner = () => {
         </div>
       </div>
     );
-  }
-
-  if (!user) {
-    navigate(`/c/${turma.share_slug || turmaId}`, { replace: true });
-    return null;
   }
 
   return <SalaView isFollower={isMember} />;
