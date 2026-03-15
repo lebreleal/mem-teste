@@ -274,7 +274,7 @@ const Dashboard = () => {
       }
 
       // Publishing: sync folder decks to turma_decks
-      const folderDecks = allDecks.filter(d => d.folder_id === state.currentFolderId && !d.is_archived && !d.parent_deck_id);
+      const folderDecks = state.decks.filter(d => d.folder_id === state.currentFolderId && !d.is_archived && !d.parent_deck_id);
       const { data: existingTurmaDecks } = await supabase.from('turma_decks').select('deck_id').eq('turma_id', turmaId!);
       const existingIds = new Set((existingTurmaDecks ?? []).map((td: any) => td.deck_id));
 
