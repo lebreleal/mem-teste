@@ -262,13 +262,28 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
     }
   };
 
-  // Study handler — navigate to first deck with cards
-  const handleStudy = () => {
+  // Study handler — auto-follow + navigate to first deck with cards
+  const handleStudy = async () => {
+    // Auto-follow if not already a follower
+    if (!isFollower && user) {
+      try {
+        await supabase.from('turma_members').insert({ turma_id: turmaId, user_id: user.id } as any);
+        const { data: existingFolders } = await supabase.from('folders')
+          .select('id').eq('user_id', user.id).eq('source_turma_id', turmaId);
+        if (!existingFolders || existingFolders.length === 0) {
+          await supabase.from('folders')
+            .insert({ user_id: user.id, name: turma?.name || 'Sala', section: 'community', source_turma_id: turmaId } as any);
+        }
+        queryClient.invalidateQueries({ queryKey: ['turma-role', turmaId, user.id] });
+        queryClient.invalidateQueries({ queryKey: ['folders'] });
+      } catch { /* already following or error — continue to study */ }
+    }
+    if (!user) { navigate('/auth'); return; }
     const firstWithCards = salaDecks.find(d => d.total_cards > 0 && !salaDecks.some(s => s.parent_deck_id === d.id));
     if (firstWithCards) {
-      navigate(`/decks/${firstWithCards.id}`);
+      navigate(`/decks/${firstWithCards.id}`, { state: { from: 'community', turmaId } });
     } else if (rootDecks.length > 0) {
-      navigate(`/decks/${rootDecks[0].id}`);
+      navigate(`/decks/${rootDecks[0].id}`, { state: { from: 'community', turmaId } });
     }
   };
 
