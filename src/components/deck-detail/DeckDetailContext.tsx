@@ -259,6 +259,36 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     enabled: !!user && !!deckId,
   });
 
+  // Count review cards actually due today (scheduled_date <= now), not ALL review-state cards
+  const { data: reviewDueToday } = useQuery({
+    queryKey: ['review-due-count', deckId],
+    queryFn: async () => {
+      const nowISO = new Date().toISOString();
+      // Collect all descendant deck IDs
+      const allIds: string[] = [deckId];
+      let frontier = [deckId];
+      const decksList = decks ?? [];
+      while (frontier.length > 0) {
+        const nextFrontier: string[] = [];
+        for (const fid of frontier) {
+          const children = decksList.filter(d => d.parent_deck_id === fid && !d.is_archived);
+          for (const child of children) { allIds.push(child.id); nextFrontier.push(child.id); }
+        }
+        frontier = nextFrontier;
+      }
+      const { count, error } = await supabase
+        .from('cards')
+        .select('id', { count: 'exact', head: true })
+        .in('deck_id', allIds)
+        .eq('state', 2)
+        .lte('scheduled_date', nowISO);
+      if (error) throw error;
+      return count ?? 0;
+    },
+    enabled: !!user && !!deckId && decks.length > 0,
+    staleTime: 30_000,
+  });
+
   const descendantIds = useMemo(() => {
     if (!decks.length || !deckId) return [];
     const result: string[] = [];
