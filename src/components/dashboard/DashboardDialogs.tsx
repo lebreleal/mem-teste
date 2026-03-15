@@ -159,7 +159,7 @@ const DeckMoveDialog = ({
   setMoveParentDeckId: (v: string | null) => void;
   folders: Folder[];
   decks: { id: string; name: string; parent_deck_id: string | null; folder_id: string | null }[];
-  onMoveSubmit: () => void;
+  onMoveSubmit: (overrideParentDeckId?: string | null) => void;
 }) => {
   const [switchSala, setSwitchSala] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
