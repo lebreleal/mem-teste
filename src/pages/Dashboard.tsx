@@ -939,7 +939,7 @@ const Dashboard = () => {
           const noopD = (_d: any) => {};
           const noopS = (_s: string) => {};
           const getCLinkId = (_d: any) => null as string | null;
-          const [commAccordionId, setCommAccordionId] = useState<string | null>(null);
+          
           
           if (cRootDecks.length === 0) {
             return (
