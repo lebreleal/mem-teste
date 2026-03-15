@@ -59,7 +59,7 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
   const rating = Number(turma?.avg_rating ?? 0);
   const ratingCount = turma?.rating_count ?? 0;
 
-  // Fetch published decks in this Sala with hierarchy info
+  // Fetch published decks + their sub-decks
   const { data: publishedDecks = [], isLoading: decksLoading } = useQuery({
     queryKey: ['turma-published-decks', turmaId],
     queryFn: async () => {
@@ -70,13 +70,24 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
         .eq('is_published', true);
       if (!turmaDecks || turmaDecks.length === 0) return [];
 
-      const deckIds = turmaDecks.map((td: any) => td.deck_id);
+      const rootDeckIds = turmaDecks.map((td: any) => td.deck_id);
+
+      // Also fetch child decks (sub-decks of published decks)
+      const { data: childDecks } = await supabase
+        .from('decks')
+        .select('id, name, parent_deck_id')
+        .in('parent_deck_id', rootDeckIds)
+        .eq('is_archived', false);
+
+      const allChildIds = (childDecks ?? []).map((d: any) => d.id);
+      const allDeckIds = [...rootDeckIds, ...allChildIds];
+
       const { data: decks } = await supabase
         .from('decks')
         .select('id, name, parent_deck_id')
-        .in('id', deckIds);
+        .in('id', allDeckIds);
 
-      const { data: countRows } = await supabase.rpc('count_cards_per_deck', { p_deck_ids: deckIds });
+      const { data: countRows } = await supabase.rpc('count_cards_per_deck', { p_deck_ids: allDeckIds });
       const countMap = new Map((countRows ?? []).map((r: any) => [r.deck_id, Number(r.card_count)]));
       const deckMap = new Map((decks ?? []).map((d: any) => [d.id, d]));
 
@@ -84,25 +95,42 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
       const { data: qRows } = await supabase
         .from('deck_questions')
         .select('deck_id')
-        .in('deck_id', deckIds);
+        .in('deck_id', allDeckIds);
       const qCountMap = new Map<string, number>();
       for (const r of qRows ?? []) {
         qCountMap.set(r.deck_id, (qCountMap.get(r.deck_id) ?? 0) + 1);
       }
 
-      return turmaDecks
-        .map((td: any) => {
-          const dk = deckMap.get(td.deck_id);
-          return {
-            turmaDeckId: td.id,
-            deckId: td.deck_id,
-            name: dk?.name ?? 'Sem nome',
-            cardCount: countMap.get(td.deck_id) ?? 0,
-            questionCount: qCountMap.get(td.deck_id) ?? 0,
-            parentDeckId: dk?.parent_deck_id ?? null,
-          };
-        })
-        .filter((d: any) => !d.name.includes('Caderno de Erros'));
+      // Build results: root decks from turma_decks + their children
+      const results: PublishedDeck[] = [];
+
+      for (const td of turmaDecks) {
+        const dk = deckMap.get(td.deck_id);
+        if (!dk || dk.name?.includes('Caderno de Erros')) continue;
+        results.push({
+          turmaDeckId: td.id,
+          deckId: td.deck_id,
+          name: dk.name ?? 'Sem nome',
+          cardCount: countMap.get(td.deck_id) ?? 0,
+          questionCount: qCountMap.get(td.deck_id) ?? 0,
+          parentDeckId: null, // root level in turma
+        });
+      }
+
+      // Add child decks
+      for (const child of (childDecks ?? [])) {
+        if (child.name?.includes('Caderno de Erros')) continue;
+        results.push({
+          turmaDeckId: `child-${child.id}`,
+          deckId: child.id,
+          name: child.name ?? 'Sem nome',
+          cardCount: countMap.get(child.id) ?? 0,
+          questionCount: qCountMap.get(child.id) ?? 0,
+          parentDeckId: child.parent_deck_id,
+        });
+      }
+
+      return results;
     },
     enabled: !!turmaId,
     staleTime: 60_000,
