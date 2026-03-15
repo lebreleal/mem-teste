@@ -9,7 +9,7 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
-import { getOrCreateErrorDeck, getErrorDeckId } from '@/services/errorDeckService';
+// Error deck imports removed — cards no longer move to error deck on fail
 import { fsrsSchedule, type Rating, type FSRSCard, type FSRSParams, DEFAULT_FSRS_PARAMS } from '@/lib/fsrs';
 import { sm2Schedule, type SM2Card, type SM2Params } from '@/lib/sm2';
 import { parseStepToMinutes, shuffleArray, collectDescendantIds, collectFolderDeckIds, findRootAncestorId } from '@/lib/studyUtils';
@@ -353,30 +353,6 @@ export async function submitCardReview(
       last_reviewed_at: nowIso,
     };
 
-    let movedToError = false;
-    let returnedFromError = false;
-    let originDeckName: string | null = null;
-
-    if (isRatingFail && !isInErrorDeck) {
-      const errorDeckId = await getOrCreateErrorDeck(userId);
-      updatePayload.origin_deck_id = card.deck_id;
-      updatePayload.deck_id = errorDeckId;
-      movedToError = true;
-    }
-
-    if (newState === 2 && isInErrorDeck) {
-      updatePayload.deck_id = card.origin_deck_id;
-      updatePayload.origin_deck_id = null;
-      returnedFromError = true;
-
-      const { data: originDeck } = await supabase
-        .from('decks')
-        .select('name')
-        .eq('id', card.origin_deck_id)
-        .single();
-      originDeckName = originDeck?.name ?? null;
-    }
-
     const [updateResult, logResult] = await Promise.all([
       supabase.from('cards').update(updatePayload).eq('id', card.id),
       supabase.from('review_logs').insert({
@@ -399,9 +375,9 @@ export async function submitCardReview(
       difficulty: 0,
       scheduled_date: nowIso,
       interval_days: 1,
-      movedToError,
-      returnedFromError,
-      originDeckName,
+      movedToError: false,
+      returnedFromError: false,
+      originDeckName: null,
     };
   }
 
@@ -442,43 +418,12 @@ export async function submitCardReview(
     result = sm2Schedule(sm2Card, rating, sm2Params);
   }
 
-  // --- Error deck movement logic ---
-  const isRatingFail = rating === 1;
-  const cardBecomeMastered = result.state === 2;
-  const isInErrorDeck = !!card.origin_deck_id;
-
   // Build update payload
   const updatePayload: any = {
     stability: result.stability, difficulty: result.difficulty,
     state: result.state, scheduled_date: result.scheduled_date,
     last_reviewed_at: new Date().toISOString(), learning_step: result.learning_step ?? 0,
   };
-
-  // Move to error deck on fail (if not already there)
-  let movedToError = false;
-  let returnedFromError = false;
-  let originDeckName: string | null = null;
-
-  if (isRatingFail && !isInErrorDeck) {
-    const errorDeckId = await getOrCreateErrorDeck(userId);
-    updatePayload.origin_deck_id = card.deck_id;
-    updatePayload.deck_id = errorDeckId;
-    movedToError = true;
-  }
-
-  // Return to origin deck when mastered
-  if (cardBecomeMastered && isInErrorDeck) {
-    updatePayload.deck_id = card.origin_deck_id;
-    updatePayload.origin_deck_id = null;
-    returnedFromError = true;
-    // Fetch origin deck name for toast
-    const { data: originDeck } = await supabase
-      .from('decks')
-      .select('name')
-      .eq('id', card.origin_deck_id)
-      .single();
-    originDeckName = originDeck?.name ?? null;
-  }
 
   const [updateResult, logResult] = await Promise.all([
     supabase.from('cards').update(updatePayload).eq('id', card.id),
@@ -491,7 +436,7 @@ export async function submitCardReview(
   if (updateResult.error) throw updateResult.error;
   if (logResult.error) throw logResult.error;
 
-  return { ...result, movedToError, returnedFromError, originDeckName };
+  return { ...result, movedToError: false, returnedFromError: false, originDeckName: null };
 }
 
 import type { StudyStats } from '@/types/study';
