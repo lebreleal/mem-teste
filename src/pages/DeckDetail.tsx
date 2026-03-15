@@ -350,6 +350,8 @@ const DeckDetailContent = () => {
   const location = useLocation();
   const queryClient = useQueryClient();
   const fromCommunity = (location.state as any)?.from === 'community';
+  const fromDashboardSala = (location.state as any)?.from === 'dashboard-sala';
+  const dashboardSalaFolderId = (location.state as any)?.folderId;
   const communityTurmaId = (location.state as any)?.turmaId;
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
