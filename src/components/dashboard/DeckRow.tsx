@@ -238,10 +238,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
               {hasChildren && (
                 <span>{subDecks.length} {subDecks.length === 1 ? 'deck' : 'decks'}</span>
               )}
-              <span className="inline-flex items-center gap-0.5">
-                <Layers className="h-3 w-3" />
-                {totalCards} {totalCards === 1 ? 'cartão' : 'cartões'}
-              </span>
+              <span>{totalCards} {totalCards === 1 ? 'cartão' : 'cartões'}</span>
               {(() => {
                 const qCount = questionCountMap ? (() => {
                   const ids = [deck.id];
@@ -253,10 +250,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                   return ids.reduce((sum, id) => sum + (questionCountMap.get(id) ?? 0), 0);
                 })() : 0;
                 return qCount > 0 ? (
-                  <span className="inline-flex items-center gap-0.5">
-                    <HelpCircle className="h-3 w-3" />
-                    {qCount} {qCount === 1 ? 'questão' : 'questões'}
-                  </span>
+                  <span>{qCount} {qCount === 1 ? 'questão' : 'questões'}</span>
                 ) : null;
               })()}
             </p>
@@ -317,13 +311,11 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                     <h4 className="text-sm font-medium text-foreground truncate">{sub.name}</h4>
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-[11px] text-muted-foreground inline-flex items-center gap-0.5">
-                      <Layers className="h-3 w-3" />
+                    <span className="text-[11px] text-muted-foreground">
                       {sub.total_cards} {sub.total_cards === 1 ? 'cartão' : 'cartões'}
                     </span>
                     {questionCountMap && (questionCountMap.get(sub.id) ?? 0) > 0 && (
-                      <span className="text-[11px] text-muted-foreground inline-flex items-center gap-0.5">
-                        <HelpCircle className="h-3 w-3" />
+                      <span className="text-[11px] text-muted-foreground">
                         {questionCountMap.get(sub.id)} {(questionCountMap.get(sub.id) ?? 0) === 1 ? 'questão' : 'questões'}
                       </span>
                     )}

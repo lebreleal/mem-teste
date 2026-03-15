@@ -264,8 +264,9 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
 
   // Study handler — auto-follow + navigate to first deck with cards
   const handleStudy = async () => {
+    if (!user) { navigate('/auth'); return; }
     // Auto-follow if not already a follower
-    if (!isFollower && user) {
+    if (!isFollower) {
       try {
         await supabase.from('turma_members').insert({ turma_id: turmaId, user_id: user.id } as any);
         const { data: existingFolders } = await supabase.from('folders')
@@ -275,10 +276,15 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
             .insert({ user_id: user.id, name: turma?.name || 'Sala', section: 'community', source_turma_id: turmaId } as any);
         }
         queryClient.invalidateQueries({ queryKey: ['turma-role', turmaId, user.id] });
+        queryClient.invalidateQueries({ queryKey: ['turma-members', turmaId] });
         queryClient.invalidateQueries({ queryKey: ['folders'] });
-      } catch { /* already following or error — continue to study */ }
+        toast({ title: '✅ Sala adicionada ao seu menu Início!' });
+      } catch (e: any) {
+        if (e.code !== '23505') {
+          toast({ title: 'Erro ao entrar na sala', variant: 'destructive' });
+        }
+      }
     }
-    if (!user) { navigate('/auth'); return; }
     const firstWithCards = salaDecks.find(d => d.total_cards > 0 && !salaDecks.some(s => s.parent_deck_id === d.id));
     if (firstWithCards) {
       navigate(`/decks/${firstWithCards.id}`, { state: { from: 'community', turmaId } });
@@ -350,10 +356,7 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
           {!decksLoading && totalStats.totalCards > 0 && (
             <div className="flex items-center gap-3 text-[11px] text-muted-foreground mb-2">
               <span>{rootDecks.length} {rootDecks.length === 1 ? 'deck' : 'decks'}</span>
-              <span className="inline-flex items-center gap-1">
-                <Layers className="h-3 w-3" />
-                {totalStats.totalCards} {totalStats.totalCards === 1 ? 'cartão' : 'cartões'}
-              </span>
+              <span>{totalStats.totalCards} {totalStats.totalCards === 1 ? 'cartão' : 'cartões'}</span>
               {totalStats.totalQuestions > 0 && (
                 <span>{totalStats.totalQuestions} {totalStats.totalQuestions === 1 ? 'questão' : 'questões'}</span>
               )}
