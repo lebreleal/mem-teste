@@ -486,26 +486,13 @@ const Dashboard = () => {
                       <ChevronLeft className="h-4 w-4" />
                       <span>Dashboard</span>
                     </button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted/60 transition-colors text-muted-foreground hover:text-foreground">
-                          <MoreVertical className="h-4 w-4" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48">
-                        <DropdownMenuItem onClick={() => {
-                          if (currentFolder) { state.setRenameTarget({ type: 'folder', id: currentFolder.id, name: currentFolder.name }); state.setRenameName(currentFolder.name); }
-                        }}>
-                          <Pencil className="h-4 w-4 mr-2" /> Renomear sala
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setSalaImageOpen(true)}>
-                          <ImageIcon className="h-4 w-4 mr-2" /> Mudar imagem
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={async () => {
+                    <div className="flex items-center gap-1.5">
+                      {/* Share button — always visible */}
+                      <button
+                        onClick={async () => {
                           let turmaId = userTurma?.id;
                           let slug = userTurma?.share_slug;
                           if (!turmaId) {
-                            // Auto-create turma just for sharing
                             const currentFolder = state.folders.find(f => f.id === state.currentFolderId);
                             const folderName = currentFolder?.name ?? 'Minha Sala';
                             const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -521,7 +508,6 @@ const Dashboard = () => {
                             }
                           }
                           if (!slug && turmaId) {
-                            // Generate a share_slug if missing
                             const generated = turmaId.substring(0, 8);
                             await supabase.from('turmas').update({ share_slug: generated } as any).eq('id', turmaId);
                             slug = generated;
@@ -530,33 +516,53 @@ const Dashboard = () => {
                           const link = `${window.location.origin}/c/${slug || turmaId}`;
                           await navigator.clipboard.writeText(link);
                           toast({ title: '🔗 Link copiado!' });
-                        }}>
-                          <Share2 className="h-4 w-4 mr-2" /> Compartilhar link
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={handleTogglePublish} disabled={publishing}>
-                          {userTurma?.is_private === false ? (
-                            <><EyeOff className="h-4 w-4 mr-2" /> Despublicar</>
-                          ) : (
-                            <><Compass className="h-4 w-4 mr-2" /> Publicar no Explorar</>
-                          )}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={async () => {
-                          await state.archiveFolder.mutateAsync(state.currentFolderId!);
-                          state.setCurrentFolderId(null);
-                          setSearchParams({}, { replace: true });
-                        }}>
-                          <Archive className="h-4 w-4 mr-2" /> Arquivar sala
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          onClick={() => {
-                            if (currentFolder) state.setDeleteTarget({ type: 'folder', id: currentFolder.id, name: currentFolder.name });
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" /> Excluir sala
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                        }}
+                        className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted/60 transition-colors text-muted-foreground hover:text-foreground"
+                        aria-label="Compartilhar link da sala"
+                      >
+                        <Share2 className="h-4 w-4" />
+                      </button>
+
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted/60 transition-colors text-muted-foreground hover:text-foreground">
+                            <MoreVertical className="h-4 w-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem onClick={() => {
+                            if (currentFolder) { state.setRenameTarget({ type: 'folder', id: currentFolder.id, name: currentFolder.name }); state.setRenameName(currentFolder.name); }
+                          }}>
+                            <Pencil className="h-4 w-4 mr-2" /> Renomear sala
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setSalaImageOpen(true)}>
+                            <ImageIcon className="h-4 w-4 mr-2" /> Mudar imagem
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={handleTogglePublish} disabled={publishing}>
+                            {userTurma?.is_private === false ? (
+                              <><EyeOff className="h-4 w-4 mr-2" /> Despublicar</>
+                            ) : (
+                              <><Compass className="h-4 w-4 mr-2" /> Publicar no Explorar</>
+                            )}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={async () => {
+                            await state.archiveFolder.mutateAsync(state.currentFolderId!);
+                            state.setCurrentFolderId(null);
+                            setSearchParams({}, { replace: true });
+                          }}>
+                            <Archive className="h-4 w-4 mr-2" /> Arquivar sala
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => {
+                              if (currentFolder) state.setDeleteTarget({ type: 'folder', id: currentFolder.id, name: currentFolder.name });
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" /> Excluir sala
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
 
                   {/* Sala image + name + edit */}
