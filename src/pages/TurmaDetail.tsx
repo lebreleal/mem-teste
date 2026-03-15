@@ -74,16 +74,9 @@ function useSalaDecks(turmaId: string) {
             for (const c of cards as any[]) {
               const entry = cardCountMap.get(c.deck_id) ?? { total: 0, mastered: 0, novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
               entry.total++;
-              if (c.state >= 2) entry.mastered++;
-              if (c.state === 0) {
-                entry.novo++;
-              } else {
-                const d = c.difficulty ?? 5;
-                if (d <= 3) entry.facil++;
-                else if (d <= 5) entry.bom++;
-                else if (d <= 7) entry.dificil++;
-                else entry.errei++;
-              }
+              // Always show cards as "new" in the public Explore view
+              // Owner's personal progress (state/difficulty) must not leak
+              entry.novo++;
               cardCountMap.set(c.deck_id, entry);
             }
           }
@@ -222,8 +215,17 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
   const noopStr = useCallback((_s: string) => {}, []);
   const getCommunityLinkId = useCallback((_d: DeckWithStats) => null as string | null, []);
 
-  const [expandedDecks] = useState(new Set<string>());
+  const [expandedDecks, setExpandedDecks] = useState(new Set<string>());
   const [expandedAccordionId, setExpandedAccordionId] = useState<string | null>(null);
+
+  const toggleExpand = useCallback((deckId: string) => {
+    setExpandedDecks(prev => {
+      const next = new Set(prev);
+      if (next.has(deckId)) next.delete(deckId);
+      else next.add(deckId);
+      return next;
+    });
+  }, []);
 
   // Follow handler
   const handleFollow = async () => {
@@ -309,8 +311,11 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
         }
       }
     }
-    // Navigate to Dashboard — follower's local decks live there after bootstrap
-    navigate('/dashboard');
+    // Navigate to Dashboard — open the sala folder directly
+    const { data: folderData } = await supabase.from('folders')
+      .select('id').eq('user_id', user.id).eq('source_turma_id', turmaId).limit(1);
+    const targetFolderId = folderData?.[0]?.id;
+    navigate(targetFolderId ? `/dashboard?folder=${targetFolderId}` : '/dashboard');
   };
 
   // Classification bar for overall progress
@@ -466,7 +471,7 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
                 onArchive={noopStr}
                 onDelete={noopDeck}
                 expandedDecks={expandedDecks}
-                toggleExpand={noopStr}
+                toggleExpand={toggleExpand}
                 expandedAccordionId={expandedAccordionId}
                 onAccordionToggle={(id) => setExpandedAccordionId(prev => prev === id ? null : id)}
                 questionCountMap={questionCountMap}

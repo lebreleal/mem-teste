@@ -175,7 +175,10 @@ const Dashboard = () => {
         if (result.decks_created > 0) {
           queryClient.invalidateQueries({ queryKey: ['decks'] });
         }
-      }).catch(console.error);
+      }).catch((err) => {
+        console.error(err);
+        toast({ title: 'Erro ao carregar decks da sala. Tente recarregar a página.', variant: 'destructive' });
+      });
     });
   }, [user, isCommunityFolder, sourceTurmaId, state.currentFolderId]);
 
