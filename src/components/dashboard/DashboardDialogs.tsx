@@ -13,7 +13,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowLeft, ArrowUpRight, ChevronRight, CirclePlus, Search, Layers, GraduationCap, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, ChevronRight, CirclePlus, Search, Layers, RefreshCw } from 'lucide-react';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 import type { BreadcrumbItem } from './useDashboardState';
 
