@@ -1339,6 +1339,27 @@ const Dashboard = () => {
         </DialogContent>
       </Dialog>
 
+      {/* Leave Sala Confirmation */}
+      <AlertDialog open={!!leaveSalaConfirm} onOpenChange={(open) => { if (!open) setLeaveSalaConfirm(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sair da sala?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <span>Tem certeza que deseja sair desta sala?</span>
+              <span className="block text-sm font-medium text-foreground/80 mt-2">
+                📊 Suas estatísticas e progresso de estudo ficam salvos por 30 dias. Se voltar a entrar nesse período, tudo estará como antes.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleLeaveSala} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Sair da sala
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <BottomNav />
     </div>
   );
