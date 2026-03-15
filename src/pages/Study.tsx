@@ -296,8 +296,8 @@ const Study = () => {
   useEffect(() => {
     return () => {
       queryClient.removeQueries({ queryKey: studyQueueKey });
-      queryClient.invalidateQueries({ queryKey: ['study-stats'] });
-      queryClient.invalidateQueries({ queryKey: ['activity-full'] });
+      // Invalidate all study-related queries so dashboard shows fresh data
+      invalidateStudyQueries(queryClient);
     };
   }, [queryClient, studyQueueKey]);
 
