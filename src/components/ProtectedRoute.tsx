@@ -168,9 +168,8 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
                   </>
                 )}
               </>
+            )}
           </div>
-        </SheetContent>
-      </Sheet>
         </SheetContent>
       </Sheet>
 
