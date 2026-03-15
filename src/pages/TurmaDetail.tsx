@@ -349,17 +349,13 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
           {/* Stats strip */}
           {!decksLoading && totalStats.totalCards > 0 && (
             <div className="flex items-center gap-3 text-[11px] text-muted-foreground mb-2">
+              <span>{rootDecks.length} {rootDecks.length === 1 ? 'deck' : 'decks'}</span>
               <span className="inline-flex items-center gap-1">
                 <Layers className="h-3 w-3" />
-                {totalStats.totalCards} cards
+                {totalStats.totalCards} {totalStats.totalCards === 1 ? 'cartão' : 'cartões'}
               </span>
-              <span>·</span>
-              <span>{rootDecks.length} {rootDecks.length === 1 ? 'deck' : 'decks'}</span>
               {totalStats.totalQuestions > 0 && (
-                <>
-                  <span>·</span>
-                  <span>{totalStats.totalQuestions} questões</span>
-                </>
+                <span>{totalStats.totalQuestions} {totalStats.totalQuestions === 1 ? 'questão' : 'questões'}</span>
               )}
             </div>
           )}
