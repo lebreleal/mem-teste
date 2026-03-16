@@ -498,7 +498,10 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
                   <Popover key={t.id} open={colorOpen} onOpenChange={setColorOpen}>
                     <PopoverTrigger asChild>
                       <Button type="button" variant="ghost" size="icon" className="h-7 w-7 relative" title="Cor do texto">
-                        <Palette className="h-3.5 w-3.5" />
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
+                          <path d="M12 6 7.226 19.367a.953.953 0 0 1-1.801-.625L9.94 5.36A2 2 0 0 1 11.836 4h.328a2 2 0 0 1 1.895 1.36l4.516 13.382a.953.953 0 0 1-1.801.625z" />
+                          <path d="M8 14h8v2H8z" />
+                        </svg>
                         {currentColor && (
                           <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 h-1 w-3.5 rounded-full" style={{ backgroundColor: currentColor }} />
                         )}
