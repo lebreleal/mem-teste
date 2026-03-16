@@ -401,7 +401,7 @@ const ManageDeck = () => {
       )}
 
       {/* Occlusion Editor Dialog (for upload + draw) */}
-      <Dialog open={occlusionModalOpen && !occlusionImageUrl} onOpenChange={setOcclusionModalOpen}>
+      <Dialog open={occlusionModalOpen} onOpenChange={setOcclusionModalOpen}>
         <DialogContent className="sm:max-w-4xl max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-display flex items-center gap-2">
@@ -409,7 +409,13 @@ const ManageDeck = () => {
             </DialogTitle>
           </DialogHeader>
           <OcclusionEditor
-            initialFront=""
+            initialFront={occlusionImageUrl ? JSON.stringify({
+              imageUrl: occlusionImageUrl,
+              rects: occlusionRects,
+              allRects: occlusionRects,
+              canvasWidth: occlusionCanvasSize?.w ?? 0,
+              canvasHeight: occlusionCanvasSize?.h ?? 0,
+            }) : ''}
             onSave={(frontContent) => {
               try {
                 const data = JSON.parse(frontContent);
