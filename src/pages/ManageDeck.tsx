@@ -359,6 +359,7 @@ const ManageDeck = () => {
                   content={back}
                   onChange={(v) => { setBack(v); setIsDirty(true); }}
                   placeholder="Verso do cartão"
+                  chromeless
                   hideCloze
                 />
               </div>
