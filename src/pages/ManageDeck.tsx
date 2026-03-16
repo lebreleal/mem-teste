@@ -187,36 +187,7 @@ const ManageDeck = () => {
     setIsDirty(true);
   }, []);
 
-  const handleImprove = useCallback(async () => {
-    if (!currentCard) return;
-    const strippedFront = front.replace(/<[^>]*>/g, '').trim();
-    if (!strippedFront && cardType !== 'image_occlusion') {
-      toast({ title: 'Escreva algo no cartão primeiro', variant: 'destructive' });
-      return;
-    }
-    if (energy < 1) {
-      toast({ title: 'Créditos insuficientes', variant: 'destructive' });
-      return;
-    }
-    setIsImproving(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('enhance-card', {
-        body: { front, back, cardType: cardType || 'basic', aiModel: model, energyCost: 1 },
-      });
-      if (error) throw error;
-      if (data.error) { toast({ title: data.error, variant: 'destructive' }); return; }
-      if (data.unchanged) { toast({ title: '✨ Este cartão já está ótimo!' }); return; }
-      queryClient.invalidateQueries({ queryKey: ['profile'] });
-      setFront(data.front);
-      setBack(data.back);
-      setIsDirty(true);
-      toast({ title: 'Melhoria aplicada!' });
-    } catch (e: any) {
-      toast({ title: 'Erro ao melhorar', description: e.message, variant: 'destructive' });
-    } finally {
-      setIsImproving(false);
-    }
-  }, [front, back, currentCard, cardType, energy, model, queryClient, toast]);
+
 
   if (isLoading) {
     return (
