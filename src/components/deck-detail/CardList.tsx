@@ -74,6 +74,7 @@ const CardTagsInline = ({ cardId, tagsMap }: { cardId: string; tagsMap: Record<s
 };
 
 const CardList = () => {
+  const navigate = useNavigate();
   const {
     totalCards, allCards, filteredCards, selectionMode, setSelectionMode,
     selectedCards, setSelectedCards, toggleCardSelection, selectAllCards,
