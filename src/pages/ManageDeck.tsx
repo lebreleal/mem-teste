@@ -402,25 +402,6 @@ const ManageDeck = () => {
           )}
         </main>
 
-        {/* Right sidebar - actions */}
-        {currentCard && (
-          <aside className="w-10 sm:w-12 border-l border-border/50 bg-muted/20 flex-shrink-0 flex flex-col items-center gap-1 pt-4">
-            <button
-              onClick={() => setDeleteConfirmOpen(true)}
-              className="p-2 text-muted-foreground hover:text-destructive transition-colors"
-              title="Excluir"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-            <button
-              onClick={handleDuplicate}
-              className="p-2 text-muted-foreground hover:text-foreground transition-colors"
-              title="Duplicar"
-            >
-              <Copy className="h-4 w-4" />
-            </button>
-          </aside>
-        )}
       </div>
 
       {/* FAB to add new card */}
