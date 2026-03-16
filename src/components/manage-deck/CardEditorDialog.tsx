@@ -134,19 +134,7 @@ export const CardEditorDialog = ({
       );
     }
 
-    return (
-      <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-1">
-        <p className="text-[10px] font-bold uppercase text-primary tracking-wider flex items-center gap-1.5">
-          <PenLine className="h-3 w-3" /> Como usar Cloze
-        </p>
-        <p className="text-xs text-muted-foreground">
-          Selecione o texto e clique para criar um <span className="font-semibold text-foreground">cloze</span>. Clozes com mesmo número viram o <span className="font-semibold text-foreground">mesmo card</span>.
-        </p>
-        <p className="text-[11px] text-muted-foreground">
-          Cria um cloze com <span className="font-semibold text-primary">número novo</span>, gerando um <span className="font-semibold text-foreground">card separado</span>.
-        </p>
-      </div>
-    );
+    return <ClozeHelpToggle />;
   };
 
   const renderEditor = () => (
