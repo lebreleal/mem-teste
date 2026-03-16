@@ -213,11 +213,24 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     input.click();
   };
 
-  /** Toggle cloze mark — if text selected, wrap it; otherwise toggle stored mark */
+  /** Check if cursor is inside a cloze mark */
+  const isCursorInCloze = useCallback(() => {
+    if (!editor) return false;
+    return editor.isActive('clozeMark');
+  }, [editor]);
+
+  /** Toggle cloze mark — if cursor inside existing cloze, remove it; if text selected, wrap it; otherwise toggle stored mark */
   const handleCloze = useCallback(() => {
     if (!editor) return;
     const { from, to } = editor.state.selection;
     const hasSelection = from !== to;
+
+    // If cursor is inside an existing cloze (or selection has cloze), remove it
+    if (isCursorInCloze() && !clozeActive) {
+      editor.chain().focus().unsetMark('clozeMark').run();
+      setClozeActive(false);
+      return;
+    }
 
     if (clozeActive && !hasSelection) {
       // Deactivate: unset the stored mark so new text won't be cloze
@@ -235,7 +248,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
         setClozeActive(true);
       }
     }
-  }, [editor, clozeCounter, clozeActive]);
+  }, [editor, clozeCounter, clozeActive, isCursorInCloze]);
 
   /** Increment counter and start new cloze mark */
   const handleClozeNext = useCallback(() => {
