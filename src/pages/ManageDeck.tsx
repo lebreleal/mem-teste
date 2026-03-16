@@ -37,7 +37,7 @@ const ManageDeck = () => {
   const [cardType, setCardType] = useState<CardType>('basic');
   const [isDirty, setIsDirty] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [isImproving, setIsImproving] = useState(false);
+  
 
   // Image occlusion state
   const [occlusionImageUrl, setOcclusionImageUrl] = useState('');
