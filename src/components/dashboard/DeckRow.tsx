@@ -254,28 +254,32 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
               <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-destructive animate-pulse" title="Atualização disponível" />
             )}
           </div>
-          <div className="flex items-center gap-2 mt-1">
-            <p className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
-              {hasChildren && (
-                <span>{subDecks.length} {subDecks.length === 1 ? 'deck' : 'decks'}</span>
-              )}
-              <span>{totalCards} {totalCards === 1 ? 'cartão' : 'cartões'}</span>
-              {(() => {
-                const qCount = questionCountMap ? (() => {
-                  const ids = [deck.id];
-                  const collectIds = (parentId: string) => {
-                    const subs = getSubDecks(parentId);
-                    for (const s of subs) { ids.push(s.id); collectIds(s.id); }
-                  };
-                  collectIds(deck.id);
-                  return ids.reduce((sum, id) => sum + (questionCountMap.get(id) ?? 0), 0);
-                })() : 0;
-                return qCount > 0 ? (
-                  <span>{qCount} {qCount === 1 ? 'questão' : 'questões'}</span>
-                ) : null;
-              })()}
-            </p>
-          </div>
+          {!isEmptyMateria && (
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
+                {hasChildren && (
+                  <span>{subDecks.length} {subDecks.length === 1 ? 'deck' : 'decks'}</span>
+                )}
+                {totalCards > 0 && (
+                  <span>{totalCards} {totalCards === 1 ? 'cartão' : 'cartões'}</span>
+                )}
+                {(() => {
+                  const qCount = questionCountMap ? (() => {
+                    const ids = [deck.id];
+                    const collectIds = (parentId: string) => {
+                      const subs = getSubDecks(parentId);
+                      for (const s of subs) { ids.push(s.id); collectIds(s.id); }
+                    };
+                    collectIds(deck.id);
+                    return ids.reduce((sum, id) => sum + (questionCountMap.get(id) ?? 0), 0);
+                  })() : 0;
+                  return qCount > 0 ? (
+                    <span>{qCount} {qCount === 1 ? 'questão' : 'questões'}</span>
+                  ) : null;
+                })()}
+              </p>
+            </div>
+          )}
           {!isErrorDeck && !readOnly && (
             <ClassificationBar
               facilPct={classPcts.facilPct}
