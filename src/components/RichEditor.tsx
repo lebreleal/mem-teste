@@ -82,6 +82,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   const [imageMenuOpen, setImageMenuOpen] = useState(false);
   const [clozeCounter, setClozeCounter] = useState(1);
   const [clozeActive, setClozeActive] = useState(false);
+  const [cursorInCloze, setCursorInCloze] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
 
   const editor = useEditor({
