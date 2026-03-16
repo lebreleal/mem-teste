@@ -18,8 +18,7 @@ const CARD_TYPE_ICONS: Record<EditorCardType, React.ReactNode> = {
 
 const CARD_TYPES_UI = [
   { value: 'basic' as EditorCardType, label: 'Texto', desc: 'Pergunta na frente, resposta no verso' },
-  { value: 'cloze' as EditorCardType, label: 'Cloze', desc: 'Texto com lacunas para preencher' },
-  { value: 'image_occlusion' as EditorCardType, label: 'Oclusão de imagem', desc: 'Oculte partes de uma imagem' },
+  { value: 'cloze' as EditorCardType, label: 'Oclusão de Texto e Imagem', desc: 'Lacunas de texto e/ou oclusão de imagem' },
 ];
 /* ─── Inline SVG icons matching the toolbar ─── */
 const ClozeIcon = () => (
@@ -134,12 +133,11 @@ export const CardEditorDialog = ({
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">Selecione o tipo do flashcard</p>
       <div className="grid grid-cols-1 gap-2">
-        {CARD_TYPES_UI.map(type => (
+         {CARD_TYPES_UI.map(type => (
           <button
             key={type.value}
             onClick={() => {
               setEditorType(type.value);
-              if (type.value === 'image_occlusion') setOcclusionModalOpen(true);
             }}
             className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition-all hover:border-primary/50 hover:shadow-md active:scale-[0.98]"
           >
@@ -290,13 +288,16 @@ export const CardEditorDialog = ({
               content={front} onChange={setFront}
               placeholder="Qual é a capital da França?"
               hideCloze={editorType !== 'cloze'}
-              onOcclusionPaste={editorType === 'cloze' ? () => { setEditorType('image_occlusion'); setOcclusionModalOpen(true); } : undefined}
-              onOcclusionAttach={editorType === 'cloze' ? () => { setEditorType('image_occlusion'); setOcclusionModalOpen(true); } : undefined}
+              onOcclusionPaste={() => { setEditorType('image_occlusion'); setOcclusionModalOpen(true); }}
+              onOcclusionAttach={() => { setEditorType('image_occlusion'); setOcclusionModalOpen(true); }}
             />
           </div>
 
           {editorType === 'cloze' ? (
             <>
+              <button type="button" onClick={() => { setEditorType('image_occlusion'); setOcclusionModalOpen(true); }} className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors">
+                <Upload className="h-3.5 w-3.5" /> Enviar imagem para oclusão
+              </button>
               {renderClozePreview()}
               <div>
                 <Label className="mb-1.5 block">Verso (Resposta)</Label>
