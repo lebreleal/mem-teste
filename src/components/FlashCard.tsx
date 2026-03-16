@@ -242,11 +242,41 @@ const FlashCard = ({
     displayBack = renderOcclusion(frontContent, true, occlusionFallbackCanvas ?? undefined);
     try {
       const occData = JSON.parse(frontContent);
-      const strippedFront = typeof occData.frontText === 'string' ? occData.frontText.replace(/<[^>]*>/g, '').trim() : '';
-      if (strippedFront) occlusionFrontText = sanitizeHtml(occData.frontText);
+      const rawFrontText = typeof occData.frontText === 'string' ? occData.frontText : '';
+      const strippedFront = rawFrontText.replace(/<[^>]*>/g, '').trim();
+      if (strippedFront) {
+        // Process cloze markers within frontText if present
+        const hasCloze = hasClozeMarkers(rawFrontText);
+        if (hasCloze) {
+          let clozeTarget: number | undefined;
+          try {
+            const parsed = JSON.parse(backContent);
+            if (typeof parsed.clozeTarget === 'number') clozeTarget = parsed.clozeTarget;
+          } catch {}
+          occlusionFrontText = sanitizeHtml(renderCloze(rawFrontText, false, clozeTarget));
+          // For back: show revealed cloze
+          occlusionBackText = sanitizeHtml(renderCloze(rawFrontText, true, clozeTarget));
+        } else {
+          occlusionFrontText = sanitizeHtml(rawFrontText);
+        }
+      }
     } catch {}
     const backStripped = backContent ? backContent.replace(/<[^>]*>/g, '').trim() : '';
-    if (backStripped) occlusionBackText = sanitizeHtml(backContent);
+    // Parse extra back content (skip clozeTarget JSON wrapper)
+    if (backStripped) {
+      try {
+        const parsed = JSON.parse(backContent);
+        if (typeof parsed.clozeTarget === 'number') {
+          if (parsed.extra && parsed.extra.replace(/<[^>]*>/g, '').trim()) {
+            occlusionBackText = (occlusionBackText ? occlusionBackText + '<hr style="margin:1rem 0;border-color:hsl(var(--border))" />' : '') + sanitizeHtml(parsed.extra);
+          }
+        } else {
+          occlusionBackText = (occlusionBackText ? occlusionBackText + '<hr style="margin:1rem 0;border-color:hsl(var(--border))" />' : '') + sanitizeHtml(backContent);
+        }
+      } catch {
+        occlusionBackText = (occlusionBackText ? occlusionBackText + '<hr style="margin:1rem 0;border-color:hsl(var(--border))" />' : '') + sanitizeHtml(backContent);
+      }
+    }
   } else if (isCloze) {
     let clozeTarget: number | undefined;
     let extraBack = '';
@@ -360,11 +390,16 @@ const FlashCard = ({
                   {isOcclusion ? (
                     <div className="w-full space-y-4">
                       <div className="w-full flex justify-center" dangerouslySetInnerHTML={{ __html: peekingFront ? displayFront : displayBack }} />
-                      {occlusionFrontText && (
-                        <div className="prose prose-sm max-w-none text-left text-card-foreground" dangerouslySetInnerHTML={{ __html: occlusionFrontText }} />
-                      )}
-                      {!peekingFront && occlusionBackText && (
-                        <div className="prose prose-sm max-w-none text-left text-muted-foreground pt-3 border-t border-border/30" dangerouslySetInnerHTML={{ __html: occlusionBackText }} />
+                      {peekingFront ? (
+                        occlusionFrontText && (
+                          <div className="prose prose-sm max-w-none text-left text-card-foreground" dangerouslySetInnerHTML={{ __html: occlusionFrontText }} />
+                        )
+                      ) : (
+                        <>
+                          {occlusionBackText && (
+                            <div className="prose prose-sm max-w-none text-left text-card-foreground" dangerouslySetInnerHTML={{ __html: occlusionBackText }} />
+                          )}
+                        </>
                       )}
                     </div>
                   ) : (

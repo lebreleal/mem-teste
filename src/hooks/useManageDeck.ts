@@ -159,8 +159,42 @@ export function useManageDeck() {
         }
       }
       return;
+    } else if (editorType === 'image_occlusion') {
+      // Check if frontText contains cloze markers
+      let frontText = '';
+      try { frontText = JSON.parse(front)?.frontText || ''; } catch {}
+      const plainFrontText = frontText.replace(/<[^>]*>/g, '');
+      const clozeNumMatches = [...plainFrontText.matchAll(/\{\{c(\d+)::/g)];
+      const uniqueNums = [...new Set(clozeNumMatches.map(m => parseInt(m[1])))].sort((a, b) => a - b);
+
+      if (uniqueNums.length > 0) {
+        // Image occlusion + cloze: create one card per cloze number
+        const onSuccess = () => {
+          toast({ title: editingId ? 'Cartão atualizado!' : `${Math.max(1, uniqueNums.length)} cartão(ões) criado(s)!` });
+          if (addAnother) { setFront(''); setBack(''); setEditingId(null); setMcOptions(['', '', '', '']); setMcCorrectIndex(0); }
+          else { setEditorOpen(false); resetForm(); }
+        };
+        if (editingId) {
+          const backJson = JSON.stringify({ clozeTarget: uniqueNums[0] || 1, extra: back });
+          updateCard.mutate({ id: editingId, frontContent: front, backContent: backJson }, { onSuccess });
+        } else if (uniqueNums.length <= 1) {
+          const backJson = JSON.stringify({ clozeTarget: uniqueNums[0] || 1, extra: back });
+          createCard.mutate({ frontContent: front, backContent: backJson, cardType: 'image_occlusion' }, { onSuccess });
+        } else {
+          const cards = uniqueNums.map(n => ({
+            frontContent: front,
+            backContent: JSON.stringify({ clozeTarget: n, extra: back }),
+            cardType: 'image_occlusion',
+          }));
+          createCard.mutate({ cards }, { onSuccess });
+        }
+        return;
+      }
+
+      cardType = 'image_occlusion';
+      backContent = back;
     } else {
-      cardType = editorType === 'image_occlusion' ? 'image_occlusion' : 'basic';
+      cardType = 'basic';
       backContent = back;
     }
     const onSuccess = () => {

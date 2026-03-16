@@ -157,7 +157,12 @@ export const CardEditorDialog = ({
   );
 
   const renderClozePreview = () => {
-    const plainText = front.replace(/<[^>]*>/g, '');
+    let textSource = front;
+    // For image_occlusion, extract frontText from JSON
+    if (editorType === 'image_occlusion') {
+      try { textSource = JSON.parse(front)?.frontText || ''; } catch {}
+    }
+    const plainText = textSource.replace(/<[^>]*>/g, '');
     const clozeRegex = /\{\{c(\d+)::([^}]*)\}\}/g;
     const clozeNumbers = new Set<number>();
     let match;
@@ -230,8 +235,18 @@ export const CardEditorDialog = ({
                 try { const d = JSON.parse(front); d.frontText = v; setFront(JSON.stringify(d)); }
                 catch { setFront(v); }
               }}
-              placeholder="Pergunta ou contexto (opcional)" hideCloze
+              placeholder="Pergunta ou contexto (opcional)"
             />
+            {(() => {
+              // Show cloze preview if frontText has cloze markers
+              let frontText = '';
+              try { frontText = JSON.parse(front)?.frontText || ''; } catch {}
+              const plainText = frontText.replace(/<[^>]*>/g, '');
+              if (/\{\{c\d+::/.test(plainText)) {
+                return renderClozePreview();
+              }
+              return null;
+            })()}
             {(() => {
               let occData: { imageUrl?: string } | null = null;
               try { occData = JSON.parse(front); } catch {}
