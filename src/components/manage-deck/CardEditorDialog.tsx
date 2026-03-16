@@ -230,8 +230,18 @@ export const CardEditorDialog = ({
                 try { const d = JSON.parse(front); d.frontText = v; setFront(JSON.stringify(d)); }
                 catch { setFront(v); }
               }}
-              placeholder="Pergunta ou contexto (opcional)" hideCloze
+              placeholder="Pergunta ou contexto (opcional)"
             />
+            {(() => {
+              // Show cloze preview if frontText has cloze markers
+              let frontText = '';
+              try { frontText = JSON.parse(front)?.frontText || ''; } catch {}
+              const plainText = frontText.replace(/<[^>]*>/g, '');
+              if (/\{\{c\d+::/.test(plainText)) {
+                return renderClozePreview();
+              }
+              return null;
+            })()}
             {(() => {
               let occData: { imageUrl?: string } | null = null;
               try { occData = JSON.parse(front); } catch {}
