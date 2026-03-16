@@ -1124,9 +1124,11 @@ const Dashboard = () => {
             open={state.aiDeckOpen}
             onOpenChange={(open) => {
               state.setAiDeckOpen(open);
-              if (!open) setPendingReviewData(null);
+              if (!open) { setPendingReviewData(null); setAiDeckParentId(null); setAiDeckParentName(null); }
             }}
             folderId={pendingReviewData?.folderId ?? state.currentFolderId}
+            existingDeckId={aiDeckParentId}
+            existingDeckName={aiDeckParentName}
             pendingReviewData={pendingReviewData}
           />
         )}
