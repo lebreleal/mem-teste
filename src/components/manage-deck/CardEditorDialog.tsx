@@ -133,12 +133,11 @@ export const CardEditorDialog = ({
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">Selecione o tipo do flashcard</p>
       <div className="grid grid-cols-1 gap-2">
-        {CARD_TYPES_UI.map(type => (
+         {CARD_TYPES_UI.map(type => (
           <button
             key={type.value}
             onClick={() => {
               setEditorType(type.value);
-              if (type.value === 'image_occlusion') setOcclusionModalOpen(true);
             }}
             className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition-all hover:border-primary/50 hover:shadow-md active:scale-[0.98]"
           >

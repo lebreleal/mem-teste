@@ -12,8 +12,7 @@ export type EditorCardType = 'basic' | 'cloze' | 'image_occlusion';
 
 export const CARD_TYPES: { value: EditorCardType; label: string; desc: string }[] = [
   { value: 'basic', label: 'Texto', desc: 'Pergunta na frente, resposta no verso' },
-  { value: 'cloze', label: 'Cloze', desc: 'Texto com lacunas para preencher' },
-  { value: 'image_occlusion', label: 'Oclusão de imagem', desc: 'Oculte partes de uma imagem' },
+  { value: 'cloze', label: 'Oclusão de Texto e Imagem', desc: 'Lacunas de texto e/ou oclusão de imagem' },
 ];
 
 export function useManageDeck() {
