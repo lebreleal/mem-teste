@@ -1,18 +1,15 @@
 import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ChevronUp, ChevronDown, Trash2, Copy, Plus, Sparkles, Loader2, MessageSquareText, PenLine, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, ChevronUp, ChevronDown, Trash2, Copy, Plus, Loader2, MessageSquareText, PenLine, Image as ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCards } from '@/hooks/useCards';
-import { useEnergy } from '@/hooks/useEnergy';
-import { useAIModel } from '@/hooks/useAIModel';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/integrations/supabase/client'; // kept for future use
 import LazyRichEditor from '@/components/LazyRichEditor';
 import { Label } from '@/components/ui/label';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useQueryClient } from '@tanstack/react-query';
-import { CardTagEditor } from '@/components/manage-deck/CardTagWidgets';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const ImageOcclusion = lazy(() => import('@/components/ImageOcclusion'));
@@ -30,8 +27,6 @@ const ManageDeck = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { cards, isLoading, createCard, updateCard, deleteCard } = useCards(deckId ?? '');
-  const { energy } = useEnergy();
-  const { model } = useAIModel();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -42,7 +37,7 @@ const ManageDeck = () => {
   const [cardType, setCardType] = useState<CardType>('basic');
   const [isDirty, setIsDirty] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [isImproving, setIsImproving] = useState(false);
+  
 
   // Image occlusion state
   const [occlusionImageUrl, setOcclusionImageUrl] = useState('');
@@ -192,36 +187,7 @@ const ManageDeck = () => {
     setIsDirty(true);
   }, []);
 
-  const handleImprove = useCallback(async () => {
-    if (!currentCard) return;
-    const strippedFront = front.replace(/<[^>]*>/g, '').trim();
-    if (!strippedFront && cardType !== 'image_occlusion') {
-      toast({ title: 'Escreva algo no cartão primeiro', variant: 'destructive' });
-      return;
-    }
-    if (energy < 1) {
-      toast({ title: 'Créditos insuficientes', variant: 'destructive' });
-      return;
-    }
-    setIsImproving(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('enhance-card', {
-        body: { front, back, cardType: cardType || 'basic', aiModel: model, energyCost: 1 },
-      });
-      if (error) throw error;
-      if (data.error) { toast({ title: data.error, variant: 'destructive' }); return; }
-      if (data.unchanged) { toast({ title: '✨ Este cartão já está ótimo!' }); return; }
-      queryClient.invalidateQueries({ queryKey: ['profile'] });
-      setFront(data.front);
-      setBack(data.back);
-      setIsDirty(true);
-      toast({ title: 'Melhoria aplicada!' });
-    } catch (e: any) {
-      toast({ title: 'Erro ao melhorar', description: e.message, variant: 'destructive' });
-    } finally {
-      setIsImproving(false);
-    }
-  }, [front, back, currentCard, cardType, energy, model, queryClient, toast]);
+
 
   if (isLoading) {
     return (
@@ -396,21 +362,6 @@ const ManageDeck = () => {
                 />
               </div>
 
-              {/* Improve with AI */}
-              <Button
-                variant="outline"
-                onClick={handleImprove}
-                disabled={isImproving}
-                className="w-full gap-2 border-primary/30 text-primary hover:bg-primary/5 hover:text-primary"
-              >
-                {isImproving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                {isImproving ? 'Melhorando...' : 'Melhorar com IA'}
-                <span className="text-[10px] text-muted-foreground ml-auto">1 crédito</span>
-              </Button>
-
-              {/* Tags */}
-              {currentCard.id && <CardTagEditor cardId={currentCard.id} />}
-
               {/* Save button */}
               {isDirty && (
                 <Button onClick={saveCurrentCard} className="w-full gap-2" disabled={updateCard.isPending}>
@@ -453,9 +404,9 @@ const ManageDeck = () => {
       {/* FAB to add new card */}
       <button
         onClick={handleAddCard}
-        className="fixed bottom-6 right-6 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center justify-center z-20"
+        className="fixed bottom-6 right-6 h-11 w-11 rounded-full bg-primary text-primary-foreground shadow-md hover:shadow-lg hover:scale-105 transition-all flex items-center justify-center z-20"
       >
-        <Plus className="h-6 w-6" />
+        <Plus className="h-5 w-5" />
       </button>
 
       {/* Delete confirmation */}
