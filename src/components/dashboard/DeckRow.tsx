@@ -165,6 +165,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [showDevModal, setShowDevModal] = useState(false);
   const [showAddDeckMenu, setShowAddDeckMenu] = useState(false);
+  const [addDeckInfoType, setAddDeckInfoType] = useState<'manual' | 'ia' | null>(null);
 
   // Auto-detect linked (followed) decks — hide management actions for community-sourced decks
   const isLinkedDeck = useMemo(() => {
@@ -415,21 +416,55 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           <div className="flex flex-col gap-2 pt-1">
             <button
               onClick={() => { setShowAddDeckMenu(false); onCreateSubDeck(deck.id); }}
-              className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted"
+              className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center justify-between"
             >
-              <span className="text-sm font-medium text-foreground">Criar manualmente</span>
-              <p className="text-xs text-muted-foreground mt-0.5">Você define o nome e adiciona os cartões</p>
+              <span className="text-sm font-medium text-foreground">Criar deck manualmente</span>
+              <button
+                onClick={(e) => { e.stopPropagation(); setAddDeckInfoType('manual'); }}
+                className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted-foreground/10 transition-colors"
+                aria-label="O que é criar manualmente?"
+              >
+                <Info className="h-4 w-4" />
+              </button>
             </button>
             {onCreateSubDeckAI && (
               <button
                 onClick={() => { setShowAddDeckMenu(false); onCreateSubDeckAI(deck.id); }}
-                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted"
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center justify-between"
               >
-                <span className="text-sm font-medium text-foreground">Criar com IA</span>
-                <p className="text-xs text-muted-foreground mt-0.5">Envie seu material e a IA gera os cartões</p>
+                <span className="text-sm font-medium text-foreground">Criar deck com IA</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setAddDeckInfoType('ia'); }}
+                  className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted-foreground/10 transition-colors"
+                  aria-label="O que é criar com IA?"
+                >
+                  <Info className="h-4 w-4" />
+                </button>
               </button>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Info modal for add deck options */}
+      <Dialog open={addDeckInfoType !== null} onOpenChange={(v) => { if (!v) setAddDeckInfoType(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{addDeckInfoType === 'manual' ? 'Criar deck manualmente' : 'Criar deck com IA'}</DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground leading-relaxed pt-2 space-y-2">
+              {addDeckInfoType === 'manual' ? (
+                <>
+                  <p>Você escolhe o nome do deck e adiciona os cartões (flashcards) um a um.</p>
+                  <p>Ideal quando você quer ter controle total sobre o conteúdo dos seus cartões.</p>
+                </>
+              ) : (
+                <>
+                  <p>Envie seu material de estudo (PDF, imagem ou texto) e a inteligência artificial gera os cartões automaticamente.</p>
+                  <p>Ideal para transformar anotações, slides ou apostilas em flashcards rapidamente.</p>
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
         </DialogContent>
       </Dialog>
 
