@@ -295,6 +295,9 @@ export const CardEditorDialog = ({
 
           {editorType === 'cloze' ? (
             <>
+              <button type="button" onClick={() => { setEditorType('image_occlusion'); setOcclusionModalOpen(true); }} className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors">
+                <Upload className="h-3.5 w-3.5" /> Enviar imagem para oclusão
+              </button>
               {renderClozePreview()}
               <div>
                 <Label className="mb-1.5 block">Verso (Resposta)</Label>
