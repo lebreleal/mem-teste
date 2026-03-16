@@ -311,7 +311,7 @@ const ManageDeck = () => {
                 {occlusionImageUrl && (
                   <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
                     <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 block">Imagem de Oclusão</Label>
-                    <div className="space-y-3">
+                    <div className="flex items-center gap-3">
                       <button
                         type="button"
                         onClick={() => setOcclusionModalOpen(true)}
@@ -329,25 +329,8 @@ const ManageDeck = () => {
                         onClick={() => { setOcclusionImageUrl(''); setOcclusionRects([]); setOcclusionCanvasSize(null); setIsDirty(true); }}
                         className="text-destructive hover:text-destructive"
                       >
-                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Remover imagem
+                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Remover
                       </Button>
-
-                      {occlusionModalOpen && (
-                        <Suspense fallback={<Skeleton className="h-64 w-full rounded-lg" />}>
-                          <ImageOcclusion
-                            imageUrl={occlusionImageUrl}
-                            initialRects={occlusionRects}
-                            onChange={(rects, meta) => {
-                              setOcclusionRects(rects);
-                              if (meta) setOcclusionCanvasSize({ w: meta.canvasWidth, h: meta.canvasHeight });
-                              setIsDirty(true);
-                            }}
-                          />
-                          <div className="flex justify-end">
-                            <Button size="sm" onClick={() => setOcclusionModalOpen(false)}>Concluir</Button>
-                          </div>
-                        </Suspense>
-                      )}
                     </div>
                   </div>
                 )}
