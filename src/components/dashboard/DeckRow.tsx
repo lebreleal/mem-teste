@@ -280,7 +280,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
               </p>
             </div>
           )}
-          {!isErrorDeck && !readOnly && (
+          {!isErrorDeck && !readOnly && !isEmptyMateria && (
             <ClassificationBar
               facilPct={classPcts.facilPct}
               bomPct={classPcts.bomPct}
