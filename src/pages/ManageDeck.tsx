@@ -386,6 +386,17 @@ const ManageDeck = () => {
             </div>
           )}
         </main>
+      </div>
+
+      {/* FAB to add new card */}
+      {totalCards > 0 && (
+        <button
+          onClick={handleAddCard}
+          className="fixed bottom-6 right-6 h-11 w-11 rounded-full bg-primary text-primary-foreground shadow-md hover:shadow-lg hover:scale-105 transition-all flex items-center justify-center z-20"
+        >
+          <Plus className="h-5 w-5" />
+        </button>
+      )}
 
       {/* Delete confirmation */}
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
