@@ -36,6 +36,7 @@ const ManageDeck = () => {
   const [front, setFront] = useState('');
   const [back, setBack] = useState('');
   const [cardType, setCardType] = useState<CardType>('basic');
+  const [isDirty, setIsDirty] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [typeInfoOpen, setTypeInfoOpen] = useState(false);
   
