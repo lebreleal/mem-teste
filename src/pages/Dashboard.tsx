@@ -1144,6 +1144,28 @@ const Dashboard = () => {
         {state.premiumOpen && <PremiumModal open={state.premiumOpen} onClose={() => state.setPremiumOpen(false)} defaultTab={state.premiumTab} />}
       </Suspense>
 
+      {/* Info modal for add menu items */}
+      <Dialog open={addMenuInfoType !== null} onOpenChange={(v) => { if (!v) setAddMenuInfoType(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{addMenuInfoType === 'materia' ? 'O que é uma Matéria?' : 'O que é um Deck?'}</DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground leading-relaxed pt-2 space-y-2">
+              {addMenuInfoType === 'materia' ? (
+                <>
+                  <p>Uma <strong>Matéria</strong> é um agrupador que organiza seus decks por tema ou disciplina.</p>
+                  <p>Por exemplo, dentro da matéria <em>"Farmacologia"</em> você pode ter os decks <em>"Antibióticos"</em>, <em>"Anti-inflamatórios"</em>, etc.</p>
+                  <p>Ao estudar, você pode revisar todos os decks de uma matéria de uma só vez.</p>
+                </>
+              ) : (
+                <>
+                  <p>Um <strong>Deck</strong> é um conjunto de flashcards sobre um assunto específico.</p>
+                  <p>Você pode criar decks manualmente, digitando seus próprios cartões, ou usar a IA para gerar cartões automaticamente a partir do seu material de estudo.</p>
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
 
       <Suspense fallback={null}>
         {studyWeightsOpen && (
