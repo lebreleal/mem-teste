@@ -324,6 +324,8 @@ const Dashboard = () => {
     folderId: string | null;
     textSample?: string;
   } | null>(null);
+  const [aiDeckParentId, setAiDeckParentId] = useState<string | null>(null);
+  const [aiDeckParentName, setAiDeckParentName] = useState<string | null>(null);
 
   const activeSection = 'personal' as const;
 
