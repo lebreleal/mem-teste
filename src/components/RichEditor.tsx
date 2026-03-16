@@ -23,6 +23,7 @@ import { compressImage } from '@/lib/imageUtils';
 /* ─── Cloze Mark Extension ─── */
 const ClozeMark = Mark.create({
   name: 'clozeMark',
+  inclusive: false,
   addAttributes() {
     return {
       num: {
