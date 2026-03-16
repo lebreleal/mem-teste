@@ -271,7 +271,7 @@ const ManageDeck = () => {
               {/* Front */}
               <div className="rounded-2xl border border-border bg-card flex-1 min-h-0 overflow-y-auto relative">
                 {!front || front === '<p></p>' ? (
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="absolute inset-0 flex items-start justify-start p-4 pointer-events-none">
                     <span className="text-muted-foreground/40 text-lg font-medium">[Pergunta]</span>
                   </div>
                 ) : null}
