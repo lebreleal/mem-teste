@@ -1389,36 +1389,37 @@ const Dashboard = () => {
           {addMenuStep === 'main' && (
             <div className="flex flex-col gap-1">
               <button
-                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center justify-between"
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
                 onClick={() => setAddMenuStep('create-deck')}
               >
                 <span className="text-sm font-medium text-foreground">Criar deck</span>
                 <button
                   onClick={(e) => { e.stopPropagation(); setAddMenuInfoType('deck'); }}
-                  className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted-foreground/10 transition-colors"
-                  aria-label="O que é um deck?"
+                  className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
                 >
-                  <Info className="h-4 w-4" />
+                  <Info className="h-3.5 w-3.5" />
                 </button>
+                <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 ml-auto shrink-0" />
               </button>
               <button
-                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center justify-between"
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
                 onClick={() => { setSalaAddMenuOpen(false); setAddMenuStep('main'); state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId('__materia__'); }}
               >
                 <span className="text-sm font-medium text-foreground">Criar matéria</span>
                 <button
                   onClick={(e) => { e.stopPropagation(); setAddMenuInfoType('materia'); }}
-                  className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted-foreground/10 transition-colors"
-                  aria-label="O que é matéria?"
+                  className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
                 >
-                  <Info className="h-4 w-4" />
+                  <Info className="h-3.5 w-3.5" />
                 </button>
+                <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 ml-auto shrink-0" />
               </button>
               <button
-                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted"
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
                 onClick={() => { setSalaAddMenuOpen(false); setAddMenuStep('main'); state.setImportOpen(true); state.setImportDeckId(null); state.setImportDeckName(''); }}
               >
                 <span className="text-sm font-medium text-foreground">Importar cartões</span>
+                <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 ml-auto shrink-0" />
               </button>
             </div>
           )}
@@ -1426,28 +1427,30 @@ const Dashboard = () => {
           {addMenuStep === 'create-deck' && (
             <div className="flex flex-col gap-1">
               <button
-                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center justify-between"
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
                 onClick={() => { setSalaAddMenuOpen(false); setAddMenuStep('main'); state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
               >
                 <span className="text-sm font-medium text-foreground">Criar deck manualmente</span>
                 <button
                   onClick={(e) => { e.stopPropagation(); setAddMenuInfoType('deck-manual'); }}
-                  className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted-foreground/10 transition-colors"
+                  className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
                 >
-                  <Info className="h-4 w-4" />
+                  <Info className="h-3.5 w-3.5" />
                 </button>
+                <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 ml-auto shrink-0" />
               </button>
               <button
-                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center justify-between"
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
                 onClick={() => { setSalaAddMenuOpen(false); setAddMenuStep('main'); state.setAiDeckOpen(true); }}
               >
                 <span className="text-sm font-medium text-foreground">Criar deck com IA</span>
                 <button
                   onClick={(e) => { e.stopPropagation(); setAddMenuInfoType('deck-ia'); }}
-                  className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted-foreground/10 transition-colors"
+                  className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
                 >
-                  <Info className="h-4 w-4" />
+                  <Info className="h-3.5 w-3.5" />
                 </button>
+                <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 ml-auto shrink-0" />
               </button>
               <Button variant="ghost" size="sm" className="mt-2 self-start text-xs gap-1" onClick={() => setAddMenuStep('main')}>
                 <ChevronLeft className="h-3.5 w-3.5" /> Voltar
