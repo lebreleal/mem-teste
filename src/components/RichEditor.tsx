@@ -10,8 +10,11 @@ import { Mark, mergeAttributes } from '@tiptap/core';
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough, Heading2,
   List, ListOrdered, Code, Volume2, Palette, ImagePlus, ScanEye,
-  ClipboardPaste, Paperclip,
+  ClipboardPaste, Paperclip, Settings2,
 } from 'lucide-react';
+import { loadToolbarConfig, saveToolbarConfig, type ToolbarItem } from '@/components/rich-editor/toolbarConfig';
+import { lazy, Suspense } from 'react';
+const ToolbarConfigSheet = lazy(() => import('@/components/rich-editor/ToolbarConfigSheet'));
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
