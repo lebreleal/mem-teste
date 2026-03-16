@@ -207,7 +207,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
       setIsSaving(true);
       try {
         await cardService.updateCard(editCardIdRef.current, front, backContent);
-        toast({ title: 'Card atualizado!' });
+         toast({ title: 'Cartão atualizado!' });
         setEditOpen(false);
         queryClient.invalidateQueries({ queryKey: ['cards'] });
         onCardUpdated({ front_content: front, back_content: backContent });
