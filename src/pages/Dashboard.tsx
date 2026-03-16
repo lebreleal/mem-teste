@@ -1162,12 +1162,12 @@ const Dashboard = () => {
                   <p>Ao estudar, você pode revisar todos os decks de uma matéria de uma só vez.</p>
                 </>
               )}
-              {addMenuInfoType === 'deck' && (
-                <>
-                  <p>Um <strong>Deck</strong> é um conjunto de flashcards sobre um assunto específico.</p>
-                  <p>Você pode criar decks manualmente ou usar a IA para gerar cartões automaticamente.</p>
-                </>
-              )}
+               {addMenuInfoType === 'deck' && (
+                 <>
+                   <p>Um <strong>Baralho</strong> é um conjunto de flashcards sobre um assunto específico.</p>
+                   <p>Você pode criar baralhos manualmente ou usar a IA para gerar cartões automaticamente.</p>
+                 </>
+               )}
               {addMenuInfoType === 'deck-manual' && (
                 <>
                   <p>Você escolhe o nome do deck e adiciona os cartões (flashcards) um a um.</p>
