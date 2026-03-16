@@ -112,101 +112,69 @@ export function useManageDeck() {
       toast({ title: 'Preencha a pergunta', variant: 'destructive' });
       return;
     }
-    let cardType: string;
-    let backContent: string;
 
-    if (editorType === 'cloze') {
-      if (!front.includes('{{c')) {
-        toast({ title: 'Use a sintaxe {{c1::resposta}} para criar lacunas', variant: 'destructive' });
-        return;
-      }
-      const plainForNumbers = front.replace(/<[^>]*>/g, '');
-      const clozeNumMatches = [...plainForNumbers.matchAll(/\{\{c(\d+)::/g)];
-      const uniqueNums = [...new Set(clozeNumMatches.map(m => parseInt(m[1])))].sort((a, b) => a - b);
-      if (editingId) {
-        const backJson = JSON.stringify({ clozeTarget: uniqueNums[0] || 1, extra: back });
-        updateCard.mutate({ id: editingId, frontContent: front, backContent: backJson }, {
-          onSuccess: () => {
-            toast({ title: 'Cartão atualizado!' });
-            if (addAnother) { setFront(''); setBack(''); setEditingId(null); setMcOptions(['', '', '', '']); setMcCorrectIndex(0); }
-            else { setEditorOpen(false); resetForm(); }
-          },
-        });
-      } else {
-        if (uniqueNums.length <= 1) {
-          const backJson = JSON.stringify({ clozeTarget: uniqueNums[0] || 1, extra: back });
-          createCard.mutate({ frontContent: front, backContent: backJson, cardType: 'cloze' }, {
-            onSuccess: () => {
-              toast({ title: 'Cartão criado!' });
-              if (addAnother) { setFront(''); setBack(''); setEditingId(null); setMcOptions(['', '', '', '']); setMcCorrectIndex(0); }
-              else { setEditorOpen(false); resetForm(); }
-            },
-          });
-        } else {
-          const cards = uniqueNums.map(n => ({
-            frontContent: front,
-            backContent: JSON.stringify({ clozeTarget: n, extra: back }),
-            cardType: 'cloze',
-          }));
-          createCard.mutate({ cards }, {
-            onSuccess: () => {
-              toast({ title: `${uniqueNums.length} cartões criados!` });
-              if (addAnother) { setFront(''); setBack(''); setEditingId(null); setMcOptions(['', '', '', '']); setMcCorrectIndex(0); }
-              else { setEditorOpen(false); resetForm(); }
-            },
-          });
-        }
-      }
-      return;
-    } else if (editorType === 'image_occlusion') {
-      // Check if frontText contains cloze markers
-      let frontText = '';
-      try { frontText = JSON.parse(front)?.frontText || ''; } catch {}
-      const plainFrontText = frontText.replace(/<[^>]*>/g, '');
-      const clozeNumMatches = [...plainFrontText.matchAll(/\{\{c(\d+)::/g)];
-      const uniqueNums = [...new Set(clozeNumMatches.map(m => parseInt(m[1])))].sort((a, b) => a - b);
-
-      if (uniqueNums.length > 0) {
-        // Image occlusion + cloze: create one card per cloze number
-        const onSuccess = () => {
-          toast({ title: editingId ? 'Cartão atualizado!' : `${Math.max(1, uniqueNums.length)} cartão(ões) criado(s)!` });
-          if (addAnother) { setFront(''); setBack(''); setEditingId(null); setMcOptions(['', '', '', '']); setMcCorrectIndex(0); }
-          else { setEditorOpen(false); resetForm(); }
-        };
-        if (editingId) {
-          const backJson = JSON.stringify({ clozeTarget: uniqueNums[0] || 1, extra: back });
-          updateCard.mutate({ id: editingId, frontContent: front, backContent: backJson }, { onSuccess });
-        } else if (uniqueNums.length <= 1) {
-          const backJson = JSON.stringify({ clozeTarget: uniqueNums[0] || 1, extra: back });
-          createCard.mutate({ frontContent: front, backContent: backJson, cardType: 'image_occlusion' }, { onSuccess });
-        } else {
-          const cards = uniqueNums.map(n => ({
-            frontContent: front,
-            backContent: JSON.stringify({ clozeTarget: n, extra: back }),
-            cardType: 'image_occlusion',
-          }));
-          createCard.mutate({ cards }, { onSuccess });
-        }
-        return;
-      }
-
-      cardType = 'image_occlusion';
-      backContent = back;
-    } else {
-      cardType = 'basic';
-      backContent = back;
-    }
-    const onSuccess = () => {
-      toast({ title: editingId ? 'Cartão atualizado!' : 'Cartão criado!' });
+    const onSuccessFn = (msg: string) => () => {
+      toast({ title: msg });
       if (addAnother) { setFront(''); setBack(''); setEditingId(null); setMcOptions(['', '', '', '']); setMcCorrectIndex(0); }
       else { setEditorOpen(false); resetForm(); }
     };
-    if (editingId) {
-      updateCard.mutate({ id: editingId, frontContent: front, backContent }, { onSuccess });
-    } else {
-      createCard.mutate({ frontContent: front, backContent, cardType }, { onSuccess });
+
+    // Auto-detect content type from front content
+    let hasImage = false;
+    let frontText = front;
+    try {
+      const parsed = JSON.parse(front);
+      if (parsed && typeof parsed === 'object' && 'imageUrl' in parsed) {
+        hasImage = true;
+        frontText = parsed.frontText || '';
+      }
+    } catch {}
+
+    const plainText = frontText.replace(/<[^>]*>/g, '');
+    const clozeNumMatches = [...plainText.matchAll(/\{\{c(\d+)::/g)];
+    const uniqueNums = [...new Set(clozeNumMatches.map(m => parseInt(m[1])))].sort((a, b) => a - b);
+    const hasCloze = uniqueNums.length > 0;
+
+    // Determine card type based on content
+    const detectedType = hasImage ? 'image_occlusion' : hasCloze ? 'cloze' : 'basic';
+
+    if (hasCloze) {
+      // Cloze or Image+Cloze: create one card per cloze number
+      if (editingId) {
+        const backJson = JSON.stringify({ clozeTarget: uniqueNums[0] || 1, extra: back });
+        updateCard.mutate({ id: editingId, frontContent: front, backContent: backJson }, {
+          onSuccess: onSuccessFn('Cartão atualizado!'),
+        });
+      } else if (uniqueNums.length <= 1) {
+        const backJson = JSON.stringify({ clozeTarget: uniqueNums[0] || 1, extra: back });
+        createCard.mutate({ frontContent: front, backContent: backJson, cardType: detectedType }, {
+          onSuccess: onSuccessFn('Cartão criado!'),
+        });
+      } else {
+        const cards = uniqueNums.map(n => ({
+          frontContent: front,
+          backContent: JSON.stringify({ clozeTarget: n, extra: back }),
+          cardType: detectedType,
+        }));
+        createCard.mutate({ cards }, {
+          onSuccess: onSuccessFn(`${uniqueNums.length} cartões criados!`),
+        });
+      }
+      return;
     }
-  }, [front, back, editorType, mcOptions, mcCorrectIndex, editingId, createCard, updateCard, toast, resetForm]);
+
+    // Basic or Image Occlusion without cloze
+    const backContent = back;
+    if (editingId) {
+      updateCard.mutate({ id: editingId, frontContent: front, backContent }, {
+        onSuccess: onSuccessFn('Cartão atualizado!'),
+      });
+    } else {
+      createCard.mutate({ frontContent: front, backContent, cardType: detectedType }, {
+        onSuccess: onSuccessFn('Cartão criado!'),
+      });
+    }
+  }, [front, back, editingId, createCard, updateCard, toast, resetForm]);
 
   const handleDelete = useCallback(() => {
     if (!deleteId) return;
