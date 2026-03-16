@@ -280,6 +280,7 @@ const ManageDeck = () => {
                   onChange={(v) => { setFront(v); setIsDirty(true); }}
                   placeholder=""
                   chromeless
+                  hideToolbarUntilFocus
                   hideCloze={cardType !== 'cloze'}
                   onOcclusionPaste={cardType === 'image_occlusion' ? handleOcclusionPaste : undefined}
                   onOcclusionAttach={cardType === 'image_occlusion' ? handleOcclusionAttach : undefined}
