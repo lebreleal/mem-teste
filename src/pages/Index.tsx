@@ -28,17 +28,17 @@ const Index = () => {
 
       <div className="flex flex-col items-center w-full max-w-sm">
         {/* Logo + Brand */}
-        <MemoCardsLogo size={80} className="mb-4" />
-        <h1 className="font-display text-3xl font-black tracking-tight text-foreground mb-2">
-          MemoCards
+        <MemoCardsLogo size={56} className="mb-3" />
+        <h1 className="font-display text-2xl font-black tracking-tight text-foreground">
+          memocards
         </h1>
 
         {/* Tagline */}
-        <h2 className="text-2xl sm:text-3xl font-extrabold text-foreground text-center leading-tight mt-6 mb-2">
-          A arma definitiva<br />de estudo.
+        <h2 className="text-2xl sm:text-3xl font-extrabold text-foreground text-center leading-tight mt-8 mb-2">
+          Transforme seus<br />materiais em estudo.
         </h2>
         <p className="text-sm text-muted-foreground text-center max-w-xs leading-relaxed mb-12">
-          Use <strong className="text-foreground">IA</strong> para encontrar ou criar flashcards de qualquer fonte. Aprenda mais rápido com repetição espaçada.
+          Crie flashcards com <strong className="text-foreground">IA</strong> a partir dos seus materiais de estudo. Aprenda mais rápido com repetição espaçada.
         </p>
 
         {/* Buttons */}
