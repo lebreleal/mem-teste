@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ChevronUp, ChevronDown, Trash2, Move, Copy, Plus, Sparkles, Loader2, Settings2 } from 'lucide-react';
+import { ArrowLeft, ChevronUp, ChevronDown, Trash2, Copy, Plus, Sparkles, Loader2, MessageSquareText, PenLine, Image as ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCards } from '@/hooks/useCards';
 import { useEnergy } from '@/hooks/useEnergy';
@@ -10,7 +10,20 @@ import { supabase } from '@/integrations/supabase/client';
 import LazyRichEditor from '@/components/LazyRichEditor';
 import { Label } from '@/components/ui/label';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useQueryClient } from '@tanstack/react-query';
+import { CardTagEditor } from '@/components/manage-deck/CardTagWidgets';
+import { Skeleton } from '@/components/ui/skeleton';
+
+const ImageOcclusion = lazy(() => import('@/components/ImageOcclusion'));
+
+type CardType = 'basic' | 'cloze' | 'image_occlusion';
+
+const CARD_TYPE_OPTIONS: { value: CardType; label: string; icon: React.ReactNode }[] = [
+  { value: 'basic', label: 'Frente e Verso', icon: <MessageSquareText className="h-4 w-4" /> },
+  { value: 'cloze', label: 'Cloze', icon: <PenLine className="h-4 w-4" /> },
+  { value: 'image_occlusion', label: 'Oclusão de Imagem', icon: <ImageIcon className="h-4 w-4" /> },
+];
 
 const ManageDeck = () => {
   const { deckId } = useParams<{ deckId: string }>();
@@ -26,9 +39,16 @@ const ManageDeck = () => {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [front, setFront] = useState('');
   const [back, setBack] = useState('');
+  const [cardType, setCardType] = useState<CardType>('basic');
   const [isDirty, setIsDirty] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [isImproving, setIsImproving] = useState(false);
+
+  // Image occlusion state
+  const [occlusionImageUrl, setOcclusionImageUrl] = useState('');
+  const [occlusionRects, setOcclusionRects] = useState<any[]>([]);
+  const [occlusionCanvasSize, setOcclusionCanvasSize] = useState<{ w: number; h: number } | null>(null);
+  const [occlusionModalOpen, setOcclusionModalOpen] = useState(false);
 
   const sortedCards = cards ?? [];
   const currentCard = sortedCards[selectedIndex] ?? null;
@@ -45,34 +65,63 @@ const ManageDeck = () => {
   // Load card content when selection changes
   useEffect(() => {
     if (!currentCard) return;
-    setFront(currentCard.front_content);
-    if (currentCard.card_type === 'cloze') {
+    const ct = (currentCard.card_type ?? 'basic') as CardType;
+    setCardType(ct);
+
+    if (ct === 'image_occlusion') {
+      try {
+        const data = JSON.parse(currentCard.front_content);
+        setOcclusionImageUrl(data.imageUrl || '');
+        setOcclusionRects(data.allRects || data.rects || []);
+        setOcclusionCanvasSize(data.canvasWidth ? { w: data.canvasWidth, h: data.canvasHeight } : null);
+        setFront(data.frontText || '');
+      } catch { setFront(''); setOcclusionImageUrl(''); setOcclusionRects([]); }
+      setBack(currentCard.back_content);
+    } else if (ct === 'cloze') {
+      setFront(currentCard.front_content);
       try {
         const parsed = JSON.parse(currentCard.back_content);
         setBack(typeof parsed.clozeTarget === 'number' ? (parsed.extra || '') : currentCard.back_content);
       } catch { setBack(currentCard.back_content); }
     } else {
+      setFront(currentCard.front_content);
       setBack(currentCard.back_content);
     }
     setIsDirty(false);
   }, [currentCard?.id]);
 
-  const saveCurrentCard = useCallback(async () => {
-    if (!currentCard || !isDirty) return;
+  const buildSavePayload = useCallback(() => {
+    let frontContent = front;
     let backContent = back;
-    if (currentCard.card_type === 'cloze') {
+
+    if (cardType === 'image_occlusion') {
+      frontContent = JSON.stringify({
+        imageUrl: occlusionImageUrl,
+        frontText: front,
+        rects: occlusionRects,
+        allRects: occlusionRects,
+        canvasWidth: occlusionCanvasSize?.w ?? 0,
+        canvasHeight: occlusionCanvasSize?.h ?? 0,
+      });
+    } else if (cardType === 'cloze') {
       const plainForNumbers = front.replace(/<[^>]*>/g, '');
       const clozeNumMatches = [...plainForNumbers.matchAll(/\{\{c(\d+)::/g)];
       const uniqueNums = [...new Set(clozeNumMatches.map(m => parseInt(m[1])))].sort((a, b) => a - b);
       backContent = JSON.stringify({ clozeTarget: uniqueNums[0] || 1, extra: back });
     }
+
+    return { frontContent, backContent };
+  }, [front, back, cardType, occlusionImageUrl, occlusionRects, occlusionCanvasSize]);
+
+  const saveCurrentCard = useCallback(async () => {
+    if (!currentCard || !isDirty) return;
+    const { frontContent, backContent } = buildSavePayload();
     updateCard.mutate(
-      { id: currentCard.id, frontContent: front, backContent },
+      { id: currentCard.id, frontContent, backContent },
       { onSuccess: () => { setIsDirty(false); } }
     );
-  }, [currentCard, front, back, isDirty, updateCard]);
+  }, [currentCard, isDirty, buildSavePayload, updateCard]);
 
-  // Auto-save when navigating away from a card
   const selectCard = useCallback((idx: number) => {
     if (idx < 0 || idx >= totalCards) return;
     if (isDirty) saveCurrentCard();
@@ -103,7 +152,6 @@ const ManageDeck = () => {
       {
         onSuccess: () => {
           toast({ title: 'Novo cartão criado' });
-          // Select the new card (will be last)
           setTimeout(() => setSelectedIndex(totalCards), 100);
         },
       }
@@ -123,10 +171,31 @@ const ManageDeck = () => {
     );
   }, [currentCard, createCard, totalCards, toast]);
 
+  const handleTypeChange = useCallback((newType: CardType) => {
+    setCardType(newType);
+    setIsDirty(true);
+    // Reset occlusion state when switching away
+    if (newType !== 'image_occlusion') {
+      setOcclusionImageUrl('');
+      setOcclusionRects([]);
+      setOcclusionCanvasSize(null);
+    }
+  }, []);
+
+  const handleOcclusionPaste = useCallback(() => {
+    setOcclusionModalOpen(true);
+    setIsDirty(true);
+  }, []);
+
+  const handleOcclusionAttach = useCallback(() => {
+    setOcclusionModalOpen(true);
+    setIsDirty(true);
+  }, []);
+
   const handleImprove = useCallback(async () => {
     if (!currentCard) return;
     const strippedFront = front.replace(/<[^>]*>/g, '').trim();
-    if (!strippedFront) {
+    if (!strippedFront && cardType !== 'image_occlusion') {
       toast({ title: 'Escreva algo no cartão primeiro', variant: 'destructive' });
       return;
     }
@@ -137,7 +206,7 @@ const ManageDeck = () => {
     setIsImproving(true);
     try {
       const { data, error } = await supabase.functions.invoke('enhance-card', {
-        body: { front, back, cardType: currentCard.card_type || 'basic', aiModel: model, energyCost: 1 },
+        body: { front, back, cardType: cardType || 'basic', aiModel: model, energyCost: 1 },
       });
       if (error) throw error;
       if (data.error) { toast({ title: data.error, variant: 'destructive' }); return; }
@@ -152,7 +221,7 @@ const ManageDeck = () => {
     } finally {
       setIsImproving(false);
     }
-  }, [front, back, currentCard, energy, model, queryClient, toast]);
+  }, [front, back, currentCard, cardType, energy, model, queryClient, toast]);
 
   if (isLoading) {
     return (
@@ -186,9 +255,7 @@ const ManageDeck = () => {
             </div>
           )}
 
-          <button onClick={() => {/* settings could go here */}} className="p-1.5 text-muted-foreground hover:text-foreground transition-colors">
-            <Settings2 className="h-4 w-4" />
-          </button>
+          <div className="w-16" />
         </div>
       </header>
 
@@ -216,26 +283,111 @@ const ManageDeck = () => {
         <main className="flex-1 overflow-y-auto p-4 sm:p-6">
           {currentCard ? (
             <div className="max-w-2xl mx-auto space-y-4">
+              {/* Card type selector */}
+              <div className="flex items-center gap-3">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground shrink-0">Tipo</Label>
+                <Select value={cardType} onValueChange={(v) => handleTypeChange(v as CardType)}>
+                  <SelectTrigger className="w-[200px] h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CARD_TYPE_OPTIONS.map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        <span className="flex items-center gap-2">
+                          {opt.icon} {opt.label}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               {/* Front */}
               <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 min-h-[180px]">
-                <div className="flex items-center justify-between mb-2">
-                  <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Frente</Label>
-                  <button onClick={handleImprove} disabled={isImproving} className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors disabled:opacity-50">
-                    {isImproving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                    IA
-                  </button>
-                </div>
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 block">
+                  {cardType === 'image_occlusion' ? 'Frente (Pergunta)' : 'Frente'}
+                </Label>
                 <LazyRichEditor
                   content={front}
                   onChange={(v) => { setFront(v); setIsDirty(true); }}
-                  placeholder="Frente do cartão"
-                  hideCloze={currentCard.card_type !== 'cloze'}
+                  placeholder={
+                    cardType === 'cloze'
+                      ? 'A {{c1::mitocôndria}} é responsável pela respiração celular.'
+                      : cardType === 'image_occlusion'
+                      ? 'Pergunta ou contexto (opcional)'
+                      : 'Frente do cartão'
+                  }
+                  hideCloze={cardType !== 'cloze'}
+                  onOcclusionPaste={cardType === 'image_occlusion' ? handleOcclusionPaste : undefined}
+                  onOcclusionAttach={cardType === 'image_occlusion' ? handleOcclusionAttach : undefined}
                 />
               </div>
 
+              {/* Image occlusion area */}
+              {cardType === 'image_occlusion' && (
+                <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 block">Imagem de Oclusão</Label>
+                  {occlusionImageUrl ? (
+                    <div className="space-y-3">
+                      <button
+                        type="button"
+                        onClick={() => setOcclusionModalOpen(true)}
+                        className="relative inline-block rounded-lg overflow-hidden border border-border"
+                        title="Editar oclusões"
+                      >
+                        <img src={occlusionImageUrl} alt="Imagem de oclusão" className="h-20 w-20 object-cover rounded-lg" />
+                        <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center bg-primary/80 py-0.5">
+                          <ImageIcon className="h-3 w-3 text-primary-foreground" />
+                        </div>
+                      </button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => { setOcclusionImageUrl(''); setOcclusionRects([]); setOcclusionCanvasSize(null); setIsDirty(true); }}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Remover imagem
+                      </Button>
+
+                      {occlusionModalOpen && (
+                        <Suspense fallback={<Skeleton className="h-64 w-full rounded-lg" />}>
+                          <ImageOcclusion
+                            imageUrl={occlusionImageUrl}
+                            initialRects={occlusionRects}
+                            onChange={(rects, meta) => {
+                              setOcclusionRects(rects);
+                              if (meta) setOcclusionCanvasSize({ w: meta.canvasWidth, h: meta.canvasHeight });
+                              setIsDirty(true);
+                            }}
+                          />
+                          <div className="flex justify-end">
+                            <Button size="sm" onClick={() => setOcclusionModalOpen(false)}>Concluir</Button>
+                          </div>
+                        </Suspense>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Use o ícone de oclusão na barra da Frente para anexar uma imagem.</p>
+                  )}
+                </div>
+              )}
+
+              {/* Cloze help */}
+              {cardType === 'cloze' && (
+                <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <PenLine className="h-3.5 w-3.5 text-primary" />
+                    <p className="text-[11px] font-bold text-primary">Como usar Cloze</p>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Selecione o texto e clique para criar um <strong className="text-foreground">cloze</strong>. Clozes com mesmo número viram o mesmo cartão.
+                  </p>
+                </div>
+              )}
+
               {/* Back */}
               <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 min-h-[180px]">
-                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 block">Verso</Label>
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 block">Verso (Resposta)</Label>
                 <LazyRichEditor
                   content={back}
                   onChange={(v) => { setBack(v); setIsDirty(true); }}
@@ -244,7 +396,22 @@ const ManageDeck = () => {
                 />
               </div>
 
-              {/* Save button (visible when dirty) */}
+              {/* Improve with AI */}
+              <Button
+                variant="outline"
+                onClick={handleImprove}
+                disabled={isImproving}
+                className="w-full gap-2 border-primary/30 text-primary hover:bg-primary/5 hover:text-primary"
+              >
+                {isImproving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                {isImproving ? 'Melhorando...' : 'Melhorar com IA'}
+                <span className="text-[10px] text-muted-foreground ml-auto">1 crédito</span>
+              </Button>
+
+              {/* Tags */}
+              {currentCard.id && <CardTagEditor cardId={currentCard.id} />}
+
+              {/* Save button */}
               {isDirty && (
                 <Button onClick={saveCurrentCard} className="w-full gap-2" disabled={updateCard.isPending}>
                   {updateCard.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
