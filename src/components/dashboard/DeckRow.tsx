@@ -285,7 +285,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
         {/* Actions on hover for loose decks, always when matéria expanded */}
         {!isErrorDeck && !deckSelectionMode && !readOnly && (
           <div className={`flex items-center gap-1.5 shrink-0 transition-opacity duration-200 ${
-            hasChildren && isExpanded
+            (hasChildren || isEmptyMateria) && isExpanded
               ? 'opacity-100'
               : 'opacity-0 group-hover:opacity-100'
           }`}>
@@ -305,7 +305,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
         )}
 
         {/* Chevron arrow for navigation (loose decks only, hidden on hover) */}
-        {!deckSelectionMode && !isErrorDeck && !hasChildren && (
+        {!deckSelectionMode && !isErrorDeck && !hasChildren && !isEmptyMateria && (
           <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 -rotate-90 group-hover:hidden" />
         )}
       </div>
