@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, lazy, Suspense, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ChevronUp, ChevronDown, Trash2, Copy, Plus, Loader2, PenLine, Image as ImageIcon, Info } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -32,6 +32,7 @@ const ManageDeck = () => {
   const queryClient = useQueryClient();
 
   const initialCardId = searchParams.get('cardId');
+  const hasAppliedInitialCardRef = useRef(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [pendingNewCardId, setPendingNewCardId] = useState<string | null>(null);
   const [front, setFront] = useState('');
@@ -48,19 +49,25 @@ const ManageDeck = () => {
   const [occlusionCanvasSize, setOcclusionCanvasSize] = useState<{ w: number; h: number } | null>(null);
   const [occlusionModalOpen, setOcclusionModalOpen] = useState(false);
 
-  const sortedCards = cards ?? [];
+  const sortedCards = useMemo(() => [...(cards ?? [])].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()), [cards]);
   const currentCard = sortedCards[selectedIndex] ?? null;
   const totalCards = sortedCards.length;
 
-  // Set initial card from URL param or newly created card id
+  // Apply URL card only once; after that preserve local selection and prioritize newly created card
   useEffect(() => {
-    const targetCardId = pendingNewCardId || initialCardId;
-    if (targetCardId && sortedCards.length > 0) {
-      const idx = sortedCards.findIndex(c => c.id === targetCardId);
+    if (pendingNewCardId && sortedCards.length > 0) {
+      const idx = sortedCards.findIndex(c => c.id === pendingNewCardId);
       if (idx >= 0) {
         setSelectedIndex(idx);
-        if (pendingNewCardId === targetCardId) setPendingNewCardId(null);
+        setPendingNewCardId(null);
       }
+      return;
+    }
+
+    if (!hasAppliedInitialCardRef.current && initialCardId && sortedCards.length > 0) {
+      const idx = sortedCards.findIndex(c => c.id === initialCardId);
+      if (idx >= 0) setSelectedIndex(idx);
+      hasAppliedInitialCardRef.current = true;
     }
   }, [initialCardId, pendingNewCardId, sortedCards]);
 
