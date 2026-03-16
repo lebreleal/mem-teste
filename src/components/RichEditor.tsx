@@ -240,34 +240,32 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     return editor.isActive('clozeMark');
   }, [editor]);
 
-  /** Toggle cloze mark — if cursor inside existing cloze, remove it; if text selected, wrap it; otherwise toggle stored mark */
+  /** Toggle cloze mark — if cursor is inside an existing cloze, remove that cloze range */
   const handleCloze = useCallback(() => {
     if (!editor) return;
     const { from, to } = editor.state.selection;
     const hasSelection = from !== to;
 
-    // If cursor is inside an existing cloze (or selection has cloze), remove it
-    if (isCursorInCloze() && !clozeActive) {
+    if (isCursorInCloze()) {
+      editor.chain().focus().extendMarkRange('clozeMark').unsetMark('clozeMark').run();
+      setClozeActive(false);
+      setCursorInCloze(false);
+      return;
+    }
+
+    if (clozeActive && !hasSelection) {
       editor.chain().focus().unsetMark('clozeMark').run();
       setClozeActive(false);
       return;
     }
 
-    if (clozeActive && !hasSelection) {
-      // Deactivate: unset the stored mark so new text won't be cloze
-      editor.chain().focus().unsetMark('clozeMark').run();
+    editor.chain().focus().setMark('clozeMark', { num: String(clozeCounter) }).run();
+
+    if (hasSelection) {
+      editor.chain().setTextSelection(to).unsetMark('clozeMark').run();
       setClozeActive(false);
     } else {
-      // Activate or wrap selection
-      editor.chain().focus().setMark('clozeMark', { num: String(clozeCounter) }).run();
-      // If there was a selection, the mark is applied inline — deactivate stored mark after
-      if (hasSelection) {
-        // Move cursor to end of selection and unset stored mark
-        editor.chain().setTextSelection(to).unsetMark('clozeMark').run();
-        setClozeActive(false);
-      } else {
-        setClozeActive(true);
-      }
+      setClozeActive(true);
     }
   }, [editor, clozeCounter, clozeActive, isCursorInCloze]);
 
