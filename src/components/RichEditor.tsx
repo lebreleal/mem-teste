@@ -247,7 +247,54 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     const hasSelection = from !== to;
 
     if (isCursorInCloze()) {
-      editor.chain().focus().extendMarkRange('clozeMark').unsetMark('clozeMark').run();
+      // Find the exact range of the cloze mark at cursor position (not all adjacent clozes)
+      const { $from } = editor.state.selection;
+      const pos = $from.pos;
+      const resolvedPos = editor.state.doc.resolve(pos);
+      
+      // Walk backward and forward to find this specific mark's boundaries
+      const markType = editor.schema.marks.clozeMark;
+      const currentMark = resolvedPos.marks().find(m => m.type === markType);
+      if (currentMark) {
+        const parent = resolvedPos.parent;
+        const parentOffset = resolvedPos.start();
+        let markFrom = pos;
+        let markTo = pos;
+        
+        // Find start of this specific mark
+        parent.nodesBetween(0, parent.content.size, (node, offset) => {
+          if (node.isText) {
+            const nodeFrom = parentOffset + offset;
+            const nodeTo = nodeFrom + node.nodeSize;
+            const hasThisMark = node.marks.some(m => m.type === markType && m.attrs.num === currentMark.attrs.num);
+            if (hasThisMark && nodeFrom <= pos && nodeTo >= markFrom) {
+              markFrom = Math.min(markFrom, nodeFrom);
+              markTo = Math.max(markTo, nodeTo);
+            }
+          }
+        });
+        
+        // Expand contiguously in both directions for same-num marks
+        let changed = true;
+        while (changed) {
+          changed = false;
+          parent.nodesBetween(0, parent.content.size, (node, offset) => {
+            if (node.isText) {
+              const nodeFrom = parentOffset + offset;
+              const nodeTo = nodeFrom + node.nodeSize;
+              const hasThisMark = node.marks.some(m => m.type === markType && m.attrs.num === currentMark.attrs.num);
+              if (hasThisMark && ((nodeFrom <= markTo && nodeTo > markTo) || (nodeTo >= markFrom && nodeFrom < markFrom))) {
+                markFrom = Math.min(markFrom, nodeFrom);
+                markTo = Math.max(markTo, nodeTo);
+                changed = true;
+              }
+            }
+          });
+        }
+        
+        // Remove the mark only from this range
+        editor.chain().focus().setTextSelection({ from: markFrom, to: markTo }).unsetMark('clozeMark').setTextSelection(pos).run();
+      }
       setClozeActive(false);
       setCursorInCloze(false);
       return;
