@@ -150,6 +150,7 @@ function aggregateClassification(deck: DeckWithStats, getSubDecks: (id: string) 
 const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   deck, deckSelectionMode, selectedDeckIds,
   toggleDeckSelection, getSubDecks, getAggregateStats,
+  onCreateSubDeck, onCreateSubDeckAI,
   onRename, onMove, onArchive, onDelete,
   dragHandlers, hasPendingUpdate,
   expandedAccordionId, onAccordionToggle,
