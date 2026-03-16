@@ -328,7 +328,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     editor.chain().focus().setMark('clozeMark', { num: String(clozeCounter) }).run();
 
     if (hasSelection) {
-      editor.chain().setTextSelection(to).unsetMark('clozeMark').run();
+      editor.chain().setTextSelection(to).unsetMark('clozeMark').insertContent(' ').setTextSelection(to + 1).run();
       setClozeActive(false);
     } else {
       setClozeActive(true);
@@ -357,7 +357,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     setTimeout(() => {
       editor.chain().focus().setMark('clozeMark', { num: String(nextNum) }).run();
       if (hasSelection) {
-        editor.chain().setTextSelection(to).unsetMark('clozeMark').run();
+        editor.chain().setTextSelection(to).unsetMark('clozeMark').insertContent(' ').setTextSelection(to + 1).run();
         setClozeActive(false);
       } else {
         setClozeActive(true);
