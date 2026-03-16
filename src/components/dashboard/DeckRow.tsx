@@ -175,7 +175,6 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   const subDecks = useMemo(() => getSubDecks(deck.id), [deck.id, getSubDecks]);
   const hasChildren = subDecks.length > 0;
   const isExpanded = expandedAccordionId === deck.id;
-  const isEmptyMateria = !hasChildren && totalCards === 0 && !isErrorDeck;
 
   // Aggregate classification across deck + all descendants
   const classPcts = useMemo(() => aggregateClassification(deck, getSubDecks), [deck, getSubDecks]);
@@ -183,6 +182,9 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   const aggStats = useMemo(() => getAggregateStats(deck), [deck, getAggregateStats]);
   const displayName = isErrorDeck ? 'Caderno de Erros' : deck.name;
   const hasDueCards = aggStats.new_count + aggStats.learning_count + aggStats.review_count > 0;
+
+  // A deck with no sub-decks and no cards is an empty matéria — expand inline instead of navigating
+  const isEmptyMateria = !hasChildren && totalCards === 0 && !isErrorDeck;
 
   const handleClick = () => {
     if (deckSelectionMode) {
@@ -197,7 +199,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
       }
       return;
     }
-    if (hasChildren) {
+    if (hasChildren || isEmptyMateria) {
       onAccordionToggle?.(deck.id);
     } else {
       navigate(`/decks/${deck.id}`, readOnlyNavState ? { state: readOnlyNavState } : undefined);
