@@ -60,6 +60,7 @@ interface RichEditorProps {
   onOcclusionPaste?: () => void;
   onOcclusionAttach?: () => void;
   hideCloze?: boolean;
+  chromeless?: boolean;
 }
 
 const TEXT_COLORS = [
