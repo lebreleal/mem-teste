@@ -349,6 +349,24 @@ const ManageDeck = () => {
                 </div>
               )}
 
+              {/* Card actions between cards */}
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  onClick={() => setDeleteConfirmOpen(true)}
+                  className="p-2 text-muted-foreground hover:text-destructive transition-colors"
+                  title="Excluir"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={handleDuplicate}
+                  className="p-2 text-muted-foreground hover:text-foreground transition-colors"
+                  title="Duplicar"
+                >
+                  <Copy className="h-4 w-4" />
+                </button>
+              </div>
+
               {/* Back */}
               <div className="rounded-2xl border border-border bg-card flex-1 min-h-0 overflow-y-auto relative">
                 {!back || back === '<p></p>' ? (
