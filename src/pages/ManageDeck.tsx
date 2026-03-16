@@ -341,17 +341,8 @@ const ManageDeck = () => {
                     hideCloze
                   />
                 </div>
-
-                {/* Save button */}
-                {isDirty && (
-                  <Button onClick={saveCurrentCard} className="w-full gap-2 shrink-0" disabled={updateCard.isPending}>
-                    {updateCard.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                    Salvar alterações
-                  </Button>
-                )}
               </div>
 
-              
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-center">
