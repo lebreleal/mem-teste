@@ -225,7 +225,7 @@ const ManageDeck = () => {
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Left sidebar - card numbers */}
         <aside className="w-10 sm:w-12 border-r border-border/50 bg-muted/20 overflow-y-auto flex-shrink-0">
           <div className="flex flex-col py-2">
