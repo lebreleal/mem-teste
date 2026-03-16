@@ -110,7 +110,7 @@ export function useManageDeck() {
         const backJson = JSON.stringify({ clozeTarget: uniqueNums[0] || 1, extra: back });
         updateCard.mutate({ id: editingId, frontContent: front, backContent: backJson }, {
           onSuccess: () => {
-            toast({ title: 'Card atualizado!' });
+            toast({ title: 'Cartão atualizado!' });
             if (addAnother) { setFront(''); setBack(''); setEditingId(null); setMcOptions(['', '', '', '']); setMcCorrectIndex(0); }
             else { setEditorOpen(false); resetForm(); }
           },
