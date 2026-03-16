@@ -423,6 +423,23 @@ const ManageDeck = () => {
         </button>
       )}
 
+      {/* Card type info modal */}
+      <Dialog open={typeInfoOpen} onOpenChange={setTypeInfoOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display">Tipos de Cartão</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {CARD_TYPE_OPTIONS.map(opt => (
+              <div key={opt.value} className="space-y-1">
+                <p className="text-sm font-semibold text-foreground">{opt.label}</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">{opt.description}</p>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Delete confirmation */}
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent>
