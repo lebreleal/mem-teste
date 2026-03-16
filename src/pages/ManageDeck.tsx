@@ -52,13 +52,17 @@ const ManageDeck = () => {
   const currentCard = sortedCards[selectedIndex] ?? null;
   const totalCards = sortedCards.length;
 
-  // Set initial card from URL param
+  // Set initial card from URL param or newly created card id
   useEffect(() => {
-    if (initialCardId && sortedCards.length > 0) {
-      const idx = sortedCards.findIndex(c => c.id === initialCardId);
-      if (idx >= 0) setSelectedIndex(idx);
+    const targetCardId = pendingNewCardId || initialCardId;
+    if (targetCardId && sortedCards.length > 0) {
+      const idx = sortedCards.findIndex(c => c.id === targetCardId);
+      if (idx >= 0) {
+        setSelectedIndex(idx);
+        if (pendingNewCardId === targetCardId) setPendingNewCardId(null);
+      }
     }
-  }, [initialCardId, sortedCards.length]);
+  }, [initialCardId, pendingNewCardId, sortedCards]);
 
   // Load card content when selection changes
   useEffect(() => {
