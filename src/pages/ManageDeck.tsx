@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ChevronUp, ChevronDown, Trash2, Copy, Plus, Loader2, MessageSquareText, PenLine, Image as ImageIcon, Move } from 'lucide-react';
+import { ArrowLeft, ChevronUp, ChevronDown, Trash2, Copy, Plus, Loader2, PenLine, Image as ImageIcon, Info } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useCards } from '@/hooks/useCards';
 import { useToast } from '@/hooks/use-toast';
