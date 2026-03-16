@@ -128,6 +128,26 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     }
   }, [content, editor]);
 
+  // Track whether cursor is inside an existing cloze
+  useEffect(() => {
+    if (!editor) return;
+
+    const syncClozeState = () => {
+      setCursorInCloze(editor.isActive('clozeMark'));
+    };
+
+    syncClozeState();
+    editor.on('selectionUpdate', syncClozeState);
+    editor.on('transaction', syncClozeState);
+    editor.on('focus', syncClozeState);
+
+    return () => {
+      editor.off('selectionUpdate', syncClozeState);
+      editor.off('transaction', syncClozeState);
+      editor.off('focus', syncClozeState);
+    };
+  }, [editor]);
+
   // Deactivate cloze mark on Enter or Escape
   useEffect(() => {
     if (!editor) return;
