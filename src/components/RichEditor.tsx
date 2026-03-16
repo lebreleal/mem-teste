@@ -414,8 +414,9 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
         }
       }}
     >
+      <EditorContent editor={editor} className="flex-1 min-h-0 overflow-y-auto" />
       {showToolbar && (
-        <div className={`flex items-center gap-0.5 px-2 py-1 overflow-x-auto scrollbar-none ${chromeless ? 'border-b border-border/80' : 'border-b border-border'}`}>
+        <div className={`flex items-center gap-0.5 px-2 py-1 overflow-x-auto scrollbar-none ${chromeless ? 'border-t border-border/80' : 'border-t border-border'}`}>
           {toolbarItems.filter(t => t.visible).map((t) => {
             switch (t.id) {
               case 'image':
