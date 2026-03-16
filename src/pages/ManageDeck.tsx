@@ -182,14 +182,12 @@ const ManageDeck = () => {
     }
   }, []);
 
-  const handleOcclusionPaste = useCallback((url: string) => {
-    setOcclusionImageUrl(url);
+  const handleOcclusionPaste = useCallback(() => {
     setOcclusionModalOpen(true);
     setIsDirty(true);
   }, []);
 
-  const handleOcclusionAttach = useCallback((url: string) => {
-    setOcclusionImageUrl(url);
+  const handleOcclusionAttach = useCallback(() => {
     setOcclusionModalOpen(true);
     setIsDirty(true);
   }, []);
