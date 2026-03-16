@@ -412,18 +412,8 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
         </div>
       )}
 
-      {/* Empty matéria — simple "+ Adicionar Deck" */}
-      {isEmptyMateria && !readOnly && (
-        <div className="bg-muted/20 border-t border-border/30 pl-10 pr-4 py-3">
-          <button
-            onClick={(e) => { e.stopPropagation(); setShowAddDeckMenu(true); }}
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Adicionar Deck</span>
-          </button>
-        </div>
-      )}
+
+
 
       {/* Add deck modal for empty matéria */}
       <Dialog open={showAddDeckMenu} onOpenChange={setShowAddDeckMenu}>
