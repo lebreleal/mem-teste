@@ -89,7 +89,17 @@ const ManageDeck = () => {
       }
     } else {
       setFront(currentCard.front_content);
-      setBack(currentCard.back_content);
+      // Some cards may have cloze JSON in back_content even with basic type
+      try {
+        const parsed = JSON.parse(currentCard.back_content);
+        if (parsed && typeof parsed.clozeTarget === 'number') {
+          setBack(parsed.extra || '');
+        } else {
+          setBack(currentCard.back_content);
+        }
+      } catch {
+        setBack(currentCard.back_content);
+      }
     }
     setIsDirty(false);
   }, [currentCard?.id]);
