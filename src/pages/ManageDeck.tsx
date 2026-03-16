@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ChevronUp, ChevronDown, Trash2, Copy, Plus, Loader2, MessageSquareText, PenLine, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, ChevronUp, ChevronDown, Trash2, Copy, Plus, Loader2, MessageSquareText, PenLine, Image as ImageIcon, Move } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCards } from '@/hooks/useCards';
 import { useToast } from '@/hooks/use-toast';
@@ -246,93 +246,121 @@ const ManageDeck = () => {
         </aside>
 
         {/* Main editor area */}
-        <main className="flex-1 min-h-0 overflow-hidden p-4 sm:p-6">
+        <main className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-6">
           {currentCard ? (
-            <div className="mx-auto flex h-full min-h-0 max-w-2xl flex-col gap-3">
+            <div className="mx-auto flex h-full min-h-0 max-w-2xl flex-row gap-0">
+              {/* Cards column */}
+              <div className="flex-1 min-w-0 flex flex-col gap-3">
 
-              {/* Front */}
-              <div className="rounded-2xl border border-border bg-card flex-1 min-h-0 overflow-y-auto relative">
-                {!front || front === '<p></p>' ? (
-                  <div className="absolute inset-0 flex items-start justify-start p-4 pointer-events-none">
-                    <span className="text-muted-foreground/40 text-lg font-medium">[Pergunta]</span>
+                {/* Front */}
+                <div className="rounded-2xl border border-border bg-card flex-1 min-h-[120px] overflow-y-auto relative">
+                  {!front || front === '<p></p>' ? (
+                    <div className="absolute inset-0 flex items-start justify-start p-4 pointer-events-none">
+                      <span className="text-muted-foreground/40 text-lg font-medium">[Pergunta]</span>
+                    </div>
+                  ) : null}
+                  <LazyRichEditor
+                    content={front}
+                    onChange={(v) => { setFront(v); setIsDirty(true); }}
+                    placeholder=""
+                    chromeless
+                    hideToolbarUntilFocus
+                    hideCloze={cardType !== 'cloze'}
+                    onOcclusionPaste={cardType === 'image_occlusion' ? handleOcclusionPaste : undefined}
+                    onOcclusionAttach={cardType === 'image_occlusion' ? handleOcclusionAttach : undefined}
+                  />
+                </div>
+
+                {/* Image occlusion area */}
+                {cardType === 'image_occlusion' && (
+                  <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 block">Imagem de Oclusão</Label>
+                    {occlusionImageUrl ? (
+                      <div className="space-y-3">
+                        <button
+                          type="button"
+                          onClick={() => setOcclusionModalOpen(true)}
+                          className="relative inline-block rounded-lg overflow-hidden border border-border"
+                          title="Editar oclusões"
+                        >
+                          <img src={occlusionImageUrl} alt="Imagem de oclusão" className="h-20 w-20 object-cover rounded-lg" />
+                          <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center bg-primary/80 py-0.5">
+                            <ImageIcon className="h-3 w-3 text-primary-foreground" />
+                          </div>
+                        </button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => { setOcclusionImageUrl(''); setOcclusionRects([]); setOcclusionCanvasSize(null); setIsDirty(true); }}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-1" /> Remover imagem
+                        </Button>
+
+                        {occlusionModalOpen && (
+                          <Suspense fallback={<Skeleton className="h-64 w-full rounded-lg" />}>
+                            <ImageOcclusion
+                              imageUrl={occlusionImageUrl}
+                              initialRects={occlusionRects}
+                              onChange={(rects, meta) => {
+                                setOcclusionRects(rects);
+                                if (meta) setOcclusionCanvasSize({ w: meta.canvasWidth, h: meta.canvasHeight });
+                                setIsDirty(true);
+                              }}
+                            />
+                            <div className="flex justify-end">
+                              <Button size="sm" onClick={() => setOcclusionModalOpen(false)}>Concluir</Button>
+                            </div>
+                          </Suspense>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Use o ícone de oclusão na barra da Frente para anexar uma imagem.</p>
+                    )}
                   </div>
-                ) : null}
-                <LazyRichEditor
-                  content={front}
-                  onChange={(v) => { setFront(v); setIsDirty(true); }}
-                  placeholder=""
-                  chromeless
-                  hideToolbarUntilFocus
-                  hideCloze={cardType !== 'cloze'}
-                  onOcclusionPaste={cardType === 'image_occlusion' ? handleOcclusionPaste : undefined}
-                  onOcclusionAttach={cardType === 'image_occlusion' ? handleOcclusionAttach : undefined}
-                />
+                )}
+
+                {/* Cloze help */}
+                {cardType === 'cloze' && (
+                  <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <PenLine className="h-3.5 w-3.5 text-primary" />
+                      <p className="text-[11px] font-bold text-primary">Como usar Cloze</p>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Selecione o texto e clique para criar um <strong className="text-foreground">cloze</strong>. Clozes com mesmo número viram o mesmo cartão.
+                    </p>
+                  </div>
+                )}
+
+                {/* Back */}
+                <div className="rounded-2xl border border-border bg-card flex-1 min-h-[120px] overflow-y-auto relative">
+                  {!back || back === '<p></p>' ? (
+                    <div className="absolute inset-0 flex items-start justify-start p-4 pointer-events-none">
+                      <span className="text-muted-foreground/40 text-lg font-medium">[Resposta]</span>
+                    </div>
+                  ) : null}
+                  <LazyRichEditor
+                    content={back}
+                    onChange={(v) => { setBack(v); setIsDirty(true); }}
+                    placeholder=""
+                    chromeless
+                    hideToolbarUntilFocus
+                    hideCloze
+                  />
+                </div>
+
+                {/* Save button */}
+                {isDirty && (
+                  <Button onClick={saveCurrentCard} className="w-full gap-2 shrink-0" disabled={updateCard.isPending}>
+                    {updateCard.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    Salvar alterações
+                  </Button>
+                )}
               </div>
 
-              {/* Image occlusion area */}
-              {cardType === 'image_occlusion' && (
-                <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
-                  <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 block">Imagem de Oclusão</Label>
-                  {occlusionImageUrl ? (
-                    <div className="space-y-3">
-                      <button
-                        type="button"
-                        onClick={() => setOcclusionModalOpen(true)}
-                        className="relative inline-block rounded-lg overflow-hidden border border-border"
-                        title="Editar oclusões"
-                      >
-                        <img src={occlusionImageUrl} alt="Imagem de oclusão" className="h-20 w-20 object-cover rounded-lg" />
-                        <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center bg-primary/80 py-0.5">
-                          <ImageIcon className="h-3 w-3 text-primary-foreground" />
-                        </div>
-                      </button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => { setOcclusionImageUrl(''); setOcclusionRects([]); setOcclusionCanvasSize(null); setIsDirty(true); }}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Remover imagem
-                      </Button>
-
-                      {occlusionModalOpen && (
-                        <Suspense fallback={<Skeleton className="h-64 w-full rounded-lg" />}>
-                          <ImageOcclusion
-                            imageUrl={occlusionImageUrl}
-                            initialRects={occlusionRects}
-                            onChange={(rects, meta) => {
-                              setOcclusionRects(rects);
-                              if (meta) setOcclusionCanvasSize({ w: meta.canvasWidth, h: meta.canvasHeight });
-                              setIsDirty(true);
-                            }}
-                          />
-                          <div className="flex justify-end">
-                            <Button size="sm" onClick={() => setOcclusionModalOpen(false)}>Concluir</Button>
-                          </div>
-                        </Suspense>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">Use o ícone de oclusão na barra da Frente para anexar uma imagem.</p>
-                  )}
-                </div>
-              )}
-
-              {/* Cloze help */}
-              {cardType === 'cloze' && (
-                <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <PenLine className="h-3.5 w-3.5 text-primary" />
-                    <p className="text-[11px] font-bold text-primary">Como usar Cloze</p>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    Selecione o texto e clique para criar um <strong className="text-foreground">cloze</strong>. Clozes com mesmo número viram o mesmo cartão.
-                  </p>
-                </div>
-              )}
-
-              {/* Card actions between cards */}
-              <div className="flex items-center justify-center gap-2">
+              {/* Right action strip */}
+              <div className="flex flex-col items-center justify-center gap-1 pl-2 sm:pl-3 shrink-0">
                 <button
                   onClick={() => setDeleteConfirmOpen(true)}
                   className="p-2 text-muted-foreground hover:text-destructive transition-colors"
@@ -348,31 +376,6 @@ const ManageDeck = () => {
                   <Copy className="h-4 w-4" />
                 </button>
               </div>
-
-              {/* Back */}
-              <div className="rounded-2xl border border-border bg-card flex-1 min-h-0 overflow-y-auto relative">
-                {!back || back === '<p></p>' ? (
-                  <div className="absolute inset-0 flex items-start justify-start p-4 pointer-events-none">
-                    <span className="text-muted-foreground/40 text-lg font-medium">[Resposta]</span>
-                  </div>
-                ) : null}
-                <LazyRichEditor
-                  content={back}
-                  onChange={(v) => { setBack(v); setIsDirty(true); }}
-                  placeholder=""
-                  chromeless
-                  hideToolbarUntilFocus
-                  hideCloze
-                />
-              </div>
-
-              {/* Save button */}
-              {isDirty && (
-                <Button onClick={saveCurrentCard} className="w-full gap-2 shrink-0" disabled={updateCard.isPending}>
-                  {updateCard.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  Salvar alterações
-                </Button>
-              )}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-center">
@@ -383,16 +386,17 @@ const ManageDeck = () => {
             </div>
           )}
         </main>
-
       </div>
 
       {/* FAB to add new card */}
-      <button
-        onClick={handleAddCard}
-        className="fixed bottom-20 right-6 h-11 w-11 rounded-full bg-primary text-primary-foreground shadow-md hover:shadow-lg hover:scale-105 transition-all flex items-center justify-center z-20"
-      >
-        <Plus className="h-5 w-5" />
-      </button>
+      {totalCards > 0 && (
+        <button
+          onClick={handleAddCard}
+          className="fixed bottom-6 right-6 h-11 w-11 rounded-full bg-primary text-primary-foreground shadow-md hover:shadow-lg hover:scale-105 transition-all flex items-center justify-center z-20"
+        >
+          <Plus className="h-5 w-5" />
+        </button>
+      )}
 
       {/* Delete confirmation */}
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
