@@ -4,16 +4,18 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { useToast } from '@/hooks/use-toast';
+import { useSubscription } from '@/hooks/useSubscription';
 import BottomNav from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Save, Loader2, User, Lock, Wallet, Bot, Crown, BarChart3, BrainCircuit, Gauge, LogOut } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { ArrowLeft, Loader2, ExternalLink, BarChart3, BrainCircuit, Gauge, Wallet, Bot, LogOut, Lock, User, Save } from 'lucide-react';
 
 const Profile = () => {
   const { user, signOut } = useAuth();
   const { isAdmin } = useIsAdmin();
+  const { isPremium, plan } = useSubscription();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -21,6 +23,9 @@ const Profile = () => {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(true);
   const [savingName, setSavingName] = useState(false);
+
+  const [editNameOpen, setEditNameOpen] = useState(false);
+  const [editPasswordOpen, setEditPasswordOpen] = useState(false);
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -39,14 +44,13 @@ const Profile = () => {
   const handleSaveName = async () => {
     if (!user || !name.trim()) return;
     setSavingName(true);
-
     const { error } = await supabase.from('profiles').update({ name: name.trim() }).eq('id', user.id);
     setSavingName(false);
-
     if (error) {
       toast({ title: 'Erro', description: 'Não foi possível atualizar o nome.', variant: 'destructive' });
     } else {
       toast({ title: 'Nome atualizado!' });
+      setEditNameOpen(false);
     }
   };
 
@@ -59,24 +63,15 @@ const Profile = () => {
       toast({ title: 'Erro', description: 'As senhas não coincidem.', variant: 'destructive' });
       return;
     }
-
     setSavingPassword(true);
-
-    // Verify current password by re-signing in
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: email,
-      password: currentPassword,
-    });
-
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password: currentPassword });
     if (signInError) {
       setSavingPassword(false);
       toast({ title: 'Erro', description: 'Senha atual incorreta.', variant: 'destructive' });
       return;
     }
-
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     setSavingPassword(false);
-
     if (error) {
       toast({ title: 'Erro', description: 'Não foi possível alterar a senha.', variant: 'destructive' });
     } else {
@@ -84,6 +79,7 @@ const Profile = () => {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
+      setEditPasswordOpen(false);
     }
   };
 
@@ -95,190 +91,194 @@ const Profile = () => {
     );
   }
 
+  const initials = name ? name.charAt(0).toUpperCase() : (email?.charAt(0).toUpperCase() ?? 'U');
+
   return (
     <div className="min-h-screen bg-background">
+      {/* Header */}
       <header className="sticky top-0 z-10 border-b border-border/50 bg-background/80 backdrop-blur-sm">
-        <div className="container mx-auto flex items-center gap-3 px-4 py-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
+        <div className="container mx-auto flex items-center px-4 py-4">
+          <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')} className="shrink-0">
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <h1 className="font-display text-xl font-bold text-foreground">Meu Perfil</h1>
+          <h1 className="flex-1 text-center font-display text-xl font-bold text-foreground">Meu Perfil</h1>
+          <div className="w-10 shrink-0" />
         </div>
       </header>
 
-      <main className="container mx-auto max-w-2xl space-y-4 px-4 py-6 pb-24">
-        {/* Stats shortcut */}
-        <Card className="cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => navigate('/desempenho')}>
-          <CardContent className="flex items-center gap-4 p-4">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10">
-              <BarChart3 className="h-5 w-5 text-primary" />
-            </div>
-            <div className="flex-1">
-              <p className="font-display font-semibold text-foreground">Estatísticas</p>
-              <p className="text-xs text-muted-foreground">Heatmap, gráficos e desempenho</p>
-            </div>
-            <ArrowLeft className="h-4 w-4 text-muted-foreground rotate-180" />
-          </CardContent>
-        </Card>
+      <main className="container mx-auto max-w-lg px-4 py-6 pb-24">
+        {/* Avatar */}
+        <div className="flex flex-col items-center mb-8">
+          <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center text-3xl font-bold text-primary">
+            {initials}
+          </div>
+        </div>
 
-        {/* Concepts shortcut */}
-        <Card className="cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => navigate('/conceitos')}>
-          <CardContent className="flex items-center gap-4 p-4">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10">
-              <BrainCircuit className="h-5 w-5 text-primary" />
-            </div>
-            <div className="flex-1">
-              <p className="font-display font-semibold text-foreground">Biblioteca de Temas</p>
-              <p className="text-xs text-muted-foreground">Gerenciar temas, importar e estudar</p>
-            </div>
-            <ArrowLeft className="h-4 w-4 text-muted-foreground rotate-180" />
-          </CardContent>
-        </Card>
+        {/* Info Section */}
+        <SectionHeader>Info</SectionHeader>
 
-        {/* Performance shortcut */}
-        <Card className="cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => navigate('/planejamento')}>
-          <CardContent className="flex items-center gap-4 p-4">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10">
-              <Gauge className="h-5 w-5 text-primary" />
-            </div>
-            <div className="flex-1">
-              <p className="font-display font-semibold text-foreground">Planejamento</p>
-              <p className="text-xs text-muted-foreground">Retenção e o que fazer hoje</p>
-            </div>
-            <ArrowLeft className="h-4 w-4 text-muted-foreground rotate-180" />
-          </CardContent>
-        </Card>
+        <ProfileRow
+          label={name || '—'}
+          sub="Nome"
+          onClick={() => setEditNameOpen(true)}
+        />
+        <ProfileRow
+          label={email || '—'}
+          sub="Email"
+        />
+        <ProfileRow
+          label="Alterar Senha"
+          sub="Não usado se entrou com Google ou Apple."
+          onClick={() => setEditPasswordOpen(true)}
+        />
 
-        {/* Carteira shortcut */}
-        <Card className={`relative transition-colors ${isAdmin ? 'cursor-pointer hover:bg-muted/30' : 'opacity-60'}`} onClick={() => isAdmin ? navigate('/memograna') : toast({ title: 'Em desenvolvimento', description: 'Carteira estará disponível em breve!' })}>
-          <CardContent className="flex items-center gap-4 p-4">
-            {!isAdmin && (
-              <span className="absolute -top-1.5 -right-1.5 text-[8px] font-bold bg-warning text-warning-foreground px-1.5 py-0.5 rounded-full z-10">BREVE</span>
-            )}
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10">
-              <Wallet className="h-5 w-5 text-primary" />
-            </div>
-            <div className="flex-1">
-              <p className="font-display font-semibold text-foreground">Carteira</p>
-              <p className="text-xs text-muted-foreground">Carteira, tier de criador e transações</p>
-            </div>
-            <ArrowLeft className="h-4 w-4 text-muted-foreground rotate-180" />
-          </CardContent>
-        </Card>
+        {/* Subscription Section */}
+        <SectionHeader className="mt-6">Assinatura</SectionHeader>
 
+        <ProfileRow
+          label={isPremium ? `Plano ${plan ?? 'Premium'}` : 'Plano gratuito'}
+          sub={isPremium ? 'Toque para gerenciar.' : 'Toque para mais informações.'}
+          icon={<ExternalLink className="h-4.5 w-4.5 text-muted-foreground" />}
+          onClick={() => navigate('/dashboard')}
+        />
 
-        {/* Admin IA shortcut - only for admins */}
+        {/* Shortcuts Section */}
+        <SectionHeader className="mt-6">Atalhos</SectionHeader>
+
+        <ProfileRow
+          label="Estatísticas"
+          sub="Heatmap, gráficos e desempenho"
+          icon={<BarChart3 className="h-4.5 w-4.5 text-muted-foreground" />}
+          onClick={() => navigate('/desempenho')}
+        />
+        <ProfileRow
+          label="Biblioteca de Temas"
+          sub="Gerenciar temas, importar e estudar"
+          icon={<BrainCircuit className="h-4.5 w-4.5 text-muted-foreground" />}
+          onClick={() => navigate('/conceitos')}
+        />
+        <ProfileRow
+          label="Planejamento"
+          sub="Retenção e o que fazer hoje"
+          icon={<Gauge className="h-4.5 w-4.5 text-muted-foreground" />}
+          onClick={() => navigate('/planejamento')}
+        />
+        <ProfileRow
+          label="Carteira"
+          sub="Carteira, tier de criador e transações"
+          icon={<Wallet className="h-4.5 w-4.5 text-muted-foreground" />}
+          onClick={() => isAdmin ? navigate('/memograna') : toast({ title: 'Em desenvolvimento', description: 'Carteira estará disponível em breve!' })}
+          badge={!isAdmin ? 'BREVE' : undefined}
+        />
         {isAdmin && (
-          <Card className="cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => navigate('/admin/ia')}>
-            <CardContent className="flex items-center gap-4 p-4">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10">
-                <Bot className="h-5 w-5 text-primary" />
-              </div>
-              <div className="flex-1">
-                <p className="font-display font-semibold text-foreground">Admin IA</p>
-                <p className="text-xs text-muted-foreground">Editar prompts, modelos e temperatura</p>
-              </div>
-              <ArrowLeft className="h-4 w-4 text-muted-foreground rotate-180" />
-            </CardContent>
-          </Card>
+          <ProfileRow
+            label="Admin IA"
+            sub="Editar prompts, modelos e temperatura"
+            icon={<Bot className="h-4.5 w-4.5 text-muted-foreground" />}
+            onClick={() => navigate('/admin/ia')}
+          />
         )}
 
-        {/* Profile info */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <User className="h-5 w-5 text-muted-foreground" />
-              <CardTitle className="font-display">Informações Pessoais</CardTitle>
+        {/* Sign out */}
+        <div className="mt-8">
+          <button
+            onClick={() => signOut()}
+            className="w-full flex items-center gap-3 py-3.5 px-1 text-left"
+          >
+            <LogOut className="h-5 w-5 text-destructive" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-destructive">Sair da conta</p>
+              <p className="text-xs text-muted-foreground">{email}</p>
             </div>
-            <CardDescription>Atualize seu nome e veja seu email.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="profile-email">Email</Label>
-              <Input id="profile-email" value={email} disabled className="bg-muted" />
-              <p className="text-xs text-muted-foreground">O email não pode ser alterado.</p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="profile-name">Nome</Label>
-              <Input
-                id="profile-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                maxLength={100}
-                placeholder="Seu nome"
-              />
-            </div>
-            <Button onClick={handleSaveName} disabled={savingName || !name.trim()} className="gap-2">
-              {savingName ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Salvar Nome
-            </Button>
-          </CardContent>
-        </Card>
+          </button>
+        </div>
+      </main>
 
-        {/* Password */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Lock className="h-5 w-5 text-muted-foreground" />
-              <CardTitle className="font-display">Alterar Senha</CardTitle>
-            </div>
-            <CardDescription>Use uma senha forte com pelo menos 6 caracteres.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+      {/* Edit Name Dialog */}
+      <Dialog open={editNameOpen} onOpenChange={setEditNameOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Editar Nome</DialogTitle>
+            <DialogDescription>Atualize seu nome de exibição.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
             <div className="space-y-2">
-              <Label htmlFor="current-password">Senha Atual</Label>
-              <Input
-                id="current-password"
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-              />
+              <Label htmlFor="edit-name">Nome</Label>
+              <Input id="edit-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} placeholder="Seu nome" />
+            </div>
+            <Button onClick={handleSaveName} disabled={savingName || !name.trim()} className="w-full gap-2">
+              {savingName ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Salvar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Password Dialog */}
+      <Dialog open={editPasswordOpen} onOpenChange={setEditPasswordOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Alterar Senha</DialogTitle>
+            <DialogDescription>Use uma senha forte com pelo menos 6 caracteres.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label htmlFor="cur-pw">Senha Atual</Label>
+              <Input id="cur-pw" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="new-password">Nova Senha</Label>
-              <Input
-                id="new-password"
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-              />
+              <Label htmlFor="new-pw">Nova Senha</Label>
+              <Input id="new-pw" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="confirm-password">Confirmar Nova Senha</Label>
-              <Input
-                id="confirm-password"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-              />
+              <Label htmlFor="conf-pw">Confirmar Nova Senha</Label>
+              <Input id="conf-pw" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
             </div>
-            <Button
-              onClick={handleChangePassword}
-              disabled={savingPassword || !currentPassword || !newPassword || !confirmPassword}
-              className="gap-2"
-            >
+            <Button onClick={handleChangePassword} disabled={savingPassword || !currentPassword || !newPassword || !confirmPassword} className="w-full gap-2">
               {savingPassword ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
               Alterar Senha
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </DialogContent>
+      </Dialog>
 
-        {/* Sign out */}
-        <Card className="cursor-pointer hover:bg-destructive/5 transition-colors border-destructive/20" onClick={() => { signOut(); }}>
-          <CardContent className="flex items-center gap-4 p-4">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-destructive/10">
-              <LogOut className="h-5 w-5 text-destructive" />
-            </div>
-            <div className="flex-1">
-              <p className="font-display font-semibold text-destructive">Sair da conta</p>
-              <p className="text-xs text-muted-foreground">{email}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </main>
       <BottomNav />
     </div>
   );
 };
+
+/* ── Tiny sub-components ── */
+
+const SectionHeader = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
+  <h2 className={`text-sm font-semibold text-muted-foreground mb-1 ${className}`}>{children}</h2>
+);
+
+interface ProfileRowProps {
+  label: string;
+  sub?: string;
+  icon?: React.ReactNode;
+  onClick?: () => void;
+  badge?: string;
+}
+
+const ProfileRow = ({ label, sub, icon, onClick, badge }: ProfileRowProps) => (
+  <button
+    type="button"
+    onClick={onClick}
+    disabled={!onClick}
+    className="relative w-full flex items-center gap-3 py-3.5 px-1 border-b border-border/40 text-left transition-colors hover:bg-muted/30 disabled:opacity-100 disabled:cursor-default"
+  >
+    {badge && (
+      <span className="absolute -top-1 right-0 text-[8px] font-bold bg-warning text-warning-foreground px-1.5 py-0.5 rounded-full">
+        {badge}
+      </span>
+    )}
+    <div className="flex-1 min-w-0">
+      <p className="text-sm font-medium text-foreground truncate">{label}</p>
+      {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
+    </div>
+    {icon ?? (onClick ? <ExternalLink className="h-4 w-4 text-muted-foreground shrink-0" /> : null)}
+  </button>
+);
 
 export default Profile;
