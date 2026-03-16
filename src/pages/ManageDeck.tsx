@@ -233,7 +233,7 @@ const ManageDeck = () => {
               <button
                 key={card.id}
                 onClick={() => selectCard(idx)}
-                className={`flex items-center justify-center h-8 w-8 sm:h-9 sm:w-9 mx-auto rounded-md text-xs font-medium transition-all border ${
+                className={`flex items-center justify-center h-8 w-8 sm:h-9 sm:w-9 mx-auto rounded-sm text-xs font-medium transition-all border ${
                   idx === selectedIndex
                     ? 'border-foreground text-foreground'
                     : 'border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground'
