@@ -62,8 +62,8 @@ const ManageDeck = () => {
   // Load card content when selection changes
   useEffect(() => {
     if (!currentCard) return;
-    const ct = (currentCard.card_type ?? 'basic') as CardType;
-    setCardType(ct);
+    let ct = (currentCard.card_type ?? 'basic') as CardType;
+    let needsAutoSave = false;
 
     if (ct === 'image_occlusion') {
       try {
@@ -74,17 +74,17 @@ const ManageDeck = () => {
         setFront(data.frontText || '');
       } catch { setFront(''); setOcclusionImageUrl(''); setOcclusionRects([]); }
       setBack(currentCard.back_content);
-    } else if (ct === 'cloze') {
-      // back_content may be JSON {"clozeTarget":N,"extra":"..."}
+    } else {
+      // Unified handling for basic & cloze: detect cloze markup regardless of card_type
       let clozeExtra = '';
-      let backRaw = currentCard.back_content;
+      let backRaw = currentCard.back_content || '';
       try {
         const parsed = JSON.parse(backRaw);
         if (parsed && typeof parsed.clozeTarget === 'number') {
           clozeExtra = parsed.extra || '';
-          backRaw = clozeExtra; // use extracted extra
+          backRaw = clozeExtra;
         }
-      } catch { /* not JSON, treat as plain */ }
+      } catch { /* not JSON */ }
 
       const frontVal = currentCard.front_content || '';
       const frontPlain = frontVal.replace(/<[^>]*>/g, '');
@@ -92,30 +92,28 @@ const ManageDeck = () => {
       const frontHasCloze = /\{\{c\d+::/.test(frontPlain);
       const backHasCloze = /\{\{c\d+::/.test(backPlain);
 
+      // Auto-reclassify as cloze if markup found
+      if ((frontHasCloze || backHasCloze) && ct !== 'cloze') {
+        ct = 'cloze';
+        needsAutoSave = true;
+      }
+
       if (backHasCloze && !frontHasCloze) {
         // Cloze markup is in the back — move it to front
         setFront(backRaw);
         setBack(frontVal && frontVal !== '<p></p>' ? frontVal : '');
-        setIsDirty(true); // auto-save the fix
-      } else {
+        needsAutoSave = true;
+      } else if (ct === 'cloze') {
         setFront(frontVal);
         setBack(clozeExtra || (backRaw !== currentCard.back_content ? '' : backRaw));
-      }
-    } else {
-      setFront(currentCard.front_content);
-      // Some cards may have cloze JSON in back_content even with basic type
-      try {
-        const parsed = JSON.parse(currentCard.back_content);
-        if (parsed && typeof parsed.clozeTarget === 'number') {
-          setBack(parsed.extra || '');
-        } else {
-          setBack(currentCard.back_content);
-        }
-      } catch {
-        setBack(currentCard.back_content);
+      } else {
+        setFront(frontVal);
+        setBack(backRaw);
       }
     }
-    setIsDirty(false);
+
+    setCardType(ct);
+    setIsDirty(needsAutoSave);
   }, [currentCard?.id]);
 
   const buildSavePayload = useCallback(() => {
