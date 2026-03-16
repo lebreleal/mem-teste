@@ -1149,10 +1149,10 @@ const Dashboard = () => {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>
-              {addMenuInfoType === 'materia' && 'O que é uma Matéria?'}
-              {addMenuInfoType === 'deck' && 'O que é um Deck?'}
-              {addMenuInfoType === 'deck-manual' && 'Criar deck manualmente'}
-              {addMenuInfoType === 'deck-ia' && 'Criar deck com IA'}
+               {addMenuInfoType === 'materia' && 'O que é uma Matéria?'}
+               {addMenuInfoType === 'deck' && 'O que é um Baralho?'}
+               {addMenuInfoType === 'deck-manual' && 'Criar baralho manualmente'}
+               {addMenuInfoType === 'deck-ia' && 'Criar baralho com IA'}
             </DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground leading-relaxed pt-2 space-y-2">
               {addMenuInfoType === 'materia' && (
