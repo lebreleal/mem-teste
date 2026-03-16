@@ -255,8 +255,7 @@ const ManageDeck = () => {
               <div className="flex-1 min-w-0 flex flex-col gap-3">
 
                 {/* Card type selector */}
-                <div className="flex items-center gap-3">
-                  <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground shrink-0">Tipo</Label>
+                <div className="flex items-center gap-2">
                   <Select value={cardType} onValueChange={(v) => handleTypeChange(v as CardType)}>
                     <SelectTrigger className="w-[200px] h-8 text-xs">
                       <SelectValue />
@@ -264,13 +263,18 @@ const ManageDeck = () => {
                     <SelectContent>
                       {CARD_TYPE_OPTIONS.map(opt => (
                         <SelectItem key={opt.value} value={opt.value}>
-                          <span className="flex items-center gap-2">
-                            {opt.icon} {opt.label}
-                          </span>
+                          {opt.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  <button
+                    onClick={() => setTypeInfoOpen(true)}
+                    className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+                    title="Sobre os tipos de cartão"
+                  >
+                    <Info className="h-3.5 w-3.5" />
+                  </button>
                 </div>
 
                 {/* Front */}
