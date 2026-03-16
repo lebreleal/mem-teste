@@ -254,6 +254,16 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
               <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-destructive animate-pulse" title="Atualização disponível" />
             )}
           </div>
+          {/* Empty matéria: "+ Adicionar Deck" right below title */}
+          {isEmptyMateria && !readOnly && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowAddDeckMenu(true); }}
+              className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>Adicionar Deck</span>
+            </button>
+          )}
           {!isEmptyMateria && (
             <div className="flex items-center gap-2 mt-1">
               <p className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
@@ -280,7 +290,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
               </p>
             </div>
           )}
-          {!isErrorDeck && !readOnly && (
+          {!isErrorDeck && !readOnly && !isEmptyMateria && (
             <ClassificationBar
               facilPct={classPcts.facilPct}
               bomPct={classPcts.bomPct}
@@ -402,18 +412,8 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
         </div>
       )}
 
-      {/* Empty matéria — simple "+ Adicionar Deck" */}
-      {isEmptyMateria && !readOnly && (
-        <div className="bg-muted/20 border-t border-border/30 pl-10 pr-4 py-3">
-          <button
-            onClick={(e) => { e.stopPropagation(); setShowAddDeckMenu(true); }}
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Adicionar Deck</span>
-          </button>
-        </div>
-      )}
+
+
 
       {/* Add deck modal for empty matéria */}
       <Dialog open={showAddDeckMenu} onOpenChange={setShowAddDeckMenu}>

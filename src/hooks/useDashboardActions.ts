@@ -76,15 +76,8 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
           onSuccess: (newDeck: any) => {
             state.setCreateType(null); state.setCreateName('');
             if (isMateria && newDeck?.id) {
-              // Auto-expand the new matéria and open sub-deck creation
               toast({ title: 'Matéria criada!' });
               state.toggleExpand(newDeck.id);
-              // Immediately prompt to create a deck inside the matéria
-              setTimeout(() => {
-                state.setCreateType('deck');
-                state.setCreateName('');
-                state.setCreateParentDeckId(newDeck.id);
-              }, 300);
             } else {
               toast({ title: 'Baralho criado!' });
               if (state.createParentDeckId) state.toggleExpand(state.createParentDeckId);
