@@ -388,18 +388,6 @@ const ManageDeck = () => {
                   </div>
                 )}
 
-                {/* Cloze help */}
-                {cardType === 'cloze' && (
-                  <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <PenLine className="h-3.5 w-3.5 text-primary" />
-                      <p className="text-[11px] font-bold text-primary">Como usar Cloze</p>
-                    </div>
-                    <p className="text-[11px] text-muted-foreground leading-relaxed">
-                      Selecione o texto e clique para criar um <strong className="text-foreground">cloze</strong>. Clozes com mesmo número viram o mesmo cartão.
-                    </p>
-                  </div>
-                )}
 
                 {/* Back */}
                 <div className="rounded-2xl border border-border bg-card flex-1 min-h-[120px] overflow-y-auto relative">

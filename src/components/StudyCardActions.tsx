@@ -632,20 +632,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
                 )}
                 <p className="text-[10px] text-muted-foreground">Clique na linha para marcar a resposta correta</p>
               </div>
-            ) : editorType === 'cloze' ? (
-              <div className="rounded-xl border border-warning/40 bg-warning/5 p-3 space-y-1.5">
-                <p className="text-xs font-bold text-warning flex items-center gap-1.5">
-                  <Pencil className="h-3 w-3" /> Como usar Cloze
-                </p>
-                <p className="text-[11px] text-muted-foreground">
-                  Selecione o texto e clique para criar um <strong>cloze</strong>.
-                  Clozes com mesmo número viram o <strong>mesmo card</strong>.
-                </p>
-                <p className="text-[11px] text-muted-foreground">
-                  Cria um cloze com <strong>número novo</strong>, gerando um <strong>card separado</strong>.
-                </p>
-              </div>
-            ) : editorType === 'image_occlusion' ? (
+            ) : editorType === 'cloze' ? null : editorType === 'image_occlusion' ? (
               <div className="space-y-2">
                 <Label className="mb-1.5 block">Imagem de oclusão</Label>
                 {occlusionImageUrl ? (
