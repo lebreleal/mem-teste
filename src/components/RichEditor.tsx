@@ -91,6 +91,8 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   const [isFocused, setIsFocused] = useState(false);
   const [toolbarItems, setToolbarItems] = useState<ToolbarItem[]>(loadToolbarConfig);
   const [configOpen, setConfigOpen] = useState(false);
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('');
 
   const isToolVisible = (id: string) => toolbarItems.find(t => t.id === id)?.visible !== false;
 
