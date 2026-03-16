@@ -120,7 +120,7 @@ export function useManageDeck() {
           const backJson = JSON.stringify({ clozeTarget: uniqueNums[0] || 1, extra: back });
           createCard.mutate({ frontContent: front, backContent: backJson, cardType: 'cloze' }, {
             onSuccess: () => {
-              toast({ title: 'Card criado!' });
+              toast({ title: 'Cartão criado!' });
               if (addAnother) { setFront(''); setBack(''); setEditingId(null); setMcOptions(['', '', '', '']); setMcCorrectIndex(0); }
               else { setEditorOpen(false); resetForm(); }
             },
