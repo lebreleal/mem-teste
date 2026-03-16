@@ -583,7 +583,19 @@ const CardListContent = ({
                     </div>
                   ) : !isOcclusion && !isCloze && card.back_content ? (
                     <p className="text-xs text-muted-foreground mt-1.5 leading-snug line-clamp-2">
-                      {stripHtml(card.back_content)}
+                      {(() => {
+                        const raw = card.back_content;
+                        try {
+                          const parsed = JSON.parse(raw);
+                          if (parsed && typeof parsed.clozeTarget === 'number') {
+                            return stripHtml(parsed.extra || '');
+                          }
+                          if (parsed && parsed.options) {
+                            return (parsed.options as string[]).join(' · ');
+                          }
+                        } catch { /* not JSON */ }
+                        return stripHtml(raw);
+                      })()}
                     </p>
                   ) : null}
 
