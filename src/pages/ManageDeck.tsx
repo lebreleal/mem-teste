@@ -200,7 +200,7 @@ const ManageDeck = () => {
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-10 border-b border-border/50 bg-background/80 backdrop-blur-sm">
+      <header className="sticky top-0 z-10 shrink-0 border-b border-border/50 bg-background/80 backdrop-blur-sm">
         <div className="flex items-center justify-between px-4 py-3">
           <button onClick={handleBack} className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="h-4 w-4" />
