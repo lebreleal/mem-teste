@@ -1382,7 +1382,7 @@ const Dashboard = () => {
         <SheetContent side="bottom" className="rounded-t-2xl px-4 pb-8 pt-4">
           <SheetHeader className="mb-4">
             <SheetTitle className="text-base font-bold">
-              {addMenuStep === 'main' ? 'Adicionar' : 'Criar deck'}
+              {addMenuStep === 'main' ? 'Adicionar' : 'Criar baralho'}
             </SheetTitle>
           </SheetHeader>
 
