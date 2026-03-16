@@ -133,7 +133,7 @@ export function useManageDeck() {
           }));
           createCard.mutate({ cards }, {
             onSuccess: () => {
-              toast({ title: `${uniqueNums.length} cards criados!` });
+              toast({ title: `${uniqueNums.length} cartões criados!` });
               if (addAnother) { setFront(''); setBack(''); setEditingId(null); setMcOptions(['', '', '', '']); setMcCorrectIndex(0); }
               else { setEditorOpen(false); resetForm(); }
             },
