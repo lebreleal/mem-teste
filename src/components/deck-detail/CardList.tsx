@@ -4,6 +4,7 @@
  */
 
 import { useDeckDetail } from './DeckDetailContext';
+import { useNavigate } from 'react-router-dom';
 import CardPreviewSheet from './CardPreviewSheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
