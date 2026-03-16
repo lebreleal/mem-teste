@@ -108,42 +108,8 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
   const openNew = useCallback(() => { resetForm(); setEditorOpen(true); }, [resetForm, setEditorOpen]);
 
   const openEdit = useCallback((card: CardRow) => {
-    setEditingId(card.id);
-    setCardType(card.card_type ?? 'basic');
-    if (card.card_type === 'image_occlusion') {
-      try {
-        const data = JSON.parse(card.front_content);
-        setOcclusionImageUrl(data.imageUrl || '');
-        setOcclusionRects(data.allRects || data.rects || []);
-        setOcclusionCanvasSize(data.canvasWidth ? { w: data.canvasWidth, h: data.canvasHeight } : null);
-        setFront(data.frontText || '');
-        setBack(card.back_content);
-      } catch { setFront(''); setBack(card.back_content); }
-    } else if (card.card_type === 'multiple_choice') {
-      setFront(card.front_content);
-      try {
-        const data = JSON.parse(card.back_content);
-        setMcOptions(data.options || ['', '', '', '']);
-        setMcCorrectIndex(data.correctIndex ?? 0);
-      } catch { setBack(card.back_content); }
-    } else if (card.card_type === 'cloze') {
-      setFront(card.front_content);
-      try {
-        const parsed = JSON.parse(card.back_content);
-        if (typeof parsed.clozeTarget === 'number') {
-          setBack(parsed.extra || '');
-        } else {
-          setBack(card.back_content);
-        }
-      } catch {
-        setBack(card.back_content);
-      }
-    } else {
-      setFront(card.front_content);
-      setBack(card.back_content);
-    }
-    setEditorOpen(true);
-  }, [setEditingId, setCardType, setOcclusionImageUrl, setOcclusionRects, setOcclusionCanvasSize, setFront, setBack, setMcOptions, setMcCorrectIndex, setEditorOpen]);
+    navigate(`/decks/${deckId}/manage?cardId=${card.id}`);
+  }, [navigate, deckId]);
 
   const handleSave = useCallback(async (addAnother: boolean) => {
     if (!front.trim() && !occlusionImageUrl) {
