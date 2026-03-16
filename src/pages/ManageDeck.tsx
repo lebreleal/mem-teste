@@ -351,23 +351,7 @@ const ManageDeck = () => {
                 )}
               </div>
 
-              {/* Right action strip */}
-              <div className="flex flex-col items-center justify-center gap-1 pl-2 sm:pl-3 shrink-0">
-                <button
-                  onClick={() => setDeleteConfirmOpen(true)}
-                  className="p-2 text-muted-foreground hover:text-destructive transition-colors"
-                  title="Excluir"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={handleDuplicate}
-                  className="p-2 text-muted-foreground hover:text-foreground transition-colors"
-                  title="Duplicar"
-                >
-                  <Copy className="h-4 w-4" />
-                </button>
-              </div>
+              
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-center">
