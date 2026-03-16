@@ -32,6 +32,7 @@ const ManageDeck = () => {
   const queryClient = useQueryClient();
 
   const initialCardId = searchParams.get('cardId');
+  const hasAppliedInitialCardRef = useRef(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [pendingNewCardId, setPendingNewCardId] = useState<string | null>(null);
   const [front, setFront] = useState('');
