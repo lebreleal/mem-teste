@@ -432,7 +432,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                 onClick={() => { setShowAddDeckMenu(false); onCreateSubDeckAI(deck.id); }}
                 className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
               >
-                <span className="text-sm font-medium text-foreground">Criar deck com IA</span>
+                <span className="text-sm font-medium text-foreground">Criar baralho com IA</span>
                 <button
                   onClick={(e) => { e.stopPropagation(); setAddDeckInfoType('ia'); }}
                   className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
