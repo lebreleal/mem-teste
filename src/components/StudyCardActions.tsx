@@ -308,7 +308,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
         }
 
         queryClient.invalidateQueries({ queryKey: ['cards'] });
-        toast({ title: 'Card atualizado!' });
+         toast({ title: 'Cartão atualizado!' });
         setEditOpen(false);
       } catch {
         toast({ title: 'Erro ao salvar cloze', variant: 'destructive' });
