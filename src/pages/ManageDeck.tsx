@@ -1,27 +1,16 @@
 import { useState, useEffect, useCallback, lazy, Suspense, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ChevronUp, ChevronDown, Trash2, Copy, Plus, Loader2, PenLine, Image as ImageIcon, Info } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ArrowLeft, ChevronUp, ChevronDown, Trash2, Copy, Plus, Loader2, Image as ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCards } from '@/hooks/useCards';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client'; // kept for future use
 import LazyRichEditor from '@/components/LazyRichEditor';
 import { Label } from '@/components/ui/label';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useQueryClient } from '@tanstack/react-query';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const ImageOcclusion = lazy(() => import('@/components/ImageOcclusion'));
-
-type CardType = 'basic' | 'cloze' | 'image_occlusion';
-
-const CARD_TYPE_OPTIONS: { value: CardType; label: string; description: string }[] = [
-  { value: 'basic', label: 'Frente e Verso', description: 'Cartão clássico com uma pergunta na frente e a resposta no verso. Ideal para memorizar fatos, definições e conceitos diretos.' },
-  { value: 'cloze', label: 'Oclusão de Texto', description: 'Texto com lacunas ocultas que você precisa preencher. Use {{c1::palavra}} para criar lacunas. Clozes com o mesmo número geram o mesmo cartão.' },
-  { value: 'image_occlusion', label: 'Oclusão de Imagem', description: 'Oculte partes de uma imagem com retângulos. Cada região ocultada vira um cartão independente. Ideal para anatomia, diagramas e mapas.' },
-];
 
 const ManageDeck = () => {
   const { deckId } = useParams<{ deckId: string }>();
@@ -37,11 +26,8 @@ const ManageDeck = () => {
   const [pendingNewCardId, setPendingNewCardId] = useState<string | null>(null);
   const [front, setFront] = useState('');
   const [back, setBack] = useState('');
-  const [cardType, setCardType] = useState<CardType>('basic');
   const [isDirty, setIsDirty] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [typeInfoOpen, setTypeInfoOpen] = useState(false);
-  
 
   // Image occlusion state
   const [occlusionImageUrl, setOcclusionImageUrl] = useState('');
@@ -74,7 +60,7 @@ const ManageDeck = () => {
   // Load card content when selection changes
   useEffect(() => {
     if (!currentCard) return;
-    let ct = (currentCard.card_type ?? 'basic') as CardType;
+    const ct = (currentCard.card_type ?? 'basic') as string;
     let needsAutoSave = false;
 
     if (ct === 'image_occlusion') {
@@ -85,9 +71,17 @@ const ManageDeck = () => {
         setOcclusionCanvasSize(data.canvasWidth ? { w: data.canvasWidth, h: data.canvasHeight } : null);
         setFront(data.frontText || '');
       } catch { setFront(''); setOcclusionImageUrl(''); setOcclusionRects([]); }
-      setBack(currentCard.back_content);
+      // Parse back for cloze extra
+      let backRaw = currentCard.back_content || '';
+      try {
+        const parsed = JSON.parse(backRaw);
+        if (parsed && typeof parsed.clozeTarget === 'number') {
+          backRaw = parsed.extra || '';
+        }
+      } catch {}
+      setBack(backRaw);
     } else {
-      // Unified handling for basic & cloze: detect cloze markup regardless of card_type
+      // Unified handling for basic & cloze
       let clozeExtra = '';
       let backRaw = currentCard.back_content || '';
       try {
@@ -96,43 +90,52 @@ const ManageDeck = () => {
           clozeExtra = parsed.extra || '';
           backRaw = clozeExtra;
         }
-      } catch { /* not JSON */ }
+      } catch {}
 
       const frontVal = currentCard.front_content || '';
-      const frontPlain = frontVal.replace(/<[^>]*>/g, '');
       const backPlain = backRaw.replace(/<[^>]*>/g, '');
+      const frontPlain = frontVal.replace(/<[^>]*>/g, '');
       const frontHasCloze = /\{\{c\d+::/.test(frontPlain);
       const backHasCloze = /\{\{c\d+::/.test(backPlain);
-
-      // Auto-reclassify as cloze if markup found
-      if ((frontHasCloze || backHasCloze) && ct !== 'cloze') {
-        ct = 'cloze';
-        needsAutoSave = true;
-      }
 
       if (backHasCloze && !frontHasCloze) {
         // Cloze markup is in the back — move it to front
         setFront(backRaw);
         setBack(frontVal && frontVal !== '<p></p>' ? frontVal : '');
         needsAutoSave = true;
-      } else if (ct === 'cloze') {
+      } else if (frontHasCloze) {
         setFront(frontVal);
         setBack(clozeExtra || (backRaw !== currentCard.back_content ? '' : backRaw));
       } else {
         setFront(frontVal);
         setBack(backRaw);
       }
+
+      // Clear occlusion state for non-image cards
+      setOcclusionImageUrl('');
+      setOcclusionRects([]);
+      setOcclusionCanvasSize(null);
     }
 
-    setCardType(ct);
     setIsDirty(needsAutoSave);
   }, [currentCard?.id]);
 
+  // Auto-detect card type from content
+  const detectCardType = useCallback((): string => {
+    const hasImage = !!occlusionImageUrl;
+    const plainFront = front.replace(/<[^>]*>/g, '');
+    const hasCloze = /\{\{c\d+::/.test(plainFront);
+    if (hasImage) return 'image_occlusion';
+    if (hasCloze) return 'cloze';
+    return 'basic';
+  }, [front, occlusionImageUrl]);
+
   const buildSavePayload = useCallback(() => {
+    const detectedType = detectCardType();
     let frontContent = front;
     let backContent = back;
 
-    if (cardType === 'image_occlusion') {
+    if (detectedType === 'image_occlusion') {
       frontContent = JSON.stringify({
         imageUrl: occlusionImageUrl,
         frontText: front,
@@ -141,15 +144,19 @@ const ManageDeck = () => {
         canvasWidth: occlusionCanvasSize?.w ?? 0,
         canvasHeight: occlusionCanvasSize?.h ?? 0,
       });
-    } else if (cardType === 'cloze') {
+    }
+    
+    if (detectedType === 'cloze' || detectedType === 'image_occlusion') {
       const plainForNumbers = front.replace(/<[^>]*>/g, '');
       const clozeNumMatches = [...plainForNumbers.matchAll(/\{\{c(\d+)::/g)];
       const uniqueNums = [...new Set(clozeNumMatches.map(m => parseInt(m[1])))].sort((a, b) => a - b);
-      backContent = JSON.stringify({ clozeTarget: uniqueNums[0] || 1, extra: back });
+      if (uniqueNums.length > 0) {
+        backContent = JSON.stringify({ clozeTarget: uniqueNums[0] || 1, extra: back });
+      }
     }
 
-    return { frontContent, backContent };
-  }, [front, back, cardType, occlusionImageUrl, occlusionRects, occlusionCanvasSize]);
+    return { frontContent, backContent, cardType: detectedType };
+  }, [front, back, occlusionImageUrl, occlusionRects, occlusionCanvasSize, detectCardType]);
 
   const saveCurrentCard = useCallback(async () => {
     if (!currentCard || !isDirty) return;
@@ -211,28 +218,10 @@ const ManageDeck = () => {
     );
   }, [currentCard, createCard, totalCards, toast]);
 
-  const handleTypeChange = useCallback((newType: CardType) => {
-    setCardType(newType);
-    setIsDirty(true);
-    // Reset occlusion state when switching away
-    if (newType !== 'image_occlusion') {
-      setOcclusionImageUrl('');
-      setOcclusionRects([]);
-      setOcclusionCanvasSize(null);
-    }
-  }, []);
-
-  const handleOcclusionPaste = useCallback(() => {
+  const handleOcclusionAction = useCallback(() => {
     setOcclusionModalOpen(true);
     setIsDirty(true);
   }, []);
-
-  const handleOcclusionAttach = useCallback(() => {
-    setOcclusionModalOpen(true);
-    setIsDirty(true);
-  }, []);
-
-
 
   if (isLoading) {
     return (
@@ -297,29 +286,6 @@ const ManageDeck = () => {
               {/* Cards column */}
               <div className="flex-1 min-w-0 flex flex-col gap-3">
 
-                {/* Card type selector */}
-                <div className="flex items-center gap-2">
-                  <Select value={cardType} onValueChange={(v) => handleTypeChange(v as CardType)}>
-                    <SelectTrigger className="w-[200px] h-8 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CARD_TYPE_OPTIONS.map(opt => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <button
-                    onClick={() => setTypeInfoOpen(true)}
-                    className="p-1 text-muted-foreground hover:text-foreground transition-colors"
-                    title="Sobre os tipos de cartão"
-                  >
-                    <Info className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-
                 {/* Front */}
                 <div className="rounded-2xl border border-border bg-card flex-1 min-h-[120px] overflow-y-auto relative">
                   {!front || front === '<p></p>' ? (
@@ -333,61 +299,56 @@ const ManageDeck = () => {
                     placeholder=""
                     chromeless
                     hideToolbarUntilFocus
-                    hideCloze={cardType !== 'cloze'}
-                    onOcclusionPaste={cardType === 'image_occlusion' ? handleOcclusionPaste : undefined}
-                    onOcclusionAttach={cardType === 'image_occlusion' ? handleOcclusionAttach : undefined}
+                    hideCloze={false}
+                    onOcclusionPaste={handleOcclusionAction}
+                    onOcclusionAttach={handleOcclusionAction}
                   />
                 </div>
 
-                {/* Image occlusion area */}
-                {cardType === 'image_occlusion' && (
+                {/* Image occlusion area - shown when there's an image */}
+                {occlusionImageUrl && (
                   <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
                     <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 block">Imagem de Oclusão</Label>
-                    {occlusionImageUrl ? (
-                      <div className="space-y-3">
-                        <button
-                          type="button"
-                          onClick={() => setOcclusionModalOpen(true)}
-                          className="relative inline-block rounded-lg overflow-hidden border border-border"
-                          title="Editar oclusões"
-                        >
-                          <img src={occlusionImageUrl} alt="Imagem de oclusão" className="h-20 w-20 object-cover rounded-lg" />
-                          <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center bg-primary/80 py-0.5">
-                            <ImageIcon className="h-3 w-3 text-primary-foreground" />
-                          </div>
-                        </button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => { setOcclusionImageUrl(''); setOcclusionRects([]); setOcclusionCanvasSize(null); setIsDirty(true); }}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-3.5 w-3.5 mr-1" /> Remover imagem
-                        </Button>
+                    <div className="space-y-3">
+                      <button
+                        type="button"
+                        onClick={() => setOcclusionModalOpen(true)}
+                        className="relative inline-block rounded-lg overflow-hidden border border-border"
+                        title="Editar oclusões"
+                      >
+                        <img src={occlusionImageUrl} alt="Imagem de oclusão" className="h-20 w-20 object-cover rounded-lg" />
+                        <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center bg-primary/80 py-0.5">
+                          <ImageIcon className="h-3 w-3 text-primary-foreground" />
+                        </div>
+                      </button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => { setOcclusionImageUrl(''); setOcclusionRects([]); setOcclusionCanvasSize(null); setIsDirty(true); }}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Remover imagem
+                      </Button>
 
-                        {occlusionModalOpen && (
-                          <Suspense fallback={<Skeleton className="h-64 w-full rounded-lg" />}>
-                            <ImageOcclusion
-                              imageUrl={occlusionImageUrl}
-                              initialRects={occlusionRects}
-                              onChange={(rects, meta) => {
-                                setOcclusionRects(rects);
-                                if (meta) setOcclusionCanvasSize({ w: meta.canvasWidth, h: meta.canvasHeight });
-                                setIsDirty(true);
-                              }}
-                            />
-                            <div className="flex justify-end">
-                              <Button size="sm" onClick={() => setOcclusionModalOpen(false)}>Concluir</Button>
-                            </div>
-                          </Suspense>
-                        )}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">Use o ícone de oclusão na barra da Frente para anexar uma imagem.</p>
-                    )}
+                      {occlusionModalOpen && (
+                        <Suspense fallback={<Skeleton className="h-64 w-full rounded-lg" />}>
+                          <ImageOcclusion
+                            imageUrl={occlusionImageUrl}
+                            initialRects={occlusionRects}
+                            onChange={(rects, meta) => {
+                              setOcclusionRects(rects);
+                              if (meta) setOcclusionCanvasSize({ w: meta.canvasWidth, h: meta.canvasHeight });
+                              setIsDirty(true);
+                            }}
+                          />
+                          <div className="flex justify-end">
+                            <Button size="sm" onClick={() => setOcclusionModalOpen(false)}>Concluir</Button>
+                          </div>
+                        </Suspense>
+                      )}
+                    </div>
                   </div>
                 )}
-
 
                 {/* Back */}
                 <div className="rounded-2xl border border-border bg-card flex-1 min-h-[120px] overflow-y-auto relative">
@@ -453,23 +414,6 @@ const ManageDeck = () => {
           <Plus className="h-5 w-5" />
         </button>
       )}
-
-      {/* Card type info modal */}
-      <Dialog open={typeInfoOpen} onOpenChange={setTypeInfoOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-display">Tipos de Cartão</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            {CARD_TYPE_OPTIONS.map(opt => (
-              <div key={opt.value} className="space-y-1">
-                <p className="text-sm font-semibold text-foreground">{opt.label}</p>
-                <p className="text-xs text-muted-foreground leading-relaxed">{opt.description}</p>
-              </div>
-            ))}
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Delete confirmation */}
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
