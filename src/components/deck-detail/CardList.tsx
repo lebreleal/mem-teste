@@ -408,16 +408,33 @@ const CardListContent = ({
   const visibleCardIds = useMemo(() => visibleCards.map((c: any) => c.id), [visibleCards]);
   const { data: tagsMap = {} } = useCardTagsBatch(visibleCardIds);
 
+  /** Resolve the effective cloze front text for a card (handles cloze stored in back_content extra). */
+  const getClozeDisplayText = (card: any): string | null => {
+    const hasClozeInFront = /\{\{c\d+::.+?\}\}/.test((card.front_content || '').replace(/<[^>]*>/g, ''));
+    if (hasClozeInFront) return card.front_content;
+    // Check if back_content JSON extra has cloze markup
+    try {
+      const parsed = JSON.parse(card.back_content);
+      if (parsed && typeof parsed.clozeTarget === 'number' && parsed.extra) {
+        const plain = (parsed.extra as string).replace(/<[^>]*>/g, '');
+        if (/\{\{c\d+::.+?\}\}/.test(plain)) return parsed.extra;
+      }
+    } catch {}
+    return null;
+  };
+
+  const isClozeCard = (c: any) => c.card_type === 'cloze' || getClozeDisplayText(c) !== null;
+
   // Group cloze cards by front_content to show as stacked
   const groups = useMemo(() => {
     const result: { cards: typeof visibleCards; isClozeGroup: boolean }[] = [];
     const usedIds = new Set<string>();
-    const isClozeCard = (c: any) => c.card_type === 'cloze' || /\{\{c\d+::.+?\}\}/.test(c.front_content);
     visibleCards.forEach((card: any) => {
       if (usedIds.has(card.id)) return;
       if (isClozeCard(card)) {
+        const key = getClozeDisplayText(card);
         const siblings = visibleCards.filter(
-          (c: any) => isClozeCard(c) && c.front_content === card.front_content && !usedIds.has(c.id)
+          (c: any) => isClozeCard(c) && getClozeDisplayText(c) === key && !usedIds.has(c.id)
         );
         siblings.forEach((s: any) => usedIds.add(s.id));
         result.push({ cards: siblings, isClozeGroup: siblings.length > 1 });
@@ -441,7 +458,7 @@ const CardListContent = ({
     <div className="space-y-2.5">
       {groups.map((group: any, gi: number) => {
         const card = group.cards[0];
-        const isCloze = card.card_type === 'cloze' || /\{\{c\d+::.+?\}\}/.test(card.front_content);
+        const isCloze = isClozeCard(card);
         const isMultiple = card.card_type === 'multiple_choice';
         const isOcclusion = card.card_type === 'image_occlusion';
         const isSelected = selectedCards.has(card.id);
@@ -467,7 +484,8 @@ const CardListContent = ({
           } catch {}
         }
 
-        const clozeNums = isCloze ? getClozeNumbers(card.front_content) : [];
+        const clozeText = isCloze ? getClozeDisplayText(card) : null;
+        const clozeNums = clozeText ? getClozeNumbers(clozeText) : [];
 
         return (
           <div key={card.id} className="relative">
@@ -523,10 +541,10 @@ const CardListContent = ({
                       </div>
                     );
                   })()}
-                  {isCloze ? (
+                  {isCloze && clozeText ? (
                     <p className="text-sm font-semibold text-foreground leading-snug">
                       {(() => {
-                        const plain = stripHtml(card.front_content);
+                        const plain = stripHtml(clozeText);
                         const parts: React.ReactNode[] = [];
                         const regex = /\{\{c(\d+)::([^}]*)\}\}/g;
                         let lastIdx = 0;
