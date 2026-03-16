@@ -269,7 +269,7 @@ const ManageDeck = () => {
               </div>
 
               {/* Front */}
-              <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 min-h-[180px]">
+              <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 max-h-[35vh] overflow-y-auto">
                 <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 block">
                   {cardType === 'image_occlusion' ? 'Frente (Pergunta)' : 'Frente'}
                 </Label>
@@ -352,7 +352,7 @@ const ManageDeck = () => {
               )}
 
               {/* Back */}
-              <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 min-h-[180px]">
+              <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 max-h-[35vh] overflow-y-auto">
                 <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 block">Verso (Resposta)</Label>
                 <LazyRichEditor
                   content={back}
