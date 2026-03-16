@@ -1,5 +1,5 @@
-import React from 'react';
-import { MessageSquareText, CheckSquare, PenLine, Image, ArrowLeft, Plus, Trash2, Sparkles, Loader2, Upload, ArrowRight } from 'lucide-react';
+import React, { useState } from 'react';
+import { MessageSquareText, CheckSquare, PenLine, Image, ArrowLeft, Plus, Trash2, Sparkles, Loader2, Upload, ArrowRight, ChevronDown, ChevronUp } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
