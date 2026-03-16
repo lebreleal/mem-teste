@@ -405,7 +405,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
 
   return (
     <div
-      className={`${chromeless ? 'bg-transparent' : 'rounded-lg border border-input bg-card'} flex flex-col`}
+      className={`${chromeless ? 'bg-transparent' : 'rounded-lg border border-input bg-card'} flex flex-col h-full`}
       onFocus={() => setIsFocused(true)}
       onBlur={(e) => {
         // Only blur if focus left this entire container
