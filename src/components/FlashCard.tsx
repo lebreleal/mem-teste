@@ -390,11 +390,16 @@ const FlashCard = ({
                   {isOcclusion ? (
                     <div className="w-full space-y-4">
                       <div className="w-full flex justify-center" dangerouslySetInnerHTML={{ __html: peekingFront ? displayFront : displayBack }} />
-                      {occlusionFrontText && (
-                        <div className="prose prose-sm max-w-none text-left text-card-foreground" dangerouslySetInnerHTML={{ __html: occlusionFrontText }} />
-                      )}
-                      {!peekingFront && occlusionBackText && (
-                        <div className="prose prose-sm max-w-none text-left text-muted-foreground pt-3 border-t border-border/30" dangerouslySetInnerHTML={{ __html: occlusionBackText }} />
+                      {peekingFront ? (
+                        occlusionFrontText && (
+                          <div className="prose prose-sm max-w-none text-left text-card-foreground" dangerouslySetInnerHTML={{ __html: occlusionFrontText }} />
+                        )
+                      ) : (
+                        <>
+                          {occlusionBackText && (
+                            <div className="prose prose-sm max-w-none text-left text-card-foreground" dangerouslySetInnerHTML={{ __html: occlusionBackText }} />
+                          )}
+                        </>
                       )}
                     </div>
                   ) : (
