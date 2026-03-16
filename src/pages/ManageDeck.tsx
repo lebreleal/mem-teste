@@ -4,7 +4,7 @@ import { ArrowLeft, ChevronUp, ChevronDown, Trash2, Copy, Plus, Loader2, Message
 import { Button } from '@/components/ui/button';
 import { useCards } from '@/hooks/useCards';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/integrations/supabase/client'; // kept for future use
 import LazyRichEditor from '@/components/LazyRichEditor';
 import { Label } from '@/components/ui/label';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
