@@ -417,6 +417,32 @@ const ManageDeck = () => {
         </button>
       )}
 
+      {/* Occlusion Editor Dialog (for upload + draw) */}
+      <Dialog open={occlusionModalOpen && !occlusionImageUrl} onOpenChange={setOcclusionModalOpen}>
+        <DialogContent className="sm:max-w-4xl max-h-[90dvh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display flex items-center gap-2">
+              <ImageIcon className="h-5 w-5 text-primary" /> Oclusão de Imagem
+            </DialogTitle>
+          </DialogHeader>
+          <OcclusionEditor
+            initialFront=""
+            onSave={(frontContent) => {
+              try {
+                const data = JSON.parse(frontContent);
+                setOcclusionImageUrl(data.imageUrl || '');
+                setOcclusionRects(data.allRects || data.rects || []);
+                setOcclusionCanvasSize(data.canvasWidth ? { w: data.canvasWidth, h: data.canvasHeight } : null);
+                setIsDirty(true);
+              } catch {}
+              setOcclusionModalOpen(false);
+            }}
+            onCancel={() => setOcclusionModalOpen(false)}
+            isSaving={false}
+          />
+        </DialogContent>
+      </Dialog>
+
       {/* Delete confirmation */}
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent>
