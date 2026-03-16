@@ -233,10 +233,10 @@ const ManageDeck = () => {
               <button
                 key={card.id}
                 onClick={() => selectCard(idx)}
-                className={`flex items-center justify-center h-9 w-9 sm:h-10 sm:w-10 mx-auto rounded-full text-xs font-semibold transition-all ${
+                className={`flex items-center justify-center h-8 w-8 sm:h-9 sm:w-9 mx-auto rounded-md text-xs font-medium transition-all border ${
                   idx === selectedIndex
-                    ? 'bg-foreground text-background shadow-sm'
-                    : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+                    ? 'border-foreground text-foreground'
+                    : 'border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground'
                 }`}
               >
                 {idx + 1}
