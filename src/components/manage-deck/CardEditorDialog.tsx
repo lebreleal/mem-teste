@@ -1,25 +1,13 @@
 import React, { useState } from 'react';
-import { MessageSquareText, CheckSquare, PenLine, Image, ArrowLeft, Plus, Trash2, Sparkles, Loader2, Upload, ArrowRight, ChevronDown, ChevronUp } from 'lucide-react';
+import { Image, Trash2, Sparkles, Loader2, Upload, ChevronDown, ChevronUp } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import LazyRichEditor from '@/components/LazyRichEditor';
 import { CardTagEditor } from './CardTagWidgets';
-import { sanitizeHtml } from '@/lib/sanitize';
 import type { EditorCardType } from '@/hooks/useManageDeck';
 import OcclusionEditor from '@/components/manage-deck/OcclusionEditor';
 
-const CARD_TYPE_ICONS: Record<EditorCardType, React.ReactNode> = {
-  basic: <MessageSquareText className="h-5 w-5 text-muted-foreground" />,
-  cloze: <PenLine className="h-5 w-5 text-muted-foreground" />,
-  image_occlusion: <Image className="h-5 w-5 text-muted-foreground" />,
-};
-
-const CARD_TYPES_UI = [
-  { value: 'basic' as EditorCardType, label: 'Texto', desc: 'Pergunta na frente, resposta no verso' },
-  { value: 'cloze' as EditorCardType, label: 'Oclusão de Texto e Imagem', desc: 'Lacunas de texto e/ou oclusão de imagem' },
-];
 /* ─── Inline SVG icons matching the toolbar ─── */
 const ClozeIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -50,7 +38,6 @@ const ClozeHelpToggle = () => {
 
       {open && (
         <div className="px-3 pb-3 space-y-3 text-xs text-muted-foreground border-t border-border/50 pt-2.5">
-          {/* Step 1: Create cloze */}
           <div className="flex items-start gap-2.5">
             <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-card border border-border shadow-sm">
               <ClozeIcon />
@@ -61,7 +48,6 @@ const ClozeHelpToggle = () => {
             </div>
           </div>
 
-          {/* Step 2: New cloze number */}
           <div className="flex items-start gap-2.5">
             <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-card border border-border shadow-sm">
               <ClozePlusIcon />
@@ -72,7 +58,6 @@ const ClozeHelpToggle = () => {
             </div>
           </div>
 
-          {/* Step 3: Remove */}
           <div className="flex items-start gap-2.5">
             <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-card border border-border shadow-sm text-destructive">
               <Trash2 className="h-3.5 w-3.5" />
@@ -83,7 +68,6 @@ const ClozeHelpToggle = () => {
             </div>
           </div>
 
-          {/* Tip */}
           <div className="rounded-md bg-primary/5 border border-primary/20 px-2.5 py-2 text-[11px]">
             <span className="font-semibold text-primary">Dica:</span> Lacunas com o mesmo número (ex: <span className="font-mono text-primary">c1</span>) viram um único cartão. Use números diferentes para gerar cartões separados.
           </div>
@@ -127,40 +111,25 @@ export const CardEditorDialog = ({
   occlusionModalOpen, setOcclusionModalOpen,
   resetForm, handleSave, handleImprove, addMcOption, removeMcOption,
 }: CardEditorDialogProps) => {
-  const canImprove = editorType && editorType !== 'image_occlusion';
 
-  const renderTypeSelector = () => (
-    <div className="space-y-3">
-      <p className="text-sm text-muted-foreground">Selecione o tipo do flashcard</p>
-      <div className="grid grid-cols-1 gap-2">
-         {CARD_TYPES_UI.map(type => (
-          <button
-            key={type.value}
-            onClick={() => {
-              setEditorType(type.value);
-            }}
-            className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition-all hover:border-primary/50 hover:shadow-md active:scale-[0.98]"
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              {CARD_TYPE_ICONS[type.value]}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-foreground">{type.label}</p>
-              <p className="text-[11px] text-muted-foreground">{type.desc}</p>
-            </div>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
+  // Check if front content has image occlusion data (JSON with imageUrl)
+  const hasOcclusionImage = (() => {
+    try { return !!JSON.parse(front)?.imageUrl; } catch { return false; }
+  })();
+
+  // Extract text content for cloze detection
+  const frontTextContent = (() => {
+    if (hasOcclusionImage) {
+      try { return JSON.parse(front)?.frontText || ''; } catch { return ''; }
+    }
+    return front;
+  })();
+
+  const hasCloze = /\{\{c\d+::/.test(frontTextContent.replace(/<[^>]*>/g, ''));
+  const canImprove = !hasOcclusionImage; // can improve text-based cards
 
   const renderClozePreview = () => {
-    let textSource = front;
-    // For image_occlusion, extract frontText from JSON
-    if (editorType === 'image_occlusion') {
-      try { textSource = JSON.parse(front)?.frontText || ''; } catch {}
-    }
-    const plainText = textSource.replace(/<[^>]*>/g, '');
+    const plainText = frontTextContent.replace(/<[^>]*>/g, '');
     const clozeRegex = /\{\{c(\d+)::([^}]*)\}\}/g;
     const clozeNumbers = new Set<number>();
     let match;
@@ -213,124 +182,93 @@ export const CardEditorDialog = ({
     return <ClozeHelpToggle />;
   };
 
-  const renderEditor = () => (
-    <div className="space-y-4">
-      {!editingId && (
-        <button onClick={() => setEditorType(null)} className="inline-flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft className="h-3 w-3" />
-          {editorType && CARD_TYPE_ICONS[editorType]}{' '}
-          {CARD_TYPES_UI.find(t => t.value === editorType)?.label}
-        </button>
-      )}
+  // Unified editor: supports cloze text + image occlusion together
+  const renderEditor = () => {
+    // Determine if we're in "has image" mode (front is JSON with imageUrl)
+    const isImageMode = hasOcclusionImage;
 
-      {editorType === 'image_occlusion' ? (
-        <>
-          <div>
-            <Label className="mb-1.5 block">Frente (Pergunta)</Label>
-            <LazyRichEditor
-              content={(() => { try { const d = JSON.parse(front); return d.frontText || ''; } catch { return front; } })()}
-              onChange={(v) => {
-                try { const d = JSON.parse(front); d.frontText = v; setFront(JSON.stringify(d)); }
-                catch { setFront(v); }
-              }}
-              placeholder="Pergunta ou contexto (opcional)"
-              onOcclusionPaste={() => setOcclusionModalOpen(true)}
-              onOcclusionAttach={() => setOcclusionModalOpen(true)}
-            />
-            {(() => {
-              // Show cloze preview if frontText has cloze markers
-              let frontText = '';
-              try { frontText = JSON.parse(front)?.frontText || ''; } catch {}
-              const plainText = frontText.replace(/<[^>]*>/g, '');
-              if (/\{\{c\d+::/.test(plainText)) {
-                return renderClozePreview();
-              }
-              return null;
-            })()}
-            {(() => {
-              let occData: { imageUrl?: string } | null = null;
-              try { occData = JSON.parse(front); } catch {}
-              if (occData?.imageUrl) {
-                return (
-                  <div className="mt-2 inline-flex">
-                    <button type="button" onClick={() => setOcclusionModalOpen(true)} className="relative group inline-block rounded-lg overflow-hidden border border-border">
-                      <img src={occData.imageUrl} alt="Oclusão" className="h-14 w-14 object-cover rounded-lg" />
-                      <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center bg-primary/80 py-0.5">
-                        <Image className="h-3 w-3 text-primary-foreground" />
-                      </div>
-                      <button type="button" onClick={(e) => { e.stopPropagation(); setFront(''); }} className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-muted-foreground/80 text-background flex items-center justify-center text-[10px] font-bold hover:bg-destructive transition-colors">×</button>
-                    </button>
-                  </div>
-                );
-              }
-              return (
-                <button type="button" onClick={() => setOcclusionModalOpen(true)} className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors">
-                  <Upload className="h-3.5 w-3.5" /> Enviar imagem para oclusão
-                </button>
-              );
-            })()}
-          </div>
-          <div>
-            <Label className="mb-1.5 block">Verso</Label>
-            <LazyRichEditor content={back} onChange={setBack} placeholder="Resposta / nota extra" hideCloze />
-          </div>
-          <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => { setEditorOpen(false); resetForm(); }}>Cancelar</Button>
-            {!editingId && <Button variant="secondary" onClick={() => handleSave(true)} disabled={isSaving || !front}>{isSaving ? 'Salvando...' : 'Salvar e Adicionar Outro'}</Button>}
-            <Button onClick={() => handleSave(false)} disabled={isSaving || !front}>{isSaving ? 'Salvando...' : 'Salvar e Fechar'}</Button>
-          </div>
-        </>
-      ) : (
-        <>
-          <div>
-            <Label className="mb-1.5 block">Frente</Label>
-            <LazyRichEditor
-              content={front} onChange={setFront}
-              placeholder="Qual é a capital da França?"
-              hideCloze={editorType !== 'cloze'}
-              onOcclusionPaste={() => { setEditorType('image_occlusion'); setOcclusionModalOpen(true); }}
-              onOcclusionAttach={() => { setEditorType('image_occlusion'); setOcclusionModalOpen(true); }}
-            />
-          </div>
+    // Rich editor content/onChange adapts based on whether front is occlusion JSON
+    const editorContent = isImageMode
+      ? (() => { try { return JSON.parse(front)?.frontText || ''; } catch { return front; } })()
+      : front;
 
-          {editorType === 'cloze' ? (
-            <>
-              <button type="button" onClick={() => { setEditorType('image_occlusion'); setOcclusionModalOpen(true); }} className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors">
-                <Upload className="h-3.5 w-3.5" /> Enviar imagem para oclusão
-              </button>
-              {renderClozePreview()}
-              <div>
-                <Label className="mb-1.5 block">Verso (Resposta)</Label>
-                <LazyRichEditor content={back} onChange={setBack} placeholder="Resposta ou informação adicional" hideCloze />
+    const editorOnChange = isImageMode
+      ? (v: string) => {
+          try { const d = JSON.parse(front); d.frontText = v; setFront(JSON.stringify(d)); }
+          catch { setFront(v); }
+        }
+      : setFront;
+
+    return (
+      <div className="space-y-4">
+        {/* Front */}
+        <div>
+          <Label className="mb-1.5 block">Frente</Label>
+          <LazyRichEditor
+            content={editorContent}
+            onChange={editorOnChange}
+            placeholder="Pergunta, texto com lacunas, ou contexto"
+            hideCloze={false}
+            onOcclusionPaste={() => setOcclusionModalOpen(true)}
+            onOcclusionAttach={() => setOcclusionModalOpen(true)}
+          />
+        </div>
+
+        {/* Cloze preview */}
+        {hasCloze && renderClozePreview()}
+        {!hasCloze && <ClozeHelpToggle />}
+
+        {/* Image occlusion area */}
+        {isImageMode ? (
+          <div className="inline-flex">
+            <button type="button" onClick={() => setOcclusionModalOpen(true)} className="relative group inline-block rounded-lg overflow-hidden border border-border">
+              <img src={(() => { try { return JSON.parse(front)?.imageUrl; } catch { return ''; } })()} alt="Oclusão" className="h-14 w-14 object-cover rounded-lg" />
+              <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center bg-primary/80 py-0.5">
+                <Image className="h-3 w-3 text-primary-foreground" />
               </div>
-            </>
-          ) : (
-            <div>
-              <Label className="mb-1.5 block">Verso (Resposta)</Label>
-              <LazyRichEditor content={back} onChange={setBack} placeholder="Paris" hideCloze />
-            </div>
-          )}
-
-          {canImprove && (
-            <Button variant="outline" onClick={handleImprove} disabled={isImproving}
-              className="w-full gap-2 border-primary/30 text-primary hover:bg-primary/5 hover:text-primary">
-              {isImproving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              {isImproving ? 'Melhorando...' : 'Melhorar com IA'}
-              <span className="text-[10px] text-muted-foreground ml-auto">1 crédito</span>
-            </Button>
-          )}
-
-          {editingId && <CardTagEditor cardId={editingId} />}
-
-          <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => { setEditorOpen(false); resetForm(); }}>Cancelar</Button>
-            {!editingId && <Button variant="secondary" onClick={() => handleSave(true)} disabled={isSaving}>{isSaving ? 'Salvando...' : 'Salvar e Adicionar Outro'}</Button>}
-            <Button onClick={() => handleSave(false)} disabled={isSaving}>{isSaving ? 'Salvando...' : 'Salvar e Fechar'}</Button>
+              <button type="button" onClick={(e) => {
+                e.stopPropagation();
+                // Remove image but keep frontText
+                try {
+                  const d = JSON.parse(front);
+                  setFront(d.frontText || '');
+                } catch { setFront(''); }
+              }} className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-muted-foreground/80 text-background flex items-center justify-center text-[10px] font-bold hover:bg-destructive transition-colors">×</button>
+            </button>
           </div>
-        </>
-      )}
-    </div>
-  );
+        ) : (
+          <button type="button" onClick={() => setOcclusionModalOpen(true)} className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors">
+            <Upload className="h-3.5 w-3.5" /> Enviar imagem para oclusão
+          </button>
+        )}
+
+        {/* Back */}
+        <div>
+          <Label className="mb-1.5 block">Verso (Resposta)</Label>
+          <LazyRichEditor content={back} onChange={setBack} placeholder="Resposta ou informação adicional" hideCloze />
+        </div>
+
+        {/* Improve with AI */}
+        {canImprove && (
+          <Button variant="outline" onClick={handleImprove} disabled={isImproving}
+            className="w-full gap-2 border-primary/30 text-primary hover:bg-primary/5 hover:text-primary">
+            {isImproving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {isImproving ? 'Melhorando...' : 'Melhorar com IA'}
+            <span className="text-[10px] text-muted-foreground ml-auto">1 crédito</span>
+          </Button>
+        )}
+
+        {editingId && <CardTagEditor cardId={editingId} />}
+
+        {/* Actions */}
+        <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
+          <Button variant="outline" onClick={() => { setEditorOpen(false); resetForm(); }}>Cancelar</Button>
+          {!editingId && <Button variant="secondary" onClick={() => handleSave(true)} disabled={isSaving}>{isSaving ? 'Salvando...' : 'Salvar e Adicionar Outro'}</Button>}
+          <Button onClick={() => handleSave(false)} disabled={isSaving}>{isSaving ? 'Salvando...' : 'Salvar e Fechar'}</Button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <>
@@ -338,10 +276,10 @@ export const CardEditorDialog = ({
         <DialogContent className="max-h-[85dvh] sm:max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="font-display">
-              {editingId ? 'Editar Cartão' : editorType ? CARD_TYPES_UI.find(t => t.value === editorType)?.label : 'Novo Cartão'}
+              {editingId ? 'Editar Cartão' : 'Novo Cartão'}
             </DialogTitle>
           </DialogHeader>
-          {editorType === null ? renderTypeSelector() : renderEditor()}
+          {renderEditor()}
         </DialogContent>
       </Dialog>
 
