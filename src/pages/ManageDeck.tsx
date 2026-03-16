@@ -3,8 +3,6 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ChevronUp, ChevronDown, Trash2, Copy, Plus, Loader2, MessageSquareText, PenLine, Image as ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCards } from '@/hooks/useCards';
-import { useEnergy } from '@/hooks/useEnergy';
-import { useAIModel } from '@/hooks/useAIModel';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import LazyRichEditor from '@/components/LazyRichEditor';
