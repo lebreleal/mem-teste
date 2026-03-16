@@ -408,16 +408,33 @@ const CardListContent = ({
   const visibleCardIds = useMemo(() => visibleCards.map((c: any) => c.id), [visibleCards]);
   const { data: tagsMap = {} } = useCardTagsBatch(visibleCardIds);
 
+  /** Resolve the effective cloze front text for a card (handles cloze stored in back_content extra). */
+  const getClozeDisplayText = (card: any): string | null => {
+    const hasClozeInFront = /\{\{c\d+::.+?\}\}/.test((card.front_content || '').replace(/<[^>]*>/g, ''));
+    if (hasClozeInFront) return card.front_content;
+    // Check if back_content JSON extra has cloze markup
+    try {
+      const parsed = JSON.parse(card.back_content);
+      if (parsed && typeof parsed.clozeTarget === 'number' && parsed.extra) {
+        const plain = (parsed.extra as string).replace(/<[^>]*>/g, '');
+        if (/\{\{c\d+::.+?\}\}/.test(plain)) return parsed.extra;
+      }
+    } catch {}
+    return null;
+  };
+
+  const isClozeCard = (c: any) => c.card_type === 'cloze' || getClozeDisplayText(c) !== null;
+
   // Group cloze cards by front_content to show as stacked
   const groups = useMemo(() => {
     const result: { cards: typeof visibleCards; isClozeGroup: boolean }[] = [];
     const usedIds = new Set<string>();
-    const isClozeCard = (c: any) => c.card_type === 'cloze' || /\{\{c\d+::.+?\}\}/.test(c.front_content);
     visibleCards.forEach((card: any) => {
       if (usedIds.has(card.id)) return;
       if (isClozeCard(card)) {
+        const key = getClozeDisplayText(card);
         const siblings = visibleCards.filter(
-          (c: any) => isClozeCard(c) && c.front_content === card.front_content && !usedIds.has(c.id)
+          (c: any) => isClozeCard(c) && getClozeDisplayText(c) === key && !usedIds.has(c.id)
         );
         siblings.forEach((s: any) => usedIds.add(s.id));
         result.push({ cards: siblings, isClozeGroup: siblings.length > 1 });
