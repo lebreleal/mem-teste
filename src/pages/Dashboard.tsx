@@ -26,7 +26,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { calculateRealStudyTime } from '@/lib/studyUtils';
 
 /** Suspense fallback that shows global loading overlay while chunk loads */
@@ -324,6 +324,8 @@ const Dashboard = () => {
     folderId: string | null;
     textSample?: string;
   } | null>(null);
+  const [aiDeckParentId, setAiDeckParentId] = useState<string | null>(null);
+  const [aiDeckParentName, setAiDeckParentName] = useState<string | null>(null);
 
   const activeSection = 'personal' as const;
 
@@ -356,6 +358,7 @@ const Dashboard = () => {
   // Listen for "+" button inside own sala → open add menu sheet
   const [salaAddMenuOpen, setSalaAddMenuOpen] = useState(false);
   const [addMenuStep, setAddMenuStep] = useState<'main' | 'create-deck'>('main');
+  const [addMenuInfoType, setAddMenuInfoType] = useState<'deck' | 'materia' | 'deck-manual' | 'deck-ia' | null>(null);
   useEffect(() => {
     const handler = () => {
       if (state.isInsideSala && !isCommunityFolder) {
@@ -951,6 +954,12 @@ const Dashboard = () => {
             getCommunityLinkId={state.getCommunityLinkId}
             navigateToCommunity={actions.handleNavigateCommunity}
             onCreateSubDeck={isCommunityFolder ? () => {} : (deckId) => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(deckId); }}
+            onCreateSubDeckAI={isCommunityFolder ? undefined : (deckId) => {
+              const parentDeck = state.decks.find(d => d.id === deckId);
+              setAiDeckParentId(deckId);
+              setAiDeckParentName(parentDeck?.name ?? null);
+              state.setAiDeckOpen(true);
+            }}
             onRenameDeck={isCommunityFolder ? () => {} : (d) => { state.setRenameTarget({ type: 'deck', id: d.id, name: d.name }); state.setRenameName(d.name); }}
             onMoveDeck={isCommunityFolder ? () => {} : (d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(d.folder_id || state.currentFolderId); state.setMoveParentDeckId(null); }}
             onArchiveDeck={isCommunityFolder ? () => {} : (id) => state.archiveDeck.mutate(id)}
@@ -1122,9 +1131,11 @@ const Dashboard = () => {
             open={state.aiDeckOpen}
             onOpenChange={(open) => {
               state.setAiDeckOpen(open);
-              if (!open) setPendingReviewData(null);
+              if (!open) { setPendingReviewData(null); setAiDeckParentId(null); setAiDeckParentName(null); }
             }}
-            folderId={pendingReviewData?.folderId ?? null}
+            folderId={pendingReviewData?.folderId ?? state.currentFolderId}
+            existingDeckId={aiDeckParentId}
+            existingDeckName={aiDeckParentName}
             pendingReviewData={pendingReviewData}
           />
         )}
@@ -1133,6 +1144,46 @@ const Dashboard = () => {
         {state.premiumOpen && <PremiumModal open={state.premiumOpen} onClose={() => state.setPremiumOpen(false)} defaultTab={state.premiumTab} />}
       </Suspense>
 
+      {/* Info modal for add menu items */}
+      <Dialog open={addMenuInfoType !== null} onOpenChange={(v) => { if (!v) setAddMenuInfoType(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {addMenuInfoType === 'materia' && 'O que é uma Matéria?'}
+              {addMenuInfoType === 'deck' && 'O que é um Deck?'}
+              {addMenuInfoType === 'deck-manual' && 'Criar deck manualmente'}
+              {addMenuInfoType === 'deck-ia' && 'Criar deck com IA'}
+            </DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground leading-relaxed pt-2 space-y-2">
+              {addMenuInfoType === 'materia' && (
+                <>
+                  <p>Uma <strong>Matéria</strong> é um agrupador que organiza seus decks por tema ou disciplina.</p>
+                  <p>Por exemplo, dentro da matéria <em>"Farmacologia"</em> você pode ter os decks <em>"Antibióticos"</em>, <em>"Anti-inflamatórios"</em>, etc.</p>
+                  <p>Ao estudar, você pode revisar todos os decks de uma matéria de uma só vez.</p>
+                </>
+              )}
+              {addMenuInfoType === 'deck' && (
+                <>
+                  <p>Um <strong>Deck</strong> é um conjunto de flashcards sobre um assunto específico.</p>
+                  <p>Você pode criar decks manualmente ou usar a IA para gerar cartões automaticamente.</p>
+                </>
+              )}
+              {addMenuInfoType === 'deck-manual' && (
+                <>
+                  <p>Você escolhe o nome do deck e adiciona os cartões (flashcards) um a um.</p>
+                  <p>Ideal quando você quer ter controle total sobre o conteúdo dos seus cartões.</p>
+                </>
+              )}
+              {addMenuInfoType === 'deck-ia' && (
+                <>
+                  <p>Envie seu material de estudo (PDF, imagem ou texto) e a inteligência artificial gera os cartões automaticamente.</p>
+                  <p>Ideal para transformar anotações, slides ou apostilas em flashcards rapidamente.</p>
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
 
       <Suspense fallback={null}>
         {studyWeightsOpen && (
@@ -1338,31 +1389,37 @@ const Dashboard = () => {
           {addMenuStep === 'main' && (
             <div className="flex flex-col gap-1">
               <button
-                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
                 onClick={() => setAddMenuStep('create-deck')}
               >
-                <SquarePlus className="h-5 w-5 text-primary shrink-0" />
-                <div>
-                  <span className="text-sm font-medium text-foreground">Criar deck</span>
-                  <span className="block text-xs text-muted-foreground mt-0.5">Criar manualmente ou com IA</span>
-                </div>
+                <span className="text-sm font-medium text-foreground">Criar deck</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setAddMenuInfoType('deck'); }}
+                  className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                >
+                  <Info className="h-3.5 w-3.5" />
+                </button>
+                <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 ml-auto shrink-0" />
               </button>
               <button
-                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
                 onClick={() => { setSalaAddMenuOpen(false); setAddMenuStep('main'); state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId('__materia__'); }}
               >
-                <Layers className="h-5 w-5 text-primary shrink-0" />
-                <div>
-                  <span className="text-sm font-medium text-foreground">Criar matéria</span>
-                  <span className="block text-xs text-muted-foreground mt-0.5">Organiza seus decks por tema</span>
-                </div>
+                <span className="text-sm font-medium text-foreground">Criar matéria</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setAddMenuInfoType('materia'); }}
+                  className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                >
+                  <Info className="h-3.5 w-3.5" />
+                </button>
+                <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 ml-auto shrink-0" />
               </button>
               <button
-                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
                 onClick={() => { setSalaAddMenuOpen(false); setAddMenuStep('main'); state.setImportOpen(true); state.setImportDeckId(null); state.setImportDeckName(''); }}
               >
-                <Archive className="h-5 w-5 text-primary shrink-0" />
                 <span className="text-sm font-medium text-foreground">Importar cartões</span>
+                <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 ml-auto shrink-0" />
               </button>
             </div>
           )}
@@ -1370,24 +1427,30 @@ const Dashboard = () => {
           {addMenuStep === 'create-deck' && (
             <div className="flex flex-col gap-1">
               <button
-                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
                 onClick={() => { setSalaAddMenuOpen(false); setAddMenuStep('main'); state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
               >
-                <Pencil className="h-5 w-5 text-primary shrink-0" />
-                <div>
-                  <span className="text-sm font-medium text-foreground">Criar manualmente</span>
-                  <span className="block text-xs text-muted-foreground mt-0.5">Defina nome e adicione cartões</span>
-                </div>
+                <span className="text-sm font-medium text-foreground">Criar deck manualmente</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setAddMenuInfoType('deck-manual'); }}
+                  className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                >
+                  <Info className="h-3.5 w-3.5" />
+                </button>
+                <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 ml-auto shrink-0" />
               </button>
               <button
-                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
                 onClick={() => { setSalaAddMenuOpen(false); setAddMenuStep('main'); state.setAiDeckOpen(true); }}
               >
-                <Sparkles className="h-5 w-5 text-primary shrink-0" />
-                <div>
-                  <span className="text-sm font-medium text-foreground">Criar com IA</span>
-                  <span className="block text-xs text-muted-foreground mt-0.5">A partir do seu material de estudo</span>
-                </div>
+                <span className="text-sm font-medium text-foreground">Criar deck com IA</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setAddMenuInfoType('deck-ia'); }}
+                  className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                >
+                  <Info className="h-3.5 w-3.5" />
+                </button>
+                <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 ml-auto shrink-0" />
               </button>
               <Button variant="ghost" size="sm" className="mt-2 self-start text-xs gap-1" onClick={() => setAddMenuStep('main')}>
                 <ChevronLeft className="h-3.5 w-3.5" /> Voltar

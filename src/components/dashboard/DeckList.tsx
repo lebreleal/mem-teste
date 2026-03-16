@@ -35,6 +35,7 @@ interface DeckListProps {
 
   // Actions
   onCreateSubDeck: (deckId: string) => void;
+  onCreateSubDeckAI?: (deckId: string) => void;
   onRenameDeck: (deck: DeckWithStats) => void;
   onMoveDeck: (deck: DeckWithStats) => void;
   onArchiveDeck: (id: string) => void;

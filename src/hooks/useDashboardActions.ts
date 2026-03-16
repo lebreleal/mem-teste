@@ -73,10 +73,15 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
       state.createDeck.mutate(
         { name, folderId: actualParentDeckId ? null : state.currentFolderId, parentDeckId: actualParentDeckId, algorithmMode: defaultAlgorithm },
         {
-          onSuccess: () => {
+          onSuccess: (newDeck: any) => {
             state.setCreateType(null); state.setCreateName('');
-            toast({ title: 'Baralho criado!' });
-            if (state.createParentDeckId) state.toggleExpand(state.createParentDeckId);
+            if (isMateria && newDeck?.id) {
+              toast({ title: 'Matéria criada!' });
+              state.toggleExpand(newDeck.id);
+            } else {
+              toast({ title: 'Baralho criado!' });
+              if (state.createParentDeckId) state.toggleExpand(state.createParentDeckId);
+            }
             state.setCreateParentDeckId(null);
           },
           onError: () => toast({ title: 'Erro ao criar baralho', variant: 'destructive' }),

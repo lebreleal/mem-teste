@@ -7,7 +7,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Info, ChevronDown, Layers, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings, Plus, Minus, Play } from 'lucide-react';
+import { Info, ChevronDown, Layers, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings, Plus, Minus, Play, Sparkles, BookOpen } from 'lucide-react';
 import type { DeckWithStats } from '@/hooks/useDecks';
 import type { DragReorderHandlers } from '@/hooks/useDragReorder';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
@@ -101,6 +101,7 @@ interface DeckRowProps {
   getCommunityLinkId: (deck: DeckWithStats) => string | null;
   navigateToCommunity: (id: string) => void;
   onCreateSubDeck: (deckId: string) => void;
+  onCreateSubDeckAI?: (deckId: string) => void;
   onRename: (deck: DeckWithStats) => void;
   onMove: (deck: DeckWithStats) => void;
   onArchive: (id: string) => void;
@@ -149,6 +150,7 @@ function aggregateClassification(deck: DeckWithStats, getSubDecks: (id: string) 
 const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   deck, deckSelectionMode, selectedDeckIds,
   toggleDeckSelection, getSubDecks, getAggregateStats,
+  onCreateSubDeck, onCreateSubDeckAI,
   onRename, onMove, onArchive, onDelete,
   dragHandlers, hasPendingUpdate,
   expandedAccordionId, onAccordionToggle,
@@ -162,6 +164,8 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   const isErrorDeck = deck.name === ERROR_DECK_NAME;
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [showDevModal, setShowDevModal] = useState(false);
+  const [showAddDeckMenu, setShowAddDeckMenu] = useState(false);
+  const [addDeckInfoType, setAddDeckInfoType] = useState<'manual' | 'ia' | null>(null);
 
   // Auto-detect linked (followed) decks — hide management actions for community-sourced decks
   const isLinkedDeck = useMemo(() => {
@@ -181,6 +185,11 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   const displayName = isErrorDeck ? 'Caderno de Erros' : deck.name;
   const hasDueCards = aggStats.new_count + aggStats.learning_count + aggStats.review_count > 0;
 
+  // A deck with no sub-decks and no cards is an empty matéria — expand inline instead of navigating
+  const isEmptyMateria = !hasChildren && totalCards === 0 && !isErrorDeck;
+  // Empty matérias are always "expanded" — no toggle needed
+  const effectiveExpanded = isEmptyMateria ? true : isExpanded;
+
   const handleClick = () => {
     if (deckSelectionMode) {
       toggleDeckSelection(deck.id);
@@ -196,6 +205,9 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
     }
     if (hasChildren) {
       onAccordionToggle?.(deck.id);
+    } else if (isEmptyMateria) {
+      // do nothing — always expanded, no navigation
+      return;
     } else {
       navigate(`/decks/${deck.id}`, readOnlyNavState ? { state: readOnlyNavState } : undefined);
     }
@@ -243,29 +255,43 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
               <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-destructive animate-pulse" title="Atualização disponível" />
             )}
           </div>
-          <div className="flex items-center gap-2 mt-1">
-            <p className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
-              {hasChildren && (
-                <span>{subDecks.length} {subDecks.length === 1 ? 'deck' : 'decks'}</span>
-              )}
-              <span>{totalCards} {totalCards === 1 ? 'cartão' : 'cartões'}</span>
-              {(() => {
-                const qCount = questionCountMap ? (() => {
-                  const ids = [deck.id];
-                  const collectIds = (parentId: string) => {
-                    const subs = getSubDecks(parentId);
-                    for (const s of subs) { ids.push(s.id); collectIds(s.id); }
-                  };
-                  collectIds(deck.id);
-                  return ids.reduce((sum, id) => sum + (questionCountMap.get(id) ?? 0), 0);
-                })() : 0;
-                return qCount > 0 ? (
-                  <span>{qCount} {qCount === 1 ? 'questão' : 'questões'}</span>
-                ) : null;
-              })()}
-            </p>
-          </div>
-          {!isErrorDeck && !readOnly && (
+          {/* Empty matéria: "+ Adicionar Deck" right below title */}
+          {isEmptyMateria && !readOnly && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowAddDeckMenu(true); }}
+              className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>Adicionar Deck</span>
+            </button>
+          )}
+          {!isEmptyMateria && (
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
+                {hasChildren && (
+                  <span>{subDecks.length} {subDecks.length === 1 ? 'deck' : 'decks'}</span>
+                )}
+                {totalCards > 0 && (
+                  <span>{totalCards} {totalCards === 1 ? 'cartão' : 'cartões'}</span>
+                )}
+                {(() => {
+                  const qCount = questionCountMap ? (() => {
+                    const ids = [deck.id];
+                    const collectIds = (parentId: string) => {
+                      const subs = getSubDecks(parentId);
+                      for (const s of subs) { ids.push(s.id); collectIds(s.id); }
+                    };
+                    collectIds(deck.id);
+                    return ids.reduce((sum, id) => sum + (questionCountMap.get(id) ?? 0), 0);
+                  })() : 0;
+                  return qCount > 0 ? (
+                    <span>{qCount} {qCount === 1 ? 'questão' : 'questões'}</span>
+                  ) : null;
+                })()}
+              </p>
+            </div>
+          )}
+          {!isErrorDeck && !readOnly && !isEmptyMateria && (
             <ClassificationBar
               facilPct={classPcts.facilPct}
               bomPct={classPcts.bomPct}
@@ -282,7 +308,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           <div className={`flex items-center gap-1.5 shrink-0 transition-opacity duration-200 ${
             hasChildren && isExpanded
               ? 'opacity-100'
-              : 'opacity-0 group-hover:opacity-100'
+              : isEmptyMateria ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
           }`}>
             {hasDueCards && (
               <button
@@ -300,7 +326,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
         )}
 
         {/* Chevron arrow for navigation (loose decks only, hidden on hover) */}
-        {!deckSelectionMode && !isErrorDeck && !hasChildren && (
+        {!deckSelectionMode && !isErrorDeck && !hasChildren && !isEmptyMateria && (
           <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 -rotate-90 group-hover:hidden" />
         )}
       </div>
@@ -363,10 +389,86 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
               </div>
             );
           })}
+          {/* Add deck row at bottom of expanded matéria */}
+          {!readOnly && !effectiveDisableManagement && (
+            <div className="flex items-center gap-3 pl-10 pr-4 py-3 border-t border-border/30">
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowAddDeckMenu(true); }}
+                className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>Adicionar Deck</span>
+              </button>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Info modal for error deck */}
+
+
+
+      {/* Add deck modal */}
+      <Dialog open={showAddDeckMenu} onOpenChange={setShowAddDeckMenu}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle>Novo deck em {deck.name}</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-2 pt-1">
+            <button
+              onClick={() => { setShowAddDeckMenu(false); onCreateSubDeck(deck.id); }}
+              className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
+            >
+              <span className="text-sm font-medium text-foreground">Criar deck manualmente</span>
+              <button
+                onClick={(e) => { e.stopPropagation(); setAddDeckInfoType('manual'); }}
+                className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
+              >
+                <Info className="h-3.5 w-3.5" />
+              </button>
+              <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 ml-auto shrink-0" />
+            </button>
+            {onCreateSubDeckAI && (
+              <button
+                onClick={() => { setShowAddDeckMenu(false); onCreateSubDeckAI(deck.id); }}
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
+              >
+                <span className="text-sm font-medium text-foreground">Criar deck com IA</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setAddDeckInfoType('ia'); }}
+                  className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                >
+                  <Info className="h-3.5 w-3.5" />
+                </button>
+                <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 ml-auto shrink-0" />
+              </button>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Info modal for add deck options */}
+      <Dialog open={addDeckInfoType !== null} onOpenChange={(v) => { if (!v) setAddDeckInfoType(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{addDeckInfoType === 'manual' ? 'Criar deck manualmente' : 'Criar deck com IA'}</DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground leading-relaxed pt-2 space-y-2">
+              {addDeckInfoType === 'manual' ? (
+                <>
+                  <p>Você escolhe o nome do deck e adiciona os cartões (flashcards) um a um.</p>
+                  <p>Ideal quando você quer ter controle total sobre o conteúdo dos seus cartões.</p>
+                </>
+              ) : (
+                <>
+                  <p>Envie seu material de estudo (PDF, imagem ou texto) e a inteligência artificial gera os cartões automaticamente.</p>
+                  <p>Ideal para transformar anotações, slides ou apostilas em flashcards rapidamente.</p>
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
+
+
       <Dialog open={showInfoModal} onOpenChange={setShowInfoModal}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
