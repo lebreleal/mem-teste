@@ -416,6 +416,13 @@ const ManageDeck = () => {
               } catch {}
               setOcclusionModalOpen(false);
             }}
+            onRemoveImage={() => {
+              setOcclusionImageUrl('');
+              setOcclusionRects([]);
+              setOcclusionCanvasSize(null);
+              setIsDirty(true);
+              setOcclusionModalOpen(false);
+            }}
             onCancel={() => setOcclusionModalOpen(false)}
             isSaving={false}
           />
