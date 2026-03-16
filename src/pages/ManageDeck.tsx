@@ -53,15 +53,21 @@ const ManageDeck = () => {
   const currentCard = sortedCards[selectedIndex] ?? null;
   const totalCards = sortedCards.length;
 
-  // Set initial card from URL param or newly created card id
+  // Apply URL card only once; after that preserve local selection and prioritize newly created card
   useEffect(() => {
-    const targetCardId = pendingNewCardId || initialCardId;
-    if (targetCardId && sortedCards.length > 0) {
-      const idx = sortedCards.findIndex(c => c.id === targetCardId);
+    if (pendingNewCardId && sortedCards.length > 0) {
+      const idx = sortedCards.findIndex(c => c.id === pendingNewCardId);
       if (idx >= 0) {
         setSelectedIndex(idx);
-        if (pendingNewCardId === targetCardId) setPendingNewCardId(null);
+        setPendingNewCardId(null);
       }
+      return;
+    }
+
+    if (!hasAppliedInitialCardRef.current && initialCardId && sortedCards.length > 0) {
+      const idx = sortedCards.findIndex(c => c.id === initialCardId);
+      if (idx >= 0) setSelectedIndex(idx);
+      hasAppliedInitialCardRef.current = true;
     }
   }, [initialCardId, pendingNewCardId, sortedCards]);
 
