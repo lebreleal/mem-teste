@@ -101,6 +101,7 @@ interface DeckRowProps {
   getCommunityLinkId: (deck: DeckWithStats) => string | null;
   navigateToCommunity: (id: string) => void;
   onCreateSubDeck: (deckId: string) => void;
+  onCreateSubDeckAI?: (deckId: string) => void;
   onRename: (deck: DeckWithStats) => void;
   onMove: (deck: DeckWithStats) => void;
   onArchive: (id: string) => void;
