@@ -416,30 +416,30 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           <div className="flex flex-col gap-2 pt-1">
             <button
               onClick={() => { setShowAddDeckMenu(false); onCreateSubDeck(deck.id); }}
-              className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center justify-between"
+              className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
             >
               <span className="text-sm font-medium text-foreground">Criar deck manualmente</span>
               <button
                 onClick={(e) => { e.stopPropagation(); setAddDeckInfoType('manual'); }}
-                className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted-foreground/10 transition-colors"
-                aria-label="O que é criar manualmente?"
+                className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
               >
-                <Info className="h-4 w-4" />
+                <Info className="h-3.5 w-3.5" />
               </button>
+              <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 ml-auto shrink-0" />
             </button>
             {onCreateSubDeckAI && (
               <button
                 onClick={() => { setShowAddDeckMenu(false); onCreateSubDeckAI(deck.id); }}
-                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center justify-between"
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
               >
                 <span className="text-sm font-medium text-foreground">Criar deck com IA</span>
                 <button
                   onClick={(e) => { e.stopPropagation(); setAddDeckInfoType('ia'); }}
-                  className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted-foreground/10 transition-colors"
-                  aria-label="O que é criar com IA?"
+                  className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
                 >
-                  <Info className="h-4 w-4" />
+                  <Info className="h-3.5 w-3.5" />
                 </button>
+                <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 ml-auto shrink-0" />
               </button>
             )}
           </div>
