@@ -53,10 +53,10 @@ const Auth = () => {
       <div className="w-full max-w-sm space-y-6">
         {/* Header */}
         <div className="flex flex-col items-center space-y-2">
-          <MemoCardsLogo size={48} />
-          <h1 className="font-display text-2xl font-black tracking-tight text-foreground">
-            memocards
-          </h1>
+          <div className="flex items-center gap-2.5">
+            <MemoCardsLogo size={36} />
+            <span className="font-display text-2xl font-black tracking-tight text-foreground">Memocards</span>
+          </div>
           <p className="text-sm text-muted-foreground">
             {mode === 'login' ? 'Entre na sua conta' : 'Crie sua conta grátis'}
           </p>
