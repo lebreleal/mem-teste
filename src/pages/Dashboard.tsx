@@ -324,6 +324,8 @@ const Dashboard = () => {
     folderId: string | null;
     textSample?: string;
   } | null>(null);
+  const [aiDeckParentId, setAiDeckParentId] = useState<string | null>(null);
+  const [aiDeckParentName, setAiDeckParentName] = useState<string | null>(null);
 
   const activeSection = 'personal' as const;
 
@@ -951,6 +953,12 @@ const Dashboard = () => {
             getCommunityLinkId={state.getCommunityLinkId}
             navigateToCommunity={actions.handleNavigateCommunity}
             onCreateSubDeck={isCommunityFolder ? () => {} : (deckId) => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(deckId); }}
+            onCreateSubDeckAI={isCommunityFolder ? undefined : (deckId) => {
+              const parentDeck = state.decks.find(d => d.id === deckId);
+              setAiDeckParentId(deckId);
+              setAiDeckParentName(parentDeck?.name ?? null);
+              state.setAiDeckOpen(true);
+            }}
             onRenameDeck={isCommunityFolder ? () => {} : (d) => { state.setRenameTarget({ type: 'deck', id: d.id, name: d.name }); state.setRenameName(d.name); }}
             onMoveDeck={isCommunityFolder ? () => {} : (d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(d.folder_id || state.currentFolderId); state.setMoveParentDeckId(null); }}
             onArchiveDeck={isCommunityFolder ? () => {} : (id) => state.archiveDeck.mutate(id)}
@@ -1122,9 +1130,11 @@ const Dashboard = () => {
             open={state.aiDeckOpen}
             onOpenChange={(open) => {
               state.setAiDeckOpen(open);
-              if (!open) setPendingReviewData(null);
+              if (!open) { setPendingReviewData(null); setAiDeckParentId(null); setAiDeckParentName(null); }
             }}
             folderId={pendingReviewData?.folderId ?? state.currentFolderId}
+            existingDeckId={aiDeckParentId}
+            existingDeckName={aiDeckParentName}
             pendingReviewData={pendingReviewData}
           />
         )}

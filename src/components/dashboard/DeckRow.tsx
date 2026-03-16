@@ -7,7 +7,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Info, ChevronDown, Layers, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings, Plus, Minus, Play } from 'lucide-react';
+import { Info, ChevronDown, Layers, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings, Plus, Minus, Play, Sparkles, BookOpen } from 'lucide-react';
 import type { DeckWithStats } from '@/hooks/useDecks';
 import type { DragReorderHandlers } from '@/hooks/useDragReorder';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
@@ -101,6 +101,7 @@ interface DeckRowProps {
   getCommunityLinkId: (deck: DeckWithStats) => string | null;
   navigateToCommunity: (id: string) => void;
   onCreateSubDeck: (deckId: string) => void;
+  onCreateSubDeckAI?: (deckId: string) => void;
   onRename: (deck: DeckWithStats) => void;
   onMove: (deck: DeckWithStats) => void;
   onArchive: (id: string) => void;
@@ -149,6 +150,7 @@ function aggregateClassification(deck: DeckWithStats, getSubDecks: (id: string) 
 const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   deck, deckSelectionMode, selectedDeckIds,
   toggleDeckSelection, getSubDecks, getAggregateStats,
+  onCreateSubDeck, onCreateSubDeckAI,
   onRename, onMove, onArchive, onDelete,
   dragHandlers, hasPendingUpdate,
   expandedAccordionId, onAccordionToggle,
@@ -181,6 +183,9 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   const displayName = isErrorDeck ? 'Caderno de Erros' : deck.name;
   const hasDueCards = aggStats.new_count + aggStats.learning_count + aggStats.review_count > 0;
 
+  // A deck with no sub-decks and no cards is an empty matéria — expand inline instead of navigating
+  const isEmptyMateria = !hasChildren && totalCards === 0 && !isErrorDeck;
+
   const handleClick = () => {
     if (deckSelectionMode) {
       toggleDeckSelection(deck.id);
@@ -194,7 +199,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
       }
       return;
     }
-    if (hasChildren) {
+    if (hasChildren || isEmptyMateria) {
       onAccordionToggle?.(deck.id);
     } else {
       navigate(`/decks/${deck.id}`, readOnlyNavState ? { state: readOnlyNavState } : undefined);
@@ -221,8 +226,8 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
         className={`group flex items-center gap-3 px-4 py-4 cursor-pointer transition-all hover:bg-muted/50 ${dragHandlers ? dragHandlers.className : ''}`}
         onClick={handleClick}
       >
-        {/* Expand/collapse icon for decks with children */}
-        {hasChildren && (
+        {/* Expand/collapse icon for decks with children or empty matérias */}
+        {(hasChildren || isEmptyMateria) && (
           isExpanded
             ? <Minus className="h-4 w-4 text-muted-foreground shrink-0" />
             : <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -280,7 +285,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
         {/* Actions on hover for loose decks, always when matéria expanded */}
         {!isErrorDeck && !deckSelectionMode && !readOnly && (
           <div className={`flex items-center gap-1.5 shrink-0 transition-opacity duration-200 ${
-            hasChildren && isExpanded
+            (hasChildren || isEmptyMateria) && isExpanded
               ? 'opacity-100'
               : 'opacity-0 group-hover:opacity-100'
           }`}>
@@ -300,7 +305,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
         )}
 
         {/* Chevron arrow for navigation (loose decks only, hidden on hover) */}
-        {!deckSelectionMode && !isErrorDeck && !hasChildren && (
+        {!deckSelectionMode && !isErrorDeck && !hasChildren && !isEmptyMateria && (
           <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 -rotate-90 group-hover:hidden" />
         )}
       </div>
@@ -363,10 +368,62 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
               </div>
             );
           })}
+          {/* Add deck row at bottom of expanded matéria */}
+          {!readOnly && !effectiveDisableManagement && (
+            <div className="flex items-center gap-3 pl-10 pr-4 py-3 border-t border-border/30">
+              <button
+                onClick={(e) => { e.stopPropagation(); onCreateSubDeck(deck.id); }}
+                className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>Adicionar Deck</span>
+              </button>
+              {onCreateSubDeckAI && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onCreateSubDeckAI(deck.id); }}
+                  className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  <span>Com IA</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Info modal for error deck */}
+      {/* Empty matéria — show add deck buttons */}
+      {isEmptyMateria && isExpanded && !readOnly && (
+        <div className="bg-muted/30 border-t border-border/30 px-6 py-5">
+          <p className="text-sm text-muted-foreground mb-3">Nenhum deck nesta matéria. Adicione um para começar:</p>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={(e) => { e.stopPropagation(); onCreateSubDeck(deck.id); }}
+              className="flex items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted border border-border/50"
+            >
+              <BookOpen className="h-5 w-5 text-primary shrink-0" />
+              <div>
+                <span className="text-sm font-medium text-foreground">Criar Deck Manual</span>
+                <p className="text-xs text-muted-foreground">Adicione cartões manualmente</p>
+              </div>
+            </button>
+            {onCreateSubDeckAI && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onCreateSubDeckAI(deck.id); }}
+                className="flex items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted border border-border/50"
+              >
+                <Sparkles className="h-5 w-5 text-primary shrink-0" />
+                <div>
+                  <span className="text-sm font-medium text-foreground">Criar Deck com IA</span>
+                  <p className="text-xs text-muted-foreground">A partir do seu material de estudo</p>
+                </div>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+
       <Dialog open={showInfoModal} onOpenChange={setShowInfoModal}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
