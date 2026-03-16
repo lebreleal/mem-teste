@@ -540,6 +540,7 @@ const CardListContent = ({
                         )}
                       </div>
                     );
+                  })()}
                   {isCloze && clozeText ? (
                     <p className="text-sm font-semibold text-foreground leading-snug">
                       {(() => {
