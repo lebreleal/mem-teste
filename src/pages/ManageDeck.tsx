@@ -336,7 +336,6 @@ const ManageDeck = () => {
                     onChange={(v) => { setBack(v); setIsDirty(true); }}
                     placeholder=""
                     chromeless
-                    hideToolbarUntilFocus
                     hideCloze
                   />
                 </div>
