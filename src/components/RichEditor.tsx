@@ -61,6 +61,7 @@ interface RichEditorProps {
   onOcclusionAttach?: () => void;
   hideCloze?: boolean;
   chromeless?: boolean;
+  hideToolbarUntilFocus?: boolean;
 }
 
 const TEXT_COLORS = [
