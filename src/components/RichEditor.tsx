@@ -547,7 +547,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
           </Button>
         </div>
       )}
-      <EditorContent editor={editor} />
+      
 
       <Suspense fallback={null}>
         {configOpen && (
