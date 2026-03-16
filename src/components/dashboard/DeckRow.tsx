@@ -7,7 +7,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Info, ChevronDown, Layers, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings, Plus, Minus, Play } from 'lucide-react';
+import { Info, ChevronDown, Layers, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings, Plus, Minus, Play, Sparkles, BookOpen } from 'lucide-react';
 import type { DeckWithStats } from '@/hooks/useDecks';
 import type { DragReorderHandlers } from '@/hooks/useDragReorder';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
