@@ -181,13 +181,13 @@ const ManageDeck = () => {
     createCard.mutate(
       { frontContent: '', backContent: '', cardType: 'basic' },
       {
-        onSuccess: () => {
+        onSuccess: (createdCard) => {
+          setPendingNewCardId(createdCard.id);
           toast({ title: 'Novo cartão criado' });
-          setTimeout(() => setSelectedIndex(totalCards), 100);
         },
       }
     );
-  }, [createCard, totalCards, toast]);
+  }, [createCard, toast]);
 
   const handleDuplicate = useCallback(() => {
     if (!currentCard) return;
