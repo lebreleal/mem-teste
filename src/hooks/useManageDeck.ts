@@ -146,7 +146,7 @@ export function useManageDeck() {
       backContent = back;
     }
     const onSuccess = () => {
-      toast({ title: editingId ? 'Card atualizado!' : 'Card criado!' });
+      toast({ title: editingId ? 'Cartão atualizado!' : 'Cartão criado!' });
       if (addAnother) { setFront(''); setBack(''); setEditingId(null); setMcOptions(['', '', '', '']); setMcCorrectIndex(0); }
       else { setEditorOpen(false); resetForm(); }
     };
