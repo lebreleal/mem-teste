@@ -10,7 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { ArrowLeft, Loader2, ExternalLink, BarChart3, BrainCircuit, Gauge, Wallet, Bot, LogOut, Lock, User, Save } from 'lucide-react';
+import { ArrowLeft, Loader2, ExternalLink, BarChart3, BrainCircuit, Gauge, Wallet, Bot, LogOut, Lock, User, Save, Camera } from 'lucide-react';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 
 const Profile = () => {
   const { user, signOut } = useAuth();
@@ -92,6 +93,27 @@ const Profile = () => {
   }
 
   const initials = name ? name.charAt(0).toUpperCase() : (email?.charAt(0).toUpperCase() ?? 'U');
+  const avatarUrl = user?.user_metadata?.avatar_url as string | undefined;
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    const ext = file.name.split('.').pop();
+    const path = `${user.id}/avatar.${ext}`;
+    const { error: uploadErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
+    if (uploadErr) {
+      toast({ title: 'Erro', description: 'Falha ao enviar imagem.', variant: 'destructive' });
+      return;
+    }
+    const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
+    const publicUrl = urlData.publicUrl + '?t=' + Date.now();
+    const { error: updateErr } = await supabase.auth.updateUser({ data: { avatar_url: publicUrl } });
+    if (updateErr) {
+      toast({ title: 'Erro', description: 'Falha ao atualizar avatar.', variant: 'destructive' });
+    } else {
+      toast({ title: 'Foto atualizada!' });
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -109,8 +131,18 @@ const Profile = () => {
       <main className="container mx-auto max-w-lg px-4 py-6 pb-24">
         {/* Avatar */}
         <div className="flex flex-col items-center mb-8">
-          <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center text-3xl font-bold text-primary">
-            {initials}
+          <div className="relative">
+            <Avatar className="h-20 w-20 text-3xl">
+              <AvatarImage src={avatarUrl} alt="Avatar" />
+              <AvatarFallback className="bg-primary/10 text-primary font-bold text-3xl">{initials}</AvatarFallback>
+            </Avatar>
+            <label
+              htmlFor="avatar-upload"
+              className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full bg-primary flex items-center justify-center cursor-pointer shadow-md hover:bg-primary/90 transition-colors"
+            >
+              <Camera className="h-3.5 w-3.5 text-primary-foreground" />
+              <input id="avatar-upload" type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+            </label>
           </div>
         </div>
 
