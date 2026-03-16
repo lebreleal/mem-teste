@@ -58,39 +58,28 @@ export function useManageDeck() {
 
   const openEdit = useCallback((card: { id: string; front_content: string; back_content: string; card_type: string }) => {
     setEditingId(card.id);
-    if (card.card_type === 'cloze') {
-      // If front_content is image-occlusion JSON, extract frontText only
-      try {
-        const parsed = JSON.parse(card.front_content);
-        if (parsed && typeof parsed === 'object' && 'imageUrl' in parsed) {
-          setFront(parsed.frontText || '');
-        } else {
-          setFront(card.front_content);
-        }
-      } catch { setFront(card.front_content); }
-      setEditorType('cloze');
+    // For all types, extract frontText if it's occlusion JSON
+    try {
+      const parsed = JSON.parse(card.front_content);
+      if (parsed && typeof parsed === 'object' && 'imageUrl' in parsed) {
+        // Keep full JSON in front for image occlusion
+        setFront(card.front_content);
+      } else {
+        setFront(card.front_content);
+      }
+    } catch { setFront(card.front_content); }
+
+    // Handle back content for cloze-type cards
+    if (card.card_type === 'cloze' || card.card_type === 'image_occlusion') {
       try {
         const parsed = JSON.parse(card.back_content);
         setBack(typeof parsed.clozeTarget === 'number' ? (parsed.extra || '') : card.back_content);
       } catch { setBack(card.back_content); }
-    } else if (card.card_type === 'image_occlusion') {
-      setEditorType('image_occlusion');
-      setFront(card.front_content);
-      try { JSON.parse(card.front_content); } catch {}
-      setBack(card.back_content);
     } else {
-      // For basic cards, also extract frontText if it's occlusion JSON
-      try {
-        const parsed = JSON.parse(card.front_content);
-        if (parsed && typeof parsed === 'object' && 'imageUrl' in parsed) {
-          setFront(parsed.frontText || '');
-        } else {
-          setFront(card.front_content);
-        }
-      } catch { setFront(card.front_content); }
-      setEditorType('basic');
       setBack(card.back_content);
     }
+
+    setEditorType('basic'); // unified editor, type auto-detected on save
     setEditorOpen(true);
   }, []);
 
