@@ -358,7 +358,7 @@ const Dashboard = () => {
   // Listen for "+" button inside own sala → open add menu sheet
   const [salaAddMenuOpen, setSalaAddMenuOpen] = useState(false);
   const [addMenuStep, setAddMenuStep] = useState<'main' | 'create-deck'>('main');
-  const [addMenuInfoType, setAddMenuInfoType] = useState<'deck' | 'materia' | null>(null);
+  const [addMenuInfoType, setAddMenuInfoType] = useState<'deck' | 'materia' | 'deck-manual' | 'deck-ia' | null>(null);
   useEffect(() => {
     const handler = () => {
       if (state.isInsideSala && !isCommunityFolder) {
