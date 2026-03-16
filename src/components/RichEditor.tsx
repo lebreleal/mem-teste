@@ -3,6 +3,7 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import { markdownToHtml } from '@/lib/markdownToHtml';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
+import Link from '@tiptap/extension-link';
 import Underline from '@tiptap/extension-underline';
 import Color from '@tiptap/extension-color';
 import { TextStyle } from '@tiptap/extension-text-style';
