@@ -131,8 +131,18 @@ const Profile = () => {
       <main className="container mx-auto max-w-lg px-4 py-6 pb-24">
         {/* Avatar */}
         <div className="flex flex-col items-center mb-8">
-          <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center text-3xl font-bold text-primary">
-            {initials}
+          <div className="relative">
+            <Avatar className="h-20 w-20 text-3xl">
+              <AvatarImage src={avatarUrl} alt="Avatar" />
+              <AvatarFallback className="bg-primary/10 text-primary font-bold text-3xl">{initials}</AvatarFallback>
+            </Avatar>
+            <label
+              htmlFor="avatar-upload"
+              className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full bg-primary flex items-center justify-center cursor-pointer shadow-md hover:bg-primary/90 transition-colors"
+            >
+              <Camera className="h-3.5 w-3.5 text-primary-foreground" />
+              <input id="avatar-upload" type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+            </label>
           </div>
         </div>
 
