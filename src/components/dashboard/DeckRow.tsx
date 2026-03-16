@@ -402,36 +402,54 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
         </div>
       )}
 
-      {/* Empty matéria — show add deck buttons */}
-      {isEmptyMateria && isExpanded && !readOnly && (
-        <div className="bg-muted/30 border-t border-border/30 px-6 py-5">
-          <p className="text-sm text-muted-foreground mb-3">Nenhum deck nesta matéria. Adicione um para começar:</p>
-          <div className="flex flex-col gap-2">
+      {/* Empty matéria — simple "+ Adicionar Deck" */}
+      {isEmptyMateria && !readOnly && (
+        <div className="bg-muted/20 border-t border-border/30 pl-10 pr-4 py-3">
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowAddDeckMenu(true); }}
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Adicionar Deck</span>
+          </button>
+        </div>
+      )}
+
+      {/* Add deck modal for empty matéria */}
+      <Dialog open={showAddDeckMenu} onOpenChange={setShowAddDeckMenu}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle>Adicionar Deck</DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground">
+              Escolha como criar o deck em <strong>{deck.name}</strong>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2 pt-2">
             <button
-              onClick={(e) => { e.stopPropagation(); onCreateSubDeck(deck.id); }}
+              onClick={() => { setShowAddDeckMenu(false); onCreateSubDeck(deck.id); }}
               className="flex items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted border border-border/50"
             >
               <BookOpen className="h-5 w-5 text-primary shrink-0" />
               <div>
-                <span className="text-sm font-medium text-foreground">Criar Deck Manual</span>
-                <p className="text-xs text-muted-foreground">Adicione cartões manualmente</p>
+                <span className="text-sm font-medium text-foreground">Manual</span>
+                <p className="text-xs text-muted-foreground">Crie e adicione cartões</p>
               </div>
             </button>
             {onCreateSubDeckAI && (
               <button
-                onClick={(e) => { e.stopPropagation(); onCreateSubDeckAI(deck.id); }}
+                onClick={() => { setShowAddDeckMenu(false); onCreateSubDeckAI(deck.id); }}
                 className="flex items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted border border-border/50"
               >
                 <Sparkles className="h-5 w-5 text-primary shrink-0" />
                 <div>
-                  <span className="text-sm font-medium text-foreground">Criar Deck com IA</span>
+                  <span className="text-sm font-medium text-foreground">Com IA</span>
                   <p className="text-xs text-muted-foreground">A partir do seu material de estudo</p>
                 </div>
               </button>
             )}
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
 
       <Dialog open={showInfoModal} onOpenChange={setShowInfoModal}>
