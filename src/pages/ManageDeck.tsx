@@ -10,7 +10,6 @@ import { Label } from '@/components/ui/label';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useQueryClient } from '@tanstack/react-query';
-import { CardTagEditor } from '@/components/manage-deck/CardTagWidgets';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const ImageOcclusion = lazy(() => import('@/components/ImageOcclusion'));
