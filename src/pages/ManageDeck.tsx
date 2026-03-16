@@ -12,7 +12,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Skeleton } from '@/components/ui/skeleton';
 import OcclusionEditor from '@/components/manage-deck/OcclusionEditor';
 
-const ImageOcclusion = lazy(() => import('@/components/ImageOcclusion'));
+
 
 const ManageDeck = () => {
   const { deckId } = useParams<{ deckId: string }>();
