@@ -1168,12 +1168,12 @@ const Dashboard = () => {
                    <p>Você pode criar baralhos manualmente ou usar a IA para gerar cartões automaticamente.</p>
                  </>
                )}
-              {addMenuInfoType === 'deck-manual' && (
-                <>
-                  <p>Você escolhe o nome do deck e adiciona os cartões (flashcards) um a um.</p>
-                  <p>Ideal quando você quer ter controle total sobre o conteúdo dos seus cartões.</p>
-                </>
-              )}
+               {addMenuInfoType === 'deck-manual' && (
+                 <>
+                   <p>Você escolhe o nome do baralho e adiciona os cartões (flashcards) um a um.</p>
+                   <p>Ideal quando você quer ter controle total sobre o conteúdo dos seus cartões.</p>
+                 </>
+               )}
               {addMenuInfoType === 'deck-ia' && (
                 <>
                   <p>Envie seu material de estudo (PDF, imagem ou texto) e a inteligência artificial gera os cartões automaticamente.</p>
