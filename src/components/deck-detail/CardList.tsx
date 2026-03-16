@@ -484,7 +484,8 @@ const CardListContent = ({
           } catch {}
         }
 
-        const clozeNums = isCloze ? getClozeNumbers(card.front_content) : [];
+        const clozeText = isCloze ? getClozeDisplayText(card) : null;
+        const clozeNums = clozeText ? getClozeNumbers(clozeText) : [];
 
         return (
           <div key={card.id} className="relative">
