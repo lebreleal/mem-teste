@@ -175,6 +175,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   const subDecks = useMemo(() => getSubDecks(deck.id), [deck.id, getSubDecks]);
   const hasChildren = subDecks.length > 0;
   const isExpanded = expandedAccordionId === deck.id;
+  const isEmptyMateria = !hasChildren && totalCards === 0 && !isErrorDeck;
 
   // Aggregate classification across deck + all descendants
   const classPcts = useMemo(() => aggregateClassification(deck, getSubDecks), [deck, getSubDecks]);
