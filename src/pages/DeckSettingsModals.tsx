@@ -15,9 +15,9 @@ import {
 } from '@/components/ui/alert-dialog';
 import {
   ChevronRight, Zap, Sparkles, Download, Copy,
-  RotateCcw, Loader2, Plus, X, Shuffle, Mail,
+  RotateCcw, Loader2, Plus, X, Shuffle, Mail, Package,
 } from 'lucide-react';
-import ankiLogo from '@/assets/anki-logo.svg';
+// anki-logo removed
 
 interface DeckSettingsModalsProps {
   deckId: string;
@@ -436,7 +436,7 @@ const DeckSettingsModals = (props: DeckSettingsModalsProps) => {
               disabled={exportingCsv || exportingAnki}
             >
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted p-1.5">
-                {exportingAnki ? <Loader2 className="h-5 w-5 animate-spin text-primary" /> : <img src={ankiLogo} alt="Anki" className="h-full w-full object-contain" />}
+                {exportingAnki ? <Loader2 className="h-5 w-5 animate-spin text-primary" /> : <Package className="h-5 w-5 text-muted-foreground" />}
               </div>
               <div>
                 <p className="font-medium text-sm text-foreground">Exportar como Anki</p>
