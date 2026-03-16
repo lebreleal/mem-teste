@@ -953,6 +953,12 @@ const Dashboard = () => {
             getCommunityLinkId={state.getCommunityLinkId}
             navigateToCommunity={actions.handleNavigateCommunity}
             onCreateSubDeck={isCommunityFolder ? () => {} : (deckId) => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(deckId); }}
+            onCreateSubDeckAI={isCommunityFolder ? undefined : (deckId) => {
+              const parentDeck = state.decks.find(d => d.id === deckId);
+              setAiDeckParentId(deckId);
+              setAiDeckParentName(parentDeck?.name ?? null);
+              state.setAiDeckOpen(true);
+            }}
             onRenameDeck={isCommunityFolder ? () => {} : (d) => { state.setRenameTarget({ type: 'deck', id: d.id, name: d.name }); state.setRenameName(d.name); }}
             onMoveDeck={isCommunityFolder ? () => {} : (d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(d.folder_id || state.currentFolderId); state.setMoveParentDeckId(null); }}
             onArchiveDeck={isCommunityFolder ? () => {} : (id) => state.archiveDeck.mutate(id)}
