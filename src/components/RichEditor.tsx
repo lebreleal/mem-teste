@@ -82,6 +82,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   const [imageMenuOpen, setImageMenuOpen] = useState(false);
   const [clozeCounter, setClozeCounter] = useState(1);
   const [clozeActive, setClozeActive] = useState(false);
+  const [cursorInCloze, setCursorInCloze] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
 
   const editor = useEditor({
@@ -126,6 +127,26 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       setClozeCounter(1);
     }
   }, [content, editor]);
+
+  // Track whether cursor is inside an existing cloze
+  useEffect(() => {
+    if (!editor) return;
+
+    const syncClozeState = () => {
+      setCursorInCloze(editor.isActive('clozeMark'));
+    };
+
+    syncClozeState();
+    editor.on('selectionUpdate', syncClozeState);
+    editor.on('transaction', syncClozeState);
+    editor.on('focus', syncClozeState);
+
+    return () => {
+      editor.off('selectionUpdate', syncClozeState);
+      editor.off('transaction', syncClozeState);
+      editor.off('focus', syncClozeState);
+    };
+  }, [editor]);
 
   // Deactivate cloze mark on Enter or Escape
   useEffect(() => {
@@ -219,34 +240,32 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     return editor.isActive('clozeMark');
   }, [editor]);
 
-  /** Toggle cloze mark — if cursor inside existing cloze, remove it; if text selected, wrap it; otherwise toggle stored mark */
+  /** Toggle cloze mark — if cursor is inside an existing cloze, remove that cloze range */
   const handleCloze = useCallback(() => {
     if (!editor) return;
     const { from, to } = editor.state.selection;
     const hasSelection = from !== to;
 
-    // If cursor is inside an existing cloze (or selection has cloze), remove it
-    if (isCursorInCloze() && !clozeActive) {
+    if (isCursorInCloze()) {
+      editor.chain().focus().extendMarkRange('clozeMark').unsetMark('clozeMark').run();
+      setClozeActive(false);
+      setCursorInCloze(false);
+      return;
+    }
+
+    if (clozeActive && !hasSelection) {
       editor.chain().focus().unsetMark('clozeMark').run();
       setClozeActive(false);
       return;
     }
 
-    if (clozeActive && !hasSelection) {
-      // Deactivate: unset the stored mark so new text won't be cloze
-      editor.chain().focus().unsetMark('clozeMark').run();
+    editor.chain().focus().setMark('clozeMark', { num: String(clozeCounter) }).run();
+
+    if (hasSelection) {
+      editor.chain().setTextSelection(to).unsetMark('clozeMark').run();
       setClozeActive(false);
     } else {
-      // Activate or wrap selection
-      editor.chain().focus().setMark('clozeMark', { num: String(clozeCounter) }).run();
-      // If there was a selection, the mark is applied inline — deactivate stored mark after
-      if (hasSelection) {
-        // Move cursor to end of selection and unset stored mark
-        editor.chain().setTextSelection(to).unsetMark('clozeMark').run();
-        setClozeActive(false);
-      } else {
-        setClozeActive(true);
-      }
+      setClozeActive(true);
     }
   }, [editor, clozeCounter, clozeActive, isCursorInCloze]);
 
@@ -287,6 +306,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   const ToolBtn = ({ onClick, active, children, title }: { onClick: () => void; active?: boolean; children: React.ReactNode; title?: string }) => (
     <Button type="button" variant="ghost" size="icon"
       className={`h-7 w-7 transition-all ${active ? 'bg-primary/15 text-primary ring-1 ring-primary/40' : ''}`}
+      onMouseDown={(e) => e.preventDefault()}
       onClick={onClick} title={title}
     >
       {children}
@@ -328,7 +348,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
           </DropdownMenu>
 
           {!hideCloze && (
-            <ToolBtn onClick={handleCloze} active={clozeActive || editor.isActive('clozeMark')} title={`Cloze c${clozeCounter} (mesmo número)`}>
+            <ToolBtn onClick={handleCloze} active={clozeActive || cursorInCloze} title={`Cloze c${clozeCounter} (mesmo número)`}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="3" width="18" height="18" rx="3" strokeDasharray="4 3" />
               </svg>
@@ -338,6 +358,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
           {!hideCloze && (
             <Button type="button" variant="ghost" size="icon"
               className="h-7 w-7"
+              onMouseDown={(e) => e.preventDefault()}
               onClick={handleClozeNext}
               title={`Novo cloze c${clozeCounter + 1} (próximo número)`}
             >
