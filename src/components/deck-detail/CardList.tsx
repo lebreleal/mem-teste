@@ -234,7 +234,7 @@ const CardList = () => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => openNew()}>
+                <DropdownMenuItem onClick={() => navigate(`/decks/${deck?.id}/manage`)}>
                   <PenLine className="mr-2 h-4 w-4" /> Criar manualmente
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setAiAddCardsOpen(true)}>
