@@ -157,7 +157,12 @@ export const CardEditorDialog = ({
   );
 
   const renderClozePreview = () => {
-    const plainText = front.replace(/<[^>]*>/g, '');
+    let textSource = front;
+    // For image_occlusion, extract frontText from JSON
+    if (editorType === 'image_occlusion') {
+      try { textSource = JSON.parse(front)?.frontText || ''; } catch {}
+    }
+    const plainText = textSource.replace(/<[^>]*>/g, '');
     const clozeRegex = /\{\{c(\d+)::([^}]*)\}\}/g;
     const clozeNumbers = new Set<number>();
     let match;
