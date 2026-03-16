@@ -80,7 +80,7 @@ const DeckCard = ({ deck, onStudy, onDelete }: DeckCardProps) => {
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => navigate(`/decks/${deck.id}/manage`)}>
                 <Layers className="mr-2 h-4 w-4" />
-                Gerenciar Cards
+                Gerenciar Cartões
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => navigate(`/decks/${deck.id}/settings`)}>
                 <Settings className="mr-2 h-4 w-4" />

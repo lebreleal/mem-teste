@@ -411,14 +411,14 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
       <Dialog open={showAddDeckMenu} onOpenChange={setShowAddDeckMenu}>
         <DialogContent className="max-w-xs">
           <DialogHeader>
-            <DialogTitle>Novo deck em {deck.name}</DialogTitle>
+            <DialogTitle>Novo baralho em {deck.name}</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-2 pt-1">
             <button
               onClick={() => { setShowAddDeckMenu(false); onCreateSubDeck(deck.id); }}
               className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
             >
-              <span className="text-sm font-medium text-foreground">Criar deck manualmente</span>
+              <span className="text-sm font-medium text-foreground">Criar baralho manualmente</span>
               <button
                 onClick={(e) => { e.stopPropagation(); setAddDeckInfoType('manual'); }}
                 className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
@@ -432,7 +432,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                 onClick={() => { setShowAddDeckMenu(false); onCreateSubDeckAI(deck.id); }}
                 className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
               >
-                <span className="text-sm font-medium text-foreground">Criar deck com IA</span>
+                <span className="text-sm font-medium text-foreground">Criar baralho com IA</span>
                 <button
                   onClick={(e) => { e.stopPropagation(); setAddDeckInfoType('ia'); }}
                   className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
@@ -450,12 +450,12 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
       <Dialog open={addDeckInfoType !== null} onOpenChange={(v) => { if (!v) setAddDeckInfoType(null); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>{addDeckInfoType === 'manual' ? 'Criar deck manualmente' : 'Criar deck com IA'}</DialogTitle>
+            <DialogTitle>{addDeckInfoType === 'manual' ? 'Criar baralho manualmente' : 'Criar baralho com IA'}</DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground leading-relaxed pt-2 space-y-2">
               {addDeckInfoType === 'manual' ? (
                 <>
-                  <p>Você escolhe o nome do deck e adiciona os cartões (flashcards) um a um.</p>
-                  <p>Ideal quando você quer ter controle total sobre o conteúdo dos seus cartões.</p>
+                   <p>Você escolhe o nome do baralho e adiciona os cartões (flashcards) um a um.</p>
+                   <p>Ideal quando você quer ter controle total sobre o conteúdo dos seus cartões.</p>
                 </>
               ) : (
                 <>

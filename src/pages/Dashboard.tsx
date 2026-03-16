@@ -1149,10 +1149,10 @@ const Dashboard = () => {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>
-              {addMenuInfoType === 'materia' && 'O que é uma Matéria?'}
-              {addMenuInfoType === 'deck' && 'O que é um Deck?'}
-              {addMenuInfoType === 'deck-manual' && 'Criar deck manualmente'}
-              {addMenuInfoType === 'deck-ia' && 'Criar deck com IA'}
+               {addMenuInfoType === 'materia' && 'O que é uma Matéria?'}
+               {addMenuInfoType === 'deck' && 'O que é um Baralho?'}
+               {addMenuInfoType === 'deck-manual' && 'Criar baralho manualmente'}
+               {addMenuInfoType === 'deck-ia' && 'Criar baralho com IA'}
             </DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground leading-relaxed pt-2 space-y-2">
               {addMenuInfoType === 'materia' && (
@@ -1162,18 +1162,18 @@ const Dashboard = () => {
                   <p>Ao estudar, você pode revisar todos os decks de uma matéria de uma só vez.</p>
                 </>
               )}
-              {addMenuInfoType === 'deck' && (
-                <>
-                  <p>Um <strong>Deck</strong> é um conjunto de flashcards sobre um assunto específico.</p>
-                  <p>Você pode criar decks manualmente ou usar a IA para gerar cartões automaticamente.</p>
-                </>
-              )}
-              {addMenuInfoType === 'deck-manual' && (
-                <>
-                  <p>Você escolhe o nome do deck e adiciona os cartões (flashcards) um a um.</p>
-                  <p>Ideal quando você quer ter controle total sobre o conteúdo dos seus cartões.</p>
-                </>
-              )}
+               {addMenuInfoType === 'deck' && (
+                 <>
+                   <p>Um <strong>Baralho</strong> é um conjunto de flashcards sobre um assunto específico.</p>
+                   <p>Você pode criar baralhos manualmente ou usar a IA para gerar cartões automaticamente.</p>
+                 </>
+               )}
+               {addMenuInfoType === 'deck-manual' && (
+                 <>
+                   <p>Você escolhe o nome do baralho e adiciona os cartões (flashcards) um a um.</p>
+                   <p>Ideal quando você quer ter controle total sobre o conteúdo dos seus cartões.</p>
+                 </>
+               )}
               {addMenuInfoType === 'deck-ia' && (
                 <>
                   <p>Envie seu material de estudo (PDF, imagem ou texto) e a inteligência artificial gera os cartões automaticamente.</p>
@@ -1382,7 +1382,7 @@ const Dashboard = () => {
         <SheetContent side="bottom" className="rounded-t-2xl px-4 pb-8 pt-4">
           <SheetHeader className="mb-4">
             <SheetTitle className="text-base font-bold">
-              {addMenuStep === 'main' ? 'Adicionar' : 'Criar deck'}
+              {addMenuStep === 'main' ? 'Adicionar' : 'Criar baralho'}
             </SheetTitle>
           </SheetHeader>
 
@@ -1392,7 +1392,7 @@ const Dashboard = () => {
                 className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
                 onClick={() => setAddMenuStep('create-deck')}
               >
-                <span className="text-sm font-medium text-foreground">Criar deck</span>
+                <span className="text-sm font-medium text-foreground">Criar baralho</span>
                 <button
                   onClick={(e) => { e.stopPropagation(); setAddMenuInfoType('deck'); }}
                   className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
@@ -1430,7 +1430,7 @@ const Dashboard = () => {
                 className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
                 onClick={() => { setSalaAddMenuOpen(false); setAddMenuStep('main'); state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
               >
-                <span className="text-sm font-medium text-foreground">Criar deck manualmente</span>
+                <span className="text-sm font-medium text-foreground">Criar baralho manualmente</span>
                 <button
                   onClick={(e) => { e.stopPropagation(); setAddMenuInfoType('deck-manual'); }}
                   className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
@@ -1443,7 +1443,7 @@ const Dashboard = () => {
                 className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
                 onClick={() => { setSalaAddMenuOpen(false); setAddMenuStep('main'); state.setAiDeckOpen(true); }}
               >
-                <span className="text-sm font-medium text-foreground">Criar deck com IA</span>
+                <span className="text-sm font-medium text-foreground">Criar baralho com IA</span>
                 <button
                   onClick={(e) => { e.stopPropagation(); setAddMenuInfoType('deck-ia'); }}
                   className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"

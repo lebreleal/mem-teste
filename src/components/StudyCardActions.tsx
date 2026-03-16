@@ -207,7 +207,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
       setIsSaving(true);
       try {
         await cardService.updateCard(editCardIdRef.current, front, backContent);
-        toast({ title: 'Card atualizado!' });
+         toast({ title: 'Cartão atualizado!' });
         setEditOpen(false);
         queryClient.invalidateQueries({ queryKey: ['cards'] });
         onCardUpdated({ front_content: front, back_content: backContent });
@@ -308,7 +308,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
         }
 
         queryClient.invalidateQueries({ queryKey: ['cards'] });
-        toast({ title: 'Card atualizado!' });
+         toast({ title: 'Cartão atualizado!' });
         setEditOpen(false);
       } catch {
         toast({ title: 'Erro ao salvar cloze', variant: 'destructive' });
@@ -338,7 +338,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
           ...(frontText ? { frontText } : {}),
         });
         await cardService.updateCard(editCardIdRef.current, frontContent, back);
-        toast({ title: 'Card atualizado!' });
+         toast({ title: 'Cartão atualizado!' });
         setEditOpen(false);
         queryClient.invalidateQueries({ queryKey: ['cards'] });
         onCardUpdated({ front_content: frontContent, back_content: back });
@@ -354,7 +354,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
     setIsSaving(true);
     try {
       await cardService.updateCard(editCardIdRef.current, front, back);
-      toast({ title: 'Card atualizado!' });
+      toast({ title: 'Cartão atualizado!' });
       setEditOpen(false);
       queryClient.invalidateQueries({ queryKey: ['cards'] });
       onCardUpdated({ front_content: front, back_content: back });
@@ -518,13 +518,13 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
               <button
                 onClick={openEdit}
                 className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                aria-label="Editar card"
+                aria-label="Editar cartão"
                 disabled={editLoading}
               >
                 {editLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pencil className="h-3.5 w-3.5" />}
               </button>
             </TooltipTrigger>
-            <TooltipContent><p>Editar card</p></TooltipContent>
+            <TooltipContent><p>Editar cartão</p></TooltipContent>
           </Tooltip>
         )}
       </div>
@@ -566,7 +566,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Pencil className="h-4 w-4" /> Editar Card
+              <Pencil className="h-4 w-4" /> Editar Cartão
             </DialogTitle>
           </DialogHeader>
 

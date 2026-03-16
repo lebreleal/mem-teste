@@ -110,7 +110,7 @@ export function useManageDeck() {
         const backJson = JSON.stringify({ clozeTarget: uniqueNums[0] || 1, extra: back });
         updateCard.mutate({ id: editingId, frontContent: front, backContent: backJson }, {
           onSuccess: () => {
-            toast({ title: 'Card atualizado!' });
+            toast({ title: 'Cartão atualizado!' });
             if (addAnother) { setFront(''); setBack(''); setEditingId(null); setMcOptions(['', '', '', '']); setMcCorrectIndex(0); }
             else { setEditorOpen(false); resetForm(); }
           },
@@ -120,7 +120,7 @@ export function useManageDeck() {
           const backJson = JSON.stringify({ clozeTarget: uniqueNums[0] || 1, extra: back });
           createCard.mutate({ frontContent: front, backContent: backJson, cardType: 'cloze' }, {
             onSuccess: () => {
-              toast({ title: 'Card criado!' });
+              toast({ title: 'Cartão criado!' });
               if (addAnother) { setFront(''); setBack(''); setEditingId(null); setMcOptions(['', '', '', '']); setMcCorrectIndex(0); }
               else { setEditorOpen(false); resetForm(); }
             },
@@ -133,7 +133,7 @@ export function useManageDeck() {
           }));
           createCard.mutate({ cards }, {
             onSuccess: () => {
-              toast({ title: `${uniqueNums.length} cards criados!` });
+              toast({ title: `${uniqueNums.length} cartões criados!` });
               if (addAnother) { setFront(''); setBack(''); setEditingId(null); setMcOptions(['', '', '', '']); setMcCorrectIndex(0); }
               else { setEditorOpen(false); resetForm(); }
             },
@@ -146,7 +146,7 @@ export function useManageDeck() {
       backContent = back;
     }
     const onSuccess = () => {
-      toast({ title: editingId ? 'Card atualizado!' : 'Card criado!' });
+      toast({ title: editingId ? 'Cartão atualizado!' : 'Cartão criado!' });
       if (addAnother) { setFront(''); setBack(''); setEditingId(null); setMcOptions(['', '', '', '']); setMcCorrectIndex(0); }
       else { setEditorOpen(false); resetForm(); }
     };
@@ -159,7 +159,7 @@ export function useManageDeck() {
 
   const handleDelete = useCallback(() => {
     if (!deleteId) return;
-    deleteCard.mutate(deleteId, { onSuccess: () => { setDeleteId(null); toast({ title: 'Card excluído' }); } });
+    deleteCard.mutate(deleteId, { onSuccess: () => { setDeleteId(null); toast({ title: 'Cartão excluído' }); } });
   }, [deleteId, deleteCard, toast]);
 
   const handleImprove = useCallback(async () => {

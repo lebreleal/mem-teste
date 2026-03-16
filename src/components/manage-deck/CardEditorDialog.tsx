@@ -257,7 +257,7 @@ export const CardEditorDialog = ({
         <DialogContent className="max-h-[85dvh] sm:max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="font-display">
-              {editingId ? 'Editar Card' : editorType ? CARD_TYPES_UI.find(t => t.value === editorType)?.label : 'Novo Card'}
+              {editingId ? 'Editar Cartão' : editorType ? CARD_TYPES_UI.find(t => t.value === editorType)?.label : 'Novo Cartão'}
             </DialogTitle>
           </DialogHeader>
           {editorType === null ? renderTypeSelector() : renderEditor()}
