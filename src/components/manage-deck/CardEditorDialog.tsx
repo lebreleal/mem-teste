@@ -1,5 +1,5 @@
-import React from 'react';
-import { MessageSquareText, CheckSquare, PenLine, Image, ArrowLeft, Plus, Trash2, Sparkles, Loader2, Upload, ArrowRight } from 'lucide-react';
+import React, { useState } from 'react';
+import { MessageSquareText, CheckSquare, PenLine, Image, ArrowLeft, Plus, Trash2, Sparkles, Loader2, Upload, ArrowRight, ChevronDown, ChevronUp } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +21,79 @@ const CARD_TYPES_UI = [
   { value: 'cloze' as EditorCardType, label: 'Cloze', desc: 'Texto com lacunas para preencher' },
   { value: 'image_occlusion' as EditorCardType, label: 'Oclusão de imagem', desc: 'Oculte partes de uma imagem' },
 ];
+/* ─── Inline SVG icons matching the toolbar ─── */
+const ClozeIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="3" strokeDasharray="4 3" />
+  </svg>
+);
+const ClozePlusIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="3" strokeDasharray="4 3" />
+    <path d="M12 9v6" />
+    <path d="M9 12h6" />
+  </svg>
+);
+
+const ClozeHelpToggle = () => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="rounded-lg border border-border bg-muted/20 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-primary hover:bg-muted/40 transition-colors"
+      >
+        <span className="underline underline-offset-2">Como usar Oclusão de Texto</span>
+        {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+      </button>
+
+      {open && (
+        <div className="px-3 pb-3 space-y-3 text-xs text-muted-foreground border-t border-border/50 pt-2.5">
+          {/* Step 1: Create cloze */}
+          <div className="flex items-start gap-2.5">
+            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-card border border-border shadow-sm">
+              <ClozeIcon />
+            </span>
+            <div>
+              <p className="font-semibold text-foreground mb-0.5">Criar oclusão</p>
+              <p><span className="text-foreground font-medium">Selecione</span> a palavra ou trecho e clique neste ícone. O texto vira uma lacuna oculta no cartão. Se clicar de novo no mesmo ícone, a próxima seleção terá o <span className="text-foreground font-medium">mesmo número</span> — ou seja, as duas lacunas viram <span className="text-foreground font-medium">o mesmo cartão</span>.</p>
+            </div>
+          </div>
+
+          {/* Step 2: New cloze number */}
+          <div className="flex items-start gap-2.5">
+            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-card border border-border shadow-sm">
+              <ClozePlusIcon />
+            </span>
+            <div>
+              <p className="font-semibold text-foreground mb-0.5">Nova oclusão (número diferente)</p>
+              <p><span className="text-foreground font-medium">Selecione</span> o trecho e clique neste ícone com <span className="text-foreground font-medium">+</span>. Ele cria uma lacuna com um <span className="text-foreground font-medium">número novo</span>, gerando um <span className="text-foreground font-medium">cartão separado</span>.</p>
+            </div>
+          </div>
+
+          {/* Step 3: Remove */}
+          <div className="flex items-start gap-2.5">
+            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-card border border-border shadow-sm text-destructive">
+              <Trash2 className="h-3.5 w-3.5" />
+            </span>
+            <div>
+              <p className="font-semibold text-foreground mb-0.5">Remover oclusão</p>
+              <p>Coloque o cursor dentro da lacuna e clique no ícone <span className="inline-flex align-middle mx-0.5"><ClozeIcon /></span> novamente. A oclusão é removida e o texto volta ao normal.</p>
+            </div>
+          </div>
+
+          {/* Tip */}
+          <div className="rounded-md bg-primary/5 border border-primary/20 px-2.5 py-2 text-[11px]">
+            <span className="font-semibold text-primary">Dica:</span> Lacunas com o mesmo número (ex: <span className="font-mono text-primary">c1</span>) viram um único cartão. Use números diferentes para gerar cartões separados.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 
 interface CardEditorDialogProps {
   editorOpen: boolean;
@@ -134,19 +207,7 @@ export const CardEditorDialog = ({
       );
     }
 
-    return (
-      <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-1">
-        <p className="text-[10px] font-bold uppercase text-primary tracking-wider flex items-center gap-1.5">
-          <PenLine className="h-3 w-3" /> Como usar Cloze
-        </p>
-        <p className="text-xs text-muted-foreground">
-          Selecione o texto e clique para criar um <span className="font-semibold text-foreground">cloze</span>. Clozes com mesmo número viram o <span className="font-semibold text-foreground">mesmo card</span>.
-        </p>
-        <p className="text-[11px] text-muted-foreground">
-          Cria um cloze com <span className="font-semibold text-primary">número novo</span>, gerando um <span className="font-semibold text-foreground">card separado</span>.
-        </p>
-      </div>
-    );
+    return <ClozeHelpToggle />;
   };
 
   const renderEditor = () => (
