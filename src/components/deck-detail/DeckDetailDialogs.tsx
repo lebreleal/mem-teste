@@ -57,7 +57,7 @@ const DeckDetailDialogs = () => {
       <Dialog open={ctx.editorOpen && !ctx.occlusionModalOpen} onOpenChange={open => { if (!open) { ctx.setEditorOpen(false); ctx.resetForm(); } }}>
         <DialogContent className="max-h-[85dvh] sm:max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="font-display">{ctx.editingId ? 'Editar Card' : 'Novo Card'}</DialogTitle>
+            <DialogTitle className="font-display">{ctx.editingId ? 'Editar Cartão' : 'Novo Cartão'}</DialogTitle>
           </DialogHeader>
 
           {!ctx.editingId && ctx.cardType === null ? (
