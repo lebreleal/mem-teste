@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import {
   ChevronRight, Zap, Sparkles, Download, Copy,
-  RotateCcw, Loader2, Plus, X, Shuffle, Mail,
+  RotateCcw, Loader2, Plus, X, Shuffle, Mail, Package,
 } from 'lucide-react';
 // anki-logo removed
 
