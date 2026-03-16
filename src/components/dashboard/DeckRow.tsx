@@ -411,7 +411,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
       <Dialog open={showAddDeckMenu} onOpenChange={setShowAddDeckMenu}>
         <DialogContent className="max-w-xs">
           <DialogHeader>
-            <DialogTitle>Novo deck em {deck.name}</DialogTitle>
+            <DialogTitle>Novo baralho em {deck.name}</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-2 pt-1">
             <button
