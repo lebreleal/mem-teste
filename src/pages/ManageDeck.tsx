@@ -33,6 +33,7 @@ const ManageDeck = () => {
 
   const initialCardId = searchParams.get('cardId');
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [pendingNewCardId, setPendingNewCardId] = useState<string | null>(null);
   const [front, setFront] = useState('');
   const [back, setBack] = useState('');
   const [cardType, setCardType] = useState<CardType>('basic');
@@ -51,13 +52,17 @@ const ManageDeck = () => {
   const currentCard = sortedCards[selectedIndex] ?? null;
   const totalCards = sortedCards.length;
 
-  // Set initial card from URL param
+  // Set initial card from URL param or newly created card id
   useEffect(() => {
-    if (initialCardId && sortedCards.length > 0) {
-      const idx = sortedCards.findIndex(c => c.id === initialCardId);
-      if (idx >= 0) setSelectedIndex(idx);
+    const targetCardId = pendingNewCardId || initialCardId;
+    if (targetCardId && sortedCards.length > 0) {
+      const idx = sortedCards.findIndex(c => c.id === targetCardId);
+      if (idx >= 0) {
+        setSelectedIndex(idx);
+        if (pendingNewCardId === targetCardId) setPendingNewCardId(null);
+      }
     }
-  }, [initialCardId, sortedCards.length]);
+  }, [initialCardId, pendingNewCardId, sortedCards]);
 
   // Load card content when selection changes
   useEffect(() => {
@@ -176,13 +181,15 @@ const ManageDeck = () => {
     createCard.mutate(
       { frontContent: '', backContent: '', cardType: 'basic' },
       {
-        onSuccess: () => {
+        onSuccess: (createdCard) => {
+          if (!Array.isArray(createdCard) && createdCard?.id) {
+            setPendingNewCardId(createdCard.id);
+          }
           toast({ title: 'Novo cartão criado' });
-          setTimeout(() => setSelectedIndex(totalCards), 100);
         },
       }
     );
-  }, [createCard, totalCards, toast]);
+  }, [createCard, toast]);
 
   const handleDuplicate = useCallback(() => {
     if (!currentCard) return;
