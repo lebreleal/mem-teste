@@ -202,8 +202,11 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
       }
       return;
     }
-    if (hasChildren || isEmptyMateria) {
+    if (hasChildren) {
       onAccordionToggle?.(deck.id);
+    } else if (isEmptyMateria) {
+      // do nothing — always expanded, no navigation
+      return;
     } else {
       navigate(`/decks/${deck.id}`, readOnlyNavState ? { state: readOnlyNavState } : undefined);
     }
