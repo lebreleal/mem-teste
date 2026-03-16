@@ -75,16 +75,32 @@ const ManageDeck = () => {
       } catch { setFront(''); setOcclusionImageUrl(''); setOcclusionRects([]); }
       setBack(currentCard.back_content);
     } else if (ct === 'cloze') {
-      setFront(currentCard.front_content);
-      // back_content may be JSON {"clozeTarget":N,"extra":"..."} or plain text
+      // back_content may be JSON {"clozeTarget":N,"extra":"..."}
+      // If front_content is empty but extra has cloze markup, use extra as front
+      let clozeExtra = '';
       try {
         const parsed = JSON.parse(currentCard.back_content);
         if (parsed && typeof parsed.clozeTarget === 'number') {
-          setBack(parsed.extra || '');
-        } else {
-          setBack(currentCard.back_content);
+          clozeExtra = parsed.extra || '';
         }
-      } catch {
+      } catch { /* not JSON, treat as plain */ }
+
+      const frontVal = currentCard.front_content;
+      if (frontVal && frontVal !== '<p></p>') {
+        setFront(frontVal);
+        setBack(clozeExtra);
+      } else if (clozeExtra) {
+        // front is empty but extra has content — check if extra has cloze markup
+        const hasCloze = /\{\{c\d+::/.test(clozeExtra.replace(/<[^>]*>/g, ''));
+        if (hasCloze) {
+          setFront(clozeExtra);
+          setBack('');
+        } else {
+          setFront(frontVal);
+          setBack(clozeExtra);
+        }
+      } else {
+        setFront(frontVal);
         setBack(currentCard.back_content);
       }
     } else {
@@ -298,7 +314,7 @@ const ManageDeck = () => {
                 <div className="rounded-2xl border border-border bg-card flex-1 min-h-[120px] overflow-y-auto relative">
                   {!front || front === '<p></p>' ? (
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <span className="text-muted-foreground/40 text-lg font-medium">[Pergunta]</span>
+                      <span className="text-muted-foreground/40 text-lg font-medium">[Frente]</span>
                     </div>
                   ) : null}
                   <LazyRichEditor
@@ -379,7 +395,7 @@ const ManageDeck = () => {
                 <div className="rounded-2xl border border-border bg-card flex-1 min-h-[120px] overflow-y-auto relative">
                   {!back || back === '<p></p>' ? (
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <span className="text-muted-foreground/40 text-lg font-medium">[Resposta]</span>
+                      <span className="text-muted-foreground/40 text-lg font-medium">[Verso]</span>
                     </div>
                   ) : null}
                   <LazyRichEditor
