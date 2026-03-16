@@ -182,7 +182,9 @@ const ManageDeck = () => {
       { frontContent: '', backContent: '', cardType: 'basic' },
       {
         onSuccess: (createdCard) => {
-          setPendingNewCardId(createdCard.id);
+          if (!Array.isArray(createdCard) && createdCard?.id) {
+            setPendingNewCardId(createdCard.id);
+          }
           toast({ title: 'Novo cartão criado' });
         },
       }
