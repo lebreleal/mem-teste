@@ -50,7 +50,7 @@ export function useManageDeck() {
 
   const resetForm = useCallback(() => {
     setFront(''); setBack(''); setEditingId(null);
-    setEditorType(null);
+    setEditorType('basic');
     setMcOptions(['', '', '', '']); setMcCorrectIndex(0);
   }, []);
 
