@@ -227,16 +227,16 @@ const ManageDeck = () => {
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Left sidebar - card numbers */}
-        <aside className="w-10 sm:w-12 border-r border-border/50 bg-muted/20 overflow-y-auto flex-shrink-0">
-          <div className="flex flex-col py-2">
+        <aside className="w-12 sm:w-14 border-r border-border/50 bg-muted/20 overflow-y-auto flex-shrink-0">
+          <div className="flex flex-col gap-1.5 p-1.5">
             {sortedCards.map((card, idx) => (
               <button
                 key={card.id}
                 onClick={() => selectCard(idx)}
-                className={`py-2 text-xs font-medium transition-colors ${
+                className={`flex items-center justify-center h-9 w-9 sm:h-10 sm:w-10 mx-auto rounded-lg text-xs font-semibold transition-all ${
                   idx === selectedIndex
-                    ? 'bg-primary/10 text-primary font-bold border-r-2 border-primary'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                    ? 'bg-card border-2 border-foreground text-foreground shadow-sm'
+                    : 'bg-card border border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground'
                 }`}
               >
                 {idx + 1}
