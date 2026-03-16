@@ -165,6 +165,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [showDevModal, setShowDevModal] = useState(false);
   const [showAddDeckMenu, setShowAddDeckMenu] = useState(false);
+  const [addDeckInfoType, setAddDeckInfoType] = useState<'manual' | 'ia' | null>(null);
 
   // Auto-detect linked (followed) decks — hide management actions for community-sourced decks
   const isLinkedDeck = useMemo(() => {
