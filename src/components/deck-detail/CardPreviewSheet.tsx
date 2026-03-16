@@ -191,7 +191,7 @@ export function CardContent({
         return (
           <div>
             <div className="text-lg sm:text-xl leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeHtml(html) }} />
-            {revealed && extraBack && extraBack.replace(/<[^>]*>/g, '').trim() && (
+            {revealed && extraBack && (extraBack.replace(/<[^>]*>/g, '').trim() || /<img\s/i.test(extraBack)) && (
               <div className="mt-4 pt-4 border-t border-border/30 text-base leading-relaxed text-muted-foreground" dangerouslySetInnerHTML={{ __html: sanitizeHtml(extraBack) }} />
             )}
           </div>
