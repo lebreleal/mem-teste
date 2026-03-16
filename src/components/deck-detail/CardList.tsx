@@ -458,7 +458,7 @@ const CardListContent = ({
     <div className="space-y-2.5">
       {groups.map((group: any, gi: number) => {
         const card = group.cards[0];
-        const isCloze = card.card_type === 'cloze' || /\{\{c\d+::.+?\}\}/.test(card.front_content);
+        const isCloze = isClozeCard(card);
         const isMultiple = card.card_type === 'multiple_choice';
         const isOcclusion = card.card_type === 'image_occlusion';
         const isSelected = selectedCards.has(card.id);
