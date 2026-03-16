@@ -283,6 +283,7 @@ const ManageDeck = () => {
                       ? 'Pergunta ou contexto (opcional)'
                       : 'Frente do cartão'
                   }
+                  chromeless
                   hideCloze={cardType !== 'cloze'}
                   onOcclusionPaste={cardType === 'image_occlusion' ? handleOcclusionPaste : undefined}
                   onOcclusionAttach={cardType === 'image_occlusion' ? handleOcclusionAttach : undefined}
@@ -358,6 +359,7 @@ const ManageDeck = () => {
                   content={back}
                   onChange={(v) => { setBack(v); setIsDirty(true); }}
                   placeholder="Verso do cartão"
+                  chromeless
                   hideCloze
                 />
               </div>
