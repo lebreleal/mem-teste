@@ -17,10 +17,10 @@ const ImageOcclusion = lazy(() => import('@/components/ImageOcclusion'));
 
 type CardType = 'basic' | 'cloze' | 'image_occlusion';
 
-const CARD_TYPE_OPTIONS: { value: CardType; label: string; icon: React.ReactNode }[] = [
-  { value: 'basic', label: 'Frente e Verso', icon: <MessageSquareText className="h-4 w-4" /> },
-  { value: 'cloze', label: 'Cloze', icon: <PenLine className="h-4 w-4" /> },
-  { value: 'image_occlusion', label: 'Oclusão de Imagem', icon: <ImageIcon className="h-4 w-4" /> },
+const CARD_TYPE_OPTIONS: { value: CardType; label: string; description: string }[] = [
+  { value: 'basic', label: 'Pergunta e Resposta', description: 'Cartão clássico com uma pergunta na frente e a resposta no verso. Ideal para memorizar fatos, definições e conceitos diretos.' },
+  { value: 'cloze', label: 'Oclusão de Texto', description: 'Texto com lacunas ocultas que você precisa preencher. Use {{c1::palavra}} para criar lacunas. Clozes com o mesmo número geram o mesmo cartão.' },
+  { value: 'image_occlusion', label: 'Oclusão de Imagem', description: 'Oculte partes de uma imagem com retângulos. Cada região ocultada vira um cartão independente. Ideal para anatomia, diagramas e mapas.' },
 ];
 
 const ManageDeck = () => {
