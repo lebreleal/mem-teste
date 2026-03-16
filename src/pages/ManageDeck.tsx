@@ -33,6 +33,7 @@ const ManageDeck = () => {
 
   const initialCardId = searchParams.get('cardId');
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [pendingNewCardId, setPendingNewCardId] = useState<string | null>(null);
   const [front, setFront] = useState('');
   const [back, setBack] = useState('');
   const [cardType, setCardType] = useState<CardType>('basic');
