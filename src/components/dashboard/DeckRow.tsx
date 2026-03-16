@@ -226,8 +226,8 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
         className={`group flex items-center gap-3 px-4 py-4 cursor-pointer transition-all hover:bg-muted/50 ${dragHandlers ? dragHandlers.className : ''}`}
         onClick={handleClick}
       >
-        {/* Expand/collapse icon for decks with children */}
-        {hasChildren && (
+        {/* Expand/collapse icon for decks with children or empty matérias */}
+        {(hasChildren || isEmptyMateria) && (
           isExpanded
             ? <Minus className="h-4 w-4 text-muted-foreground shrink-0" />
             : <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
