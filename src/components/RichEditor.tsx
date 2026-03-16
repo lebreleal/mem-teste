@@ -297,6 +297,24 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       }
       setClozeActive(false);
       setCursorInCloze(false);
+      // Re-sync counter: find the lowest unused cloze number
+      setTimeout(() => {
+        if (!editor) return;
+        const html = editor.getHTML();
+        const nums = [...html.matchAll(/data-cloze="(\d+)"/g)].map(m => parseInt(m[1]));
+        if (nums.length > 0) {
+          // Find first gap starting from 1, or max+1
+          const unique = [...new Set(nums)].sort((a, b) => a - b);
+          let next = 1;
+          for (const n of unique) {
+            if (n === next) next++;
+            else break;
+          }
+          setClozeCounter(next);
+        } else {
+          setClozeCounter(1);
+        }
+      }, 10);
       return;
     }
 
