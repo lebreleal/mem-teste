@@ -159,7 +159,7 @@ export function useManageDeck() {
 
   const handleDelete = useCallback(() => {
     if (!deleteId) return;
-    deleteCard.mutate(deleteId, { onSuccess: () => { setDeleteId(null); toast({ title: 'Card excluído' }); } });
+    deleteCard.mutate(deleteId, { onSuccess: () => { setDeleteId(null); toast({ title: 'Cartão excluído' }); } });
   }, [deleteId, deleteCard, toast]);
 
   const handleImprove = useCallback(async () => {
