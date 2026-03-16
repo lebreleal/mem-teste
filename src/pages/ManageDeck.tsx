@@ -198,9 +198,9 @@ const ManageDeck = () => {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="flex h-[100dvh] flex-col overflow-hidden bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-10 border-b border-border/50 bg-background/80 backdrop-blur-sm">
+      <header className="sticky top-0 z-10 shrink-0 border-b border-border/50 bg-background/80 backdrop-blur-sm">
         <div className="flex items-center justify-between px-4 py-3">
           <button onClick={handleBack} className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="h-4 w-4" />
@@ -225,7 +225,7 @@ const ManageDeck = () => {
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Left sidebar - card numbers */}
         <aside className="w-10 sm:w-12 border-r border-border/50 bg-muted/20 overflow-y-auto flex-shrink-0">
           <div className="flex flex-col py-2">
@@ -246,9 +246,9 @@ const ManageDeck = () => {
         </aside>
 
         {/* Main editor area */}
-        <main className="flex-1 overflow-hidden p-4 sm:p-6">
+        <main className="flex-1 min-h-0 overflow-hidden p-4 sm:p-6">
           {currentCard ? (
-            <div className="max-w-2xl mx-auto h-full flex flex-col gap-3">
+            <div className="mx-auto flex h-full min-h-0 max-w-2xl flex-col gap-3">
               {/* Card type selector */}
               <div className="flex items-center gap-3">
                 <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground shrink-0">Tipo</Label>
