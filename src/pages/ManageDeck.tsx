@@ -289,7 +289,7 @@ const ManageDeck = () => {
               <div className="flex-1 min-w-0 flex flex-col gap-3">
 
                 {/* Front */}
-                <div className="rounded-2xl border border-border bg-card flex-1 min-h-[120px] overflow-y-auto relative">
+                <div className="rounded-2xl border border-border bg-card flex-1 min-h-[120px] overflow-hidden relative flex flex-col">
                   {!front || front === '<p></p>' && !occlusionImageUrl ? (
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                       <span className="text-muted-foreground/40 text-lg font-medium">[Frente]</span>
