@@ -269,18 +269,16 @@ const ManageDeck = () => {
               </div>
 
               {/* Front */}
-              <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 flex-1 min-h-0 overflow-y-auto">
-                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 block">Pergunta</Label>
+              <div className="rounded-2xl border border-border bg-card flex-1 min-h-0 overflow-y-auto relative">
+                {!front || front === '<p></p>' ? (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <span className="text-muted-foreground/40 text-lg font-medium">[Pergunta]</span>
+                  </div>
+                ) : null}
                 <LazyRichEditor
                   content={front}
                   onChange={(v) => { setFront(v); setIsDirty(true); }}
-                  placeholder={
-                    cardType === 'cloze'
-                      ? 'A {{c1::mitocôndria}} é responsável pela respiração celular.'
-                      : cardType === 'image_occlusion'
-                      ? 'Pergunta ou contexto (opcional)'
-                      : 'Frente do cartão'
-                  }
+                  placeholder=""
                   chromeless
                   hideCloze={cardType !== 'cloze'}
                   onOcclusionPaste={cardType === 'image_occlusion' ? handleOcclusionPaste : undefined}
