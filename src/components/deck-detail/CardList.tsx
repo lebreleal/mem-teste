@@ -541,10 +541,10 @@ const CardListContent = ({
                       </div>
                     );
                   })()}
-                  {isCloze ? (
-                    <p className="text-sm font-semibold text-foreground leading-snug">
+                     <p className="text-sm font-semibold text-foreground leading-snug">
                       {(() => {
-                        const plain = stripHtml(card.front_content);
+                        const plain = stripHtml(clozeText || '');
+                        const parts: React.ReactNode[] = [];
                         const parts: React.ReactNode[] = [];
                         const regex = /\{\{c(\d+)::([^}]*)\}\}/g;
                         let lastIdx = 0;
