@@ -454,8 +454,8 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
             <DialogDescription className="text-sm text-muted-foreground leading-relaxed pt-2 space-y-2">
               {addDeckInfoType === 'manual' ? (
                 <>
-                  <p>Você escolhe o nome do deck e adiciona os cartões (flashcards) um a um.</p>
-                  <p>Ideal quando você quer ter controle total sobre o conteúdo dos seus cartões.</p>
+                   <p>Você escolhe o nome do baralho e adiciona os cartões (flashcards) um a um.</p>
+                   <p>Ideal quando você quer ter controle total sobre o conteúdo dos seus cartões.</p>
                 </>
               ) : (
                 <>
