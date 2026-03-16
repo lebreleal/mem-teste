@@ -227,16 +227,16 @@ const ManageDeck = () => {
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Left sidebar - card numbers */}
-        <aside className="w-12 sm:w-14 border-r border-border/50 bg-muted/20 overflow-y-auto flex-shrink-0">
+        <aside className="w-12 sm:w-14 overflow-y-auto flex-shrink-0">
           <div className="flex flex-col gap-1.5 p-1.5">
             {sortedCards.map((card, idx) => (
               <button
                 key={card.id}
                 onClick={() => selectCard(idx)}
-                className={`flex items-center justify-center h-9 w-9 sm:h-10 sm:w-10 mx-auto rounded-lg text-xs font-semibold transition-all ${
+                className={`flex items-center justify-center h-9 w-9 sm:h-10 sm:w-10 mx-auto rounded-full text-xs font-semibold transition-all ${
                   idx === selectedIndex
-                    ? 'bg-card border-2 border-foreground text-foreground shadow-sm'
-                    : 'bg-card border border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground'
+                    ? 'bg-foreground text-background shadow-sm'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground'
                 }`}
               >
                 {idx + 1}
@@ -270,9 +270,7 @@ const ManageDeck = () => {
 
               {/* Front */}
               <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 flex-1 min-h-0 overflow-y-auto">
-                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 block">
-                  {cardType === 'image_occlusion' ? 'Frente (Pergunta)' : 'Frente'}
-                </Label>
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 block">Pergunta</Label>
                 <LazyRichEditor
                   content={front}
                   onChange={(v) => { setFront(v); setIsDirty(true); }}
@@ -354,7 +352,7 @@ const ManageDeck = () => {
 
               {/* Back */}
               <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 flex-1 min-h-0 overflow-y-auto">
-                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 block">Verso (Resposta)</Label>
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 block">Resposta</Label>
                 <LazyRichEditor
                   content={back}
                   onChange={(v) => { setBack(v); setIsDirty(true); }}
