@@ -26,7 +26,7 @@ import {
   Shuffle, BookOpen, Mail, Globe, BarChart3, Settings,
 } from 'lucide-react';
 import { DeckStatsTab } from '@/components/deck-detail/DeckStatsTab';
-import ankiLogo from '@/assets/anki-logo.svg';
+// anki-logo removed — using Package icon instead
 import { exportAsApkg } from '@/lib/ankiExport';
 import DeckSettingsModals from '@/pages/DeckSettingsModals';
 

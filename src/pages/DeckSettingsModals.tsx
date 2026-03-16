@@ -17,7 +17,7 @@ import {
   ChevronRight, Zap, Sparkles, Download, Copy,
   RotateCcw, Loader2, Plus, X, Shuffle, Mail,
 } from 'lucide-react';
-import ankiLogo from '@/assets/anki-logo.svg';
+// anki-logo removed
 
 interface DeckSettingsModalsProps {
   deckId: string;

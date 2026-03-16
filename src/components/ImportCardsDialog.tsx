@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeft, FileText, Download, ChevronRight, Sparkles, AlertTriangle, Package, Loader2, FolderTree, X } from 'lucide-react';
-import ankiLogo from '@/assets/anki-logo.svg';
+// anki-logo removed
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { AnkiParseResult } from '@/lib/ankiParser';
