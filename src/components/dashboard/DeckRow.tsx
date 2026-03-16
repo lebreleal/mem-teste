@@ -295,9 +295,9 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
         {/* Actions on hover for loose decks, always when matéria expanded */}
         {!isErrorDeck && !deckSelectionMode && !readOnly && (
           <div className={`flex items-center gap-1.5 shrink-0 transition-opacity duration-200 ${
-            (hasChildren || isEmptyMateria) && isExpanded
+            hasChildren && isExpanded
               ? 'opacity-100'
-              : 'opacity-0 group-hover:opacity-100'
+              : isEmptyMateria ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
           }`}>
             {hasDueCards && (
               <button
