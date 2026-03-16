@@ -76,10 +76,17 @@ const ManageDeck = () => {
       setBack(currentCard.back_content);
     } else if (ct === 'cloze') {
       setFront(currentCard.front_content);
+      // back_content may be JSON {"clozeTarget":N,"extra":"..."} or plain text
       try {
         const parsed = JSON.parse(currentCard.back_content);
-        setBack(typeof parsed.clozeTarget === 'number' ? (parsed.extra || '') : currentCard.back_content);
-      } catch { setBack(currentCard.back_content); }
+        if (parsed && typeof parsed.clozeTarget === 'number') {
+          setBack(parsed.extra || '');
+        } else {
+          setBack(currentCard.back_content);
+        }
+      } catch {
+        setBack(currentCard.back_content);
+      }
     } else {
       setFront(currentCard.front_content);
       setBack(currentCard.back_content);
