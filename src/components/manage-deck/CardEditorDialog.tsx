@@ -290,6 +290,8 @@ export const CardEditorDialog = ({
               content={front} onChange={setFront}
               placeholder="Qual é a capital da França?"
               hideCloze={editorType !== 'cloze'}
+              onOcclusionPaste={editorType === 'cloze' ? () => { setEditorType('image_occlusion'); setOcclusionModalOpen(true); } : undefined}
+              onOcclusionAttach={editorType === 'cloze' ? () => { setEditorType('image_occlusion'); setOcclusionModalOpen(true); } : undefined}
             />
           </div>
 
