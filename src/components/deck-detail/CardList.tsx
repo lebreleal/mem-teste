@@ -4,6 +4,7 @@
  */
 
 import { useDeckDetail } from './DeckDetailContext';
+import { useNavigate } from 'react-router-dom';
 import CardPreviewSheet from './CardPreviewSheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -73,6 +74,7 @@ const CardTagsInline = ({ cardId, tagsMap }: { cardId: string; tagsMap: Record<s
 };
 
 const CardList = () => {
+  const navigate = useNavigate();
   const {
     totalCards, allCards, filteredCards, selectionMode, setSelectionMode,
     selectedCards, setSelectedCards, toggleCardSelection, selectAllCards,
@@ -232,7 +234,7 @@ const CardList = () => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => openNew()}>
+                <DropdownMenuItem onClick={() => navigate(`/decks/${deck?.id}/manage`)}>
                   <PenLine className="mr-2 h-4 w-4" /> Criar manualmente
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setAiAddCardsOpen(true)}>
