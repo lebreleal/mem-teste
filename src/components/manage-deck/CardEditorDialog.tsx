@@ -95,6 +95,7 @@ const ClozeHelpToggle = () => {
 };
 
 
+interface CardEditorDialogProps {
   editorOpen: boolean;
   setEditorOpen: (v: boolean) => void;
   editingId: string | null;
