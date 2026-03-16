@@ -299,27 +299,17 @@ const ManageDeck = () => {
                   {/* Image occlusion area - inside front card */}
                   {occlusionImageUrl && (
                     <div className="p-3 pb-0">
-                      <div className="flex items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={() => setOcclusionModalOpen(true)}
-                          className="relative inline-block rounded-lg overflow-hidden border border-border shrink-0"
-                          title="Editar oclusões"
-                        >
-                          <img src={occlusionImageUrl} alt="Imagem de oclusão" className="h-20 w-20 object-cover rounded-lg" />
-                          <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center bg-primary/80 py-0.5">
-                            <ImageIcon className="h-3 w-3 text-primary-foreground" />
-                          </div>
-                        </button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => { setOcclusionImageUrl(''); setOcclusionRects([]); setOcclusionCanvasSize(null); setIsDirty(true); }}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-3.5 w-3.5 mr-1" /> Remover
-                        </Button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setOcclusionModalOpen(true)}
+                        className="relative inline-block rounded-lg overflow-hidden border border-border shrink-0"
+                        title="Editar oclusões"
+                      >
+                        <img src={occlusionImageUrl} alt="Imagem de oclusão" className="h-20 w-20 object-cover rounded-lg" />
+                        <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center bg-primary/80 py-0.5">
+                          <ImageIcon className="h-3 w-3 text-primary-foreground" />
+                        </div>
+                      </button>
                     </div>
                   )}
 
@@ -424,6 +414,13 @@ const ManageDeck = () => {
                 setOcclusionCanvasSize(data.canvasWidth ? { w: data.canvasWidth, h: data.canvasHeight } : null);
                 setIsDirty(true);
               } catch {}
+              setOcclusionModalOpen(false);
+            }}
+            onRemoveImage={() => {
+              setOcclusionImageUrl('');
+              setOcclusionRects([]);
+              setOcclusionCanvasSize(null);
+              setIsDirty(true);
               setOcclusionModalOpen(false);
             }}
             onCancel={() => setOcclusionModalOpen(false)}
