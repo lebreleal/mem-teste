@@ -246,9 +246,9 @@ const ManageDeck = () => {
         </aside>
 
         {/* Main editor area */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+        <main className="flex-1 overflow-hidden p-4 sm:p-6">
           {currentCard ? (
-            <div className="max-w-2xl mx-auto space-y-4">
+            <div className="max-w-2xl mx-auto h-full flex flex-col gap-3">
               {/* Card type selector */}
               <div className="flex items-center gap-3">
                 <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground shrink-0">Tipo</Label>
@@ -269,7 +269,7 @@ const ManageDeck = () => {
               </div>
 
               {/* Front */}
-              <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 max-h-[35vh] overflow-y-auto">
+              <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 flex-1 min-h-0 overflow-y-auto">
                 <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 block">
                   {cardType === 'image_occlusion' ? 'Frente (Pergunta)' : 'Frente'}
                 </Label>
@@ -352,7 +352,7 @@ const ManageDeck = () => {
               )}
 
               {/* Back */}
-              <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 max-h-[35vh] overflow-y-auto">
+              <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 flex-1 min-h-0 overflow-y-auto">
                 <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 block">Verso (Resposta)</Label>
                 <LazyRichEditor
                   content={back}
@@ -364,7 +364,7 @@ const ManageDeck = () => {
 
               {/* Save button */}
               {isDirty && (
-                <Button onClick={saveCurrentCard} className="w-full gap-2" disabled={updateCard.isPending}>
+                <Button onClick={saveCurrentCard} className="w-full gap-2 shrink-0" disabled={updateCard.isPending}>
                   {updateCard.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                   Salvar alterações
                 </Button>
