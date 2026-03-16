@@ -396,21 +396,6 @@ const ManageDeck = () => {
                 />
               </div>
 
-              {/* Improve with AI */}
-              <Button
-                variant="outline"
-                onClick={handleImprove}
-                disabled={isImproving}
-                className="w-full gap-2 border-primary/30 text-primary hover:bg-primary/5 hover:text-primary"
-              >
-                {isImproving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                {isImproving ? 'Melhorando...' : 'Melhorar com IA'}
-                <span className="text-[10px] text-muted-foreground ml-auto">1 crédito</span>
-              </Button>
-
-              {/* Tags */}
-              {currentCard.id && <CardTagEditor cardId={currentCard.id} />}
-
               {/* Save button */}
               {isDirty && (
                 <Button onClick={saveCurrentCard} className="w-full gap-2" disabled={updateCard.isPending}>
