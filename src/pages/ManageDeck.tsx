@@ -318,7 +318,6 @@ const ManageDeck = () => {
                     onChange={(v) => { setFront(v); setIsDirty(true); }}
                     placeholder=""
                     chromeless
-                    hideToolbarUntilFocus
                     hideCloze={false}
                     onOcclusionPaste={handleOcclusionAction}
                     onOcclusionAttach={handleOcclusionAction}
@@ -337,7 +336,6 @@ const ManageDeck = () => {
                     onChange={(v) => { setBack(v); setIsDirty(true); }}
                     placeholder=""
                     chromeless
-                    hideToolbarUntilFocus
                     hideCloze
                   />
                 </div>
