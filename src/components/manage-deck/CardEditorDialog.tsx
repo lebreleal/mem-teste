@@ -236,6 +236,8 @@ export const CardEditorDialog = ({
                 catch { setFront(v); }
               }}
               placeholder="Pergunta ou contexto (opcional)"
+              onOcclusionPaste={() => setOcclusionModalOpen(true)}
+              onOcclusionAttach={() => setOcclusionModalOpen(true)}
             />
             {(() => {
               // Show cloze preview if frontText has cloze markers
