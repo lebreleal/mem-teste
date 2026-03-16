@@ -26,7 +26,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { calculateRealStudyTime } from '@/lib/studyUtils';
 
 /** Suspense fallback that shows global loading overlay while chunk loads */
@@ -358,6 +358,7 @@ const Dashboard = () => {
   // Listen for "+" button inside own sala → open add menu sheet
   const [salaAddMenuOpen, setSalaAddMenuOpen] = useState(false);
   const [addMenuStep, setAddMenuStep] = useState<'main' | 'create-deck'>('main');
+  const [addMenuInfoType, setAddMenuInfoType] = useState<'deck' | 'materia' | null>(null);
   useEffect(() => {
     const handler = () => {
       if (state.isInsideSala && !isCommunityFolder) {
@@ -1143,6 +1144,28 @@ const Dashboard = () => {
         {state.premiumOpen && <PremiumModal open={state.premiumOpen} onClose={() => state.setPremiumOpen(false)} defaultTab={state.premiumTab} />}
       </Suspense>
 
+      {/* Info modal for add menu items */}
+      <Dialog open={addMenuInfoType !== null} onOpenChange={(v) => { if (!v) setAddMenuInfoType(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{addMenuInfoType === 'materia' ? 'O que é uma Matéria?' : 'O que é um Deck?'}</DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground leading-relaxed pt-2 space-y-2">
+              {addMenuInfoType === 'materia' ? (
+                <>
+                  <p>Uma <strong>Matéria</strong> é um agrupador que organiza seus decks por tema ou disciplina.</p>
+                  <p>Por exemplo, dentro da matéria <em>"Farmacologia"</em> você pode ter os decks <em>"Antibióticos"</em>, <em>"Anti-inflamatórios"</em>, etc.</p>
+                  <p>Ao estudar, você pode revisar todos os decks de uma matéria de uma só vez.</p>
+                </>
+              ) : (
+                <>
+                  <p>Um <strong>Deck</strong> é um conjunto de flashcards sobre um assunto específico.</p>
+                  <p>Você pode criar decks manualmente, digitando seus próprios cartões, ou usar a IA para gerar cartões automaticamente a partir do seu material de estudo.</p>
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
 
       <Suspense fallback={null}>
         {studyWeightsOpen && (
@@ -1351,27 +1374,25 @@ const Dashboard = () => {
                 className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
                 onClick={() => setAddMenuStep('create-deck')}
               >
-                <SquarePlus className="h-5 w-5 text-primary shrink-0" />
-                <div>
-                  <span className="text-sm font-medium text-foreground">Criar deck</span>
-                  <span className="block text-xs text-muted-foreground mt-0.5">Criar manualmente ou com IA</span>
-                </div>
+                <span className="text-sm font-medium text-foreground">Criar deck</span>
               </button>
               <button
-                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3 justify-between"
                 onClick={() => { setSalaAddMenuOpen(false); setAddMenuStep('main'); state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId('__materia__'); }}
               >
-                <Layers className="h-5 w-5 text-primary shrink-0" />
-                <div>
-                  <span className="text-sm font-medium text-foreground">Criar matéria</span>
-                  <span className="block text-xs text-muted-foreground mt-0.5">Organiza seus decks por tema</span>
-                </div>
+                <span className="text-sm font-medium text-foreground">Criar matéria</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setAddMenuInfoType('materia'); }}
+                  className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted-foreground/10 transition-colors"
+                  aria-label="O que é matéria?"
+                >
+                  <Info className="h-4 w-4" />
+                </button>
               </button>
               <button
                 className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
                 onClick={() => { setSalaAddMenuOpen(false); setAddMenuStep('main'); state.setImportOpen(true); state.setImportDeckId(null); state.setImportDeckName(''); }}
               >
-                <Archive className="h-5 w-5 text-primary shrink-0" />
                 <span className="text-sm font-medium text-foreground">Importar cartões</span>
               </button>
             </div>
