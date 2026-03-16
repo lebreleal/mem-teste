@@ -406,36 +406,27 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
 
 
 
-      {/* Add deck modal for empty matéria */}
+      {/* Add deck modal */}
       <Dialog open={showAddDeckMenu} onOpenChange={setShowAddDeckMenu}>
         <DialogContent className="max-w-xs">
           <DialogHeader>
-            <DialogTitle>Adicionar Deck</DialogTitle>
-            <DialogDescription className="text-sm text-muted-foreground">
-              Escolha como criar o deck em <strong>{deck.name}</strong>
-            </DialogDescription>
+            <DialogTitle>Novo deck em {deck.name}</DialogTitle>
           </DialogHeader>
-          <div className="flex flex-col gap-2 pt-2">
+          <div className="flex flex-col gap-2 pt-1">
             <button
               onClick={() => { setShowAddDeckMenu(false); onCreateSubDeck(deck.id); }}
-              className="flex items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted border border-border/50"
+              className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted"
             >
-              <BookOpen className="h-5 w-5 text-primary shrink-0" />
-              <div>
-                <span className="text-sm font-medium text-foreground">Manual</span>
-                <p className="text-xs text-muted-foreground">Crie e adicione cartões</p>
-              </div>
+              <span className="text-sm font-medium text-foreground">Criar manualmente</span>
+              <p className="text-xs text-muted-foreground mt-0.5">Você define o nome e adiciona os cartões</p>
             </button>
             {onCreateSubDeckAI && (
               <button
                 onClick={() => { setShowAddDeckMenu(false); onCreateSubDeckAI(deck.id); }}
-                className="flex items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted border border-border/50"
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted"
               >
-                <Sparkles className="h-5 w-5 text-primary shrink-0" />
-                <div>
-                  <span className="text-sm font-medium text-foreground">Com IA</span>
-                  <p className="text-xs text-muted-foreground">A partir do seu material de estudo</p>
-                </div>
+                <span className="text-sm font-medium text-foreground">Criar com IA</span>
+                <p className="text-xs text-muted-foreground mt-0.5">Envie seu material e a IA gera os cartões</p>
               </button>
             )}
           </div>
