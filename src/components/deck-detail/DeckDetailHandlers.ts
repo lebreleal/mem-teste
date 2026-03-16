@@ -105,7 +105,7 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
     setMcOptions(['', '', '', '']); setMcCorrectIndex(0);
   }, [setFront, setBack, setEditingId, setCardType, setOcclusionImageUrl, setOcclusionRects, setOcclusionCanvasSize, setMcOptions, setMcCorrectIndex]);
 
-  const openNew = useCallback(() => { resetForm(); setEditorOpen(true); }, [resetForm, setEditorOpen]);
+  const openNew = useCallback(() => { navigate(`/decks/${deckId}/manage`); }, [navigate, deckId]);
 
   const openEdit = useCallback((card: CardRow) => {
     navigate(`/decks/${deckId}/manage?cardId=${card.id}`);
