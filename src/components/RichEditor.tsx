@@ -358,6 +358,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
           {!hideCloze && (
             <Button type="button" variant="ghost" size="icon"
               className="h-7 w-7"
+              onMouseDown={(e) => e.preventDefault()}
               onClick={handleClozeNext}
               title={`Novo cloze c${clozeCounter + 1} (próximo número)`}
             >
