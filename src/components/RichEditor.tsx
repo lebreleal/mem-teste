@@ -88,6 +88,15 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   const [clozeActive, setClozeActive] = useState(false);
   const [cursorInCloze, setCursorInCloze] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
+  const [toolbarItems, setToolbarItems] = useState<ToolbarItem[]>(loadToolbarConfig);
+  const [configOpen, setConfigOpen] = useState(false);
+
+  const isToolVisible = (id: string) => toolbarItems.find(t => t.id === id)?.visible !== false;
+
+  const handleSaveToolbarConfig = (items: ToolbarItem[]) => {
+    setToolbarItems(items);
+    saveToolbarConfig(items);
+  };
 
   const editor = useEditor({
     extensions: [
