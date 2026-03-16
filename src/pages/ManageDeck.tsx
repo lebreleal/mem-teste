@@ -18,7 +18,7 @@ const ImageOcclusion = lazy(() => import('@/components/ImageOcclusion'));
 type CardType = 'basic' | 'cloze' | 'image_occlusion';
 
 const CARD_TYPE_OPTIONS: { value: CardType; label: string; description: string }[] = [
-  { value: 'basic', label: 'Pergunta e Resposta', description: 'Cartão clássico com uma pergunta na frente e a resposta no verso. Ideal para memorizar fatos, definições e conceitos diretos.' },
+  { value: 'basic', label: 'Frente e Verso', description: 'Cartão clássico com uma pergunta na frente e a resposta no verso. Ideal para memorizar fatos, definições e conceitos diretos.' },
   { value: 'cloze', label: 'Oclusão de Texto', description: 'Texto com lacunas ocultas que você precisa preencher. Use {{c1::palavra}} para criar lacunas. Clozes com o mesmo número geram o mesmo cartão.' },
   { value: 'image_occlusion', label: 'Oclusão de Imagem', description: 'Oculte partes de uma imagem com retângulos. Cada região ocultada vira um cartão independente. Ideal para anatomia, diagramas e mapas.' },
 ];
@@ -76,13 +76,30 @@ const ManageDeck = () => {
       setBack(currentCard.back_content);
     } else if (ct === 'cloze') {
       setFront(currentCard.front_content);
+      // back_content may be JSON {"clozeTarget":N,"extra":"..."} or plain text
       try {
         const parsed = JSON.parse(currentCard.back_content);
-        setBack(typeof parsed.clozeTarget === 'number' ? (parsed.extra || '') : currentCard.back_content);
-      } catch { setBack(currentCard.back_content); }
+        if (parsed && typeof parsed.clozeTarget === 'number') {
+          setBack(parsed.extra || '');
+        } else {
+          setBack(currentCard.back_content);
+        }
+      } catch {
+        setBack(currentCard.back_content);
+      }
     } else {
       setFront(currentCard.front_content);
-      setBack(currentCard.back_content);
+      // Some cards may have cloze JSON in back_content even with basic type
+      try {
+        const parsed = JSON.parse(currentCard.back_content);
+        if (parsed && typeof parsed.clozeTarget === 'number') {
+          setBack(parsed.extra || '');
+        } else {
+          setBack(currentCard.back_content);
+        }
+      } catch {
+        setBack(currentCard.back_content);
+      }
     }
     setIsDirty(false);
   }, [currentCard?.id]);
