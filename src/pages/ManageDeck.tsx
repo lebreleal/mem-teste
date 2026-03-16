@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ChevronUp, ChevronDown, Trash2, Copy, Plus, Loader2, MessageSquareText, PenLine, Image as ImageIcon, Move } from 'lucide-react';
+import { ArrowLeft, ChevronUp, ChevronDown, Trash2, Copy, Plus, Loader2, PenLine, Image as ImageIcon, Info } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useCards } from '@/hooks/useCards';
 import { useToast } from '@/hooks/use-toast';
@@ -16,10 +17,10 @@ const ImageOcclusion = lazy(() => import('@/components/ImageOcclusion'));
 
 type CardType = 'basic' | 'cloze' | 'image_occlusion';
 
-const CARD_TYPE_OPTIONS: { value: CardType; label: string; icon: React.ReactNode }[] = [
-  { value: 'basic', label: 'Frente e Verso', icon: <MessageSquareText className="h-4 w-4" /> },
-  { value: 'cloze', label: 'Cloze', icon: <PenLine className="h-4 w-4" /> },
-  { value: 'image_occlusion', label: 'Oclusão de Imagem', icon: <ImageIcon className="h-4 w-4" /> },
+const CARD_TYPE_OPTIONS: { value: CardType; label: string; description: string }[] = [
+  { value: 'basic', label: 'Pergunta e Resposta', description: 'Cartão clássico com uma pergunta na frente e a resposta no verso. Ideal para memorizar fatos, definições e conceitos diretos.' },
+  { value: 'cloze', label: 'Oclusão de Texto', description: 'Texto com lacunas ocultas que você precisa preencher. Use {{c1::palavra}} para criar lacunas. Clozes com o mesmo número geram o mesmo cartão.' },
+  { value: 'image_occlusion', label: 'Oclusão de Imagem', description: 'Oculte partes de uma imagem com retângulos. Cada região ocultada vira um cartão independente. Ideal para anatomia, diagramas e mapas.' },
 ];
 
 const ManageDeck = () => {
@@ -37,6 +38,7 @@ const ManageDeck = () => {
   const [cardType, setCardType] = useState<CardType>('basic');
   const [isDirty, setIsDirty] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [typeInfoOpen, setTypeInfoOpen] = useState(false);
   
 
   // Image occlusion state
@@ -253,8 +255,7 @@ const ManageDeck = () => {
               <div className="flex-1 min-w-0 flex flex-col gap-3">
 
                 {/* Card type selector */}
-                <div className="flex items-center gap-3">
-                  <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground shrink-0">Tipo</Label>
+                <div className="flex items-center gap-2">
                   <Select value={cardType} onValueChange={(v) => handleTypeChange(v as CardType)}>
                     <SelectTrigger className="w-[200px] h-8 text-xs">
                       <SelectValue />
@@ -262,13 +263,18 @@ const ManageDeck = () => {
                     <SelectContent>
                       {CARD_TYPE_OPTIONS.map(opt => (
                         <SelectItem key={opt.value} value={opt.value}>
-                          <span className="flex items-center gap-2">
-                            {opt.icon} {opt.label}
-                          </span>
+                          {opt.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  <button
+                    onClick={() => setTypeInfoOpen(true)}
+                    className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+                    title="Sobre os tipos de cartão"
+                  >
+                    <Info className="h-3.5 w-3.5" />
+                  </button>
                 </div>
 
                 {/* Front */}
@@ -416,6 +422,23 @@ const ManageDeck = () => {
           <Plus className="h-5 w-5" />
         </button>
       )}
+
+      {/* Card type info modal */}
+      <Dialog open={typeInfoOpen} onOpenChange={setTypeInfoOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display">Tipos de Cartão</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {CARD_TYPE_OPTIONS.map(opt => (
+              <div key={opt.value} className="space-y-1">
+                <p className="text-sm font-semibold text-foreground">{opt.label}</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">{opt.description}</p>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete confirmation */}
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
