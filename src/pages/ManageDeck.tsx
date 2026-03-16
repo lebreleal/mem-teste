@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, lazy, Suspense, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ChevronUp, ChevronDown, Trash2, Copy, Plus, Loader2, Image as ImageIcon } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useCards } from '@/hooks/useCards';
 import { useToast } from '@/hooks/use-toast';
@@ -9,8 +10,9 @@ import { Label } from '@/components/ui/label';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useQueryClient } from '@tanstack/react-query';
 import { Skeleton } from '@/components/ui/skeleton';
+import OcclusionEditor from '@/components/manage-deck/OcclusionEditor';
 
-const ImageOcclusion = lazy(() => import('@/components/ImageOcclusion'));
+
 
 const ManageDeck = () => {
   const { deckId } = useParams<{ deckId: string }>();
@@ -309,7 +311,7 @@ const ManageDeck = () => {
                 {occlusionImageUrl && (
                   <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
                     <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 block">Imagem de Oclusão</Label>
-                    <div className="space-y-3">
+                    <div className="flex items-center gap-3">
                       <button
                         type="button"
                         onClick={() => setOcclusionModalOpen(true)}
@@ -327,25 +329,8 @@ const ManageDeck = () => {
                         onClick={() => { setOcclusionImageUrl(''); setOcclusionRects([]); setOcclusionCanvasSize(null); setIsDirty(true); }}
                         className="text-destructive hover:text-destructive"
                       >
-                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Remover imagem
+                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Remover
                       </Button>
-
-                      {occlusionModalOpen && (
-                        <Suspense fallback={<Skeleton className="h-64 w-full rounded-lg" />}>
-                          <ImageOcclusion
-                            imageUrl={occlusionImageUrl}
-                            initialRects={occlusionRects}
-                            onChange={(rects, meta) => {
-                              setOcclusionRects(rects);
-                              if (meta) setOcclusionCanvasSize({ w: meta.canvasWidth, h: meta.canvasHeight });
-                              setIsDirty(true);
-                            }}
-                          />
-                          <div className="flex justify-end">
-                            <Button size="sm" onClick={() => setOcclusionModalOpen(false)}>Concluir</Button>
-                          </div>
-                        </Suspense>
-                      )}
                     </div>
                   </div>
                 )}
@@ -414,6 +399,38 @@ const ManageDeck = () => {
           <Plus className="h-5 w-5" />
         </button>
       )}
+
+      {/* Occlusion Editor Dialog (for upload + draw) */}
+      <Dialog open={occlusionModalOpen} onOpenChange={setOcclusionModalOpen}>
+        <DialogContent className="sm:max-w-4xl max-h-[90dvh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display flex items-center gap-2">
+              <ImageIcon className="h-5 w-5 text-primary" /> Oclusão de Imagem
+            </DialogTitle>
+          </DialogHeader>
+          <OcclusionEditor
+            initialFront={occlusionImageUrl ? JSON.stringify({
+              imageUrl: occlusionImageUrl,
+              rects: occlusionRects,
+              allRects: occlusionRects,
+              canvasWidth: occlusionCanvasSize?.w ?? 0,
+              canvasHeight: occlusionCanvasSize?.h ?? 0,
+            }) : ''}
+            onSave={(frontContent) => {
+              try {
+                const data = JSON.parse(frontContent);
+                setOcclusionImageUrl(data.imageUrl || '');
+                setOcclusionRects(data.allRects || data.rects || []);
+                setOcclusionCanvasSize(data.canvasWidth ? { w: data.canvasWidth, h: data.canvasHeight } : null);
+                setIsDirty(true);
+              } catch {}
+              setOcclusionModalOpen(false);
+            }}
+            onCancel={() => setOcclusionModalOpen(false)}
+            isSaving={false}
+          />
+        </DialogContent>
+      </Dialog>
 
       {/* Delete confirmation */}
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
