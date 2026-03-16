@@ -1,12 +1,13 @@
 import { useState, useCallback } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
-import { GripVertical, ImagePlus, ScanEye, Volume2, Palette, Bold, Italic, Underline, Strikethrough, Heading2, List, ListOrdered, Code } from 'lucide-react';
+import { GripVertical, ImagePlus, ScanEye, Volume2, Palette, Bold, Italic, Underline, Strikethrough, Heading2, List, ListOrdered, Code, Link2 } from 'lucide-react';
 import type { ToolbarItem } from './toolbarConfig';
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   image: ImagePlus,
   occlusion: ScanEye,
+  link: Link2,
   audio: Volume2,
   color: Palette,
   bold: Bold,
