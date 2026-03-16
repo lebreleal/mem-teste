@@ -1351,27 +1351,25 @@ const Dashboard = () => {
                 className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
                 onClick={() => setAddMenuStep('create-deck')}
               >
-                <SquarePlus className="h-5 w-5 text-primary shrink-0" />
-                <div>
-                  <span className="text-sm font-medium text-foreground">Criar deck</span>
-                  <span className="block text-xs text-muted-foreground mt-0.5">Criar manualmente ou com IA</span>
-                </div>
+                <span className="text-sm font-medium text-foreground">Criar deck</span>
               </button>
               <button
-                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3 justify-between"
                 onClick={() => { setSalaAddMenuOpen(false); setAddMenuStep('main'); state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId('__materia__'); }}
               >
-                <Layers className="h-5 w-5 text-primary shrink-0" />
-                <div>
-                  <span className="text-sm font-medium text-foreground">Criar matéria</span>
-                  <span className="block text-xs text-muted-foreground mt-0.5">Organiza seus decks por tema</span>
-                </div>
+                <span className="text-sm font-medium text-foreground">Criar matéria</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setAddMenuInfoType('materia'); }}
+                  className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted-foreground/10 transition-colors"
+                  aria-label="O que é matéria?"
+                >
+                  <Info className="h-4 w-4" />
+                </button>
               </button>
               <button
                 className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
                 onClick={() => { setSalaAddMenuOpen(false); setAddMenuStep('main'); state.setImportOpen(true); state.setImportDeckId(null); state.setImportDeckName(''); }}
               >
-                <Archive className="h-5 w-5 text-primary shrink-0" />
                 <span className="text-sm font-medium text-foreground">Importar cartões</span>
               </button>
             </div>

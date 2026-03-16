@@ -392,21 +392,12 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           {!readOnly && !effectiveDisableManagement && (
             <div className="flex items-center gap-3 pl-10 pr-4 py-3 border-t border-border/30">
               <button
-                onClick={(e) => { e.stopPropagation(); onCreateSubDeck(deck.id); }}
+                onClick={(e) => { e.stopPropagation(); setShowAddDeckMenu(true); }}
                 className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 <Plus className="h-3.5 w-3.5" />
                 <span>Adicionar Deck</span>
               </button>
-              {onCreateSubDeckAI && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); onCreateSubDeckAI(deck.id); }}
-                  className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  <span>Com IA</span>
-                </button>
-              )}
             </div>
           )}
         </div>
