@@ -1392,7 +1392,7 @@ const Dashboard = () => {
                 className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
                 onClick={() => setAddMenuStep('create-deck')}
               >
-                <span className="text-sm font-medium text-foreground">Criar deck</span>
+                <span className="text-sm font-medium text-foreground">Criar baralho</span>
                 <button
                   onClick={(e) => { e.stopPropagation(); setAddMenuInfoType('deck'); }}
                   className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
