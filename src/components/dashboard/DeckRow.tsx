@@ -185,10 +185,11 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   const displayName = isErrorDeck ? 'Caderno de Erros' : deck.name;
   const hasDueCards = aggStats.new_count + aggStats.learning_count + aggStats.review_count > 0;
 
-  // A deck with no sub-decks and no cards is an empty matéria — expand inline instead of navigating
-  const isEmptyMateria = !hasChildren && totalCards === 0 && !isErrorDeck;
+  // Only treat as empty matéria if explicitly expanded (the user created it as matéria)
+  // A regular empty deck should navigate normally
+  const isEmptyMateria = false;
   // Empty matérias are always "expanded" — no toggle needed
-  const effectiveExpanded = isEmptyMateria ? true : isExpanded;
+  const effectiveExpanded = isExpanded;
 
   const handleClick = () => {
     if (deckSelectionMode) {
