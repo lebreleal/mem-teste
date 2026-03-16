@@ -281,8 +281,8 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   const currentColor = editor.getAttributes('textStyle').color || '';
 
   return (
-    <div className="rounded-lg border border-input bg-card">
-      <div className="flex flex-wrap items-center gap-0.5 border-b border-border px-2 py-1">
+    <div className={chromeless ? 'bg-transparent' : 'rounded-lg border border-input bg-card'}>
+      <div className={`flex flex-wrap items-center gap-0.5 px-2 py-1 ${chromeless ? 'border-b border-border/80' : 'border-b border-border'}`}>
         {/* Special tools first */}
         <DropdownMenu open={imageMenuOpen} onOpenChange={setImageMenuOpen}>
           <DropdownMenuTrigger asChild>
@@ -300,7 +300,6 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* Cloze same number button - dashed square */}
         {!hideCloze && (
           <ToolBtn onClick={handleCloze} active={clozeActive} title={`Cloze c${clozeCounter} (mesmo número)`}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -309,7 +308,6 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
           </ToolBtn>
         )}
 
-        {/* Cloze next number button - dashed square with + */}
         {!hideCloze && (
           <Button type="button" variant="ghost" size="icon"
             className="h-7 w-7"
@@ -345,7 +343,6 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
           <Volume2 className="h-3.5 w-3.5" />
         </ToolBtn>
 
-        {/* Color picker */}
         <Popover open={colorOpen} onOpenChange={setColorOpen}>
           <PopoverTrigger asChild>
             <Button type="button" variant="ghost" size="icon" className="h-7 w-7 relative" title="Cor do texto">
@@ -370,7 +367,6 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
 
         <div className="mx-0.5 h-4 w-px bg-border" />
 
-        {/* Formatting */}
         <ToolBtn onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')} title="Negrito">
           <Bold className="h-3.5 w-3.5" />
         </ToolBtn>
