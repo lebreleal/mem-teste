@@ -405,7 +405,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
 
   return (
     <div
-      className={chromeless ? 'bg-transparent' : 'rounded-lg border border-input bg-card'}
+      className={`${chromeless ? 'bg-transparent' : 'rounded-lg border border-input bg-card'} flex flex-col`}
       onFocus={() => setIsFocused(true)}
       onBlur={(e) => {
         // Only blur if focus left this entire container
@@ -414,8 +414,9 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
         }
       }}
     >
+      <EditorContent editor={editor} className="flex-1 min-h-0 overflow-y-auto" />
       {showToolbar && (
-        <div className={`flex items-center gap-0.5 px-2 py-1 overflow-x-auto scrollbar-none ${chromeless ? 'border-b border-border/80' : 'border-b border-border'}`}>
+        <div className={`flex items-center gap-0.5 px-2 py-1 overflow-x-auto scrollbar-none ${chromeless ? 'border-t border-border/80' : 'border-t border-border'}`}>
           {toolbarItems.filter(t => t.visible).map((t) => {
             switch (t.id) {
               case 'image':
@@ -546,7 +547,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
           </Button>
         </div>
       )}
-      <EditorContent editor={editor} />
+      
 
       <Suspense fallback={null}>
         {configOpen && (
