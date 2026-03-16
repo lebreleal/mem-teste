@@ -371,7 +371,38 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
         </div>
       )}
 
-      {/* Info modal for error deck */}
+      {/* Empty matéria — show add deck buttons */}
+      {isEmptyMateria && isExpanded && !readOnly && (
+        <div className="bg-muted/30 border-t border-border/30 px-6 py-5">
+          <p className="text-sm text-muted-foreground mb-3">Nenhum deck nesta matéria. Adicione um para começar:</p>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={(e) => { e.stopPropagation(); onCreateSubDeck(deck.id); }}
+              className="flex items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted border border-border/50"
+            >
+              <BookOpen className="h-5 w-5 text-primary shrink-0" />
+              <div>
+                <span className="text-sm font-medium text-foreground">Criar Deck Manual</span>
+                <p className="text-xs text-muted-foreground">Adicione cartões manualmente</p>
+              </div>
+            </button>
+            {onCreateSubDeckAI && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onCreateSubDeckAI(deck.id); }}
+                className="flex items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted border border-border/50"
+              >
+                <Sparkles className="h-5 w-5 text-primary shrink-0" />
+                <div>
+                  <span className="text-sm font-medium text-foreground">Criar Deck com IA</span>
+                  <p className="text-xs text-muted-foreground">A partir do seu material de estudo</p>
+                </div>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+
       <Dialog open={showInfoModal} onOpenChange={setShowInfoModal}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
