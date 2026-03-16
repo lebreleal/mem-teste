@@ -76,32 +76,30 @@ const ManageDeck = () => {
       setBack(currentCard.back_content);
     } else if (ct === 'cloze') {
       // back_content may be JSON {"clozeTarget":N,"extra":"..."}
-      // If front_content is empty but extra has cloze markup, use extra as front
       let clozeExtra = '';
+      let backRaw = currentCard.back_content;
       try {
-        const parsed = JSON.parse(currentCard.back_content);
+        const parsed = JSON.parse(backRaw);
         if (parsed && typeof parsed.clozeTarget === 'number') {
           clozeExtra = parsed.extra || '';
+          backRaw = clozeExtra; // use extracted extra
         }
       } catch { /* not JSON, treat as plain */ }
 
-      const frontVal = currentCard.front_content;
-      if (frontVal && frontVal !== '<p></p>') {
-        setFront(frontVal);
-        setBack(clozeExtra);
-      } else if (clozeExtra) {
-        // front is empty but extra has content — check if extra has cloze markup
-        const hasCloze = /\{\{c\d+::/.test(clozeExtra.replace(/<[^>]*>/g, ''));
-        if (hasCloze) {
-          setFront(clozeExtra);
-          setBack('');
-        } else {
-          setFront(frontVal);
-          setBack(clozeExtra);
-        }
+      const frontVal = currentCard.front_content || '';
+      const frontPlain = frontVal.replace(/<[^>]*>/g, '');
+      const backPlain = backRaw.replace(/<[^>]*>/g, '');
+      const frontHasCloze = /\{\{c\d+::/.test(frontPlain);
+      const backHasCloze = /\{\{c\d+::/.test(backPlain);
+
+      if (backHasCloze && !frontHasCloze) {
+        // Cloze markup is in the back — move it to front
+        setFront(backRaw);
+        setBack(frontVal && frontVal !== '<p></p>' ? frontVal : '');
+        setIsDirty(true); // auto-save the fix
       } else {
         setFront(frontVal);
-        setBack(currentCard.back_content);
+        setBack(clozeExtra || (backRaw !== currentCard.back_content ? '' : backRaw));
       }
     } else {
       setFront(currentCard.front_content);
