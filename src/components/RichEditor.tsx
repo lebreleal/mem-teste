@@ -297,6 +297,24 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       }
       setClozeActive(false);
       setCursorInCloze(false);
+      // Re-sync counter: find the lowest unused cloze number
+      setTimeout(() => {
+        if (!editor) return;
+        const html = editor.getHTML();
+        const nums = [...html.matchAll(/data-cloze="(\d+)"/g)].map(m => parseInt(m[1]));
+        if (nums.length > 0) {
+          // Find first gap starting from 1, or max+1
+          const unique = [...new Set(nums)].sort((a, b) => a - b);
+          let next = 1;
+          for (const n of unique) {
+            if (n === next) next++;
+            else break;
+          }
+          setClozeCounter(next);
+        } else {
+          setClozeCounter(1);
+        }
+      }, 10);
       return;
     }
 
@@ -325,7 +343,15 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     if (clozeActive) {
       editor.chain().focus().unsetMark('clozeMark').run();
     }
-    const nextNum = clozeCounter + 1;
+    // Find next unused cloze number
+    const html = editor.getHTML();
+    const existingNums = [...new Set([...html.matchAll(/data-cloze="(\d+)"/g)].map(m => parseInt(m[1])))].sort((a, b) => a - b);
+    let nextNum = 1;
+    for (const n of existingNums) {
+      if (n === nextNum) nextNum++;
+      else break;
+    }
+    if (nextNum <= Math.max(0, ...existingNums)) nextNum = Math.max(...existingNums) + 1;
     setClozeCounter(nextNum);
     setTimeout(() => {
       editor.chain().focus().setMark('clozeMark', { num: String(nextNum) }).run();
