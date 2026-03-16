@@ -18,8 +18,7 @@ const CARD_TYPE_ICONS: Record<EditorCardType, React.ReactNode> = {
 
 const CARD_TYPES_UI = [
   { value: 'basic' as EditorCardType, label: 'Texto', desc: 'Pergunta na frente, resposta no verso' },
-  { value: 'cloze' as EditorCardType, label: 'Cloze', desc: 'Texto com lacunas para preencher' },
-  { value: 'image_occlusion' as EditorCardType, label: 'Oclusão de imagem', desc: 'Oculte partes de uma imagem' },
+  { value: 'cloze' as EditorCardType, label: 'Oclusão de Texto e Imagem', desc: 'Lacunas de texto e/ou oclusão de imagem' },
 ];
 /* ─── Inline SVG icons matching the toolbar ─── */
 const ClozeIcon = () => (
