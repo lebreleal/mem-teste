@@ -284,7 +284,7 @@ const ManageDeck = () => {
         {/* Main editor area */}
         <main className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-6">
           {currentCard ? (
-            <div className="mx-auto flex h-full min-h-0 max-w-2xl flex-row gap-0">
+            <div className="mx-auto flex h-full min-h-0 max-w-2xl flex-col gap-0">
               {/* Cards column */}
               <div className="flex-1 min-w-0 flex flex-col gap-3">
 
@@ -341,33 +341,8 @@ const ManageDeck = () => {
                     hideCloze
                   />
                 </div>
-
-                {/* Save button */}
-                {isDirty && (
-                  <Button onClick={saveCurrentCard} className="w-full gap-2 shrink-0" disabled={updateCard.isPending}>
-                    {updateCard.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                    Salvar alterações
-                  </Button>
-                )}
               </div>
 
-              {/* Right action strip */}
-              <div className="flex flex-col items-center justify-center gap-1 pl-2 sm:pl-3 shrink-0">
-                <button
-                  onClick={() => setDeleteConfirmOpen(true)}
-                  className="p-2 text-muted-foreground hover:text-destructive transition-colors"
-                  title="Excluir"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={handleDuplicate}
-                  className="p-2 text-muted-foreground hover:text-foreground transition-colors"
-                  title="Duplicar"
-                >
-                  <Copy className="h-4 w-4" />
-                </button>
-              </div>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-center">
@@ -380,14 +355,48 @@ const ManageDeck = () => {
         </main>
       </div>
 
-      {/* FAB to add new card */}
-      {totalCards > 0 && (
-        <button
-          onClick={handleAddCard}
-          className="fixed bottom-6 right-6 h-11 w-11 rounded-full bg-primary text-primary-foreground shadow-md hover:shadow-lg hover:scale-105 transition-all flex items-center justify-center z-20"
-        >
-          <Plus className="h-5 w-5" />
-        </button>
+      {/* Bottom action bar - always visible */}
+      {currentCard && (
+        <div className="shrink-0 border-t border-border bg-background px-4 py-2">
+          <div className="mx-auto max-w-2xl flex items-center gap-1">
+            <button
+              onClick={() => setDeleteConfirmOpen(true)}
+              className="p-2 text-muted-foreground hover:text-destructive transition-colors"
+              title="Excluir"
+            >
+              <Trash2 className="h-[18px] w-[18px]" />
+            </button>
+            <button
+              onClick={handleDuplicate}
+              className="p-2 text-muted-foreground hover:text-foreground transition-colors"
+              title="Duplicar"
+            >
+              <Copy className="h-[18px] w-[18px]" />
+            </button>
+            <button
+              onClick={handleAddCard}
+              className="p-2 text-muted-foreground hover:text-foreground transition-colors"
+              title="Novo cartão"
+            >
+              <Plus className="h-[18px] w-[18px]" />
+            </button>
+            {occlusionImageUrl && (
+              <button
+                onClick={() => setOcclusionModalOpen(true)}
+                className="p-2 text-muted-foreground hover:text-foreground transition-colors"
+                title="Editar oclusão"
+              >
+                <ImageIcon className="h-[18px] w-[18px]" />
+              </button>
+            )}
+            {isDirty && (
+              <Button onClick={saveCurrentCard} size="sm" className="ml-auto gap-1.5" disabled={updateCard.isPending}>
+                {updateCard.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                Salvar
+              </Button>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Occlusion Editor Dialog (for upload + draw) */}
