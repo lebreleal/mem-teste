@@ -74,7 +74,7 @@ const TEXT_COLORS = [
   { label: 'Rosa', value: '#ec4899' },
 ];
 
-const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclusionAttach, hideCloze }: RichEditorProps) => {
+const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclusionAttach, hideCloze, chromeless = false }: RichEditorProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [colorOpen, setColorOpen] = useState(false);
