@@ -381,7 +381,7 @@ const DashboardDialogs = (props: DashboardDialogsProps) => {
             </DialogTitle>
             {props.createType === 'folder' && (
               <p className="text-sm text-muted-foreground text-center pt-1">
-                Uma sala organiza seus decks e matérias em um só lugar. (ex: "Medicina 2026", "Concurso Federal", "Residência Cardio")
+                Uma sala organiza seus baralhos e matérias em um só lugar. (ex: "Medicina 2026", "Concurso Federal", "Residência Cardio")
               </p>
             )}
           </DialogHeader>
