@@ -23,12 +23,7 @@ const TrialStudyModal = ({ open, onOpenChange, deckId, deckName }: TrialStudyMod
 
   const { data: cards = [], isLoading } = useQuery({
     queryKey: ['trial-cards', deckId],
-    queryFn: async () => {
-      const { data } = await supabase.from('cards')
-        .select('id, front_content, back_content, card_type, stability, difficulty, state, scheduled_date, last_reviewed_at')
-        .eq('deck_id', deckId);
-      return data ?? [];
-    },
+    queryFn: () => fetchTrialCards(deckId),
     enabled: open && !!deckId,
   });
 
