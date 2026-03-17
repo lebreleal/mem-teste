@@ -317,7 +317,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   };
 
   const uploadImageFile = async (file: File) => {
-    const url = await uploadToStorage(file);
+    const url = await handleUploadImage(file);
     if (url) {
       if (onImageAttached) onImageAttached(url);
       else insertImageUrl(url);
