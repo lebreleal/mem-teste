@@ -145,12 +145,12 @@ export function useStudyPlan(options?: { full?: boolean }) {
   const plans = plansQuery.data ?? [];
 
   // ─── Deck hierarchy from shared cache (avoids duplicate query) ───
-  interface DeckHierarchyItem { id: string; parent_deck_id: string | null }
-  const cachedDecks = qc.getQueryData<DeckHierarchyItem[]>(['decks', userId]);
+  interface CachedDeckItem { id: string; parent_deck_id: string | null; is_archived?: boolean }
+  const cachedDecks = qc.getQueryData<CachedDeckItem[]>(['decks', userId]);
   const deckHierarchy = useMemo(() => {
-    if (!cachedDecks) return [] as DeckHierarchyItem[];
+    if (!cachedDecks) return [] as { id: string; parent_deck_id: string | null }[];
     return cachedDecks
-      .filter(d => !(d as Record<string, unknown>).is_archived)
+      .filter(d => !d.is_archived)
       .map(d => ({ id: d.id, parent_deck_id: d.parent_deck_id }));
   }, [cachedDecks]);
 
