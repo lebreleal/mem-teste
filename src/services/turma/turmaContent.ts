@@ -174,7 +174,7 @@ export async function reorderTurmaExams(orderedIds: string[]) {
 // ── Turma Ratings ──
 
 export async function fetchMyTurmaRating(turmaId: string, userId: string) {
-  const { data } = await supabase.from('turma_ratings').select('*').eq('turma_id', turmaId).eq('user_id', userId).maybeSingle();
+  const { data } = await supabase.from('turma_ratings').select('id, turma_id, user_id, rating, comment, created_at').eq('turma_id', turmaId).eq('user_id', userId).maybeSingle();
   return data as any;
 }
 
