@@ -36,9 +36,9 @@ export const CardEditorDialog = ({
   editorOpen, setEditorOpen, editingId, editorType, setEditorType,
   front, setFront, back, setBack,
   mcOptions, setMcOptions, mcCorrectIndex, setMcCorrectIndex,
-  isSaving, isImproving,
+  isSaving, isImproving, isAICreating = false,
   occlusionModalOpen, setOcclusionModalOpen,
-  resetForm, handleSave, handleImprove, addMcOption, removeMcOption,
+  resetForm, handleSave, handleImprove, handleAICreate, addMcOption, removeMcOption,
 }: CardEditorDialogProps) => {
 
   // Check if front content has image occlusion data
