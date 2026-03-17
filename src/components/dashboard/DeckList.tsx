@@ -6,7 +6,7 @@
 
 import { useState, useMemo } from 'react';
 import {
-  GraduationCap, ChevronRight, Loader2, Search, Tag as TagIcon, CheckCircle2, XCircle,
+  GraduationCap, ChevronRight, Loader2, Search, CheckCircle2, XCircle,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
