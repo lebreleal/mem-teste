@@ -869,9 +869,8 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
           </p>
         )}
 
-        {/* Bottom bar — eye + colors + AI detect */}
+        {/* Bottom bar — eye + IA */}
         <div className="shrink-0 flex items-center justify-center gap-2 mt-2 flex-wrap">
-          {/* Eye toggle */}
           <button
             onClick={() => setPreviewOpaque(v => !v)}
             className={`h-8 w-8 shrink-0 flex items-center justify-center rounded-lg transition-colors ${
@@ -882,70 +881,13 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
             {previewOpaque ? <IconEyeClosed className="h-4 w-4" /> : <IconEyeOpen className="h-4 w-4" />}
           </button>
 
-          {/* Color dots */}
-          <div className="relative flex items-center gap-1">
-            {visibleColors.map(c => {
-              const isActive = shapeColor === c.fill;
-              return (
-                <button
-                  key={c.label}
-                  className={`rounded-full transition-all shrink-0 ${isActive ? 'ring-2 ring-offset-1 ring-foreground/40 scale-110' : 'hover:scale-110'}`}
-                  style={{
-                    backgroundColor: c.fill.replace(/[\d.]+\)$/, '1)'),
-                    width: 20,
-                    height: 20,
-                  }}
-                  onClick={() => setShapeColor(c.fill)}
-                  title={c.label}
-                />
-              );
-            })}
-            <button
-              onClick={() => setColorInfoOpen(v => !v)}
-              className="h-5 w-5 shrink-0 flex items-center justify-center text-primary/70 hover:text-primary transition-colors"
-              title="Como funcionam as cores"
-            >
-              <IconInfo className="h-3.5 w-3.5" />
-            </button>
-
-            {colorInfoOpen && (
-              <div className="absolute left-0 bottom-full mb-2 z-50 w-72 rounded-xl bg-card border border-border shadow-lg p-3 space-y-2.5">
-                <div className="flex items-start justify-between">
-                  <p className="text-xs text-muted-foreground leading-relaxed pr-2">
-                    Formas da mesma cor são agrupadas no mesmo cartão. Cores diferentes geram cartões diferentes. Você pode usar quantas cores quiser.
-                  </p>
-                  <button onClick={() => setColorInfoOpen(false)} className="shrink-0 h-5 w-5 flex items-center justify-center text-muted-foreground hover:text-foreground">
-                    <IconClose className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="rounded-lg border border-border bg-muted/30 p-2 text-center space-y-1.5">
-                    <p className="text-[10px] font-semibold text-foreground">Mesma cor = agrupadas</p>
-                    <div className="mx-auto w-14 h-8 rounded bg-muted relative flex items-center justify-center gap-0.5">
-                      <div className="w-4 h-2.5 rounded-sm" style={{ backgroundColor: COLORS[0].fill.replace(/[\d.]+\)$/, '1)') }} />
-                      <div className="w-4 h-2.5 rounded-sm" style={{ backgroundColor: COLORS[0].fill.replace(/[\d.]+\)$/, '1)') }} />
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-border bg-muted/30 p-2 text-center space-y-1.5">
-                    <p className="text-[10px] font-semibold text-foreground">Cores diferentes = cards</p>
-                    <div className="mx-auto w-14 h-8 rounded bg-muted relative flex items-center justify-center gap-0.5">
-                      <div className="w-4 h-2.5 rounded-sm" style={{ backgroundColor: COLORS[0].fill.replace(/[\d.]+\)$/, '1)') }} />
-                      <div className="w-4 h-2.5 rounded-sm" style={{ backgroundColor: COLORS[1].fill.replace(/[\d.]+\)$/, '1)') }} />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Detect AI — animated gradient border */}
           <button
             onClick={handleDetectAI}
             disabled={isDetecting || !imgLoaded}
             className="relative inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all disabled:opacity-50 shrink-0 overflow-hidden"
             style={{ background: 'hsl(var(--card))' }}
           >
-            <span className="absolute inset-0 rounded-full p-[1.5px] overflow-hidden" style={{ background: 'linear-gradient(90deg, #00B2FF, #3347FF, #FF306B, #FF9B23, #00B2FF)', backgroundSize: '200% 100%', animation: 'gradient-shift 3s linear infinite' }} >
+            <span className="absolute inset-0 rounded-full p-[1.5px] overflow-hidden" style={{ background: 'linear-gradient(90deg, #00B2FF, #3347FF, #FF306B, #FF9B23, #00B2FF)', backgroundSize: '200% 100%', animation: 'gradient-shift 3s linear infinite' }}>
               <span className="block w-full h-full rounded-full bg-card" />
             </span>
             <span className="relative flex items-center gap-1.5">
@@ -956,16 +898,6 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
         </div>
       </div>
 
-      {/* Info strip */}
-      {shapes.length > 0 && (
-        <div className="shrink-0 border-t border-border/40 px-3 py-1.5">
-          <p className="text-[11px] text-muted-foreground text-center">
-            {shapes.length} área{shapes.length !== 1 ? 's' : ''} · {cardCount} cartão{cardCount !== 1 ? 'ões' : ''}
-          </p>
-        </div>
-      )}
-
-      {/* Gradient animation keyframes */}
       <style>{`
         @keyframes gradient-shift {
           0% { background-position: 0% 50%; }
