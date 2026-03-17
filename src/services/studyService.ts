@@ -52,7 +52,7 @@ export async function fetchStudyQueue(
   };
 
   let deckIds: string[] = [];
-  let deckConfig = {} as DeckStudyConfig;
+  let deckConfig: DeckStudyConfig | undefined;
   let limitScopeIds: string[] = [];
   let folderLimitDecks: typeof activeDecks = [];
 
