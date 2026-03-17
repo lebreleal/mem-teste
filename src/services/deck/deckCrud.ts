@@ -391,4 +391,66 @@ export async function countPendingSuggestions(deckId: string): Promise<number> {
   return count ?? 0;
 }
 
-// fetchQuestionCountsByDeck removed
+/** Collect a deck ID plus all descendant deck IDs. */
+async function collectDeckHierarchyIds(rootDeckId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('decks')
+    .select('id, parent_deck_id');
+
+  if (error) throw error;
+
+  const rows = (data ?? []) as DeckParentRow[];
+  const collected = [rootDeckId];
+  const queue = [rootDeckId];
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    const children = rows.filter((row) => row.parent_deck_id === current);
+
+    for (const child of children) {
+      collected.push(child.id);
+      queue.push(child.id);
+    }
+  }
+
+  return collected;
+}
+
+/**
+ * Backward-compatible export kept to avoid runtime crashes from stale lazy chunks.
+ * Counts deck_questions for the deck and all descendant decks.
+ */
+export async function countDeckQuestionsRecursive(deckId: string): Promise<number> {
+  try {
+    const deckIds = await collectDeckHierarchyIds(deckId);
+    const { count, error } = await supabase
+      .from('deck_questions')
+      .select('id', { count: 'exact', head: true })
+      .in('deck_id', deckIds);
+
+    if (error) throw error;
+    return count ?? 0;
+  } catch (error) {
+    console.error('countDeckQuestionsRecursive error:', error);
+    return 0;
+  }
+}
+
+/**
+ * Backward-compatible export kept to avoid runtime crashes from stale lazy chunks.
+ * Returns recursive question counts keyed by deck ID.
+ */
+export async function fetchQuestionCountsByDeck(deckIds: string[]): Promise<Record<string, number>> {
+  try {
+    if (deckIds.length === 0) return {};
+
+    const entries = await Promise.all(
+      deckIds.map(async (deckId) => [deckId, await countDeckQuestionsRecursive(deckId)] as const),
+    );
+
+    return Object.fromEntries(entries);
+  } catch (error) {
+    console.error('fetchQuestionCountsByDeck error:', error);
+    return {};
+  }
+}
