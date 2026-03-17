@@ -79,23 +79,7 @@ const MateriaDetail: React.FC = () => {
     () => (decks ?? []).filter(d => d.parent_deck_id === id && !d.is_archived),
     [decks, id]
   );
-
-  // Fetch image_url (color) from DB since it's not in DeckWithStats
-  const { data: materiaExtra } = useQuery({
-    queryKey: ['materia-extra', id],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('decks')
-        .select('image_url')
-        .eq('id', id!)
-        .single();
-      return data;
-    },
-    enabled: !!id,
-    staleTime: 60_000,
-  });
-
-  const materiaColor = parseMateriaColor(materiaExtra?.image_url);
+  const materiaColor = useMemo(() => id ? getMateriaColors()[id] ?? null : null, [id, showEdit]);
 
   const [showEdit, setShowEdit] = useState(false);
   const [editName, setEditName] = useState('');
