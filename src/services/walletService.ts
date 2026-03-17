@@ -34,7 +34,7 @@ export async function fetchCreatorTier(userId: string): Promise<CreatorTierData>
     .eq('id', userId)
     .single();
 
-  const currentTier = (profile as any)?.creator_tier ?? 1;
+  const currentTier = profile?.creator_tier ?? 1;
 
   const { data: listings } = await supabase
     .from('marketplace_listings')
