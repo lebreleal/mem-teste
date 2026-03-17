@@ -4,7 +4,8 @@
  */
 
 import { useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchCardFrontContent } from '@/services/uiQueryService';
+import { getAccessToken, getCurrentUserId } from '@/services/authService';
 import * as cardService from '@/services/cardService';
 import * as deckService from '@/services/deckService';
 import { invalidateDeckRelatedQueries } from '@/lib/queryKeys';

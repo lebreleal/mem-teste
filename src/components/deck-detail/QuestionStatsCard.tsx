@@ -42,21 +42,11 @@ const QuestionStatsCard = ({ deckId, sourceDeckId, isReadOnly, onPractice, onCre
   })) : [];
 
   const masteryPct = useMemo(() => {
-    const total = questions.length;
-    if (total === 0) return 0;
-    const latestByQ = new Map<string, { is_correct: boolean; answered_at: string }>();
-    for (const a of attempts) {
-      const prev = latestByQ.get(a.question_id);
-      if (!prev || a.answered_at > prev.answered_at) latestByQ.set(a.question_id, a);
-    }
-    let correct = 0;
-    for (const [, a] of latestByQ) {
-      if (a.is_correct) correct++;
-    }
-    return Math.round((correct / total) * 100);
-  }, [questions, attempts]);
+    if (!qStats || qStats.total === 0) return 0;
+    return Math.round((qStats.correct / qStats.total) * 100);
+  }, [qStats]);
 
-  const total = questions.length;
+  const total = qStats?.total ?? 0;
 
   return (
     <div className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
