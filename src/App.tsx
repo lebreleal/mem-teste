@@ -85,11 +85,14 @@ const queryClient = new QueryClient({
   },
 });
 
-/** Custom serializer that converts Map instances to a tagged format for JSON persistence. */
+/** Custom serializer that converts Map/Set instances to a tagged format for JSON persistence. */
 function serializeCache(data: unknown): string {
   return JSON.stringify(data, (_key, value) => {
     if (value instanceof Map) {
       return { __type: 'Map', entries: Array.from(value.entries()) };
+    }
+    if (value instanceof Set) {
+      return { __type: 'Set', values: Array.from(value) };
     }
     return value;
   });
@@ -99,6 +102,9 @@ function deserializeCache(str: string): unknown {
   return JSON.parse(str, (_key, value) => {
     if (value && typeof value === 'object' && value.__type === 'Map' && Array.isArray(value.entries)) {
       return new Map(value.entries);
+    }
+    if (value && typeof value === 'object' && value.__type === 'Set' && Array.isArray(value.values)) {
+      return new Set(value.values);
     }
     return value;
   });
