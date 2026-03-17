@@ -66,7 +66,7 @@ const TurmaExamResults = () => {
 
       toast({
         title: `Nota: ${Math.round(data.score)}%`,
-        description: data.freeGradingsRemaining > 0
+        description: (data.freeGradingsRemaining ?? 0) > 0
           ? `${data.freeGradingsRemaining} correções gratuitas restantes hoje`
           : 'Próximas correções custarão 2 Créditos IA',
       });
