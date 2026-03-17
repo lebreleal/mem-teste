@@ -763,28 +763,6 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
           </button>
         </div>
 
-        {/* Row 2: "Esconda tudo e adivinhe um" toggle */}
-        <div className="flex items-center justify-between">
-          <span className="text-[13px] font-medium text-foreground">Esconda tudo e adivinhe um</span>
-          <button
-            onClick={() => setHideAllGuessOne(v => !v)}
-            className="relative shrink-0"
-            style={{ width: 48, height: 28 }}
-          >
-            <div
-              className="absolute inset-0 rounded-full transition-colors"
-              style={{ backgroundColor: hideAllGuessOne ? 'hsl(var(--primary))' : 'hsl(var(--muted))' }}
-            />
-            <div
-              className="absolute top-1 rounded-full bg-white shadow-sm transition-transform"
-              style={{
-                width: 20,
-                height: 20,
-                transform: hideAllGuessOne ? 'translateX(24px)' : 'translateX(4px)',
-              }}
-            />
-          </button>
-        </div>
 
         {/* Info strip */}
         {shapes.length > 0 && (
