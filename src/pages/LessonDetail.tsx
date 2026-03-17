@@ -215,7 +215,7 @@ const LessonDetail = () => {
 
       let turmaFolder = folders.find(f => f.name === turma.name && !f.parent_id);
       if (turmaFolder && turmaFolder.is_archived) {
-        await unarchiveFolder(turmaFolder.id);
+        await archiveFolder(turmaFolder.id);
       }
       if (!turmaFolder) {
         const existingFolderNames = folders.filter(f => !f.parent_id).map(f => f.name);
