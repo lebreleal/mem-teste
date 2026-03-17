@@ -118,8 +118,8 @@ export function useStudyPlan(options?: { full?: boolean }) {
   const plansQuery = useQuery({
     queryKey: ['study-plans', userId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('study_plans' as any)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- study_plans not in generated types
+      const { data, error } = await (supabase.from as any)('study_plans')
         .select('id, user_id, name, daily_minutes, weekly_minutes, deck_ids, target_date, priority, created_at, updated_at')
         .eq('user_id', userId!)
         .order('priority', { ascending: true });
