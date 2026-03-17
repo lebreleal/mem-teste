@@ -20,7 +20,9 @@ import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading
 import { useSubscription } from '@/hooks/useSubscription';
 import { useStudyPlan } from '@/hooks/useStudyPlan';
 // useDecks removed — state.decks from useDashboardState is the single source of truth
-import { supabase } from '@/integrations/supabase/client';
+import { fetchUserOwnTurma, fetchCommunityFolderInfo, createTurmaWithOwner, updateTurma, publishDecksToTurma, removeTurmaMember, ensureShareSlug } from '@/services/turma/turmaCrud';
+import { clearFolderTurmaLink, deleteFolder, uploadFolderImage } from '@/services/folderService';
+import { detachCommunityDeck } from '@/services/deck/deckCrud';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
