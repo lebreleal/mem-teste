@@ -552,38 +552,14 @@ const LinkedDeckTabs = ({ deckId, resolvedSourceDeckId, isLinkedDeck, activeTab,
 
   const { data: suggestionCount = 0 } = useQuery({
     queryKey: ['suggestion-count', effectiveDeckId],
-    queryFn: async () => {
-      const { count } = await supabase
-        .from('deck_suggestions')
-        .select('id', { count: 'exact', head: true })
-        .eq('deck_id', effectiveDeckId)
-        .eq('status', 'pending');
-      return count ?? 0;
-    },
+    queryFn: () => countPendingSuggestions(effectiveDeckId),
     enabled: !!effectiveDeckId,
     staleTime: 60_000,
   });
 
   const { data: questionCount = 0 } = useQuery({
     queryKey: ['deck-questions-count', effectiveDeckId],
-    queryFn: async () => {
-      // Recursively get all descendant deck IDs
-      const allIds: string[] = [effectiveDeckId];
-      let frontier = [effectiveDeckId];
-      while (frontier.length > 0) {
-        const { data: children } = await supabase
-          .from('decks').select('id').in('parent_deck_id', frontier);
-        if (!children || children.length === 0) break;
-        const childIds = children.map((d: any) => d.id);
-        allIds.push(...childIds);
-        frontier = childIds;
-      }
-      const { count } = await supabase
-        .from('deck_questions' as any)
-        .select('id', { count: 'exact', head: true })
-        .in('deck_id', allIds);
-      return count ?? 0;
-    },
+    queryFn: () => countDeckQuestionsRecursive(effectiveDeckId),
     enabled: !!effectiveDeckId,
     staleTime: 60_000,
   });
