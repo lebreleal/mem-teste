@@ -3,6 +3,8 @@
  * Shows card counter, accuracy, and time elapsed.
  */
 
+import { IconDeck } from '@/components/icons';
+
 export interface DeckSessionStats {
   deckId: string;
   deckName: string;
@@ -38,7 +40,8 @@ const SessionProgressStrip = ({
   return (
     <div className="bg-card/80 backdrop-blur-sm border-b border-border/50">
       <div className="flex items-center justify-center px-3 py-1.5 text-xs gap-3">
-        <span className="font-bold text-foreground tabular-nums">
+        <span className="font-bold text-foreground tabular-nums flex items-center gap-1">
+          <IconDeck className="h-3.5 w-3.5 text-muted-foreground" />
           {reviewCount}/{initialQueueSize}
         </span>
         <span className="text-muted-foreground tabular-nums">
