@@ -139,19 +139,7 @@ const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: stri
 
   const { data: questionCounts } = useQuery({
     queryKey: ['sub-deck-question-counts', parentDeckId],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('deck_questions')
-        .select('deck_id')
-        .in('deck_id', allDescendantIds);
-      const map = new Map<string, number>();
-      if (data) {
-        for (const q of data as any[]) {
-          map.set(q.deck_id, (map.get(q.deck_id) ?? 0) + 1);
-        }
-      }
-      return map;
-    },
+    queryFn: () => fetchQuestionCountsByDeck(allDescendantIds),
     enabled: allDescendantIds.length > 0,
     staleTime: 60_000,
   });
