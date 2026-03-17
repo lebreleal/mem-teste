@@ -213,8 +213,8 @@ export function useStatsData() {
     if (!retentionOverTime || retentionOverTime.length === 0) return [];
     return retentionOverTime.map((row: { week_start: string; correct: number; total: number }) => ({
       label: format(new Date(row.week_start), 'dd/MM'),
-      rate: row.total > 0 ? Math.round((Number(row.correct) / Number(row.total)) * 100) : 0,
-      total: Number(row.total),
+      rate: row.total_reviews > 0 ? Math.round(row.retention * 100) : 0,
+      total: row.total_reviews,
     }));
   }, [retentionOverTime]);
 
