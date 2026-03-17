@@ -8,6 +8,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { mapCardRow, type Card, type CardState } from '@/types/domain';
 import type { ICardRepository, CardFilter, CardPage } from '@/types/repositories';
 
+const CARD_COLS = 'id, deck_id, front_content, back_content, card_type, state, stability, difficulty, scheduled_date, learning_step, last_reviewed_at, origin_deck_id, created_at, updated_at' as const;
+
 export class SupabaseCardRepository implements ICardRepository {
   async findById(id: string): Promise<Card | null> {
     const { data, error } = await supabase
