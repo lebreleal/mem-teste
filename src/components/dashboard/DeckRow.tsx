@@ -181,7 +181,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
 
   // Auto-detect linked (followed) decks — hide management actions for community-sourced decks
   const isLinkedDeck = useMemo(() => {
-    return !!(deck.source_turma_deck_id || deck.source_listing_id || (deck as DeckWithStats & { is_live_deck?: boolean }).is_live_deck);
+    return !!(deck.source_turma_deck_id || deck.source_listing_id || deck.is_live_deck);
   }, [deck]);
   const effectiveDisableManagement = disableManagementActions || isLinkedDeck;
 
