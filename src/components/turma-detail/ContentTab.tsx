@@ -12,7 +12,7 @@ import { useContentMutations } from './content/useContentMutations';
 import { useContentImport } from './content/useContentImport';
 import { useDeckTagsBatch, useTagDescendants } from '@/hooks/useTags';
 import type { Tag } from '@/types/tag';
-import type { TurmaDeck, TurmaSubject } from '@/types/turma';
+import type { TurmaDeck, TurmaSubject, TurmaExam } from '@/types/turma';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
