@@ -138,7 +138,7 @@ const LessonContent = ({
     enabled: showImportExam && !!userId,
   });
 
-  const personalExamIds = personalExams.map((e: any) => e.id);
+  const personalExamIds = personalExams.map((e: { id: string }) => e.id);
   const { data: personalQuestionCounts = {} } = useQuery({
     queryKey: ['personal-exam-qcounts', personalExamIds],
     queryFn: async () => {
