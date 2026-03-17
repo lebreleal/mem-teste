@@ -97,13 +97,7 @@ export function CatchUpDialog({ open, onOpenChange, totalReview, avgSecondsPerCa
     if (!open || allDeckIds.length === 0) return;
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 30);
-    supabase
-      .from('cards')
-      .select('id', { count: 'exact', head: true })
-      .in('deck_id', allDeckIds)
-      .eq('state', 2)
-      .lt('scheduled_date', cutoff.toISOString())
-      .then(({ count }) => setOverdueCount(count ?? 0));
+    countOverdueCards(allDeckIds, cutoff.toISOString()).then(c => setOverdueCount(c));
   }, [open, allDeckIds]);
 
   const handleDilute = async (days: number) => {
