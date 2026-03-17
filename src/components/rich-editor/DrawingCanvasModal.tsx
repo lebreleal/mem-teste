@@ -25,7 +25,6 @@ function ColorWheelPicker({ color, onChange }: { color: string; onChange: (c: st
   const [sat, setSat] = useState(100);
   const [bright, setBright] = useState(100);
 
-  // Parse initial color to HSL on mount
   useEffect(() => {
     const ctx = document.createElement('canvas').getContext('2d')!;
     ctx.fillStyle = color;
@@ -44,11 +43,10 @@ function ColorWheelPicker({ color, onChange }: { color: string; onChange: (c: st
       else h = ((r - g) / d + 4) / 6;
       setHue(Math.round(h * 360));
       setSat(Math.round(s * 100));
-      setBright(Math.round(l * 200)); // rough
+      setBright(Math.round(l * 200));
     }
   }, []);
 
-  // Draw wheel
   useEffect(() => {
     const canvas = wheelRef.current;
     if (!canvas) return;
@@ -72,7 +70,6 @@ function ColorWheelPicker({ color, onChange }: { color: string; onChange: (c: st
     }
   }, []);
 
-  // Draw brightness bar
   useEffect(() => {
     const canvas = brightnessRef.current;
     if (!canvas) return;
@@ -117,15 +114,13 @@ function ColorWheelPicker({ color, onChange }: { color: string; onChange: (c: st
     emitColor(hue, sat, b);
   };
 
-  // Wheel indicator position
   const rad = (hue * Math.PI) / 180;
-  const indicatorDist = (sat / 100) * 48; // 48% of container
+  const indicatorDist = (sat / 100) * 48;
   const ix = 50 + (indicatorDist * Math.cos(rad));
   const iy = 50 + (indicatorDist * Math.sin(rad));
 
   return (
     <div className="p-3 space-y-3">
-      {/* Color wheel */}
       <div className="relative mx-auto" style={{ width: 180, height: 180 }}>
         <canvas
           ref={wheelRef}
@@ -136,7 +131,6 @@ function ColorWheelPicker({ color, onChange }: { color: string; onChange: (c: st
           onClick={handleWheelClick}
           onTouchMove={handleWheelClick}
         />
-        {/* Indicator */}
         <div
           className="absolute w-5 h-5 rounded-full border-[3px] border-white shadow-md pointer-events-none"
           style={{
@@ -147,7 +141,6 @@ function ColorWheelPicker({ color, onChange }: { color: string; onChange: (c: st
           }}
         />
       </div>
-      {/* Brightness slider */}
       <div className="relative mx-auto" style={{ width: 180, height: 24 }}>
         <canvas
           ref={brightnessRef}
@@ -168,6 +161,36 @@ function ColorWheelPicker({ color, onChange }: { color: string; onChange: (c: st
         />
       </div>
     </div>
+  );
+}
+
+/* ─── Diagonal split color/opacity circle (SVG) ─── */
+function OpacityColorCircle({ color, opacity }: { color: string; opacity: number }) {
+  return (
+    <svg width="28" height="28" viewBox="0 0 28 28" className="shrink-0">
+      <defs>
+        <clipPath id="oc-top">
+          <polygon points="0,0 28,0 0,28" />
+        </clipPath>
+        <clipPath id="oc-bottom">
+          <polygon points="28,0 28,28 0,28" />
+        </clipPath>
+        {/* Checkerboard pattern for transparency */}
+        <pattern id="oc-checker" width="6" height="6" patternUnits="userSpaceOnUse">
+          <rect width="6" height="6" fill="white" />
+          <rect width="3" height="3" fill="#d1d5db" />
+          <rect x="3" y="3" width="3" height="3" fill="#d1d5db" />
+        </pattern>
+      </defs>
+      {/* Full color top-left diagonal */}
+      <circle cx="14" cy="14" r="13" fill={color} clipPath="url(#oc-top)" />
+      {/* Checkerboard + transparent color bottom-right diagonal */}
+      <circle cx="14" cy="14" r="13" fill="url(#oc-checker)" clipPath="url(#oc-bottom)" />
+      <circle cx="14" cy="14" r="13" fill={color} opacity={opacity / 100} clipPath="url(#oc-bottom)" />
+      {/* Border */}
+      <circle cx="14" cy="14" r="12.5" fill="none" stroke="white" strokeWidth="2" />
+      <circle cx="14" cy="14" r="13.5" fill="none" stroke="hsl(var(--border))" strokeWidth="0.5" />
+    </svg>
   );
 }
 
@@ -289,7 +312,7 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="p-0 gap-0 w-[calc(100%-0px)] max-w-[calc(100%-0px)] sm:max-w-lg h-[80dvh] max-h-[80dvh] flex flex-col overflow-hidden rounded-xl [&>button]:hidden">
+      <DialogContent className="p-0 gap-0 w-[calc(100%-16px)] max-w-4xl h-[80dvh] max-h-[80dvh] flex flex-col overflow-hidden rounded-2xl [&>button]:hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-3 py-2.5 border-b border-border shrink-0">
           <button onClick={onClose} className="h-7 w-7 flex items-center justify-center rounded-full hover:bg-accent transition-colors">
@@ -309,11 +332,11 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
           </div>
         </div>
 
-        {/* Canvas area */}
-        <div ref={containerRef} className="flex-1 min-h-0 bg-white overflow-hidden">
+        {/* Canvas area — fills all remaining space */}
+        <div ref={containerRef} className="flex-1 min-h-0 bg-white relative overflow-hidden">
           <canvas
             ref={canvasRef}
-            className="touch-none cursor-crosshair"
+            className="absolute inset-0 w-full h-full touch-none cursor-crosshair"
             onMouseDown={startDraw}
             onMouseMove={draw}
             onMouseUp={endDraw}
@@ -336,34 +359,30 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
             </div>
           )}
 
-          {/* Row 1: Thickness label + icons */}
-          <div className="flex items-center gap-3 px-3 pt-2.5 pb-1.5">
-            <span className="text-[11px] font-medium text-muted-foreground shrink-0">Espessura</span>
-            <div className="flex items-center gap-0.5">
-              {THICKNESSES.map(t => (
-                <button
-                  key={t}
-                  onClick={() => setThickness(t)}
-                  className={`h-8 w-8 flex items-center justify-center rounded-lg transition-colors ${
-                    thickness === t ? 'bg-primary text-primary-foreground' : 'hover:bg-accent text-foreground'
-                  }`}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                    <path
-                      d={STROKE_PATH}
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeWidth={t}
-                    />
-                  </svg>
-                </button>
-              ))}
-            </div>
+          {/* Row 1: Thickness icons */}
+          <div className="flex items-center justify-center gap-0.5 px-3 pt-2.5 pb-1.5">
+            {THICKNESSES.map(t => (
+              <button
+                key={t}
+                onClick={() => setThickness(t)}
+                className={`h-8 w-8 flex items-center justify-center rounded-lg transition-colors ${
+                  thickness === t ? 'bg-primary text-primary-foreground' : 'hover:bg-accent text-foreground'
+                }`}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d={STROKE_PATH}
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeWidth={t}
+                  />
+                </svg>
+              </button>
+            ))}
           </div>
 
-          {/* Row 2: Opacity + color circle */}
+          {/* Row 2: Opacity slider + color circle */}
           <div className="flex items-center gap-3 px-3 pb-2.5">
-            <span className="text-[11px] font-medium text-muted-foreground shrink-0">Opacidade</span>
             <div className="flex-1 min-w-0 relative">
               {/* Checkerboard + gradient background */}
               <div
@@ -382,17 +401,18 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
                 min={10}
                 max={100}
                 step={5}
-                className="relative w-full [&_[role=slider]]:border-2 [&_[role=slider]]:border-white [&_[role=slider]]:shadow-md [&_[data-orientation=horizontal]>.bg-primary]:bg-transparent [&_[data-orientation=horizontal]]:bg-transparent"
+                className="relative w-full [&_[role=slider]]:bg-white [&_[role=slider]]:border-2 [&_[role=slider]]:border-white [&_[role=slider]]:shadow-md [&_[data-orientation=horizontal]>.bg-primary]:bg-transparent [&_[data-orientation=horizontal]]:bg-transparent"
               />
             </div>
 
-            {/* Color circle button */}
+            {/* Color circle with diagonal opacity preview */}
             <button
               onClick={() => setShowColorPicker(p => !p)}
-              className="h-7 w-7 rounded-full border-2 border-border shadow-sm shrink-0 transition-transform hover:scale-110"
-              style={{ backgroundColor: color }}
+              className="shrink-0 transition-transform hover:scale-110"
               title="Cor"
-            />
+            >
+              <OpacityColorCircle color={color} opacity={opacity} />
+            </button>
           </div>
         </div>
       </DialogContent>
