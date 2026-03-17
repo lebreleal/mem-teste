@@ -18,9 +18,7 @@ import { usePendingDecks } from '@/stores/usePendingDecks';
 import * as aiService from '@/services/aiService';
 import * as deckService from '@/services/deckService';
 import * as cardService from '@/services/cardService';
-import * as tagService from '@/services/tagService';
 import { supabase } from '@/integrations/supabase/client';
-import type { Tag } from '@/types/tag';
 import type { Step, GenProgress, LoadProgress, GeneratedCard, DetailLevel, CardFormat, PageItem } from './types';
 
 interface UseAIDeckFlowParams {
