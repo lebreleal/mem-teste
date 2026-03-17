@@ -383,28 +383,9 @@ const DeckDetailContent = () => {
     return { label: 'Dashboard', path: '/dashboard' };
   }, [deck, decks, fromCommunity, fromDashboardSala, dashboardSalaFolderId, communityTurmaId]);
 
-  // Unified source resolution: resolves source deck ID, owner name, and updatedAt in one query
   const { data: sourceData } = useQuery({
     queryKey: ['linked-deck-source', deckId],
-    queryFn: async () => {
-      const sourceDeckId = await resolveSourceDeckId(deck);
-      if (!sourceDeckId) return null;
-
-      const [deckResult] = await Promise.all([
-        supabase.from('decks').select('user_id, updated_at').eq('id', sourceDeckId).single(),
-        Promise.resolve(null),
-      ]);
-
-      if (!deckResult.data) return { sourceDeckId, ownerName: 'Criador', updatedAt: null };
-
-      const { data: profile } = await supabase.from('profiles').select('name').eq('id', deckResult.data.user_id).single();
-
-      return {
-        sourceDeckId,
-        ownerName: profile?.name ?? 'Criador',
-        updatedAt: deckResult.data.updated_at,
-      };
-    },
+    queryFn: () => fetchLinkedDeckSource(deck),
     enabled: isLinkedDeck && !!deck,
     staleTime: 120_000,
   });
