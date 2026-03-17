@@ -71,7 +71,7 @@ interface TurmaDetailContextValue {
 
   // Mutations
   mutations: ReturnType<typeof useTurmaHierarchyMutations>;
-  examMutations: ReturnType<typeof useTurmaExamMutations>;
+  examMutations: any;
   updateTurma: ReturnType<typeof useTurmas>['updateTurma'];
 
   // Dialog states
