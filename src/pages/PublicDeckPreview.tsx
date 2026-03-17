@@ -841,33 +841,7 @@ const PublicDeckPreview = () => {
   // Fetch cards from published subtree (aggregated hierarchy)
   const { data: allCards = [], isLoading: cardsLoading } = useQuery({
     queryKey: ['public-deck-cards', deckId],
-    queryFn: async () => {
-      // 1. Discover full subtree of children (regardless of turma)
-      const allSubtreeIds = new Set<string>([deckId!]);
-      let parentIds = [deckId!];
-      while (parentIds.length > 0) {
-        const { data: children } = await supabase
-          .from('decks')
-          .select('id, parent_deck_id')
-          .in('parent_deck_id', parentIds);
-        const newChildren = (children ?? []).filter((c: any) => !allSubtreeIds.has(c.id));
-        if (newChildren.length === 0) break;
-        newChildren.forEach((c: any) => allSubtreeIds.add(c.id));
-        parentIds = newChildren.map((c: any) => c.id);
-      }
-
-      const subtreeIds = [...allSubtreeIds];
-
-      // 2. Fetch cards from all subtree decks
-      const { data, error } = await supabase
-        .from('cards')
-        .select('*')
-        .in('deck_id', subtreeIds)
-        .order('created_at', { ascending: true })
-        .limit(2000);
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => fetchDeckSubtreeCards(deckId!),
     enabled: !!deckId,
   });
 
