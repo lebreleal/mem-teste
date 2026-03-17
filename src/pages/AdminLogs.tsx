@@ -32,8 +32,8 @@ const AdminLogs = () => {
     try {
       const data = await fetchErrorLogs({ severity, search });
       setLogs(data);
-    } catch (err: any) {
-      toast({ title: "Erro ao carregar logs", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      toast({ title: "Erro ao carregar logs", description: err instanceof Error ? err.message : 'Erro desconhecido', variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -72,8 +72,8 @@ ${JSON.stringify(log.metadata, null, 2)}
       await deleteOldErrorLogs(30);
       toast({ title: "Logs antigos removidos" });
       fetchLogs();
-    } catch (err: any) {
-      toast({ title: "Erro", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      toast({ title: "Erro", description: err instanceof Error ? err.message : 'Erro desconhecido', variant: "destructive" });
     }
   };
 
@@ -167,7 +167,7 @@ ${JSON.stringify(log.metadata, null, 2)}
                       {format(new Date(log.created_at), "dd/MM HH:mm:ss")}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={severityColor(log.severity) as any} className="text-xs">
+                      <Badge variant={severityColor(log.severity) as 'destructive' | 'secondary' | 'outline'} className="text-xs">
                         {log.severity}
                       </Badge>
                     </TableCell>

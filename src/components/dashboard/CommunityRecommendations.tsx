@@ -95,7 +95,7 @@ const CommunityRecommendations = () => {
     queryKey: ['community-recommendations', user?.id],
     queryFn: async () => {
       const raw = await fetchCommunityRecommendations(user?.id);
-      return raw.map((r: any) => ({
+      return raw.map((r) => ({
         ...r,
         cover: getCoverForName(r.title),
         link: r.turma_id ? `/turmas/${r.turma_id}` : `/deck-preview/${r.id}`,

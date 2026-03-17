@@ -1,5 +1,7 @@
 import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import type { DeckWithStats } from '@/types/deck';
+import type { Tables } from '@/integrations/supabase/types';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 import { DeckDetailProvider, useDeckDetail } from '@/components/deck-detail/DeckDetailContext';
 import DeckStatsCard from '@/components/deck-detail/DeckStatsCard';
@@ -23,12 +25,20 @@ const SuggestCorrectionModal = lazy(() => import('@/components/SuggestCorrection
 const DeckQuestionsTab = lazy(() => import('@/components/deck-detail/DeckQuestionsTab'));
 
 /** Detect if a deck is linked to a community/marketplace source (including linked ancestors) */
-function checkIsLinkedDeck(deck: any, decks: any[]): boolean {
+interface LinkableDeck {
+  source_turma_deck_id?: string | null;
+  source_listing_id?: string | null;
+  is_live_deck?: boolean;
+  parent_deck_id?: string | null;
+  id: string;
+}
+
+function checkIsLinkedDeck(deck: LinkableDeck | null | undefined, decks: LinkableDeck[]): boolean {
   if (!deck) return false;
   if (deck.source_turma_deck_id || deck.source_listing_id || deck.is_live_deck) return true;
   let parentId = deck.parent_deck_id;
   while (parentId) {
-    const parent = decks.find((d: any) => d.id === parentId);
+    const parent = decks.find(d => d.id === parentId);
     if (!parent) break;
     if (parent.source_turma_deck_id || parent.source_listing_id || parent.is_live_deck) return true;
     parentId = parent.parent_deck_id;
@@ -40,15 +50,15 @@ function checkIsLinkedDeck(deck: any, decks: any[]): boolean {
 
 
 /** @deprecated Sub-deck list view — no longer used, kept temporarily for reference */
-const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: string; subDecks: any[]; allDecks: any[] }) => {
+const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: string; subDecks: DeckWithStats[]; allDecks: DeckWithStats[] }) => {
   const navigate = useNavigate();
 
   const getMastery = (deckId: string): { total: number; mastered: number } => {
-    const deck = allDecks.find((d: any) => d.id === deckId);
+    const deck = allDecks.find(d => d.id === deckId);
     if (!deck) return { total: 0, mastered: 0 };
     let total = deck.total_cards ?? 0;
     let mastered = deck.mastered_cards ?? 0;
-    const children = allDecks.filter((d: any) => d.parent_deck_id === deckId && !d.is_archived);
+    const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
     for (const child of children) {
       const cm = getMastery(child.id);
       total += cm.total;
@@ -58,51 +68,51 @@ const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: stri
   };
 
   const getDueCount = (deckId: string): number => {
-    const deck = allDecks.find((d: any) => d.id === deckId);
+    const deck = allDecks.find(d => d.id === deckId);
     if (!deck) return 0;
     let due = (deck.new_count ?? 0) + (deck.learning_count ?? 0) + (deck.review_count ?? 0);
-    const children = allDecks.filter((d: any) => d.parent_deck_id === deckId && !d.is_archived);
+    const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
     for (const child of children) due += getDueCount(child.id);
     return due;
   };
 
   const getNewCount = (deckId: string): number => {
-    const deck = allDecks.find((d: any) => d.id === deckId);
+    const deck = allDecks.find(d => d.id === deckId);
     if (!deck) return 0;
     let n = deck.new_count ?? 0;
-    const children = allDecks.filter((d: any) => d.parent_deck_id === deckId && !d.is_archived);
+    const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
     for (const child of children) n += getNewCount(child.id);
     return n;
   };
 
   const getLearningCount = (deckId: string): number => {
-    const deck = allDecks.find((d: any) => d.id === deckId);
+    const deck = allDecks.find(d => d.id === deckId);
     if (!deck) return 0;
     let l = deck.learning_count ?? 0;
-    const children = allDecks.filter((d: any) => d.parent_deck_id === deckId && !d.is_archived);
+    const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
     for (const child of children) l += getLearningCount(child.id);
     return l;
   };
 
   const getReviewCount = (deckId: string): number => {
-    const deck = allDecks.find((d: any) => d.id === deckId);
+    const deck = allDecks.find(d => d.id === deckId);
     if (!deck) return 0;
     let r = deck.review_count ?? 0;
-    const children = allDecks.filter((d: any) => d.parent_deck_id === deckId && !d.is_archived);
+    const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
     for (const child of children) r += getReviewCount(child.id);
     return r;
   };
 
   // Apply parent deck governance: cap new cards by daily_new_limit
-  const parentDeck = allDecks.find((d: any) => d.id === parentDeckId);
+  const parentDeck = allDecks.find(d => d.id === parentDeckId);
   const dailyNewLimit = parentDeck?.daily_new_limit ?? 20;
   const newReviewedToday = parentDeck?.new_reviewed_today ?? 0;
   // Also account for new_graduated_today from all children
   const getNewGraduatedToday = (deckId: string): number => {
-    const deck = allDecks.find((d: any) => d.id === deckId);
+    const deck = allDecks.find(d => d.id === deckId);
     if (!deck) return 0;
     let n = deck.new_graduated_today ?? 0;
-    const children = allDecks.filter((d: any) => d.parent_deck_id === deckId && !d.is_archived);
+    const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
     for (const child of children) n += getNewGraduatedToday(child.id);
     return n;
   };
@@ -117,10 +127,10 @@ const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: stri
   const rawReview = getReviewCount(parentDeckId);
   // Compute reviewed today early so we can cap review count
   const getReviewedTodayEarly = (deckId: string): number => {
-    const dk = allDecks.find((d: any) => d.id === deckId);
+    const dk = allDecks.find(d => d.id === deckId);
     if (!dk) return 0;
     let r = dk.reviewed_today ?? 0;
-    const children = allDecks.filter((d: any) => d.parent_deck_id === deckId && !d.is_archived);
+    const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
     for (const child of children) r += getReviewedTodayEarly(child.id);
     return r;
   };
@@ -146,7 +156,7 @@ const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: stri
 
   const getQuestionCount = (deckId: string): number => {
     let count = questionCounts?.get(deckId) ?? 0;
-    const children = allDecks.filter((d: any) => d.parent_deck_id === deckId && !d.is_archived);
+    const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
     for (const child of children) count += getQuestionCount(child.id);
     return count;
   };
@@ -155,10 +165,10 @@ const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: stri
 
   // Compute reviewed today across hierarchy for progress
   const getReviewedToday = (deckId: string): number => {
-    const deck = allDecks.find((d: any) => d.id === deckId);
+    const deck = allDecks.find(d => d.id === deckId);
     if (!deck) return 0;
     let r = deck.reviewed_today ?? 0;
-    const children = allDecks.filter((d: any) => d.parent_deck_id === deckId && !d.is_archived);
+    const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
     for (const child of children) r += getReviewedToday(child.id);
     return r;
   };
@@ -335,10 +345,11 @@ const DeckDetailContent = () => {
   const { deck, deckLoading, allCardsLoading, deckId, navigate, toast, setAlgorithmModalOpen, cardCounts, decks } = useDeckDetail();
   const location = useLocation();
   const queryClient = useQueryClient();
-  const fromCommunity = (location.state as any)?.from === 'community';
-  const fromDashboardSala = (location.state as any)?.from === 'dashboard-sala';
-  const dashboardSalaFolderId = (location.state as any)?.folderId;
-  const communityTurmaId = (location.state as any)?.turmaId;
+  const locState = location.state as { from?: string; folderId?: string; turmaId?: string } | null;
+  const fromCommunity = locState?.from === 'community';
+  const fromDashboardSala = locState?.from === 'dashboard-sala';
+  const dashboardSalaFolderId = locState?.folderId;
+  const communityTurmaId = locState?.turmaId;
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameName, setRenameName] = useState('');
@@ -349,13 +360,13 @@ const DeckDetailContent = () => {
   // Resolve folder image for blurred hero background
   const folderImage = useMemo(() => {
     if (!deck || !decks) return null;
-    let folderId = (deck as any)?.folder_id;
-    if (!folderId && (deck as any)?.parent_deck_id) {
-      let current = deck as any;
-      while (current?.parent_deck_id) {
-        current = decks.find((d: any) => d.id === current.parent_deck_id);
+    let folderId = deck.folder_id;
+    if (!folderId && deck.parent_deck_id) {
+      let currentDeck: DeckWithStats | undefined = decks.find(d => d.id === deck.parent_deck_id);
+      while (currentDeck?.parent_deck_id) {
+        currentDeck = decks.find(d => d.id === currentDeck!.parent_deck_id);
       }
-      folderId = current?.folder_id;
+      folderId = currentDeck?.folder_id ?? null;
     }
     return folderId;
   }, [deck, decks]);
@@ -371,13 +382,13 @@ const DeckDetailContent = () => {
   const backInfo = useMemo(() => {
     if (fromDashboardSala && dashboardSalaFolderId) return { label: 'Sala', path: `/dashboard?folder=${dashboardSalaFolderId}` };
     if (fromCommunity && communityTurmaId) return { label: 'Sala', path: `/turmas/${communityTurmaId}` };
-    let folderId = (deck as any)?.folder_id;
-    if (!folderId && (deck as any)?.parent_deck_id && decks) {
-      let current = deck as any;
-      while (current?.parent_deck_id) {
-        current = decks.find((d: any) => d.id === current.parent_deck_id);
+    let folderId = deck?.folder_id ?? null;
+    if (!folderId && deck?.parent_deck_id && decks) {
+      let currentDeck: DeckWithStats | undefined = decks.find(d => d.id === deck.parent_deck_id);
+      while (currentDeck?.parent_deck_id) {
+        currentDeck = decks.find(d => d.id === currentDeck!.parent_deck_id);
       }
-      folderId = current?.folder_id;
+      folderId = currentDeck?.folder_id ?? null;
     }
     if (folderId) return { label: 'Sala', path: `/dashboard?folder=${folderId}` };
     return { label: 'Dashboard', path: '/dashboard' };
@@ -392,7 +403,7 @@ const DeckDetailContent = () => {
 
   const handleRename = async () => {
     const trimmed = renameName.trim();
-    if (!trimmed || trimmed === (deck as any)?.name) { setIsRenaming(false); return; }
+    if (!trimmed || trimmed === deck?.name) { setIsRenaming(false); return; }
     try {
       const { renameDeck } = await import('@/services/deckService');
       await renameDeck(deckId!, trimmed);
@@ -413,7 +424,7 @@ const DeckDetailContent = () => {
   }
 
   const totalCards = cardCounts?.total ?? 0;
-  const deckName = (deck as any)?.name ?? 'Baralho';
+  const deckName = deck?.name ?? 'Baralho';
 
   return (
     <div className="min-h-screen bg-background">
@@ -511,7 +522,7 @@ const DeckDetailContent = () => {
               >
                 <span className="text-foreground">Algoritmo:</span>{' '}
                 <span className="font-medium text-info">
-                  {(deck as any)?.algorithm_mode === 'quick_review' ? 'Revisão Rápida' : 'FSRS-6'}
+                  {deck?.algorithm_mode === 'quick_review' ? 'Revisão Rápida' : 'FSRS-6'}
                 </span>
               </button>
             )}
@@ -682,14 +693,17 @@ const SuggestionsList = ({ deckId }: { deckId: string }) => {
             </span>
           </div>
           <p className="text-sm text-muted-foreground">{s.rationale}</p>
-          {s.suggestion_type === 'card' && s.suggested_content && (
-            <div className="text-xs text-muted-foreground/70">
-              {(s.suggested_content as any)?.front_content && <span className="text-primary">Frente editada</span>}
-              {(s.suggested_content as any)?.front_content && (s.suggested_content as any)?.back_content && ' · '}
-              {(s.suggested_content as any)?.back_content && <span className="text-primary">Verso editado</span>}
-            </div>
-          )}
-          {s.suggestion_type === 'deck' && (s.suggested_content as any)?.new_card && (
+          {s.suggestion_type === 'card' && s.suggested_content && (() => {
+            const sc = s.suggested_content as Record<string, unknown>;
+            return (
+              <div className="text-xs text-muted-foreground/70">
+                {sc.front_content && <span className="text-primary">Frente editada</span>}
+                {sc.front_content && sc.back_content && ' · '}
+                {sc.back_content && <span className="text-primary">Verso editado</span>}
+              </div>
+            );
+          })()}
+          {s.suggestion_type === 'deck' && (s.suggested_content as Record<string, unknown>)?.new_card && (
             <span className="text-xs text-primary">Novo card sugerido</span>
           )}
           {s.suggested_tags && (
