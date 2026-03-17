@@ -361,7 +361,7 @@ const ContentTab = () => {
   // ── Count downloads (inscrições) per turma_deck ──
   const { data: downloadCounts = {} } = useQuery({
     queryKey: ['turma-deck-downloads', turmaId],
-    queryFn: () => countTurmaDeckDownloads(turmaDecks.map((td: any) => td.id)),
+    queryFn: () => countTurmaDeckDownloads(turmaDecks.map(td => td.id)),
     enabled: turmaDecks.length > 0,
     staleTime: 5 * 60_000,
   });
