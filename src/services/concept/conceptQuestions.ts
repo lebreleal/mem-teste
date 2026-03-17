@@ -5,6 +5,31 @@
 import { supabase } from '@/integrations/supabase/client';
 import { GLOBAL_CONCEPT_COLS, type GlobalConcept, conceptSlug, ensureGlobalConcepts } from './conceptCrud';
 import { mapPrerequisitesViaAI } from './conceptHierarchy';
+import type { Json } from '@/integrations/supabase/types';
+
+// Helper to access tables not in generated types
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const gcTable = () => supabase.from('global_concepts' as 'cards') as ReturnType<typeof supabase.from>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const qcTable = () => supabase.from('question_concepts' as 'cards') as ReturnType<typeof supabase.from>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const dqTable = () => supabase.from('deck_questions' as 'cards') as ReturnType<typeof supabase.from>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const dqaTable = () => supabase.from('deck_question_attempts' as 'cards') as ReturnType<typeof supabase.from>;
+
+// ── Row interfaces ──
+interface QuestionLinkRow { question_id: string }
+interface ConceptLinkRow { concept_id: string }
+interface ConceptParentRow { parent_concept_id: string | null }
+interface AttemptRow { question_id: string; answered_at: string }
+interface QuestionDetailRow {
+  id: string; deck_id: string; question_text: string;
+  options: Json | null; correct_indices: number[] | null;
+  explanation: string; concepts: string[] | null;
+}
+interface QuestionBasicRow { id: string; question_text: string; deck_id: string }
+interface IdRow { id: string }
+interface DeckIdRow { deck_id: string }
 
 // ─── Auto-trigger prerequisite mapping (non-blocking) ───
 const _autoMapInFlight = new Set<string>();
@@ -12,15 +37,12 @@ async function tryAutoMapPrerequisites(userId: string, newConceptSlugs?: string[
   if (_autoMapInFlight.has(userId)) return;
   _autoMapInFlight.add(userId);
   try {
-    // If we have new concepts, always try to map them
     if (newConceptSlugs && newConceptSlugs.length > 0) {
       await mapPrerequisitesViaAI(userId);
       return;
     }
 
-    // Fallback: check if there are enough unmapped concepts
-    const { data: unmapped } = await supabase
-      .from('global_concepts' as any)
+    const { data: unmapped } = await gcTable()
       .select('id')
       .eq('user_id', userId)
       .is('parent_concept_id', null);
@@ -34,9 +56,7 @@ async function tryAutoMapPrerequisites(userId: string, newConceptSlugs?: string[
 
 // ─── Link questions to global concepts (with prerequisite support) ──────────
 export type LinkQuestionsToConceptsOptions = {
-  /** Also links prerequisite concepts to the same questions to avoid orphan concepts */
   linkPrerequisitesToQuestion?: boolean;
-  /** Links every concept in the batch to every question in the same batch */
   denseBatchLinking?: boolean;
 };
 
@@ -48,11 +68,10 @@ export async function linkQuestionsToConcepts(
   const linkPrerequisitesToQuestion = options?.linkPrerequisitesToQuestion ?? true;
   const denseBatchLinking = options?.denseBatchLinking ?? false;
 
-  // Collect all unique concept names + meta (concepts + prerequisites)
   const allNames = new Set<string>();
   const metaMap = new Map<string, { category?: string; subcategory?: string }>();
-  const prerequisiteMap = new Map<string, string[]>(); // conceptSlug → prerequisiteNames[]
-  const questionSlugMap = new Map<string, Set<string>>(); // questionId → concept slugs linked to that question
+  const prerequisiteMap = new Map<string, string[]>();
+  const questionSlugMap = new Map<string, Set<string>>();
 
   for (const pair of questionConceptPairs) {
     const questionSlugs = questionSlugMap.get(pair.questionId) ?? new Set<string>();
@@ -92,8 +111,7 @@ export async function linkQuestionsToConcepts(
 
   const uniqueNames = Array.from(allNames);
 
-  // Build context description map: questionId+conceptSlug → context_description
-  const contextDescMap = new Map<string, string>(); // "questionId:slug" → description
+  const contextDescMap = new Map<string, string>();
   for (const pair of questionConceptPairs) {
     if (pair.conceptDescriptions) {
       for (const cd of pair.conceptDescriptions) {
@@ -111,20 +129,17 @@ export async function linkQuestionsToConcepts(
     const conceptId = slugToId.get(conceptSlugKey);
     if (!conceptId || prereqNames.length === 0) continue;
 
-    // Use the first prerequisite as parent (tree model, not DAG)
     const parentSlug = conceptSlug(prereqNames[0]);
     const parentId = slugToId.get(parentSlug);
     if (parentId && parentId !== conceptId) {
-      // Only set if not already set (don't overwrite manual edits)
-      const { data: existing } = await supabase
-        .from('global_concepts' as any)
+      const { data: existing } = await gcTable()
         .select('parent_concept_id')
         .eq('id', conceptId)
         .maybeSingle();
 
-      if (existing && !(existing as any).parent_concept_id) {
-        await supabase
-          .from('global_concepts' as any)
+      if (existing && !(existing as unknown as ConceptParentRow).parent_concept_id) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await gcTable()
           .update({ parent_concept_id: parentId } as any)
           .eq('id', conceptId);
       }
@@ -167,49 +182,40 @@ export async function linkQuestionsToConcepts(
 
   if (rows.length === 0) return;
 
-  // Upsert to avoid duplicates — update context_description if it changes
-  await supabase
-    .from('question_concepts' as any)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await qcTable()
     .upsert(rows as any, { onConflict: 'question_id,concept_id', ignoreDuplicates: false });
 
-  // ── Auto-trigger prerequisite mapping for newly created concepts ──
   const newSlugs = uniqueNames.map(n => conceptSlug(n));
   tryAutoMapPrerequisites(userId, newSlugs).catch(() => {});
 }
 
 // ─── Get a varied question for a concept ────────
-// Prioritizes questions never answered or least recently answered
 export async function getVariedQuestion(
   conceptId: string,
   userId: string,
-): Promise<{ questionId: string; deckId: string; questionText: string; options: any; correctIndices: number[] | null; explanation: string; concepts: string[] } | null> {
-  // Get all question IDs linked to this concept
-  const { data: links } = await supabase
-    .from('question_concepts' as any)
+): Promise<{ questionId: string; deckId: string; questionText: string; options: Json | null; correctIndices: number[] | null; explanation: string; concepts: string[] } | null> {
+  const { data: links } = await qcTable()
     .select('question_id')
     .eq('concept_id', conceptId);
 
   if (!links || links.length === 0) return null;
 
-  const questionIds = (links as any[]).map(l => l.question_id);
+  const questionIds = (links as unknown as QuestionLinkRow[]).map(l => l.question_id);
 
-  // Get attempt counts per question for this user
-  const { data: attempts } = await supabase
-    .from('deck_question_attempts' as any)
+  const { data: attempts } = await dqaTable()
     .select('question_id, answered_at')
     .eq('user_id', userId)
     .in('question_id', questionIds);
 
-  // Build map: questionId → latest answered_at
   const lastAnswered = new Map<string, string>();
-  for (const a of (attempts ?? []) as any[]) {
+  for (const a of ((attempts ?? []) as unknown as AttemptRow[])) {
     const existing = lastAnswered.get(a.question_id);
     if (!existing || a.answered_at > existing) {
       lastAnswered.set(a.question_id, a.answered_at);
     }
   }
 
-  // Sort: unanswered first, then oldest answered
   const sorted = [...questionIds].sort((a, b) => {
     const aDate = lastAnswered.get(a);
     const bDate = lastAnswered.get(b);
@@ -219,7 +225,6 @@ export async function getVariedQuestion(
     return aDate! < bDate! ? -1 : 1;
   });
 
-  // Pick randomly among the top candidates (unanswered or same oldest date)
   const topDate = lastAnswered.get(sorted[0]);
   const topCandidates = sorted.filter(id => {
     const d = lastAnswered.get(id);
@@ -228,15 +233,14 @@ export async function getVariedQuestion(
   });
   const bestId = topCandidates[Math.floor(Math.random() * topCandidates.length)];
 
-  const { data: question } = await supabase
-    .from('deck_questions' as any)
+  const { data: question } = await dqTable()
     .select('id, deck_id, question_text, options, correct_indices, explanation, concepts')
     .eq('id', bestId)
     .maybeSingle();
 
   if (!question) return null;
 
-  const q = question as any;
+  const q = question as unknown as QuestionDetailRow;
   return {
     questionId: q.id,
     deckId: q.deck_id,
@@ -254,13 +258,12 @@ export async function getConceptQuestionCounts(
 ): Promise<Map<string, number>> {
   if (conceptIds.length === 0) return new Map();
 
-  const { data } = await supabase
-    .from('question_concepts' as any)
+  const { data } = await qcTable()
     .select('concept_id')
     .in('concept_id', conceptIds);
 
   const counts = new Map<string, number>();
-  for (const row of (data ?? []) as any[]) {
+  for (const row of ((data ?? []) as unknown as ConceptLinkRow[])) {
     counts.set(row.concept_id, (counts.get(row.concept_id) ?? 0) + 1);
   }
   return counts;
@@ -270,24 +273,22 @@ export async function getConceptQuestionCounts(
 export async function getConceptQuestions(
   conceptId: string,
 ): Promise<{ id: string; questionText: string; deckId: string; deckName?: string }[]> {
-  const { data: links } = await supabase
-    .from('question_concepts' as any)
+  const { data: links } = await qcTable()
     .select('question_id')
     .eq('concept_id', conceptId);
 
   if (!links || links.length === 0) return [];
 
-  const qIds = (links as any[]).map(l => l.question_id);
+  const qIds = (links as unknown as QuestionLinkRow[]).map(l => l.question_id);
 
-  const { data: questions } = await supabase
-    .from('deck_questions' as any)
+  const { data: questions } = await dqTable()
     .select('id, question_text, deck_id')
     .in('id', qIds);
 
   if (!questions) return [];
 
-  // Get deck names
-  const deckIds = [...new Set((questions as any[]).map(q => q.deck_id))];
+  const typedQuestions = questions as unknown as QuestionBasicRow[];
+  const deckIds = [...new Set(typedQuestions.map(q => q.deck_id))];
   const { data: decks } = await supabase
     .from('decks')
     .select('id, name')
@@ -295,7 +296,7 @@ export async function getConceptQuestions(
 
   const deckMap = new Map((decks ?? []).map(d => [d.id, d.name]));
 
-  return (questions as any[]).map(q => ({
+  return typedQuestions.map(q => ({
     id: q.id,
     questionText: q.question_text,
     deckId: q.deck_id,
@@ -305,8 +306,7 @@ export async function getConceptQuestions(
 
 // ─── Unlink a question from a concept ───────────
 export async function unlinkQuestion(conceptId: string, questionId: string) {
-  await supabase
-    .from('question_concepts' as any)
+  await qcTable()
     .delete()
     .eq('concept_id', conceptId)
     .eq('question_id', questionId);
@@ -317,7 +317,6 @@ export async function getCardConcepts(
   cardId: string,
   userId: string,
 ): Promise<GlobalConcept[]> {
-  // 1. Get the card's deck_id
   const { data: card } = await supabase
     .from('cards')
     .select('deck_id')
@@ -326,29 +325,23 @@ export async function getCardConcepts(
 
   if (!card) return [];
 
-  // 2. Get all questions from the same deck
-  const { data: questions } = await supabase
-    .from('deck_questions' as any)
+  const { data: questions } = await dqTable()
     .select('id')
-    .eq('deck_id', (card as any).deck_id);
+    .eq('deck_id', card.deck_id);
 
   if (!questions || questions.length === 0) return [];
 
-  const questionIds = (questions as any[]).map(q => q.id);
+  const questionIds = (questions as unknown as IdRow[]).map(q => q.id);
 
-  // 3. Get concept IDs linked to those questions
-  const { data: links } = await supabase
-    .from('question_concepts' as any)
+  const { data: links } = await qcTable()
     .select('concept_id')
     .in('question_id', questionIds);
 
   if (!links || links.length === 0) return [];
 
-  const conceptIds = [...new Set((links as any[]).map(l => l.concept_id))];
+  const conceptIds = [...new Set((links as unknown as ConceptLinkRow[]).map(l => l.concept_id))];
 
-  // 4. Fetch the user's global concepts
-  const { data: concepts } = await supabase
-    .from('global_concepts' as any)
+  const { data: concepts } = await gcTable()
     .select(GLOBAL_CONCEPT_COLS)
     .eq('user_id', userId)
     .in('id', conceptIds)
@@ -362,27 +355,22 @@ export async function getConceptRelatedCards(
   conceptId: string,
   userId: string,
 ): Promise<{ id: string; front_content: string; back_content: string; deck_id: string }[]> {
-  // 1. Get deck_ids from questions linked to this concept
-  const { data: links } = await supabase
-    .from('question_concepts' as any)
+  const { data: links } = await qcTable()
     .select('question_id')
     .eq('concept_id', conceptId);
 
   if (!links || links.length === 0) return [];
 
-  const questionIds = (links as any[]).map(l => l.question_id);
+  const questionIds = (links as unknown as QuestionLinkRow[]).map(l => l.question_id);
 
-  // 2. Get deck_ids from those questions
-  const { data: questions } = await supabase
-    .from('deck_questions' as any)
+  const { data: questions } = await dqTable()
     .select('deck_id')
     .in('id', questionIds);
 
   if (!questions || questions.length === 0) return [];
 
-  const deckIds = [...new Set((questions as any[]).map((q: any) => q.deck_id))];
+  const deckIds = [...new Set((questions as unknown as DeckIdRow[]).map(q => q.deck_id))];
 
-  // 3. Get cards from those decks (only user's own decks via RLS)
   const { data: cards } = await supabase
     .from('cards')
     .select('id, front_content, back_content, deck_id')
@@ -416,7 +404,6 @@ export async function generateReinforcementCards(
   const targetFront = normalizeText(targetCard?.front_content).slice(0, 280);
   const targetBack = normalizeText(targetCard?.back_content).slice(0, 380);
 
-  // Reuse deck identity (content will be refreshed to avoid stale/weak cards).
   const { data: existingDeck } = await supabase
     .from('decks')
     .select('id')
@@ -472,7 +459,8 @@ LIMITES:
     return [];
   }
 
-  const generatedCards = Array.isArray(data?.cards) ? data.cards : [];
+  interface GeneratedCard { front?: string; back?: string }
+  const generatedCards = Array.isArray(data?.cards) ? (data.cards as GeneratedCard[]) : [];
   if (generatedCards.length === 0) return [];
 
   let reinforcementDeckId = existingDeck?.id;
@@ -490,7 +478,6 @@ LIMITES:
     reinforcementDeckId = createdDeck.id;
   }
 
-  // Refresh deck content so previously weak generations are replaced.
   const { error: deleteError } = await supabase
     .from('cards')
     .delete()
@@ -501,19 +488,19 @@ LIMITES:
   }
 
   const cardRows = generatedCards
-    .map((card: any) => ({
-      deck_id: reinforcementDeckId,
+    .map(card => ({
+      deck_id: reinforcementDeckId!,
       front_content: normalizeText(card?.front),
       back_content: limitToThreeSentences(normalizeText(card?.back)),
-      card_type: 'basic',
+      card_type: 'basic' as const,
     }))
-    .filter((card: any) => card.front_content.length > 0 && card.back_content.length > 0);
+    .filter(card => card.front_content.length > 0 && card.back_content.length > 0);
 
   if (cardRows.length === 0) return [];
 
   const { data: insertedCards, error: insertError } = await supabase
     .from('cards')
-    .insert(cardRows as any)
+    .insert(cardRows)
     .select('id, front_content, back_content, deck_id')
     .limit(10);
 
@@ -538,19 +525,14 @@ export async function generateConceptQuestions(
     concepts: string[];
     source_card_ids: string[];
   }>;
-  usage: any;
+  usage: Record<string, unknown>;
 } | null> {
   const { data, error } = await supabase.functions.invoke('generate-questions', {
     body: { cardIds, aiModel, energyCost, optionsCount: 4 },
   });
 
-  if (error) {
-    return null;
-  }
-
-  if (data?.error) {
-    return null;
-  }
+  if (error) return null;
+  if (data?.error) return null;
 
   return data;
 }
@@ -562,7 +544,6 @@ export async function generateQuestionsForConcept(
   conceptCategory: string | null,
   userId: string,
 ): Promise<ReturnType<typeof getVariedQuestion>> {
-  // 1. Generate cards about this concept via AI
   const textContent = [
     `Tema: ${conceptName}`,
     conceptCategory ? `Grande área: ${conceptCategory}` : '',
@@ -594,7 +575,6 @@ Crie cartões objetivos sobre "${conceptName}".
     return null;
   }
 
-  // 2. Create/reuse deck
   const deckName = `Conceito: ${conceptName.slice(0, 60)}`;
   const { data: existingDeck } = await supabase
     .from('decks')
@@ -614,39 +594,45 @@ Crie cartões objetivos sobre "${conceptName}".
     deckId = newDeck.id;
   }
 
-  // 3. Insert cards
+  interface GeneratedCard { front?: string; back?: string }
   const normalize = (v?: string) => (v ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-  const cardRows = genData.cards
-    .map((c: any) => ({
-      deck_id: deckId,
+  const cardRows = (genData.cards as GeneratedCard[])
+    .map(c => ({
+      deck_id: deckId!,
       front_content: normalize(c?.front),
       back_content: normalize(c?.back),
-      card_type: 'basic',
+      card_type: 'basic' as const,
     }))
-    .filter((c: any) => c.front_content.length > 0 && c.back_content.length > 0);
+    .filter(c => c.front_content.length > 0 && c.back_content.length > 0);
 
   if (cardRows.length === 0) return null;
 
   const { data: insertedCards } = await supabase
     .from('cards')
-    .insert(cardRows as any)
+    .insert(cardRows)
     .select('id');
 
   if (!insertedCards || insertedCards.length === 0) return null;
 
-  // 4. Generate questions from those cards
-  const cardIds = insertedCards.map((c: any) => c.id);
+  const cardIdsForGen = insertedCards.map(c => c.id);
   const { data: qData } = await supabase.functions.invoke('generate-questions', {
-    body: { cardIds, aiModel: 'flash', energyCost: 0, optionsCount: 4 },
+    body: { cardIds: cardIdsForGen, aiModel: 'flash', energyCost: 0, optionsCount: 4 },
   });
 
   if (!qData?.questions || !Array.isArray(qData.questions) || qData.questions.length === 0) {
     return null;
   }
 
-  // 5. Insert questions and link to concept
-  const questionRows = qData.questions.map((q: any, i: number) => ({
-    deck_id: deckId,
+  interface GeneratedQuestion {
+    question_text: string;
+    options: string[];
+    correct_index?: number;
+    explanation?: string;
+    concepts?: string[];
+  }
+
+  const questionRows = (qData.questions as GeneratedQuestion[]).map((q, i) => ({
+    deck_id: deckId!,
     created_by: userId,
     question_text: q.question_text,
     options: q.options,
@@ -658,23 +644,21 @@ Crie cartões objetivos sobre "${conceptName}".
     sort_order: i,
   }));
 
-  const { data: insertedQs } = await supabase
-    .from('deck_questions' as any)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: insertedQs } = await dqTable()
     .insert(questionRows as any)
     .select('id');
 
   if (!insertedQs || insertedQs.length === 0) return null;
 
-  // Link questions to concept
-  const junctionRows = (insertedQs as any[]).map(q => ({
+  const junctionRows = (insertedQs as unknown as IdRow[]).map(q => ({
     question_id: q.id,
     concept_id: conceptId,
   }));
-  await supabase
-    .from('question_concepts' as any)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await qcTable()
     .upsert(junctionRows as any, { onConflict: 'question_id,concept_id', ignoreDuplicates: true });
 
-  // 6. Return the first question
   return getVariedQuestion(conceptId, userId);
 }
 
@@ -688,7 +672,6 @@ export async function getOrGenerateQuestion(
   const existing = await getVariedQuestion(conceptId, userId);
   if (existing) return { question: existing, wasGenerated: false };
 
-  // Auto-generate
   const generated = await generateQuestionsForConcept(conceptId, conceptName, conceptCategory, userId);
   return { question: generated, wasGenerated: true };
 }
