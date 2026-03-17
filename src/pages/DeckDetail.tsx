@@ -359,13 +359,13 @@ const DeckDetailContent = () => {
   // Resolve folder image for blurred hero background
   const folderImage = useMemo(() => {
     if (!deck || !decks) return null;
-    let folderId = (deck as any)?.folder_id;
-    if (!folderId && (deck as any)?.parent_deck_id) {
-      let current = deck as any;
-      while (current?.parent_deck_id) {
-        current = decks.find((d: any) => d.id === current.parent_deck_id);
+    let folderId = deck.folder_id;
+    if (!folderId && deck.parent_deck_id) {
+      let currentDeck: DeckWithStats | undefined = decks.find(d => d.id === deck.parent_deck_id);
+      while (currentDeck?.parent_deck_id) {
+        currentDeck = decks.find(d => d.id === currentDeck!.parent_deck_id);
       }
-      folderId = current?.folder_id;
+      folderId = currentDeck?.folder_id ?? null;
     }
     return folderId;
   }, [deck, decks]);
