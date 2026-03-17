@@ -324,7 +324,7 @@ const ContentTab = () => {
   
 
   // ── Batch tags for all community decks ──
-  const allDeckIds = useMemo(() => turmaDecks.map((d: any) => d.deck_id), [turmaDecks]);
+  const allDeckIds = useMemo(() => turmaDecks.map(d => d.deck_id), [turmaDecks]);
   const { data: deckTagsMap = {} } = useDeckTagsBatch(allDeckIds);
 
   // ── Collect unique tags from community decks for filter chips ──
