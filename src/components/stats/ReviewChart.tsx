@@ -204,7 +204,7 @@ const ReviewChart = ({
             );
           })}
         </div>
-        <p className="text-[10px] text-muted-foreground text-right">Total: {bc.total.toLocaleString()} revisões</p>
+        <p className="text-[10px] text-muted-foreground text-right">Total: {(bc.again + bc.hard + bc.good + bc.easy).toLocaleString()} revisões</p>
       </Card>
 
       {/* 11. Contagem de Cartões */}

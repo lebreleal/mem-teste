@@ -596,35 +596,11 @@ const LinkedDeckTabs = ({ deckId, resolvedSourceDeckId, isLinkedDeck, activeTab,
 const PersonalDeckTabs = ({ deckId, isLinkedDeck, activeTab, setActiveTab }: { deckId: string; isLinkedDeck: boolean; activeTab: string; setActiveTab: (v: string) => void }) => {
   const { cardCounts } = useDeckDetail();
   const totalCards = cardCounts?.total ?? 0;
-  const [questionAction, setQuestionAction] = useState<'practice' | 'ai' | null>(null);
-
-  useEffect(() => {
-    const handler = () => { setQuestionAction('practice'); setActiveTab('questions'); };
-    window.addEventListener('start-question-practice', handler);
-    return () => window.removeEventListener('start-question-practice', handler);
-  }, [setActiveTab]);
 
   return (
-    <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setQuestionAction(null); }} className="w-full">
-      <TabsList className="w-full grid grid-cols-2 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
-        <TabsTrigger value="cards" className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5">
-          <Layers className="h-4 w-4" /> Cards ({totalCards})
-        </TabsTrigger>
-        <TabsTrigger value="questions" className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5">
-          <HelpCircle className="h-4 w-4" /> Questões
-        </TabsTrigger>
-      </TabsList>
+    <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); }} className="w-full">
       <TabsContent value="cards" className="mt-4">
         <CardList />
-      </TabsContent>
-      <TabsContent value="questions" className="mt-4">
-        <Suspense fallback={null}>
-          <DeckQuestionsTab
-            deckId={deckId}
-            autoStart={questionAction === 'practice'}
-            autoCreate={questionAction === 'ai' ? 'ai' : null}
-          />
-        </Suspense>
       </TabsContent>
     </Tabs>
   );

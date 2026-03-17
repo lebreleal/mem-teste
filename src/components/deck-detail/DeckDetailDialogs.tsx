@@ -27,24 +27,6 @@ import {
   Tag as TagIcon,
 } from 'lucide-react';
 
-/** Tag editor for card edit dialog */
-const CardTagEditor = ({ cardId }: { cardId: string }) => {
-  const { data: tags = [] } = useCardTags(cardId);
-  const { addTag, removeTag } = useCardTagMutations(cardId);
-  return (
-    <div className="space-y-1.5 border-t border-border/50 pt-3">
-      <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-        <TagIcon className="h-3 w-3" /> Tags do card
-      </p>
-      <TagInput
-        tags={tags}
-        onAdd={(tag) => addTag.mutate(tag)}
-        onRemove={(tagId) => removeTag.mutate(tagId)}
-        placeholder="Adicionar tag ao card..."
-      />
-    </div>
-  );
-};
 
 const DeckDetailDialogs = () => {
   const ctx = useDeckDetail();

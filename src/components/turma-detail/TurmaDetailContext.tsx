@@ -15,7 +15,7 @@ import {
   useTurmaRole, useTurmaMembers, useTurmaSubjects, useTurmaLessons,
   useTurmaDecks, useTurmaHierarchyMutations,
 } from '@/hooks/useTurmaHierarchy';
-import { useTurmaExams, useTurmaExamMutations } from '@/hooks/useTurmaExams';
+import { useTurmaExams, useTurmaExamMutations } from '@/hooks/useTurmaHierarchy';
 import { useToast } from '@/hooks/use-toast';
 import type { BreadcrumbItem } from './constants';
 

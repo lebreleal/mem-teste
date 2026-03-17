@@ -469,17 +469,6 @@ const CardPreviewSheet = forwardRef<HTMLDivElement, Props>(({ cards, initialInde
           <ChevronRight className={isMobile ? 'h-4 w-4' : 'h-5 w-5'} />
         </Button>
       </div>
-      {/* Suggest correction modal for linked decks */}
-      {suggestCard && (
-        <Suspense fallback={null}>
-          <SuggestCorrectionModal
-            open={!!suggestCard}
-            onOpenChange={(v) => { if (!v) setSuggestCard(null); }}
-            card={suggestCard}
-            deckId={deck?.id}
-          />
-        </Suspense>
-      )}
     </div>
   );
 });

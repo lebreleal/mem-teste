@@ -58,9 +58,7 @@ const TurmaHeader = () => {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 <div className="px-3 py-2 border-b border-border/50"><p className="text-sm font-medium text-foreground truncate">{user?.email}</p></div>
-                <DropdownMenuItem onClick={() => navigate('/dashboard')}><BookOpen className="mr-2 h-4 w-4" /> Meus Baralhos</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate('/profile')}><UserCircle className="mr-2 h-4 w-4" /> Perfil</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate('/feedback')}><Lightbulb className="mr-2 h-4 w-4" /> Sugerir Melhorias</DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={signOut}><LogOut className="mr-2 h-4 w-4" /> Sair</DropdownMenuItem>
               </DropdownMenuContent>

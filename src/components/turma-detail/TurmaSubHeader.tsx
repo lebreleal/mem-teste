@@ -239,10 +239,6 @@ const TurmaSubHeader = ({
         </DialogContent>
       </Dialog>
 
-      {/* Creator Panel Sheet */}
-      {isAdmin && (
-        <CreatorPanelSheet open={showCreatorPanel} onOpenChange={setShowCreatorPanel} turmaId={turmaId} />
-      )}
     </>
   );
 };

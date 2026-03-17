@@ -69,7 +69,7 @@ const CardRow = ({ index, style, cards, isCommunityDeck, openEdit, setDeleteId, 
               return <p className="mt-1 text-xs text-muted-foreground">{mc.options?.length || 0} opções · Resposta: {mc.options?.[mc.correctIndex]}</p>;
             } catch { return null; }
           })()}
-          <CardTagsInline cardId={card.id} />
+          
         </div>
         <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
           {isCommunityDeck ? (

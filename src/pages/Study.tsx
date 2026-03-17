@@ -328,10 +328,6 @@ const Study = () => {
       </main>
 
       <StudyDialogs
-        leechInterruption={leech.leechInterruption} leechSkipConfirmOpen={leech.leechSkipConfirmOpen}
-        setLeechSkipConfirmOpen={leech.setLeechSkipConfirmOpen} clearLeechInterruption={leech.clearLeechInterruption}
-        leechBypassOnceRef={leech.leechBypassOnceRef} onStartLeechMode={leech.startLeechModeForCard}
-        localQueue={localQueue} currentCard={currentCard}
         communityInfoOpen={communityInfoOpen} setCommunityInfoOpen={setCommunityInfoOpen} sourceInfo={sourceInfo}
         pendingPro={pendingPro} confirmPro={confirmPro} cancelPro={cancelPro} baseTutorCost={BASE_TUTOR_COST}
         chatOpen={chatOpen} setChatOpen={setChatOpen}

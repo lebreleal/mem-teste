@@ -211,10 +211,10 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const { cards, isLoading: cardsLoading, createCard, updateCard, deleteCard } = useCards(deckId, { enableQuery: false });
   const { decks } = useDecks();
   const { toast } = useToast();
-  const { createExam } = useExams();
-  const { energy, spendEnergy } = useEnergy();
-  const { model, setModel, getCost } = useAIModel();
-  const { addNotification, updateNotification } = useExamNotifications();
+  // Exam generation stubs (exams system removed)
+  const createExam = { mutateAsync: async () => ({ id: '' }), isPending: false } as any;
+  const addNotification = (_n: any) => {};
+  const updateNotification = (_id: string, _update: any) => {};
 
   // ─── State ─────────────────────────────
   const [examTitle, setExamTitle] = useState('');

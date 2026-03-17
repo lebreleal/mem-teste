@@ -836,30 +836,6 @@ const ContentTab = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Subscriber Gate Dialog */}
-      <SubscriberGateDialog
-        open={!!gateDeck}
-        onOpenChange={open => !open && setGateDeck(null)}
-        deckName={gateDeck?.deck_name || ''}
-        cardCount={gateDeck?.card_count ?? 0}
-        onTrial={() => {
-          const deck = gateDeck;
-          setGateDeck(null);
-          setTrialDeck({ deckId: deck.deck_id, deckName: deck.deck_name });
-        }}
-        onSubscribe={() => {
-          setGateDeck(null);
-          ctx.handleSubscribe?.();
-        }}
-      />
-
-      {/* Trial Study Modal */}
-      <TrialStudyModal
-        open={!!trialDeck}
-        onOpenChange={open => !open && setTrialDeck(null)}
-        deckId={trialDeck?.deckId || ''}
-        deckName={trialDeck?.deckName || ''}
-      />
 
     </div>
   );
