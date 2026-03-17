@@ -44,9 +44,7 @@ const TurmaHeader = () => {
               <Brain className="h-4 w-4" style={{ color: 'hsl(var(--energy-purple, 270 70% 60%))' }} />
               <span className="text-xs font-bold tabular-nums text-foreground">{energy}</span>
             </button>
-            <button onClick={() => window.dispatchEvent(new CustomEvent('open-pomodoro'))} className="flex items-center justify-center rounded-full p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-              <Timer className="h-4 w-4" />
-            </button>
+          </div>
           </div>
           <div className="flex items-center gap-1.5">
             <button onClick={toggleTheme} className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
