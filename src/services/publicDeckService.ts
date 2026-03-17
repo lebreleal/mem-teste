@@ -356,7 +356,8 @@ export async function fetchSuggestionComments(suggestionId: string) {
   if (!data || data.length === 0) return [];
   const userIds = [...new Set(data.map(c => c.user_id))];
   const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: userIds });
-  const nameMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
+  interface ProfileRow { id: string; name: string | null }
+  const nameMap = new Map(((profiles ?? []) as unknown as ProfileRow[]).map(p => [p.id, p.name || 'Anônimo']));
   return data.map(c => ({ ...c, user_name: nameMap.get(c.user_id) ?? 'Usuário' }));
 }
 
