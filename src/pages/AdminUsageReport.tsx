@@ -34,8 +34,6 @@ const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   'gpt-4o-mini': { input: 0.15, output: 0.60 },
   'gpt-4o': { input: 2.50, output: 10.00 },
   'gpt-3.5-turbo': { input: 0.50, output: 1.50 },
-  'tts-1': { input: 15.00, output: 0 },
-  'google-neural2': { input: 4.00, output: 0 },
 };
 
 // total_tokens includes thinking tokens; real output = total - prompt
