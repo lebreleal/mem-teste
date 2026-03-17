@@ -274,10 +274,10 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     const compressed = await compressImage(file);
     const ext = compressed.name.split('.').pop() || 'webp';
     const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
-    const { error } = await supabase.storage.from('card-images').upload(path, compressed);
-    if (error) { toast({ title: 'Erro no upload', variant: 'destructive' }); return null; }
-    const { data: urlData } = supabase.storage.from('card-images').getPublicUrl(path);
-    return urlData.publicUrl;
+    try {
+      const publicUrl = await uploadToStorage(user.id, compressed);
+      return publicUrl;
+    } catch { toast({ title: 'Erro no upload', variant: 'destructive' }); return null; }
   };
 
   const pickFileAndUpload = (onUrl: (url: string) => void) => {
