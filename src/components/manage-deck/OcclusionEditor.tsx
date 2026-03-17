@@ -148,7 +148,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
     const container = containerRef.current;
     if (!container || imgSize.w === 0) return { w: 0, h: 0, scale: 1 };
     const maxW = container.clientWidth;
-    const maxH = 450;
+    const maxH = Math.min(window.innerHeight * 0.45, 400);
     const scale = Math.min(maxW / imgSize.w, maxH / imgSize.h, 1) * zoom;
     return { w: imgSize.w * scale, h: imgSize.h * scale, scale };
   }, [imgSize, zoom]);
