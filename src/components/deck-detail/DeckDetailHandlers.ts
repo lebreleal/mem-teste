@@ -400,7 +400,7 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
       queryClient.invalidateQueries({ queryKey: ['profile'] });
       setImprovePreview({ front: data.front, back: data.back });
       setImproveModalOpen(true);
-    } catch (e: any) { toast({ title: 'Erro ao melhorar card', description: e.message, variant: 'destructive' }); }
+    } catch (e: unknown) { toast({ title: 'Erro ao melhorar card', description: e instanceof Error ? e.message : 'Erro desconhecido', variant: 'destructive' }); }
     finally { setIsImproving(false); }
   }, [front, back, cardType, mcOptions, mcCorrectIndex, energy, model, queryClient, toast, setIsImproving, setImprovePreview, setImproveModalOpen]);
 
