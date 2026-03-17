@@ -535,6 +535,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   );
 
   const currentColor = editor.getAttributes('textStyle').color || '';
+  const currentHighlight = editor.getAttributes('highlight').color || '';
 
   const showToolbar = !hideToolbarUntilFocus || isFocused;
 
