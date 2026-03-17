@@ -155,7 +155,7 @@ const MemberRow = ({ member }: { member: TurmaMember }) => {
         </p>
       </div>
       <span className="text-xs text-muted-foreground shrink-0 flex items-center gap-1">
-        {isOwner && <Crown className="h-3 w-3 text-amber-500" />}
+        {isOwner && <Crown className="h-3 w-3 text-yellow-500 dark:text-yellow-400" />}
         {roleLabel[member.role] ?? 'Membro'}
       </span>
     </div>
