@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { useAuth } from '@/hooks/useAuth';
 import { useAdminUsers, type AdminProfile, type UserDeck, type TokenUsageSummary, type TokenUsageEntry, type StudyDay, type PremiumGiftPlan } from '@/hooks/useAdminUsers';
-import { supabase } from '@/integrations/supabase/client';
+import { invokeImpersonate, verifyOtp, fetchProfilePremiumExpiry } from '@/services/adminService';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -78,18 +78,10 @@ const AdminUsers = () => {
         refresh_token: session.refresh_token,
       }));
       sessionStorage.setItem('impersonated_name', user.name || user.email);
-      const { data, error } = await supabase.functions.invoke('admin-impersonate', {
-        body: { target_user_id: user.id },
-      });
-      if (error || !data?.token) {
-        sessionStorage.removeItem('admin_session');
-        sessionStorage.removeItem('impersonated_name');
-        toast({ title: 'Erro', description: 'Falha ao impersonar usuário.', variant: 'destructive' });
-        setImpersonating(false);
-        return;
-      }
-      const { error: otpError } = await supabase.auth.verifyOtp({ token_hash: data.token, type: 'magiclink' });
-      if (otpError) {
+      const result = await invokeImpersonate(user.id);
+      try {
+        await verifyOtp(result.token);
+      } catch {
         sessionStorage.removeItem('admin_session');
         sessionStorage.removeItem('impersonated_name');
         toast({ title: 'Erro', description: 'Falha na autenticação.', variant: 'destructive' });
@@ -137,9 +129,8 @@ const AdminUsers = () => {
     setGrantingPremium(true);
     const ok = await grantPremium(selectedUser.id, giftPlan);
     if (ok) {
-      // Refresh user data
-      const { data } = await supabase.from('profiles').select('premium_expires_at').eq('id', selectedUser.id).single();
-      setSelectedUser(prev => prev ? { ...prev, premium_expires_at: (data as any)?.premium_expires_at ?? null } : null);
+      const premiumExpiry = await fetchProfilePremiumExpiry(selectedUser.id);
+      setSelectedUser(prev => prev ? { ...prev, premium_expires_at: premiumExpiry } : null);
     }
     setGrantingPremium(false);
   };
