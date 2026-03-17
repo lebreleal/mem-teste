@@ -11,7 +11,15 @@ import { useAISources, type AISource } from '@/hooks/useAISources';
 import AISourceSelector from '@/components/AISourceSelector';
 import { useAuth } from '@/hooks/useAuth';
 import { useEnergy } from '@/hooks/useEnergy';
-import { supabase } from '@/integrations/supabase/client';
+import {
+  getCurrentUserId, fetchDeckQuestions, fetchQuestionAttempts, countDescendantCards,
+  fetchQuestionConceptDescriptions, searchCardsForConcept, resolveConceptNamesFromLinks,
+  saveQuestionAttempt, insertConceptCards, createQuestion, fetchLatestQuestionId,
+  updateQuestionConcepts, insertQuestionReturningId, deleteQuestion, bulkDeleteQuestions,
+  updateDeckQuestion, updateGlobalConceptDescription, searchGlobalConcepts,
+  getGlobalConceptBySlug, fetchUserGlobalConceptNames, invokeAITutor,
+  invokeGenerateQuestions, invokeParseQuestions,
+} from '@/services/deckQuestionService';
 import { moveConceptCardsToErrorDeck } from '@/services/errorDeckService';
 import { upsertQuestionIntoErrorDeck } from '@/services/errorQuestionCardService';
 import { useDecks } from '@/hooks/useDecks';
@@ -113,34 +121,16 @@ const ConceptMasterySection = ({
   useEffect(() => {
     if (!concepts || concepts.length === 0 || !questionId) return;
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      // Get concept IDs for this question from question_concepts
-      const { data: links } = await supabase
-        .from('question_concepts' as any)
-        .select('concept_id, context_description')
-        .eq('question_id', questionId);
-      if (!links || (links as any[]).length === 0) return;
+      const userId = await getCurrentUserId();
+      if (!userId) return;
+      const result = await fetchQuestionConceptDescriptions(questionId);
+      if (!result || !result.descMap) return;
 
-      const conceptIds = (links as any[]).filter(l => l.context_description).map(l => l.concept_id);
-      if (conceptIds.length === 0) return;
-
-      // Get concept names to map back
-      const { data: gcData } = await supabase
-        .from('global_concepts' as any)
-        .select('id, name, slug')
-        .in('id', conceptIds);
-
-      const descMap: Record<string, string> = {};
-      for (const link of links as any[]) {
-        if (!link.context_description) continue;
-        const gc = (gcData as any[] ?? []).find(g => g.id === link.concept_id);
-        if (gc) {
-          descMap[gc.name] = link.context_description;
-          // Also map by original concept name match
-          const matchedConcept = concepts.find(c => c.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR') === gc.slug);
-          if (matchedConcept) descMap[matchedConcept] = link.context_description;
-        }
+      const descMap: Record<string, string> = { ...result.descMap };
+      // Also map by original concept name match
+      for (const gc of result.gcData ?? []) {
+        const matchedConcept = concepts.find(c => c.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR') === gc.slug);
+        if (matchedConcept && result.descMap[gc.name]) descMap[matchedConcept] = result.descMap[gc.name];
       }
       setConceptDescriptions(descMap);
     })();
@@ -157,23 +147,7 @@ const ConceptMasterySection = ({
   const searchExistingCards = async (concept: string): Promise<any[]> => {
     setLoadingCards(prev => ({ ...prev, [concept]: true }));
     try {
-      const keywords = concept
-        .replace(/^(Você conseguiu|Você entendeu|Você sabe).*?\??\s*/i, '')
-        .split(/\s+/)
-        .map(k => k.replace(/[%,_]/g, ''))
-        .filter(w => w.length > 3)
-        .slice(0, 4);
-
-      if (keywords.length === 0) return [];
-
-      const { data } = await supabase
-        .from('cards')
-        .select('id, front_content, back_content, card_type')
-        .in('deck_id', deckScopeIds)
-        .or(keywords.map(k => `front_content.ilike.%${k}%,back_content.ilike.%${k}%`).join(','))
-        .limit(5);
-
-      const cards = data || [];
+      const cards = await searchCardsForConcept(deckScopeIds, concept);
       setPreviewCards(prev => ({ ...prev, [concept]: cards }));
       return cards;
     } catch {
@@ -194,11 +168,11 @@ const ConceptMasterySection = ({
     void (async () => {
       await searchExistingCards(concept);
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const userId = await getCurrentUserId();
+      if (!userId) return;
 
       try {
-        const moved = await moveConceptCardsToErrorDeck(user.id, [concept], deckId);
+        const moved = await moveConceptCardsToErrorDeck(userId, [concept], deckId);
         if (moved > 0) {
           queryClient.invalidateQueries({ queryKey: ['error-deck-cards'] });
           queryClient.invalidateQueries({ queryKey: ['error-notebook-count'] });
@@ -219,10 +193,7 @@ const ConceptMasterySection = ({
     setConceptExplaining(concept);
     try {
       spendEnergy.mutate(1);
-      const { data, error } = await supabase.functions.invoke('ai-tutor', {
-        body: { type: 'explain-concept', concept, deckId },
-      });
-      if (error) throw error;
+      const data = await invokeAITutor({ type: 'explain-concept', concept, deckId });
       setConceptExplanations(prev => ({ ...prev, [concept]: data?.response || 'Explicação indisponível.' }));
     } catch { toast({ title: 'Erro ao explicar conceito', variant: 'destructive' }); }
     finally { setConceptExplaining(null); }
@@ -519,9 +490,7 @@ const QuestionPractice = ({
     setStats(prev => ({ correct: prev.correct + (isCorrect ? 1 : 0), total: prev.total + 1 }));
 
     // Save attempt
-    await supabase.from('deck_question_attempts' as any).insert({
-      question_id: q.id, user_id: user.id, selected_indices: [selected], is_correct: isCorrect,
-    });
+    await saveQuestionAttempt(q.id, user.id, [selected], isCorrect);
 
     // Update concept mastery (both legacy deck_concept_mastery and global_concepts)
     if (q.concepts && q.concepts.length > 0) {
@@ -549,20 +518,7 @@ const QuestionPractice = ({
 
         // Fallback: if question has no inline concepts, resolve from question_concepts
         if (conceptsToUse.length === 0) {
-          const { data: links } = await supabase
-            .from('question_concepts' as any)
-            .select('concept_id')
-            .eq('question_id', q.id)
-            .limit(8);
-
-          const conceptIds = (links ?? []).map((l: any) => l.concept_id).filter(Boolean);
-          if (conceptIds.length > 0) {
-            const { data: gc } = await supabase
-              .from('global_concepts' as any)
-              .select('name')
-              .in('id', conceptIds);
-            conceptsToUse = (gc ?? []).map((c: any) => c.name).filter(Boolean);
-          }
+          conceptsToUse = await resolveConceptNamesFromLinks(q.id);
         }
 
         const moved = conceptsToUse.length > 0
@@ -613,10 +569,7 @@ const QuestionPractice = ({
     setHintLoading(true);
     try {
       spendEnergy.mutate(1);
-      const { data, error } = await supabase.functions.invoke('ai-tutor', {
-        body: { type: 'question-hint', question: q.question_text, options: q.options, correctIndex: q.correct_indices?.[0] ?? 0 },
-      });
-      if (error) throw error;
+      const data = await invokeAITutor({ type: 'question-hint', question: q.question_text, options: q.options, correctIndex: q.correct_indices?.[0] ?? 0 });
       setHintText(data?.response || 'Tente analisar cada alternativa com cuidado.');
     } catch { toast({ title: 'Erro ao gerar dica', variant: 'destructive' }); }
     finally { setHintLoading(false); }
@@ -629,17 +582,14 @@ const QuestionPractice = ({
     try {
       spendEnergy.mutate(1);
       const isCorrectOpt = q.correct_indices?.includes(optIdx);
-      const { data, error } = await supabase.functions.invoke('ai-tutor', {
-        body: {
-          type: 'explain-option',
-          question: q.question_text,
-          options: q.options,
-          optionIndex: optIdx,
-          isCorrect: isCorrectOpt,
-          correctIndex: q.correct_indices?.[0] ?? 0,
-        },
+      const data = await invokeAITutor({
+        type: 'explain-option',
+        question: q.question_text,
+        options: q.options,
+        optionIndex: optIdx,
+        isCorrect: isCorrectOpt,
+        correctIndex: q.correct_indices?.[0] ?? 0,
       });
-      if (error) throw error;
       setOptionExplanations(prev => ({ ...prev, [optIdx]: data?.response || 'Explicação indisponível.' }));
     } catch { toast({ title: 'Erro ao explicar alternativa', variant: 'destructive' }); }
     finally { setOptionExplainLoading(null); }
@@ -651,20 +601,10 @@ const QuestionPractice = ({
     setGeneratingConcept(concept);
     try {
       spendEnergy.mutate(2);
-      const { data, error } = await supabase.functions.invoke('ai-tutor', {
-        body: { type: 'generate-concept-cards', concept, deckId, energyCost: 0 },
-      });
-      if (error) throw error;
+      const data = await invokeAITutor({ type: 'generate-concept-cards', concept, deckId, energyCost: 0 });
       const cards = data?.cards || [];
       if (cards.length > 0) {
-        for (const card of cards) {
-          await supabase.from('cards').insert({
-            deck_id: deckId,
-            front_content: card.front,
-            back_content: card.back,
-            card_type: card.card_type || 'basic',
-          });
-        }
+        await insertConceptCards(deckId, cards);
         toast({ title: `${cards.length} cards criados para "${concept}"` });
         queryClient.invalidateQueries({ queryKey: ['cards'] });
       } else {
@@ -983,10 +923,7 @@ const CreateQuestionDialog = ({
   // Fetch card count for the deck (including sub-decks)
   const { data: cardCount = 0 } = useQuery({
     queryKey: ['deck-card-count', deckId],
-    queryFn: async () => {
-      const { data } = await supabase.rpc('count_descendant_cards_by_state', { p_deck_id: deckId });
-      return (data as any)?.total ?? 0;
-    },
+    queryFn: () => countDescendantCards(deckId),
     enabled: !!deckId,
     staleTime: 60_000,
   });
@@ -1022,31 +959,28 @@ const CreateQuestionDialog = ({
       if (!questionText.trim()) throw new Error('Enunciado obrigatório');
       if (correctIdx === null) throw new Error('Marque a alternativa correta');
 
-      const { error } = await supabase.from('deck_questions' as any).insert({
-        deck_id: deckId, created_by: user.id, question_text: questionText.trim(),
-        question_type: 'multiple_choice', options: validOptions,
-        correct_indices: [correctIdx], explanation: buildExplanation(),
+      await createQuestion(deckId, user.id, {
+        question_text: questionText.trim(),
+        question_type: 'multiple_choice',
+        options: validOptions,
+        correct_indices: [correctIdx],
+        explanation: buildExplanation(),
       });
-      if (error) throw error;
 
       // Extract concepts via AI (fire and forget)
-      supabase.functions.invoke('ai-tutor', {
-        body: { type: 'question-concepts', question: questionText.trim(), options: validOptions },
-      }).then(async ({ data }) => {
-        if (data?.concepts?.length > 0) {
-          const { data: latest } = await supabase.from('deck_questions' as any)
-            .select('id').eq('deck_id', deckId).eq('created_by', user.id)
-            .order('created_at', { ascending: false }).limit(1);
-          if (latest?.[0]) {
-            await supabase.from('deck_questions' as any).update({ concepts: data.concepts }).eq('id', (latest[0] as any).id);
-            // Link with descriptions if available
-            const conceptDescs = data.conceptsWithDescriptions ?? [];
-            await linkQuestionsToConcepts(user.id, [{
-              questionId: (latest[0] as any).id,
-              conceptNames: data.concepts,
-              conceptDescriptions: conceptDescs,
-            }]);
-            queryClient.invalidateQueries({ queryKey: ['deck-questions', deckId] });
+      invokeAITutor({ type: 'question-concepts', question: questionText.trim(), options: validOptions })
+        .then(async (data) => {
+          if (data?.concepts?.length > 0) {
+            const latestId = await fetchLatestQuestionId(deckId, user.id);
+            if (latestId) {
+              await updateQuestionConcepts(latestId, data.concepts);
+              const conceptDescs = data.conceptsWithDescriptions ?? [];
+              await linkQuestionsToConcepts(user.id, [{
+                questionId: latestId,
+                conceptNames: data.concepts,
+                conceptDescriptions: conceptDescs,
+              }]);
+              queryClient.invalidateQueries({ queryKey: ['deck-questions', deckId] });
           }
         }
       }).catch(() => {});
@@ -1092,21 +1026,16 @@ const CreateQuestionDialog = ({
       }, 3000);
 
       try {
-        const { data, error } = await supabase.functions.invoke('generate-questions', {
-          body: {
+        const data = await invokeGenerateQuestions({
             deckId,
             optionsCount: 4,
             aiModel: aiModel === 'pro' ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
             energyCost: aiCost,
             customInstructions: aiCustomInstructions.trim() || undefined,
             sourceContent: sourceContent || undefined,
-          },
         });
 
         clearInterval(stepInterval);
-
-        if (error) throw error;
-        if (data?.error) throw new Error(data.error);
 
         const qs = data?.questions ?? [];
         if (qs.length === 0) throw new Error('Nenhuma questão gerada');
@@ -1128,20 +1057,18 @@ const CreateQuestionDialog = ({
           const shuffledOpts = indices.map((i: number) => opts[i]);
           const newCorrectIdx = indices.indexOf(correctIdx);
 
-          const { data: inserted } = await supabase.from('deck_questions' as any).insert({
-            deck_id: deckId, created_by: user.id,
+          const insertedId = await insertQuestionReturningId(deckId, user.id, {
             question_text: qi.question_text || '',
             question_type: 'multiple_choice',
             options: shuffledOpts,
             correct_indices: [newCorrectIdx],
             explanation: qi.explanation || '',
             concepts: qi.concepts || [],
-          }).select('id').single();
+          });
 
-          // Collect for global concept linking
-          if (inserted && qi.concepts?.length > 0) {
+          if (insertedId && qi.concepts?.length > 0) {
             questionConceptPairs.push({
-              questionId: (inserted as any).id,
+              questionId: insertedId,
               conceptNames: qi.concepts,
               prerequisites: qi.prerequisites ?? [],
               category: qi.category ?? undefined,
@@ -1548,12 +1475,8 @@ const DeckQuestionsTab = ({
   const { data: questions = prevQuestionsRef.current, isLoading } = useQuery({
     queryKey: ['deck-questions', effectiveDeckId, hierarchyKey],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('deck_questions' as any).select('*')
-        .in('deck_id', hierarchyDeckIds)
-        .order('sort_order', { ascending: true });
-      if (error) throw error;
-      const result = (data ?? []).map((q: any) => {
+      const rawData = await fetchDeckQuestions(hierarchyDeckIds);
+      const result = (rawData).map((q: any) => {
         let opts: string[] = [];
         if (Array.isArray(q.options)) {
           opts = q.options.map((o: any) => typeof o === 'string' ? o : (o?.text || o?.label || JSON.stringify(o)));
@@ -1584,11 +1507,8 @@ const DeckQuestionsTab = ({
       if (!user) return [];
       const questionIds = questions.map(q => q.id);
       if (questionIds.length === 0) return [];
-      const { data } = await supabase
-        .from('deck_question_attempts' as any).select('*')
-        .eq('user_id', user.id)
-        .in('question_id', questionIds);
-      return (data ?? []) as unknown as QuestionAttempt[];
+      const data = await fetchQuestionAttempts(user.id, questionIds);
+      return data as unknown as QuestionAttempt[];
     },
     enabled: !!user && questions.length > 0,
     staleTime: 30_000,
@@ -1652,8 +1572,7 @@ const DeckQuestionsTab = ({
 
   const deleteMutation = useMutation({
     mutationFn: async (questionId: string) => {
-      const { error } = await supabase.from('deck_questions' as any).delete().eq('id', questionId);
-      if (error) throw error;
+      await deleteQuestion(questionId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deck-questions', effectiveDeckId] });
@@ -1663,10 +1582,7 @@ const DeckQuestionsTab = ({
 
   const bulkDeleteMutation = useMutation({
     mutationFn: async (ids: string[]) => {
-      for (const id of ids) {
-        const { error } = await supabase.from('deck_questions' as any).delete().eq('id', id);
-        if (error) throw error;
-      }
+      await bulkDeleteQuestions(ids);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deck-questions', effectiveDeckId] });
@@ -2098,18 +2014,9 @@ const PasteQuestionsDialog = ({
     setParsing(true);
     try {
       // Fetch existing global concepts for reuse
-      const { data: existingConcepts } = await supabase
-        .from('global_concepts' as any)
-        .select('name')
-        .eq('user_id', user.id)
-        .limit(200);
+      const conceptNames = await fetchUserGlobalConceptNames(user.id);
 
-      const conceptNames = (existingConcepts ?? []).map((c: any) => c.name);
-
-      const { data, error } = await supabase.functions.invoke('parse-questions', {
-        body: { text: pastedText, aiModel, existingConcepts: conceptNames },
-      });
-      if (error) throw error;
+      const data = await invokeParseQuestions({ text: pastedText, aiModel, existingConcepts: conceptNames });
       if (!data?.questions?.length) {
         toast({ title: 'Nenhuma questão encontrada no texto', variant: 'destructive' });
         setParsing(false);
@@ -2131,20 +2038,18 @@ const PasteQuestionsDialog = ({
       const questionConceptPairs: { questionId: string; conceptNames: string[]; prerequisites?: string[]; category?: string; subcategory?: string; conceptDescriptions?: { name: string; description: string }[] }[] = [];
 
       for (const q of toSave) {
-        const { data: inserted } = await supabase.from('deck_questions' as any).insert({
-          deck_id: deckId,
-          created_by: user.id,
+        const insertedId = await insertQuestionReturningId(deckId, user.id, {
           question_text: q.question_text,
           question_type: 'multiple_choice',
           options: q.options,
           correct_indices: q.correct_index >= 0 ? [q.correct_index] : [],
           explanation: q.explanation || '',
           concepts: q.concepts || [],
-        }).select('id').single();
+        });
 
-        if (inserted && q.concepts?.length > 0) {
+        if (insertedId && q.concepts?.length > 0) {
           questionConceptPairs.push({
-            questionId: (inserted as any).id,
+            questionId: insertedId,
             conceptNames: q.concepts,
             category: (q as any).category ?? undefined,
             subcategory: (q as any).subcategory ?? undefined,
@@ -2372,14 +2277,7 @@ const EditQuestionDialog = ({
     const timer = setTimeout(async () => {
       setSearchingConcepts(true);
       try {
-        const { data } = await supabase
-          .from('global_concepts' as any)
-          .select('id, name, description')
-          .eq('user_id', user.id)
-          .ilike('name', `%${conceptSearch.trim()}%`)
-          .limit(20);
-        const results = (data ?? []) as any[];
-        // Filter out already-added concepts
+        const results = await searchGlobalConcepts(user.id, conceptSearch);
         const filtered = results.filter(r => !concepts.some(c => conceptSlug(c) === conceptSlug(r.name)));
         setConceptSuggestions(filtered.map(r => ({ name: r.name, description: r.description, id: r.id })));
       } catch { setConceptSuggestions([]); }
@@ -2403,17 +2301,11 @@ const EditQuestionDialog = ({
   const handleConceptClick = async (conceptName: string) => {
     if (!user) return;
     const slug = conceptSlug(conceptName);
-    const { data } = await supabase
-      .from('global_concepts' as any)
-      .select('id, name, description')
-      .eq('user_id', user.id)
-      .eq('slug', slug)
-      .maybeSingle();
+    const data = await getGlobalConceptBySlug(user.id, slug);
     if (data) {
-      const r = data as any;
-      setEditingConcept({ name: r.name, id: r.id, description: r.description });
-      setEditName(r.name);
-      setEditDescription(r.description || '');
+      setEditingConcept({ name: data.name, id: data.id, description: data.description });
+      setEditName(data.name);
+      setEditDescription(data.description || '');
     }
   };
 
@@ -2426,10 +2318,7 @@ const EditQuestionDialog = ({
         name: editName.trim() || editingConcept.name,
       });
       // Update description separately
-      await supabase
-        .from('global_concepts' as any)
-        .update({ description: editDescription.trim() || null } as any)
-        .eq('id', editingConcept.id);
+      await updateGlobalConceptDescription(editingConcept.id, editDescription.trim() || null);
 
       // Update local concept name if changed
       if (editName.trim() && editName.trim() !== editingConcept.name) {
@@ -2448,14 +2337,13 @@ const EditQuestionDialog = ({
       if (!questionText.trim()) throw new Error('Enunciado obrigatório');
       if (correctIdx === null) throw new Error('Marque a alternativa correta');
 
-      const { error } = await supabase.from('deck_questions' as any).update({
+      await updateDeckQuestion(question.id, {
         question_text: questionText.trim(),
         options: validOptions,
         correct_indices: [correctIdx],
         explanation: explanation.trim(),
         concepts: concepts,
-      }).eq('id', question.id);
-      if (error) throw error;
+      });
 
       // Sync question_concepts junction
       if (user && concepts.length > 0) {
