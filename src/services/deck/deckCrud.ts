@@ -170,7 +170,7 @@ export async function archiveDeck(id: string) {
 
 /** Duplicate a deck and its cards. */
 export async function duplicateDeck(userId: string, id: string) {
-  const { data: deck } = await supabase.from('decks').select('*').eq('id', id).single();
+  const { data: deck } = await supabase.from('decks').select('name, folder_id').eq('id', id).single();
   if (!deck) throw new Error('Deck not found');
 
   const { data: newDeck, error } = await supabase
