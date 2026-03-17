@@ -15,12 +15,8 @@ import { sm2Schedule, type SM2Card, type SM2Params } from '@/lib/sm2';
 import { parseStepToMinutes, shuffleArray, collectDescendantIds, collectFolderDeckIds, findRootAncestorId } from '@/lib/studyUtils';
 import { TZ_OFFSET_SP } from '@/lib/dateUtils';
 
-export interface StudyQueueResult {
-  cards: any[];
-  algorithmMode: string;
-  deckConfig: any;
-  isLiveDeck: boolean;
-}
+export type { StudyQueueResult, StudyCard, DeckStudyConfig } from '@/types/study';
+import type { StudyQueueResult, DeckStudyConfig } from '@/types/study';
 
 const DECK_SELECT_COLS = 'id, name, parent_deck_id, folder_id, daily_new_limit, daily_review_limit, algorithm_mode, learning_steps, requested_retention, max_interval, interval_modifier, easy_bonus, easy_graduating_interval, shuffle_cards, is_live_deck, source_turma_deck_id, source_listing_id, bury_siblings, bury_new_siblings, bury_review_siblings, bury_learning_siblings, is_archived' as const;
 
@@ -56,7 +52,7 @@ export async function fetchStudyQueue(
   };
 
   let deckIds: string[] = [];
-  let deckConfig: any = {};
+  let deckConfig: DeckStudyConfig | undefined;
   let limitScopeIds: string[] = [];
   let folderLimitDecks: typeof activeDecks = [];
 
@@ -96,7 +92,7 @@ export async function fetchStudyQueue(
 
     // Guard: if still no decks after bootstrap, return empty queue
     if (deckIds.length === 0) {
-      return { cards: [], algorithmMode: 'fsrs', deckConfig: {}, isLiveDeck: false };
+      return { cards: [], algorithmMode: 'fsrs', deckConfig: undefined, isLiveDeck: false };
     }
 
     // Mark decks with zero new-card limit (their reviews still participate)
@@ -107,7 +103,7 @@ export async function fetchStudyQueue(
       .filter((d): d is (typeof activeDecks)[number] => !!d);
 
     folderLimitDecks = rootDecks;
-    deckConfig = rootDecks[0] ?? {};
+    deckConfig = (rootDecks[0] as DeckStudyConfig | undefined);
     limitScopeIds = deckIds;
   } else {
     const descendantIds = collectDescendantIds(activeDecks, deckId);
@@ -117,7 +113,7 @@ export async function fetchStudyQueue(
     deckIds.forEach(buildZeroLimitSet);
 
     const rootId = findRootAncestorId(activeDecks, deckId);
-    deckConfig = activeDecks.find(d => d.id === rootId) ?? {};
+    deckConfig = activeDecks.find(d => d.id === rootId) as DeckStudyConfig | undefined;
     const rootDescendants = collectDescendantIds(activeDecks, rootId);
     limitScopeIds = [rootId, ...rootDescendants];
   }

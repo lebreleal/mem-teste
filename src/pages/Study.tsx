@@ -11,6 +11,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStudySession } from '@/hooks/useStudySession';
+import type { StudyCard, DeckStudyConfig } from '@/types/study';
 import { useEnergy } from '@/hooks/useEnergy';
 import { getNextReadyIndex, parseStepToMinutes, extractImageUrls } from '@/lib/studyUtils';
 import { useAIModel } from '@/hooks/useAIModel';
@@ -64,10 +65,10 @@ const Study = () => {
   }, [deckId, folderId, navigate, queryClient]);
   const TUTOR_COST = getCost(BASE_TUTOR_COST);
 
-  const getCardDeckConfig = useCallback((_card: any) => deckConfig ?? {}, [deckConfig]);
+  const getCardDeckConfig = useCallback((_card: StudyCard) => deckConfig, [deckConfig]);
 
   // Local queue state
-  const [localQueue, setLocalQueue] = useState<any[]>([]);
+  const [localQueue, setLocalQueue] = useState<StudyCard[]>([]);
   const [queueInitialized, setQueueInitialized] = useState(false);
   const [reviewCount, setReviewCount] = useState(0);
   const [cardKey, setCardKey] = useState(0);
