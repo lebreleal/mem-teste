@@ -104,6 +104,7 @@ const DashboardModals = (props: DashboardModalsProps) => {
                   <p>Ideal para transformar anotações, slides ou apostilas em flashcards rapidamente.</p>
                 </>
               )}
+            </div>
             </DialogDescription>
           </DialogHeader>
         </DialogContent>
