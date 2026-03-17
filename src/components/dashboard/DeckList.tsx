@@ -211,8 +211,45 @@ const DeckList = ({
         );
       })}
 
-      {/* Decks (Matérias) with accordion */}
-      {deckDrag.displayItems.map(deck => {
+      {/* Matérias */}
+      {deckDrag.displayItems.filter(d => {
+        const subs = deckRowProps.getSubDecks(d.id);
+        return subs.length > 0 || (d.total_cards === 0 && deckRowProps.expandedDecks.has(d.id));
+      }).map(deck => {
+        const dragHandlers = deckDrag.getHandlers(deck);
+        return (
+          <DeckRow
+            key={deck.id}
+            deck={deck}
+            onRename={onRenameDeck}
+            onMove={onMoveDeck}
+            onArchive={onArchiveDeck}
+            onDelete={onDeleteDeck}
+            onDetachCommunityDeck={onDetachCommunityDeck}
+            navigateToCommunity={navigateToCommunity}
+            dragHandlers={dragHandlers}
+            hasPendingUpdate={decksWithPendingUpdates?.has(deck.id)}
+            expandedAccordionId={expandedAccordionId}
+            onAccordionToggle={handleAccordionToggle}
+            questionCountMap={questionCountMap}
+            {...deckRowProps}
+          />
+        );
+      })}
+
+      {/* Separator between matérias and loose decks */}
+      {(() => {
+        const hasMaterias = deckDrag.displayItems.some(d => deckRowProps.getSubDecks(d.id).length > 0);
+        const hasLoose = deckDrag.displayItems.some(d => deckRowProps.getSubDecks(d.id).length === 0 && d.name !== '📕 Caderno de Erros');
+        return hasMaterias && hasLoose ? <div className="border-t border-border/30 mx-4 my-1" /> : null;
+      })()}
+
+      {/* Loose decks */}
+      {deckDrag.displayItems.filter(d => {
+        const subs = deckRowProps.getSubDecks(d.id);
+        const isEmptyMateria = subs.length === 0 && d.total_cards === 0 && deckRowProps.expandedDecks.has(d.id);
+        return subs.length === 0 && !isEmptyMateria;
+      }).map(deck => {
         const dragHandlers = deckDrag.getHandlers(deck);
         return (
           <DeckRow
