@@ -191,7 +191,7 @@ export async function submitTurmaRating(turmaId: string, userId: string, rating:
 export async function fetchAllTurmaRatings(turmaId: string) {
   const { data: ratings } = await supabase
     .from('turma_ratings')
-    .select('*')
+    .select('id, turma_id, user_id, rating, comment, created_at')
     .eq('turma_id', turmaId)
     .order('created_at', { ascending: false });
   if (!ratings || ratings.length === 0) return [];

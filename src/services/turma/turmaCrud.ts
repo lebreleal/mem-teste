@@ -87,7 +87,7 @@ export async function fetchDiscoverTurmas(_userId: string, searchQuery: string):
   // Only published/public Salas
   const { data: publicTurmas } = await supabase
     .from('turmas')
-    .select('*')
+    .select('id, name, description, owner_id, is_private, cover_image_url, created_at, updated_at, subscription_price, share_slug, avg_rating, rating_count')
     .or('is_private.eq.false,share_slug.not.is.null')
     .order('created_at', { ascending: false })
     .limit(200);

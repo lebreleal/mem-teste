@@ -140,7 +140,7 @@ export async function fetchClozeSiblings(deckIds: string[], frontContent: string
   const results: CardRow[] = [];
   for (let i = 0; i < deckIds.length; i += IN_BATCH) {
     const batch = deckIds.slice(i, i + IN_BATCH);
-    const { data, error } = await supabase.from('cards').select('*').in('deck_id', batch).eq('card_type', 'cloze').eq('front_content', frontContent);
+    const { data, error } = await supabase.from('cards').select(CARD_COLS).in('deck_id', batch).eq('card_type', 'cloze').eq('front_content', frontContent);
     if (error) throw error;
     if (data) results.push(...(data as CardRow[]));
   }

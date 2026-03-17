@@ -22,7 +22,7 @@ export class SupabaseCardRepository implements ICardRepository {
   }
 
   async findMany(filter: CardFilter, limit = 200, offset = 0): Promise<CardPage> {
-    let query = supabase.from('cards').select('*', { count: 'exact' });
+    let query = supabase.from('cards').select(CARD_COLS, { count: 'exact' });
 
     if (filter.deckId) query = query.eq('deck_id', filter.deckId);
     if (filter.deckIds?.length) query = query.in('deck_id', filter.deckIds);

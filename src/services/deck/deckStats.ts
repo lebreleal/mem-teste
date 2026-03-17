@@ -17,7 +17,7 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
     while (hasMore) {
       const { data, error } = await supabase
         .from('decks')
-        .select('*')
+        .select('id, name, parent_deck_id, folder_id, user_id, daily_new_limit, daily_review_limit, algorithm_mode, learning_steps, requested_retention, max_interval, interval_modifier, easy_bonus, easy_graduating_interval, shuffle_cards, is_live_deck, source_turma_deck_id, source_listing_id, bury_siblings, bury_new_siblings, bury_review_siblings, bury_learning_siblings, is_archived, is_public, is_free_in_community, community_id, sort_order, allow_duplication, synced_at, created_at, updated_at')
         .eq('user_id', userId)
         .order('sort_order', { ascending: true })
         .order('created_at', { ascending: false })
