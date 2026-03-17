@@ -55,72 +55,71 @@ export const CardEditorDialog = ({
   const canImprove = !hasOcclusionImage;
 
   return (
-    <>
-      <Dialog open={editorOpen && !occlusionModalOpen} onOpenChange={open => { if (!open) { setEditorOpen(false); resetForm(); } }}>
-        <DialogContent className="max-h-[85dvh] sm:max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="font-display">
-              {editingId ? 'Editar Cartão' : 'Novo Cartão'}
-            </DialogTitle>
-          </DialogHeader>
-          <CardEditorForm
-            front={front}
-            onFrontChange={setFront}
-            back={back}
-            onBackChange={setBack}
-            cardType={undefined}
-            mcOptions={mcOptions}
-            onMcOptionsChange={setMcOptions}
-            mcCorrectIndex={mcCorrectIndex}
-            onMcCorrectIndexChange={setMcCorrectIndex}
-            occlusionImageUrl={occlusionImageUrl}
-            onOpenOcclusion={() => setOcclusionModalOpen(true)}
-            onRemoveOcclusion={() => {
-              try {
-                const d = JSON.parse(front);
-                setFront(d.frontText || '');
-              } catch { setFront(''); }
-            }}
-            onImprove={canImprove ? handleImprove : undefined}
-            isImproving={isImproving}
-            onAICreate={handleAICreate}
-            isAICreating={isAICreating}
-            onSave={() => handleSave(false)}
-            onSaveAndAdd={!editingId ? () => handleSave(true) : undefined}
-            onCancel={() => { setEditorOpen(false); resetForm(); }}
-            isSaving={isSaving}
-            extraContent={editingId ? <CardTagEditor cardId={editingId} /> : undefined}
-          />
-        </DialogContent>
-      </Dialog>
-
-      {/* Occlusion Editor — modal over modal with padding to show parent behind */}
-      {occlusionModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8 lg:p-12">
-          {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={() => setOcclusionModalOpen(false)} />
-          {/* Modal — NOT fullscreen, capped size with visible padding */}
-          <div className="relative bg-background rounded-2xl border shadow-2xl w-full max-w-4xl max-h-[calc(100dvh-32px)] sm:max-h-[calc(100dvh-64px)] lg:max-h-[calc(100dvh-96px)] flex flex-col overflow-hidden"
-               style={{ height: 'auto', minHeight: '50vh' }}>
-            <OcclusionEditor
-              initialFront={front}
-              onSave={(frontContent) => {
-                try {
-                  const existing = JSON.parse(front);
-                  if (existing.frontText) {
-                    const newData = JSON.parse(frontContent);
-                    newData.frontText = existing.frontText;
-                    setFront(JSON.stringify(newData));
-                  } else { setFront(frontContent); }
-                } catch { setFront(frontContent); }
-                setOcclusionModalOpen(false);
-              }}
-              onCancel={() => setOcclusionModalOpen(false)}
-              isSaving={false}
-            />
+    <Dialog open={editorOpen} onOpenChange={open => { if (!open) { setEditorOpen(false); resetForm(); } }}>
+      <DialogContent className={`relative overflow-hidden p-0 ${occlusionModalOpen ? 'sm:max-w-5xl max-h-[92dvh]' : 'sm:max-w-2xl max-h-[85dvh]'}`}>
+        <div className="relative">
+          <div className={`transition-all ${occlusionModalOpen ? 'pointer-events-none select-none blur-[1px] scale-[0.985]' : ''}`}>
+            <div className={`${occlusionModalOpen ? 'max-h-[92dvh] overflow-hidden' : 'max-h-[85dvh] overflow-y-auto'} p-6`}>
+              <DialogHeader>
+                <DialogTitle className="font-display">
+                  {editingId ? 'Editar Cartão' : 'Novo Cartão'}
+                </DialogTitle>
+              </DialogHeader>
+              <CardEditorForm
+                front={front}
+                onFrontChange={setFront}
+                back={back}
+                onBackChange={setBack}
+                cardType={undefined}
+                mcOptions={mcOptions}
+                onMcOptionsChange={setMcOptions}
+                mcCorrectIndex={mcCorrectIndex}
+                onMcCorrectIndexChange={setMcCorrectIndex}
+                occlusionImageUrl={occlusionImageUrl}
+                onOpenOcclusion={() => setOcclusionModalOpen(true)}
+                onRemoveOcclusion={() => {
+                  try {
+                    const d = JSON.parse(front);
+                    setFront(d.frontText || '');
+                  } catch { setFront(''); }
+                }}
+                onImprove={canImprove ? handleImprove : undefined}
+                isImproving={isImproving}
+                onAICreate={handleAICreate}
+                isAICreating={isAICreating}
+                onSave={() => handleSave(false)}
+                onSaveAndAdd={!editingId ? () => handleSave(true) : undefined}
+                onCancel={() => { setEditorOpen(false); resetForm(); }}
+                isSaving={isSaving}
+                extraContent={editingId ? <CardTagEditor cardId={editingId} /> : undefined}
+              />
+            </div>
           </div>
+
+          {occlusionModalOpen && (
+            <div className="absolute inset-0 z-30 flex items-center justify-center bg-background/40 backdrop-blur-[2px] p-3 sm:p-5 lg:p-6">
+              <div className="relative flex w-full max-w-4xl flex-col overflow-hidden rounded-[1.5rem] border border-border bg-background shadow-2xl max-h-[78dvh] min-h-[60vh]">
+                <OcclusionEditor
+                  initialFront={front}
+                  onSave={(frontContent) => {
+                    try {
+                      const existing = JSON.parse(front);
+                      if (existing.frontText) {
+                        const newData = JSON.parse(frontContent);
+                        newData.frontText = existing.frontText;
+                        setFront(JSON.stringify(newData));
+                      } else { setFront(frontContent); }
+                    } catch { setFront(frontContent); }
+                    setOcclusionModalOpen(false);
+                  }}
+                  onCancel={() => setOcclusionModalOpen(false)}
+                  isSaving={false}
+                />
+              </div>
+            </div>
+          )}
         </div>
-      )}
-    </>
+      </DialogContent>
+    </Dialog>
   );
 };

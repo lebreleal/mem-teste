@@ -13,7 +13,7 @@ import { compressImage } from '@/lib/imageUtils';
 import { useToast } from '@/hooks/use-toast';
 import {
   IconRect, IconPolygon, IconFreehand, IconEraser, IconEyeOpen, IconEyeClosed,
-  IconSparkle, IconUpload, IconClose, IconCheck, IconInfo, IconTrash, IconCursor, IconHand,
+  IconSparkle, IconUpload, IconClose, IconCheck, IconTrash, IconCursor, IconHand,
 } from '@/components/icons';
 
 type Tool = 'select' | 'rect' | 'polygon' | 'freehand' | 'eraser' | 'hand';
@@ -49,6 +49,10 @@ const COLORS = [
 ];
 
 const getColorObj = (fill: string) => COLORS.find(c => c.fill === fill) || COLORS[0];
+const cloneShape = (shape: OcclusionShape): OcclusionShape => ({
+  ...shape,
+  points: shape.points?.map(point => ({ ...point })),
+});
 
 const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: OcclusionEditorProps) => {
   const { user } = useAuth();
@@ -59,11 +63,9 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
   const [uploading, setUploading] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [tool, setTool] = useState<Tool>('rect');
-  const [prevDrawTool, setPrevDrawTool] = useState<Tool>('rect');
   const [imgLoaded, setImgLoaded] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [previewOpaque, setPreviewOpaque] = useState(true);
-  const [colorInfoOpen, setColorInfoOpen] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [imgSize, setImgSize] = useState({ w: 0, h: 0 });
@@ -71,8 +73,11 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
   const [startPos, setStartPos] = useState<{ x: number; y: number } | null>(null);
   const [currentRect, setCurrentRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [currentPoints, setCurrentPoints] = useState<{ x: number; y: number }[]>([]);
+  const [polygonPreviewPoint, setPolygonPreviewPoint] = useState<{ x: number; y: number } | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [hoveredSelectableId, setHoveredSelectableId] = useState<string | null>(null);
   const [shapeColor, setShapeColor] = useState(COLORS[0].fill);
+  const [dragging, setDragging] = useState<{ startX: number; startY: number; origShape: OcclusionShape } | null>(null);
   const [resizing, setResizing] = useState<{ corner: string; startX: number; startY: number; origShape: OcclusionShape } | null>(null);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [panning, setPanning] = useState(false);
