@@ -187,7 +187,7 @@ const DeckSettings = () => {
   }, [deckId, user]);
 
   // ── Handlers ────────────────────────────────────────────────
-  const saveSettings = async (updates: Record<string, any>) => {
+  const saveSettings = async (updates: Record<string, string | number | boolean | string[] | null>) => {
     if (!deckId) return;
     setSaving(true);
     try {
