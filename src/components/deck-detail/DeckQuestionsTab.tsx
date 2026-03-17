@@ -1475,12 +1475,8 @@ const DeckQuestionsTab = ({
   const { data: questions = prevQuestionsRef.current, isLoading } = useQuery({
     queryKey: ['deck-questions', effectiveDeckId, hierarchyKey],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('deck_questions' as any).select('*')
-        .in('deck_id', hierarchyDeckIds)
-        .order('sort_order', { ascending: true });
-      if (error) throw error;
-      const result = (data ?? []).map((q: any) => {
+      const rawData = await fetchDeckQuestions(hierarchyDeckIds);
+      const result = (rawData).map((q: any) => {
         let opts: string[] = [];
         if (Array.isArray(q.options)) {
           opts = q.options.map((o: any) => typeof o === 'string' ? o : (o?.text || o?.label || JSON.stringify(o)));
