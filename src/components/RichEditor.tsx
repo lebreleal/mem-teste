@@ -515,7 +515,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
                         <ClipboardPaste className="h-4 w-4" /> Colar da área de transferência
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={onOcclusionAttach} className="gap-2">
-                        <Paperclip className="h-4 w-4" /> Anexar arquivo
+                        <ImagePlus className="h-4 w-4" /> Anexar imagem
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
