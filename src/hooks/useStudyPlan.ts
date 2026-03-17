@@ -222,7 +222,8 @@ export function useStudyPlan(options?: { full?: boolean }) {
     queryKey: ['plan-metrics', userId, expandedDeckIds],
     queryFn: async () => {
       if (expandedDeckIds.length === 0) return { total_new: 0, total_review: 0, total_learning: 0 };
-      const { data, error } = await supabase.rpc('get_plan_metrics' as any, {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC not in generated types
+      const { data, error } = await (supabase.rpc as any)('get_plan_metrics', {
         p_user_id: userId,
         p_deck_ids: expandedDeckIds,
       });
