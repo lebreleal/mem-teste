@@ -869,17 +869,7 @@ const PublicDeckPreview = () => {
   // Fetch exams linked to same lesson as this deck
   const { data: deckExams = [] } = useQuery({
     queryKey: ['turma-deck-exams', turmaDeck?.turma_id, turmaDeck?.lesson_id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('turma_exams')
-        .select('id, title, description, total_questions, time_limit_seconds, created_at, is_published')
-        .eq('turma_id', turmaDeck!.turma_id)
-        .eq('lesson_id', turmaDeck!.lesson_id!)
-        .eq('is_published', true)
-        .order('sort_order', { ascending: true });
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => fetchTurmaDeckExams(turmaDeck!.turma_id, turmaDeck!.lesson_id!),
     enabled: !!turmaDeck?.turma_id && !!turmaDeck?.lesson_id,
   });
 
