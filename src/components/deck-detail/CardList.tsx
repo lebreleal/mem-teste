@@ -28,6 +28,7 @@ import SuggestCorrectionModal from '@/components/SuggestCorrectionModal';
 import { shortDisplayId } from '@/lib/shortId';
 
 const PAGE_SIZE_UI = 50;
+const GROUP_ROW_HEIGHT = 120;
 
 /** Batch-fetch tags for visible card IDs only. */
 const useCardTagsBatch = (cardIds: string[]) => {
