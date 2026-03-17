@@ -46,11 +46,18 @@ export function percentile(sorted: number[], p: number): number {
   return sorted[Math.max(0, idx)];
 }
 
-export function filterDayMap(dayMap: Record<string, any>, range: { from: Date | null; to: Date | null }) {
+/** Shape of a single day entry from activity breakdown */
+export interface DayEntry {
+  cards: number;
+  minutes: number;
+  newCards?: number;
+}
+
+export function filterDayMap(dayMap: Record<string, DayEntry>, range: { from: Date | null; to: Date | null }) {
   if (!range.from) return dayMap;
   const fromStr = format(range.from, 'yyyy-MM-dd');
   const toStr = range.to ? format(range.to, 'yyyy-MM-dd') : '9999-12-31';
-  const filtered: Record<string, any> = {};
+  const filtered: Record<string, DayEntry> = {};
   for (const [key, val] of Object.entries(dayMap)) {
     if (key >= fromStr && key <= toStr) {
       filtered[key] = val;
