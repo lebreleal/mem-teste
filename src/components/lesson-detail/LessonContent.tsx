@@ -335,7 +335,7 @@ const LessonContent = ({
           ))}
 
           {/* Files (always above decks) */}
-          {currentFiles.map((file: any) => {
+          {currentFiles.map((file) => {
             const Icon = getFileIcon(file.file_type);
             const isImage = file.file_type?.startsWith('image/');
             const isPdf = file.file_type?.includes('pdf');
