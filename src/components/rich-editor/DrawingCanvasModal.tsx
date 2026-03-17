@@ -404,14 +404,7 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
         <div ref={containerRef} className="flex-1 min-h-0 bg-white relative overflow-hidden">
           <canvas
             ref={canvasRef}
-            className="absolute inset-0 w-full h-full touch-none cursor-crosshair"
-            onMouseDown={startDraw}
-            onMouseMove={draw}
-            onMouseUp={endDraw}
-            onMouseLeave={endDraw}
-            onTouchStart={startDraw}
-            onTouchMove={draw}
-            onTouchEnd={endDraw}
+            className="absolute inset-0 touch-none cursor-crosshair"
           />
         </div>
 
