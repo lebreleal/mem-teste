@@ -117,14 +117,7 @@ const DeckSettings = () => {
 
   const studyPlansQuery = useQuery({
     queryKey: ['study-plans-lock', user?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('study_plans')
-        .select('deck_ids')
-        .eq('user_id', user!.id);
-      if (error) throw error;
-      return (data ?? []) as Array<{ deck_ids: string[] | null }>;
-    },
+    queryFn: () => fetchStudyPlanDeckIds(user!.id),
     enabled: !!user,
     staleTime: 30_000,
   });
