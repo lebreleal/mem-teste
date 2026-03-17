@@ -511,14 +511,14 @@ export async function fetchActivityBreakdown(userId: string, days = 365, tzOffse
 }
 
 /** Fetch hourly review breakdown. */
-export async function fetchHourlyBreakdown(userId: string, days = 30, tzOffsetMinutes = -180) {
+export async function fetchHourlyBreakdown(userId: string, days = 30, tzOffsetMinutes = -180): Promise<HourlyBreakdownRow[]> {
   const { data, error } = await supabase.rpc('get_hourly_breakdown' as any, {
     p_user_id: userId,
     p_tz_offset_minutes: tzOffsetMinutes,
     p_days: days,
   });
   if (error) throw error;
-  return (data as any[]) ?? [];
+  return (data as HourlyBreakdownRow[]) ?? [];
 }
 
 /** Fetch retention over time (weekly buckets). */
