@@ -6,6 +6,8 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { Tag } from '@/types/tag';
 
+const TAG_COLS = 'id, name, slug, description, parent_id, is_official, usage_count, created_by, created_at, merged_into_id, synonyms' as const;
+
 // ---- Hierarchy helpers ----
 
 export interface TagTreeNode extends Tag {
