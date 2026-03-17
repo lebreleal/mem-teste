@@ -335,6 +335,9 @@ export const CardEditorForm = ({
 
       {extraContent}
 
+      {/* Cartões invertidos */}
+      <ReversedCardsToggle />
+
       {/* Bottom bar: image occlusion (left) + actions (right) */}
       <div className="flex items-end gap-2 pt-2">
         {/* Image occlusion – bottom left */}
