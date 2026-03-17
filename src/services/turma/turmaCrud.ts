@@ -404,6 +404,7 @@ export async function publishDecksToTurma(turmaId: string, userId: string, deckI
   const existingIds = new Set((existingTurmaDecks ?? []).map(td => td.deck_id));
   const newIds = deckIds.filter(id => !existingIds.has(id));
   if (newIds.length === 0) return;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- insert typing
   await supabase.from('turma_decks').insert(
     newIds.map(id => ({
       turma_id: turmaId,
@@ -413,7 +414,7 @@ export async function publishDecksToTurma(turmaId: string, userId: string, deckI
       price_type: 'free',
       allow_download: true,
       is_published: true,
-    }) as Record<string, unknown>),
+    })) as any,
   );
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- partial update
   await supabase.from('decks').update({ is_public: true } as any).in('id', newIds);

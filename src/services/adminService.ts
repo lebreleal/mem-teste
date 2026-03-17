@@ -441,7 +441,7 @@ export async function getOrCreateTurmaFolder(userId: string, turmaId: string, tu
     .select('id').eq('user_id', userId).eq('source_turma_id', turmaId);
   if (existingFolders && existingFolders.length > 0) return existingFolders[0].id;
   const { data: newFolder } = await supabase.from('folders')
-    .insert({ user_id: userId, name: turmaName, section: 'community', source_turma_id: turmaId } as Tables<'folders'>['Insert'])
+    .insert({ user_id: userId, name: turmaName, section: 'community', source_turma_id: turmaId })
     .select('id').single();
   return newFolder?.id;
 }
