@@ -307,3 +307,149 @@ export async function fetchTurmaFolderId(userId: string, turmaId: string): Promi
     .select('id').eq('user_id', userId).eq('source_turma_id', turmaId).limit(1);
   return data?.[0]?.id;
 }
+
+// ── Admin Impersonation ──
+
+export async function adminImpersonate(targetUserId: string): Promise<{ token: string } | null> {
+  const { data, error } = await supabase.functions.invoke('admin-impersonate', {
+    body: { target_user_id: targetUserId },
+  });
+  if (error || !data?.token) return null;
+  return { token: data.token };
+}
+
+export async function verifyImpersonationToken(tokenHash: string): Promise<boolean> {
+  const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'magiclink' });
+  return !error;
+}
+
+export async function fetchProfilePremiumExpiry(userId: string): Promise<string | null> {
+  const { data } = await supabase.from('profiles').select('premium_expires_at').eq('id', userId).single();
+  return (data as any)?.premium_expires_at ?? null;
+}
+
+// ── Public Community Service ──
+
+export async function fetchTurmaBySlugOrId(slugOrId: string) {
+  const { data: bySlug } = await supabase.from('turmas').select('*').eq('share_slug', slugOrId).maybeSingle();
+  if (bySlug) return bySlug;
+  const { data: byId } = await supabase.from('turmas').select('*').eq('id', slugOrId).maybeSingle();
+  return byId;
+}
+
+export async function fetchProfileNameById(userId: string): Promise<string> {
+  const { data } = await supabase.from('profiles').select('name').eq('id', userId).single();
+  return data?.name ?? 'Criador';
+}
+
+export async function fetchTurmaMemberCount(turmaId: string): Promise<number> {
+  const { count } = await supabase.from('turma_members').select('id', { count: 'exact', head: true }).eq('turma_id', turmaId);
+  return count ?? 0;
+}
+
+export async function fetchPublishedTurmaDecks(turmaId: string) {
+  const { data: tDecks } = await supabase
+    .from('turma_decks')
+    .select('id, deck_id, is_published')
+    .eq('turma_id', turmaId)
+    .eq('is_published', true);
+  if (!tDecks || tDecks.length === 0) return [];
+
+  const deckIds = tDecks.map((d: any) => d.deck_id);
+  const { data: deckInfo } = await supabase.from('decks').select('id, name').in('id', deckIds);
+  const nameMap = new Map((deckInfo ?? []).map((d: any) => [d.id, d.name]));
+
+  const { data: countRows } = await supabase.rpc('count_cards_per_deck', { p_deck_ids: deckIds });
+  const countMap = new Map((countRows ?? []).map((r: any) => [r.deck_id, Number(r.card_count)]));
+
+  return tDecks
+    .map((td: any) => ({
+      turmaDeckId: td.id,
+      deckId: td.deck_id,
+      name: nameMap.get(td.deck_id) ?? 'Sem nome',
+      cardCount: countMap.get(td.deck_id) ?? 0,
+    }))
+    .filter((d: any) => !d.name.includes('Caderno de Erros'));
+}
+
+// ── Sala Decks (TurmaDetail) ──
+
+export async function fetchSalaDecksData(turmaId: string) {
+  const { data: turmaDecks } = await supabase
+    .from('turma_decks')
+    .select('id, deck_id, is_published')
+    .eq('turma_id', turmaId)
+    .eq('is_published', true);
+
+  if (!turmaDecks || turmaDecks.length === 0) return { turmaDecks: [], decks: [], cardCountMap: new Map() };
+
+  const rootDeckIds = turmaDecks.map((td: any) => td.deck_id);
+
+  const { data: childDecks } = await supabase
+    .from('decks')
+    .select('id')
+    .in('parent_deck_id', rootDeckIds)
+    .eq('is_archived', false);
+
+  const allDeckIds = [...rootDeckIds, ...(childDecks ?? []).map((d: any) => d.id)];
+
+  const { data: decks } = await supabase
+    .from('decks')
+    .select('*')
+    .in('id', allDeckIds);
+
+  // Fetch card stats
+  const cardCountMap = new Map<string, { total: number; mastered: number; novo: number; facil: number; bom: number; dificil: number; errei: number }>();
+  const PAGE = 1000;
+
+  for (let i = 0; i < allDeckIds.length; i += 200) {
+    const batch = allDeckIds.slice(i, i + 200);
+    let offset = 0;
+    let hasMore = true;
+    while (hasMore) {
+      const { data: cards } = await supabase
+        .from('cards')
+        .select('id, deck_id, state, difficulty')
+        .in('deck_id', batch)
+        .order('id', { ascending: true })
+        .range(offset, offset + PAGE - 1);
+      if (cards) {
+        for (const c of cards as any[]) {
+          const entry = cardCountMap.get(c.deck_id) ?? { total: 0, mastered: 0, novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
+          entry.total++;
+          entry.novo++;
+          cardCountMap.set(c.deck_id, entry);
+        }
+      }
+      hasMore = (cards?.length ?? 0) === PAGE;
+      offset += PAGE;
+    }
+  }
+
+  return { turmaDecks, decks: decks ?? [], rootDeckIds, allDeckIds, cardCountMap };
+}
+
+export async function fetchSalaQuestionCounts(deckIds: string[]): Promise<Map<string, number>> {
+  if (deckIds.length === 0) return new Map();
+  const { data } = await supabase.from('deck_questions').select('deck_id').in('deck_id', deckIds);
+  const counts = new Map<string, number>();
+  for (const row of data ?? []) {
+    counts.set(row.deck_id, (counts.get(row.deck_id) ?? 0) + 1);
+  }
+  return counts;
+}
+
+export async function insertTurmaMember(turmaId: string, userId: string) {
+  const { error } = await supabase.from('turma_members').insert({ turma_id: turmaId, user_id: userId } as any);
+  if (error) throw error;
+}
+
+export async function getOrCreateTurmaFolder(userId: string, turmaId: string, turmaName: string): Promise<string | undefined> {
+  const { data: existingFolders } = await supabase.from('folders')
+    .select('id').eq('user_id', userId).eq('source_turma_id', turmaId);
+  if (existingFolders && existingFolders.length > 0) return existingFolders[0].id;
+  const { data: newFolder } = await supabase.from('folders')
+    .insert({ user_id: userId, name: turmaName, section: 'community', source_turma_id: turmaId } as any)
+    .select('id').single();
+  return (newFolder as any)?.id;
+}
