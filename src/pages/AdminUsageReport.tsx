@@ -50,19 +50,7 @@ const calcCostUSD = (model: string, promptTokens: number, completionTokens: numb
   return (promptTokens / 1_000_000) * pricing.input + (realOutputTokens / 1_000_000) * pricing.output;
 };
 
-interface UsageEntry {
-  id: string;
-  created_at: string;
-  user_id: string;
-  user_name: string | null;
-  user_email: string | null;
-  feature_key: string;
-  model: string;
-  prompt_tokens: number;
-  completion_tokens: number;
-  total_tokens: number;
-  energy_cost: number;
-}
+// UsageEntry type imported from adminService
 
 type DatePreset = 'today' | '7d' | '30d' | 'custom';
 

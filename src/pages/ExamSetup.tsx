@@ -431,11 +431,8 @@ const ExamSetup = () => {
                         <button
                           onClick={async (e) => {
                             e.stopPropagation();
-                            const { data } = await (supabase.from('turma_exams' as any) as any)
-                              .select('turma_id')
-                              .eq('id', exam.source_turma_exam_id)
-                              .single();
-                            if (data?.turma_id) navigate(`/turmas/${data.turma_id}`);
+                            const turmaId = await fetchTurmaExamTurmaId(exam.source_turma_exam_id);
+                            if (turmaId) navigate(`/turmas/${turmaId}`);
                           }}
                           className="shrink-0 text-primary hover:text-primary/80 transition-colors"
                           title="Ver na comunidade"
