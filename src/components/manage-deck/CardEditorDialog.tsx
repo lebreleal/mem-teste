@@ -41,7 +41,6 @@ export const CardEditorDialog = ({
   resetForm, handleSave, handleImprove, handleAICreate, addMcOption, removeMcOption,
 }: CardEditorDialogProps) => {
 
-  // Check if front content has image occlusion data
   const hasOcclusionImage = (() => {
     try {
       const d = JSON.parse(front);
@@ -95,10 +94,13 @@ export const CardEditorDialog = ({
         </DialogContent>
       </Dialog>
 
-      {/* Occlusion Editor — inline overlay within same dialog area */}
+      {/* Occlusion Editor — modal over modal with visible padding */}
       {occlusionModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="bg-background rounded-lg border shadow-xl w-[95vw] max-w-2xl h-[80dvh] flex flex-col overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 lg:p-10">
+          {/* Backdrop — semi-transparent so parent modal is visible behind */}
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={() => setOcclusionModalOpen(false)} />
+          {/* Modal content — sized with padding to show parent behind */}
+          <div className="relative bg-background rounded-xl border shadow-2xl w-full max-w-3xl h-[calc(100dvh-24px)] sm:h-[calc(100dvh-48px)] lg:h-[calc(100dvh-80px)] max-h-[700px] flex flex-col overflow-hidden">
             <OcclusionEditor
               initialFront={front}
               onSave={(frontContent) => {
