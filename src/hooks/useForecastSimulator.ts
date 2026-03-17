@@ -49,7 +49,8 @@ export function useForecastSimulator(options: UseForecastSimulatorOptions) {
     queryKey: ['forecast-params', userId, deckIds],
     queryFn: async () => {
       if (!userId || deckIds.length === 0) return null;
-      const { data, error } = await supabase.rpc('get_forecast_params' as any, {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC not in generated types
+      const { data, error } = await (supabase.rpc as (fn: string, params: Record<string, unknown>) => ReturnType<typeof supabase.rpc>)('get_forecast_params', {
         p_user_id: userId,
         p_deck_ids: deckIds,
       });
