@@ -55,6 +55,8 @@ interface SalaHeroProps {
   setStudySettingsOpen: (v: boolean) => void;
   realStudyMetrics: RealStudyMetrics;
   salaDifficultyStats: { novo: number; facil: number; bom: number; dificil: number; errei: number };
+  organizeMode: boolean;
+  setOrganizeMode: (v: boolean) => void;
 }
 
 const SalaHero = ({
