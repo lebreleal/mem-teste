@@ -19,7 +19,6 @@ interface SalaInfo {
   deckCount: number;
   totalCards: number;
   masteredCards: number;
-  questionCount: number;
   dueCount: number;
   ownerName?: string;
   lastUpdated?: string;
