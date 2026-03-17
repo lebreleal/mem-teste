@@ -17,7 +17,7 @@ import {
   AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { countOverdueCards, fetchOverdueCardIds, rescheduleCards, resetOverdueCards } from '@/services/studyPlanService';
 import { formatMinutes } from './constants';
 
 // ─── "What Can I Do?" Dialog ────────────────────────────
