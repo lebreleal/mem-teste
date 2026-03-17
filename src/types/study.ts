@@ -60,6 +60,6 @@ export interface DeckStudyConfig {
 export interface StudyQueueResult {
   cards: StudyCard[];
   algorithmMode: string;
-  deckConfig: DeckStudyConfig;
+  deckConfig: DeckStudyConfig | undefined;
   isLiveDeck: boolean;
 }
