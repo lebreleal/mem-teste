@@ -279,7 +279,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           className={`group flex items-center gap-3 px-4 py-4 cursor-pointer transition-all hover:bg-muted/50 ${dragHandlers ? dragHandlers.className : ''}`}
           onClick={handleClick}
         >
-          <IconDeck className={`h-5 w-5 shrink-0 ${isErrorDeck ? 'text-destructive' : 'text-muted-foreground'}`} />
+          <IconDeck solid={isErrorDeck} className={`h-5 w-5 shrink-0 ${isErrorDeck ? 'text-destructive' : 'text-muted-foreground'}`} />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <h3 className={`font-display font-semibold truncate ${isErrorDeck ? 'text-destructive' : 'text-foreground'}`}>{displayName}</h3>
