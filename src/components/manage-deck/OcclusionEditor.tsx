@@ -39,8 +39,8 @@ const IconPolygon = ({ active }: { active?: boolean }) => (
   </svg>
 );
 const IconFreehand = ({ active }: { active?: boolean }) => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
-    <path d="M14.78 10.746 13 11l.254-1.78a1 1 0 0 1 .283-.565l3.65-3.65 1.807 1.809-3.65 3.649a1 1 0 0 1-.565.283M19.704 6.104l-1.808-1.808 1.026-1.026a1 1 0 0 1 1.414 0l.394.394a1 1 0 0 1 0 1.414zM11.873 11.354c-1.267-1.35-2.71-2.42-4.034-2.934-.66-.257-1.366-.405-2.039-.31-.714.1-1.35.473-1.756 1.147-.443.735-.579 1.498-.465 2.241.11.718.441 1.357.833 1.899.746 1.035 1.867 1.93 2.675 2.576l.065.051q.415.33.763.605c.835.659 1.397 1.102 1.771 1.523.217.244.31.42.352.558.026.09.041.2.026.35h-.032c-.343-.006-.892-.137-1.582-.413-1.366-.548-2.897-1.509-3.743-2.354a1 1 0 0 0-1.414 1.415c1.078 1.076 2.855 2.17 4.413 2.795.772.31 1.588.544 2.293.556.353.006.766-.042 1.142-.244.415-.223.716-.598.832-1.083.129-.542.136-1.07-.018-1.59-.152-.511-.437-.939-.774-1.318-.503-.567-1.256-1.16-2.12-1.839q-.322-.253-.66-.523c-.868-.693-1.792-1.436-2.367-2.235-.28-.388-.433-.73-.478-1.03-.042-.275-.004-.567.201-.908.07-.115.152-.175.321-.199.211-.03.556.007 1.037.194.958.372 2.161 1.225 3.3 2.439a1 1 0 1 0 1.458-1.369" />
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.5 : 2} strokeLinecap="round" className="h-4 w-4">
+    <path d="M7.5 18s6.269-1.673 9.5-7c1.601-2.64-6.5-.5-8-3-1.16-2.5 8-3 8-3" />
   </svg>
 );
 const IconMove = () => (
@@ -412,81 +412,112 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
     { id: 'select', icon: <IconMove />, label: 'Mover' },
   ];
 
-  // Count unique colors (each color = 1 card)
-  const uniqueColors = new Set(shapes.map(s => s.color || COLORS[0].fill));
-  const cardCount = uniqueColors.size;
+  // Count unique colors used
+  const usedColorFills = new Set(shapes.map(s => s.color || COLORS[0].fill));
+  const cardCount = usedColorFills.size;
+
+  // Progressive colors: show used colors + 1 next available
+  const visibleColors = (() => {
+    const used = COLORS.filter(c => usedColorFills.has(c.fill));
+    const unused = COLORS.filter(c => !usedColorFills.has(c.fill));
+    // Always show at least the active color + 1 extra
+    const result = [...used];
+    if (!result.find(c => c.fill === shapeColor)) {
+      const active = COLORS.find(c => c.fill === shapeColor);
+      if (active) result.push(active);
+    }
+    // Add next unused color if there are more
+    const nextUnused = unused.find(c => !result.includes(c));
+    if (nextUnused) result.push(nextUnused);
+    // Sort by original COLORS order
+    return result.sort((a, b) => COLORS.indexOf(a) - COLORS.indexOf(b));
+  })();
 
   return (
-    <div className="space-y-2.5">
-      {/* Toolbar + Colors row */}
-      <div className="flex items-center gap-1 flex-wrap rounded-xl border border-border bg-muted/30 p-1.5">
+    <div className="flex flex-col gap-2">
+      {/* Compact toolbar row */}
+      <div className="flex items-center gap-0.5">
+        {/* Drawing tools */}
         {tools.map(t => (
-          <Button
+          <button
             key={t.id}
-            variant={tool === t.id ? 'default' : 'ghost'}
-            size="icon"
-            className="h-8 w-8"
+            className={`h-8 w-8 flex items-center justify-center rounded-lg transition-colors ${
+              tool === t.id
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+            }`}
             onClick={() => { setTool(t.id); setSelectedId(null); setCurrentPoints([]); }}
             title={t.label}
           >
             {t.icon}
-          </Button>
+          </button>
         ))}
 
-        <div className="h-5 w-px bg-border mx-0.5" />
+        <div className="h-4 w-px bg-border mx-1" />
 
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setZoom(z => Math.max(0.3, z - 0.25))} title="Reduzir">
+        {/* Zoom */}
+        <button className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent" onClick={() => setZoom(z => Math.max(0.3, z - 0.25))} title="Reduzir">
           <IconZoomOut />
-        </Button>
-        <span className="text-xs text-muted-foreground w-10 text-center select-none font-medium">{Math.round(zoom * 100)}%</span>
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setZoom(z => Math.min(3, z + 0.25))} title="Ampliar">
+        </button>
+        <span className="text-[10px] text-muted-foreground w-8 text-center select-none tabular-nums">{Math.round(zoom * 100)}%</span>
+        <button className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent" onClick={() => setZoom(z => Math.min(3, z + 0.25))} title="Ampliar">
           <IconZoomIn />
-        </Button>
+        </button>
 
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Delete selected */}
         {selectedId && (
-          <>
-            <div className="h-5 w-px bg-border mx-0.5" />
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={deleteSelected} title="Excluir seleção">
-              <IconTrash />
-            </Button>
-          </>
+          <button className="h-7 w-7 flex items-center justify-center rounded-md text-destructive hover:bg-destructive/10" onClick={deleteSelected} title="Excluir">
+            <IconTrash />
+          </button>
         )}
 
-        <Button variant="ghost" size="sm" onClick={() => { setShapes([]); setSelectedId(null); setCurrentPoints([]); }} className="gap-1 text-xs h-8 ml-auto">
+        {/* Clear */}
+        <button
+          className="h-7 flex items-center gap-1 px-2 rounded-md text-xs text-muted-foreground hover:bg-accent"
+          onClick={() => { setShapes([]); setSelectedId(null); setCurrentPoints([]); }}
+        >
           <IconClear /> Limpar
-        </Button>
+        </button>
       </div>
 
-      {/* Color palette */}
-      <div className="flex items-center gap-1.5">
-        {COLORS.map(c => (
-          <button
-            key={c.label}
-            className="h-5.5 w-5.5 rounded-full border-2 transition-transform hover:scale-110 focus:outline-none"
-            style={{
-              backgroundColor: c.fill,
-              borderColor: shapeColor === c.fill ? 'hsl(var(--foreground))' : 'transparent',
-              width: 22, height: 22,
-              transform: shapeColor === c.fill ? 'scale(1.15)' : undefined,
-            }}
-            onClick={() => setShapeColor(c.fill)}
-            title={c.label}
-          />
-        ))}
+      {/* Color dots — progressive */}
+      <div className="flex items-center gap-1">
+        {visibleColors.map(c => {
+          const isActive = shapeColor === c.fill;
+          return (
+            <button
+              key={c.label}
+              className={`rounded-full transition-all focus:outline-none ${isActive ? 'ring-2 ring-offset-1 ring-foreground/40' : 'hover:scale-110'}`}
+              style={{
+                backgroundColor: c.fill,
+                width: isActive ? 24 : 20,
+                height: isActive ? 24 : 20,
+              }}
+              onClick={() => setShapeColor(c.fill)}
+              title={c.label}
+            />
+          );
+        })}
+        {visibleColors.length < COLORS.length && (
+          <span className="text-[10px] text-muted-foreground/50 ml-1">+{COLORS.length - visibleColors.length}</span>
+        )}
       </div>
 
       {/* Polygon hint */}
       {tool === 'polygon' && currentPoints.length > 0 && (
-        <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-1.5">
-          Clique para adicionar vértices. Clique perto do primeiro ponto para fechar o polígono ({currentPoints.length} ponto{currentPoints.length !== 1 ? 's' : ''}).
+        <p className="text-[11px] text-muted-foreground bg-muted/50 rounded-lg px-2.5 py-1">
+          Clique para vértices. Feche no primeiro ponto. ({currentPoints.length} pt{currentPoints.length !== 1 ? 's' : ''})
         </p>
       )}
 
-      {/* Image + Shapes overlay */}
+      {/* Image canvas */}
       <div
         ref={containerRef}
-        className="relative rounded-xl border border-border overflow-auto bg-muted/20"
-        style={{ touchAction: 'none', maxHeight: 'min(55dvh, 400px)' }}
+        className="relative rounded-xl border border-border overflow-auto bg-muted/10"
+        style={{ touchAction: 'none', maxHeight: 'min(50dvh, 380px)' }}
       >
         <div
           className="occlusion-img-wrapper relative inline-block"
@@ -535,7 +566,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
                 top: currentRect.y * scale,
                 width: currentRect.w * scale,
                 height: currentRect.h * scale,
-                backgroundColor: 'rgba(59,130,246,0.15)',
+                backgroundColor: shapeColor.replace(/[\d.]+\)$/, '0.15)'),
                 borderRadius: 4,
               }}
             />
@@ -559,27 +590,27 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
         </div>
       </div>
 
-      {/* Status + info */}
-      <div className="space-y-1.5">
-        <p className="text-xs text-muted-foreground">
-          {shapes.length} área{shapes.length !== 1 ? 's' : ''} marcada{shapes.length !== 1 ? 's' : ''}.
-          {selectedId && <span className="text-primary ml-2 font-medium">Seleção ativa — Delete para remover</span>}
-        </p>
-        <p className="text-[11px] text-muted-foreground/70 leading-snug">
-          💡 Mesma cor = mesmo cartão. Cores diferentes geram cartões separados. No estudo, todas as oclusões aparecem em azul.
-        </p>
-      </div>
+      {/* Status line */}
+      <p className="text-[11px] text-muted-foreground leading-snug">
+        {shapes.length} área{shapes.length !== 1 ? 's' : ''} marcada{shapes.length !== 1 ? 's' : ''}.
+        {selectedId && <span className="text-primary font-medium ml-1">· Delete p/ remover</span>}
+      </p>
 
-      {/* Actions */}
-      <div className="flex items-center gap-2">
+      {/* Info notice */}
+      <p className="text-[10px] text-muted-foreground/60 leading-snug">
+        💡 Mesma cor = mesmo cartão. Cores diferentes = cartões separados. No estudo, oclusões aparecem em azul.
+      </p>
+
+      {/* Bottom actions */}
+      <div className="flex items-center gap-2 pt-0.5">
         {onRemoveImage && (
-          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive gap-1.5 text-xs" onClick={onRemoveImage}>
+          <button className="inline-flex items-center gap-1 text-[11px] text-destructive hover:text-destructive/80 font-medium" onClick={onRemoveImage}>
             <IconImageOff /> Remover imagem
-          </Button>
+          </button>
         )}
         <div className="flex-1" />
-        <Button variant="outline" size="sm" className="rounded-xl" onClick={onCancel}>Cancelar</Button>
-        <Button size="sm" className="rounded-xl" onClick={handleSave} disabled={isSaving || shapes.length === 0}>
+        <Button variant="outline" size="sm" className="h-8 rounded-xl text-xs" onClick={onCancel}>Cancelar</Button>
+        <Button size="sm" className="h-8 rounded-xl text-xs" onClick={handleSave} disabled={isSaving || shapes.length === 0}>
           {isSaving ? 'Salvando...' : `Salvar (${cardCount})`}
         </Button>
       </div>
