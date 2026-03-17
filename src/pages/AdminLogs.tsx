@@ -72,8 +72,8 @@ ${JSON.stringify(log.metadata, null, 2)}
       await deleteOldErrorLogs(30);
       toast({ title: "Logs antigos removidos" });
       fetchLogs();
-    } catch (err: any) {
-      toast({ title: "Erro", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      toast({ title: "Erro", description: err instanceof Error ? err.message : 'Erro desconhecido', variant: "destructive" });
     }
   };
 
