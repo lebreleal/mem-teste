@@ -12,7 +12,7 @@ import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, Save, Loader2, Bot, ChevronRight, RotateCcw, Users, Settings, Volume2, Play, BarChart3, Tag } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { getAuthToken } from '@/services/adminService';
 import { useToast } from '@/hooks/use-toast';
 
 const PLACEHOLDER_MAP: Record<string, string[]> = {
