@@ -410,15 +410,15 @@ const ContentTab = () => {
 
   // ── Count attachments (files + exams) recursively in a folder ──
   const getFolderAttachmentCount = (folderId: string): number => {
-    const folderDecks = turmaDecks.filter((d: any) => d.subject_id === folderId && (isAdmin || d.is_published !== false));
+    const folderDecks = turmaDecks.filter(d => d.subject_id === folderId && (isAdmin || d.is_published !== false));
     let count = 0;
-    folderDecks.forEach((d: any) => {
+    folderDecks.forEach(d => {
       if (d.lesson_id) {
         count += (fileCountsByLesson[d.lesson_id] || 0) + (examCountsByLesson[d.lesson_id] || 0);
       }
     });
-    const childFolders = subjects.filter((s: any) => s.parent_id === folderId);
-    return count + childFolders.reduce((sum: number, cf: any) => sum + getFolderAttachmentCount(cf.id), 0);
+    const childFolders = subjects.filter(s => s.parent_id === folderId);
+    return count + childFolders.reduce((sum, cf) => sum + getFolderAttachmentCount(cf.id), 0);
   };
 
   // ── Current folder's decks (when tag is active, search across ALL folders) ──
