@@ -186,8 +186,6 @@ const LessonDetail = () => {
   const [editPrice, setEditPrice] = useState('');
   const [editAllowDownload, setEditAllowDownload] = useState(false);
   const [previewDeck, setPreviewDeck] = useState<any>(null);
-  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
-  const [pdfPreviewRestricted, setPdfPreviewRestricted] = useState(false);
 
   const { data: members = [] } = useTurmaMembers(turmaId!);
   const currentMember = members.find(m => m.user_id === user?.id);
