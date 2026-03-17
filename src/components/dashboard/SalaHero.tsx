@@ -239,7 +239,7 @@ const SalaHero = ({
                   className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-background border border-border shadow-sm text-muted-foreground hover:text-foreground transition-colors"
                   aria-label="Trocar imagem da sala"
                 >
-                  <ImageIcon className="h-3 w-3" />
+                  <IconImage className="h-3 w-3" />
                 </button>
               )}
             </div>
