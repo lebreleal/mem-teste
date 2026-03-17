@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
 import type { Rating } from '@/lib/fsrs';
+import type { DeckStudyConfig } from '@/types/study';
 import { buildPreviewParams, getPreviewIntervals, getCardDifficulty, getDifficultyColor, getDifficultyBgColor } from '@/lib/flashCardUtils';
 import type { DifficultyData } from '@/lib/flashCardUtils';
 import { Lightbulb, Sparkles, CheckCircle2, XCircle, Gauge, RotateCcw, BookOpen, Keyboard, Undo2, Check, Loader2, X } from 'lucide-react';
@@ -50,7 +51,7 @@ interface FlashCardProps {
   isSubmitting: boolean;
   quickReview?: boolean;
   algorithmMode?: string;
-  deckConfig?: any;
+  deckConfig?: DeckStudyConfig;
   energy?: number;
   tutorCost?: number;
   onTutorRequest?: (options?: { action?: string; mcOptions?: string[]; correctIndex?: number; selectedIndex?: number }) => void;
@@ -81,16 +82,34 @@ function renderCloze(html: string, revealed: boolean, targetNum?: number): strin
   });
 }
 
+/** Occlusion rect shape */
+interface OcclusionRect {
+  id: string;
+  x: number; y: number; w: number; h: number;
+  type?: string; text?: string;
+  points?: { x: number; y: number }[];
+}
+
+interface OcclusionData {
+  imageUrl?: string;
+  allRects?: OcclusionRect[];
+  rects?: OcclusionRect[];
+  activeRectIds?: string[];
+  canvasWidth?: number;
+  canvasHeight?: number;
+  frontText?: string;
+}
+
 function renderOcclusion(frontContent: string, revealed: boolean, fallbackCanvas?: { w: number; h: number }): string {
   try {
-    const data = JSON.parse(frontContent);
+    const data: OcclusionData = JSON.parse(frontContent);
     const { imageUrl } = data;
     if (!imageUrl) return '<p>Erro ao carregar</p>';
-    const allRects: any[] = data.allRects || data.rects || [];
-    const activeRectIds: string[] = data.activeRectIds || allRects.map((r: any) => r.id);
+    const allRects: OcclusionRect[] = data.allRects || data.rects || [];
+    const activeRectIds: string[] = data.activeRectIds || allRects.map(r => r.id);
     if (allRects.length === 0) return `<img src="${imageUrl}" style="max-width:100%;border-radius:0.5rem" />`;
 
-    const svgShapes = allRects.map((r: any) => {
+    const svgShapes = allRects.map((r: OcclusionRect) => {
       const isActive = activeRectIds.includes(r.id);
       if (!isActive) return '';
       const shapeType = r.type || 'rect';
@@ -103,23 +122,23 @@ function renderOcclusion(frontContent: string, revealed: boolean, fallbackCanvas
         const stroke = 'rgba(59,130,246,0.5)';
         if (shapeType === 'text') return `<g><rect x="${r.x}" y="${r.y}" width="${textW}" height="${textH}" rx="6" fill="${fill}" stroke="${stroke}" stroke-width="2"/><text x="${r.x + textW / 2}" y="${r.y + textH / 2}" fill="white" font-size="16" font-weight="700" text-anchor="middle" dominant-baseline="middle">${safeText || '?'}</text></g>`;
         if (shapeType === 'ellipse') return `<ellipse cx="${r.x + r.w/2}" cy="${r.y + r.h/2}" rx="${Math.abs(r.w/2)}" ry="${Math.abs(r.h/2)}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
-        if (shapeType === 'polygon' && r.points) { const pts = (r.points as {x:number,y:number}[]).map((p: any) => `${p.x},${p.y}`).join(' '); return `<polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`; }
+        if (shapeType === 'polygon' && r.points) { const pts = r.points.map(p => `${p.x},${p.y}`).join(' '); return `<polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`; }
         return `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${fill}" stroke="${stroke}" stroke-width="2" rx="4"/>`;
       }
       const fill = 'rgb(59,130,246)';
       const stroke = 'rgb(49,120,236)';
       if (shapeType === 'text') return `<g><rect x="${r.x}" y="${r.y}" width="${textW}" height="${textH}" rx="6" fill="${fill}" stroke="${stroke}" stroke-width="2"/></g>`;
       if (shapeType === 'ellipse') return `<ellipse cx="${r.x + r.w/2}" cy="${r.y + r.h/2}" rx="${Math.abs(r.w/2)}" ry="${Math.abs(r.h/2)}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
-      if (shapeType === 'polygon' && r.points) { const pts = (r.points as {x:number,y:number}[]).map((p: any) => `${p.x},${p.y}`).join(' '); return `<polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`; }
+        if (shapeType === 'polygon' && r.points) { const pts = r.points.map(p => `${p.x},${p.y}`).join(' '); return `<polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`; }
       return `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${fill}" stroke="${stroke}" stroke-width="2" rx="4"/>`;
     }).join('');
 
     const vbW = data.canvasWidth || fallbackCanvas?.w || (() => {
-      const xs = allRects.flatMap((r: any) => r.points ? r.points.map((p: any) => p.x) : [r.x, r.x + r.w]);
+      const xs = allRects.flatMap((r: OcclusionRect) => r.points ? r.points.map(p => p.x) : [r.x, r.x + r.w]);
       return Math.max(...xs, 100) * 1.02;
     })();
     const vbH = data.canvasHeight || fallbackCanvas?.h || (() => {
-      const ys = allRects.flatMap((r: any) => r.points ? r.points.map((p: any) => p.y) : [r.y, r.y + r.h]);
+      const ys = allRects.flatMap((r: OcclusionRect) => r.points ? r.points.map(p => p.y) : [r.y, r.y + r.h]);
       return Math.max(...ys, 100) * 1.02;
     })();
 

@@ -142,23 +142,23 @@ const QuestionList = React.memo(({
                 <div className="flex items-center shrink-0">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e: any) => e.stopPropagation()}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
                         <MoreVertical className="h-3.5 w-3.5" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="min-w-[140px]">
-                      <DropdownMenuItem onClick={(e: any) => { e.stopPropagation(); onPreview(q); }}>
+                      <DropdownMenuItem onClick={(e: React.MouseEvent) => { e.stopPropagation(); onPreview(q); }}>
                         <Eye className="mr-2 h-4 w-4" /> Ver
                       </DropdownMenuItem>
                       {!isReadOnly && !isCommunity && (
-                        <DropdownMenuItem onClick={(e: any) => { e.stopPropagation(); onEdit(q); }}>
+                        <DropdownMenuItem onClick={(e: React.MouseEvent) => { e.stopPropagation(); onEdit(q); }}>
                           <PenLine className="mr-2 h-4 w-4" /> Editar
                         </DropdownMenuItem>
                       )}
                       {!isReadOnly && !isCommunity && (
                         <>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={(e: any) => { e.stopPropagation(); onDelete(q.id); }}>
+                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={(e: React.MouseEvent) => { e.stopPropagation(); onDelete(q.id); }}>
                             <Trash2 className="mr-2 h-4 w-4" /> Excluir
                           </DropdownMenuItem>
                         </>

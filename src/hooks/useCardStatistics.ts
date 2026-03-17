@@ -60,7 +60,24 @@ const defaults: CardStatistics = {
   monthSummary: { days_studied: 0, days_in_month: 30, total_reviews: 0, avg_reviews_per_day: 0 },
 };
 
-function parseRetention(obj: any): TrueRetention {
+interface RetentionRpc { correct?: number; total?: number; rate?: number }
+interface CardCountsRpc { total?: number; new?: number; learning?: number; review?: number; relearning?: number; young?: number; mature?: number; frozen?: number }
+interface ButtonCountsRpc { again?: number; hard?: number; good?: number; easy?: number; total?: number }
+interface MonthSummaryRpc { days_studied?: number; days_in_month?: number; total_reviews?: number; avg_reviews_per_day?: number }
+interface CardStatisticsRpc {
+  card_counts?: CardCountsRpc;
+  interval_distribution?: number[];
+  stability_distribution?: number[];
+  difficulty_distribution?: number[];
+  retrievability_distribution?: number[];
+  true_retention?: RetentionRpc;
+  young_retention?: RetentionRpc;
+  mature_retention?: RetentionRpc;
+  button_counts?: ButtonCountsRpc;
+  month_summary?: MonthSummaryRpc;
+}
+
+function parseRetention(obj: RetentionRpc | undefined): TrueRetention {
   return {
     correct: Number(obj?.correct ?? 0),
     total: Number(obj?.total ?? 0),
@@ -75,12 +92,13 @@ export function useCardStatistics() {
     queryKey: ['card-statistics', user?.id],
     queryFn: async (): Promise<CardStatistics> => {
       if (!user) return defaults;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await supabase.rpc('get_card_statistics' as any, { p_user_id: user.id });
       if (error) {
         console.warn('[useCardStatistics] RPC error, using defaults:', error.message);
         return defaults;
       }
-      const r = data as any;
+      const r = data as unknown as CardStatisticsRpc | null;
       if (!r) return defaults;
 
       return {

@@ -135,8 +135,8 @@ const TtsButton = forwardRef<HTMLButtonElement, TtsButtonProps>(
 
         setIsPlaying(true);
         await audio.play();
-      } catch (e: any) {
-        toast({ title: 'Erro no TTS', description: e.message, variant: 'destructive' });
+      } catch (e: unknown) {
+        toast({ title: 'Erro no TTS', description: e instanceof Error ? e.message : 'Erro desconhecido', variant: 'destructive' });
       } finally {
         setIsLoading(false);
       }

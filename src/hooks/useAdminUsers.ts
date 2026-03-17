@@ -70,7 +70,7 @@ export const useAdminUsers = () => {
     if (error) {
       toast({ title: 'Erro', description: 'Falha ao carregar usuários.', variant: 'destructive' });
     } else {
-      setUsers((data as any[]) || []);
+      setUsers(((data as AdminProfile[]) ?? []));
     }
     setLoading(false);
   }, [toast]);
@@ -117,7 +117,8 @@ export const useAdminUsers = () => {
       description = '🎁 Premium Mensal (1 mês) presenteado pelo administrador';
     }
 
-    const { error } = await supabase.rpc('admin_update_profile', {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await supabase.rpc('admin_update_profile' as any, {
       p_user_id: userId,
       p_premium_expires_at: expiresAt,
     });
@@ -134,7 +135,7 @@ export const useAdminUsers = () => {
       type: 'credit',
       description,
       reference_id: `admin_gift_${plan}_${new Date().toISOString().slice(0, 10)}`,
-    } as any);
+    });
 
     toast({ title: '🎁 Premium concedido!', description });
     await fetchUsers(search);
@@ -142,21 +143,24 @@ export const useAdminUsers = () => {
   };
 
   const getUserDecks = async (userId: string): Promise<UserDeck[]> => {
-    const { data, error } = await supabase.rpc('admin_get_user_decks', { p_user_id: userId });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await supabase.rpc('admin_get_user_decks' as any, { p_user_id: userId });
     if (error) { toast({ title: 'Erro', description: 'Falha ao carregar decks.', variant: 'destructive' }); return []; }
-    return (data as any[]) || [];
+    return ((data ?? []) as unknown as UserDeck[]);
   };
 
   const getUserTokenUsage = async (userId: string, days = 30): Promise<TokenUsageSummary[]> => {
-    const { data, error } = await supabase.rpc('admin_get_user_token_usage', { p_user_id: userId, p_days: days });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await supabase.rpc('admin_get_user_token_usage' as any, { p_user_id: userId, p_days: days });
     if (error) { toast({ title: 'Erro', description: 'Falha ao carregar consumo.', variant: 'destructive' }); return []; }
-    return (data as any[]) || [];
+    return ((data ?? []) as unknown as TokenUsageSummary[]);
   };
 
   const getUserTokenUsageDetailed = async (userId: string, days = 30): Promise<TokenUsageEntry[]> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await supabase.rpc('admin_get_user_token_usage_detailed' as any, { p_user_id: userId, p_days: days });
     if (error) { toast({ title: 'Erro', description: 'Falha ao carregar consumo detalhado.', variant: 'destructive' }); return []; }
-    return (data as any[]) || [];
+    return ((data ?? []) as unknown as TokenUsageEntry[]);
   };
 
   const getUserStudyHistory = async (userId: string, days = 90): Promise<StudyDay[]> => {

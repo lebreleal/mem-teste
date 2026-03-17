@@ -5,6 +5,7 @@
 
 import { useCallback } from 'react';
 import { fetchCardFrontContent } from '@/services/uiQueryService';
+import type { ExamNotification } from '@/hooks/useExamNotifications';
 import { getCurrentUserId, invokeEdgeFunction } from '@/services/authService';
 import * as cardService from '@/services/cardService';
 import * as deckService from '@/services/deckService';
@@ -13,12 +14,57 @@ import type { CardRow } from '@/types/deck';
 import type { useToast } from '@/hooks/use-toast';
 import type { QueryClient } from '@tanstack/react-query';
 
+import type { UseMutationResult } from '@tanstack/react-query';
+
+/** Minimal deck shape needed by handlers */
+interface HandlerDeck {
+  name?: string;
+  folder_id?: string | null;
+  algorithm_mode?: string;
+}
+
+/** Shape of an occlusion rectangle */
+export interface OcclusionRect {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  type?: string;
+  text?: string;
+  groupId?: string;
+  points?: { x: number; y: number }[];
+}
+
+/** Shape returned by deckService.createAlgorithmCopy / detachCommunityDeck */
+interface CreatedDeck {
+  id: string;
+  name: string;
+}
+
+/** Generic mutation shape for createCard/updateCard/deleteCard */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyMutation = UseMutationResult<any, unknown, any, any>;
+
+/** Subdeck import shape (matches SubdeckNode from deckImport) */
+interface ImportSubdeck {
+  name: string;
+  card_indices: number[];
+  children?: ImportSubdeck[];
+}
+
+/** Subdeck import shape */
+interface ImportSubdeck {
+  name: string;
+  cards: { frontContent: string; backContent: string; cardType?: string }[];
+}
+
 interface HandlerDeps {
   deckId: string;
-  deck: any;
+  deck: HandlerDeck | null | undefined;
   allCards: CardRow[];
   allDeckIds: string[];
-  user: any;
+  user: { id: string } | null;
   toast: ReturnType<typeof useToast>['toast'];
   queryClient: QueryClient;
   navigate: (path: string) => void;
@@ -33,7 +79,7 @@ interface HandlerDeps {
   selectedCards: Set<string>;
   filteredCards: CardRow[];
   occlusionImageUrl: string;
-  occlusionRects: any[];
+  occlusionRects: OcclusionRect[];
   occlusionCanvasSize: { w: number; h: number } | null;
   mcOptions: string[];
   mcCorrectIndex: number;
@@ -47,13 +93,13 @@ interface HandlerDeps {
   examTimeLimit: number;
   improvePreview: { front: string; back: string } | null;
   // Mutations from useCards
-  createCard: any;
-  updateCard: any;
-  deleteCard: any;
+  createCard: AnyMutation;
+  updateCard: AnyMutation;
+  deleteCard: AnyMutation;
   // From hooks
-  createExam: any;
-  addNotification: any;
-  updateNotification: any;
+  createExam: AnyMutation;
+  addNotification: (n: ExamNotification) => void;
+  updateNotification: (id: string, update: Partial<ExamNotification>) => void;
   // State setters (callbacks)
   setFront: (v: string) => void;
   setBack: (v: string) => void;
@@ -67,7 +113,7 @@ interface HandlerDeps {
   setBulkMoveOpen: (v: boolean) => void;
   setEditorOpen: (v: boolean) => void;
   setOcclusionImageUrl: (v: string) => void;
-  setOcclusionRects: (v: any[]) => void;
+  setOcclusionRects: (v: OcclusionRect[]) => void;
   setOcclusionCanvasSize: (v: { w: number; h: number } | null) => void;
   setOcclusionModalOpen: (v: boolean) => void;
   setMcOptions: (v: string[]) => void;
@@ -130,15 +176,15 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
     if (occlusionImageUrl && occlusionRects.length > 0) {
       const allRects = occlusionRects;
       const userBack = back;
-      const groups: Record<string, any[]> = {};
-      const ungrouped: any[] = [];
-      allRects.forEach((r: any) => {
+    const groups: Record<string, OcclusionRect[]> = {};
+      const ungrouped: OcclusionRect[] = [];
+      allRects.forEach((r: OcclusionRect) => {
         if (r.groupId) { if (!groups[r.groupId]) groups[r.groupId] = []; groups[r.groupId].push(r); }
         else ungrouped.push(r);
       });
       const cardEntries: { activeRectIds: string[] }[] = [];
       ungrouped.forEach(r => cardEntries.push({ activeRectIds: [r.id] }));
-      Object.values(groups).forEach(groupRects => { cardEntries.push({ activeRectIds: groupRects.map((r: any) => r.id) }); });
+      Object.values(groups).forEach(groupRects => { cardEntries.push({ activeRectIds: groupRects.map(r => r.id) }); });
       const cw = occlusionCanvasSize?.w ?? undefined;
       const ch = occlusionCanvasSize?.h ?? undefined;
       const frontText = front.trim() ? front : undefined;
@@ -311,7 +357,7 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
       const url = await cardService.uploadCardImage(user.id, file);
       setOcclusionImageUrl(url);
       setOcclusionModalOpen(true);
-    } catch (e: any) { toast({ title: e.message || 'Erro no upload', variant: 'destructive' }); }
+    } catch (e: unknown) { toast({ title: e instanceof Error ? e.message : 'Erro no upload', variant: 'destructive' }); }
   }, [user, toast, setOcclusionImageUrl, setOcclusionModalOpen]);
 
   const handleOcclusionAttach = useCallback(async () => {
@@ -353,7 +399,7 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
       queryClient.invalidateQueries({ queryKey: ['profile'] });
       setImprovePreview({ front: data.front, back: data.back });
       setImproveModalOpen(true);
-    } catch (e: any) { toast({ title: 'Erro ao melhorar card', description: e.message, variant: 'destructive' }); }
+    } catch (e: unknown) { toast({ title: 'Erro ao melhorar card', description: e instanceof Error ? e.message : 'Erro desconhecido', variant: 'destructive' }); }
     finally { setIsImproving(false); }
   }, [front, back, cardType, mcOptions, mcCorrectIndex, energy, model, queryClient, toast, setIsImproving, setImprovePreview, setImproveModalOpen]);
 
@@ -367,7 +413,7 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
     toast({ title: 'Melhoria aplicada!' });
   }, [improvePreview, cardType, mcOptions, mcCorrectIndex, toast, setFront, setBack, setMcOptions, setMcCorrectIndex, setImproveModalOpen, setImprovePreview]);
 
-  const handleImportCards = useCallback(async (subDeckName: string, importedCards: { frontContent: string; backContent: string; cardType?: string }[], subdecks?: any[]) => {
+  const handleImportCards = useCallback(async (subDeckName: string, importedCards: { frontContent: string; backContent: string; cardType?: string }[], subdecks?: ImportSubdeck[]) => {
     if (!deckId) return;
     try {
       const userId = await getCurrentUserId();
@@ -411,9 +457,10 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
     try {
       const newDeck = await deckService.createAlgorithmCopy(user.id, deckId, algorithmConfirm.value, algorithmConfirm.label);
       invalidateDeckRelatedQueries(queryClient);
-      toast({ title: 'Cópia criada!', description: `"${(newDeck as any).name}" como sub-baralho.` });
+      const created = newDeck as unknown as CreatedDeck;
+      toast({ title: 'Cópia criada!', description: `"${created.name}" como sub-baralho.` });
       setAlgorithmConfirm(null); setAlgorithmModalOpen(false);
-      navigate(`/decks/${(newDeck as any).id}`);
+      navigate(`/decks/${created.id}`);
     } catch { toast({ title: 'Erro ao criar cópia', variant: 'destructive' }); }
   }, [algorithmConfirm, deckId, user, queryClient, toast, navigate, setAlgorithmConfirm, setAlgorithmModalOpen]);
 
@@ -423,7 +470,7 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
     const mcCount = Math.max(0, examTotalQuestions - examWrittenCount);
     const totalCost = examTotalQuestions * 2;
     const notifId = crypto.randomUUID();
-    const eTitle = examTitle.trim() || `Prova - ${(deck as any)?.name || 'Sem nome'}`;
+    const eTitle = examTitle.trim() || `Prova - ${deck?.name || 'Sem nome'}`;
     addNotification({ id: notifId, title: eTitle, examId: '', status: 'generating', message: 'Gerando questões com IA...' });
     toast({ title: '🧠 Gerando prova...', description: 'Você será notificado quando estiver pronta.' });
     setExamModalOpen(false); setExamGenerating(false);
@@ -455,9 +502,9 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
       });
       const exam = await createExam.mutateAsync({ deckId, title: eTitle, questions, timeLimitSeconds: examTimeLimit > 0 ? examTimeLimit * 60 : undefined });
       updateNotification(notifId, { status: 'ready', examId: exam.id, message: 'Prova pronta!' });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      updateNotification(notifId, { status: 'error', message: err.message || 'Erro ao gerar prova' });
+      updateNotification(notifId, { status: 'error', message: err instanceof Error ? err.message : 'Erro ao gerar prova' });
     }
   }, [deckId, deck, examTotalQuestions, examWrittenCount, examTitle, examOptionsCount, examTimeLimit, model, addNotification, updateNotification, createExam, queryClient, toast, setExamModalOpen, setExamGenerating]);
 

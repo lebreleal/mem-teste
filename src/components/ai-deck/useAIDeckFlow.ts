@@ -173,9 +173,9 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
           toast({ title: 'Conteúdo limitado', description: 'Para melhores resultados, copie e cole o texto.', variant: 'destructive' });
           setStep('upload'); setInputMode('text'); setFileName('');
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Document extraction error:', err);
-        toast({ title: 'Erro ao processar arquivo', description: err?.message || 'Tente colar o texto diretamente.', variant: 'destructive' });
+        toast({ title: 'Erro ao processar arquivo', description: err instanceof Error ? err.message : 'Tente colar o texto diretamente.', variant: 'destructive' });
         setStep('upload'); setInputMode(null); setFileName('');
       }
     }
@@ -249,7 +249,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
 
     try {
       await cardService.createCards(targetDeckId, rows);
-    } catch (cErr: any) {
+    } catch (cErr: unknown) {
       if (!existingDeckId) await deckService.deleteDeck(targetDeckId);
       throw cErr;
     }
@@ -511,7 +511,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
       toast({ title: existingDeckId ? '🧠 Cartões adicionados!' : '🧠 Baralho criado!', description: `${cards.length} cartões salvos` });
       resetState(); onOpenChange(false);
       if (!existingDeckId && targetDeckId) navigate(`/decks/${targetDeckId}`);
-    } catch (err: any) { toast({ title: 'Erro ao salvar', description: err?.message, variant: 'destructive' }); }
+    } catch (err: unknown) { toast({ title: 'Erro ao salvar', description: err instanceof Error ? err.message : 'Erro desconhecido', variant: 'destructive' }); }
     finally { setIsSaving(false); }
   }, [user, cards, existingDeckId, deckName, toast, resetState, onOpenChange, navigate, saveCardsToDeck, queryClient, pendingReviewData, removePending]);
 

@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 
-interface ExamNotification {
+export interface ExamNotification {
   id: string;
   title: string;
   examId: string;

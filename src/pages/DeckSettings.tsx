@@ -187,7 +187,7 @@ const DeckSettings = () => {
   }, [deckId, user]);
 
   // ── Handlers ────────────────────────────────────────────────
-  const saveSettings = async (updates: Record<string, any>) => {
+  const saveSettings = async (updates: Record<string, string | number | boolean | string[] | null>) => {
     if (!deckId) return;
     setSaving(true);
     try {
@@ -229,7 +229,7 @@ const DeckSettings = () => {
       bury_new_siblings: buryNewSiblings,
       bury_review_siblings: buryReviewSiblings,
       bury_learning_siblings: buryLearningSiblings,
-    } as any);
+    });
     setStudySettingsModal(false);
     setAdvancedModal(false);
   };
@@ -271,9 +271,10 @@ const DeckSettings = () => {
   const handleDuplicate = () => {
     if (!deckId) return;
     duplicateDeck.mutate(deckId, {
-      onSuccess: (data: any) => {
+      onSuccess: (data: unknown) => {
         toast({ title: 'Baralho duplicado!' });
-        if (data?.id) navigate(`/decks/${data.id}`);
+        const created = data as { id?: string } | null;
+        if (created?.id) navigate(`/decks/${created.id}`);
       },
     });
   };
@@ -283,7 +284,7 @@ const DeckSettings = () => {
     if (!deckId) return false;
     let parentId = decks.find(d => d.id === deckId)?.parent_deck_id;
     while (parentId) {
-      const parent = decks.find(d => d.id === parentId) as any;
+      const parent = decks.find(d => d.id === parentId);
       if (!parent) break;
       if (parent.source_turma_deck_id || parent.source_listing_id || parent.is_live_deck || parent.community_id) return true;
       parentId = parent.parent_deck_id;
@@ -299,7 +300,7 @@ const DeckSettings = () => {
       queryClient.invalidateQueries({ queryKey: ['decks'] });
       toast({ title: 'Deck copiado!', description: 'Uma cópia pessoal independente foi criada.' });
       setDetachConfirm(false);
-      navigate(`/decks/${(newDeck as any).id}`);
+      navigate(`/decks/${(newDeck as { id: string }).id}`);
     } catch {
       toast({ title: 'Erro ao copiar', variant: 'destructive' });
     } finally {
@@ -344,9 +345,10 @@ const DeckSettings = () => {
     try {
       const algorithmLabel = algorithmChangeTarget === 'fsrs' ? 'FSRS' : 'Revisão rápida';
       const newDeck = await deckService.createAlgorithmCopy(user.id, deckId, algorithmChangeTarget, algorithmLabel);
-      toast({ title: 'Novo baralho criado!', description: `"${(newDeck as any).name}" foi criado.` });
+      const created = newDeck as { id: string; name: string };
+      toast({ title: 'Novo baralho criado!', description: `"${created.name}" foi criado.` });
       setAlgorithmChangeTarget(null);
-      navigate(`/decks/${(newDeck as any).id}`);
+      navigate(`/decks/${created.id}`);
     } catch {
       toast({ title: 'Erro', variant: 'destructive' });
       setAlgorithmChangeTarget(null);
