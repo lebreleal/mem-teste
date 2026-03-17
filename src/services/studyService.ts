@@ -527,7 +527,8 @@ export async function fetchActivityBreakdown(userId: string, days = 365, tzOffse
 
 /** Fetch hourly review breakdown. */
 export async function fetchHourlyBreakdown(userId: string, days = 30, tzOffsetMinutes = -180): Promise<HourlyBreakdownRow[]> {
-  const { data, error } = await supabase.rpc('get_hourly_breakdown' as 'get_user_ranking', {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC not in generated types
+  const { data, error } = await (supabase.rpc as any)('get_hourly_breakdown', {
     p_user_id: userId,
     p_tz_offset_minutes: tzOffsetMinutes,
     p_days: days,
