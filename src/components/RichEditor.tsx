@@ -435,6 +435,23 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       <EditorContent editor={editor} className="tiptap-editor-fill" />
       {showToolbar && (
         <div className={`flex items-center gap-0.5 px-2 py-1 overflow-x-auto scrollbar-none ${chromeless ? 'border-t border-border/80' : 'border-t border-border'}`}>
+          {/* AI Creator — always first */}
+          {onAICreate && (
+            <>
+              <Button type="button" variant="ghost" size="icon"
+                className="h-7 w-7 shrink-0"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setAiCreatorOpen(true)}
+                title="Criador de IA"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="h-4 w-4">
+                  <path fill="url(#ai_toolbar_grad)" fillRule="evenodd" d="m6.894 3.787.29.58a1 1 0 0 0 .447.447l.58.29a1 1 0 0 1 0 1.789l-.58.29a1 1 0 0 0-.447.447l-.29.58a1 1 0 0 1-1.788 0l-.29-.58a1 1 0 0 0-.447-.447l-.58-.29a1 1 0 0 1 0-1.79l.58-.289a1 1 0 0 0 .447-.447l.29-.58a1 1 0 0 1 1.788 0m7.5 1.764a1 1 0 0 0-1.788 0l-1.058 2.115a7 7 0 0 1-3.13 3.13l-2.115 1.058a1 1 0 0 0 0 1.789L8.418 14.7a7 7 0 0 1 3.13 3.13l1.058 2.116a1 1 0 0 0 1.788 0l1.058-2.115a7 7 0 0 1 3.13-3.13l2.115-1.058a1 1 0 0 0 0-1.79l-2.115-1.057a7 7 0 0 1-3.13-3.13zm-1.057 3.01.163-.327.163.326a9 9 0 0 0 4.025 4.025l.326.163-.326.163a9 9 0 0 0-4.025 4.025l-.163.326-.163-.326a9 9 0 0 0-4.025-4.025l-.326-.163.326-.163a9 9 0 0 0 4.025-4.025" clipRule="evenodd" />
+                  <defs><linearGradient id="ai_toolbar_grad" x1="3.236" x2="22.601" y1="3.234" y2="4.913" gradientUnits="userSpaceOnUse"><stop stopColor="#00B3FF" /><stop offset="0.33" stopColor="#3347FF" /><stop offset="0.66" stopColor="#FF306B" /><stop offset="1" stopColor="#FF9B23" /></linearGradient></defs>
+                </svg>
+              </Button>
+              <div className="mx-0.5 h-4 w-px bg-border shrink-0" />
+            </>
+          )}
           {toolbarItems.filter(t => t.visible).map((t) => {
             switch (t.id) {
               case 'image':
