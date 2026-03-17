@@ -100,6 +100,20 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
   const [currentPoints, setCurrentPoints] = useState<{ x: number; y: number }[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null);
+  const [shapeColor, setShapeColor] = useState('rgba(59,130,246,0.6)');
+
+  const COLORS = [
+    { fill: 'rgba(59,130,246,0.6)', border: 'rgba(59,130,246,0.9)', label: 'Azul' },
+    { fill: 'rgba(239,68,68,0.55)', border: 'rgba(239,68,68,0.9)', label: 'Vermelho' },
+    { fill: 'rgba(34,197,94,0.55)', border: 'rgba(34,197,94,0.9)', label: 'Verde' },
+    { fill: 'rgba(234,179,8,0.55)', border: 'rgba(234,179,8,0.9)', label: 'Amarelo' },
+    { fill: 'rgba(168,85,247,0.55)', border: 'rgba(168,85,247,0.9)', label: 'Roxo' },
+    { fill: 'rgba(249,115,22,0.55)', border: 'rgba(249,115,22,0.9)', label: 'Laranja' },
+    { fill: 'rgba(20,184,166,0.55)', border: 'rgba(20,184,166,0.9)', label: 'Teal' },
+    { fill: 'rgba(0,0,0,0.6)', border: 'rgba(0,0,0,0.85)', label: 'Preto' },
+  ];
+
+  const getColorObj = (fill: string) => COLORS.find(c => c.fill === fill) || COLORS[0];
 
   // Parse initial data
   useEffect(() => {
