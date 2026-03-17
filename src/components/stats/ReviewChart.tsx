@@ -188,7 +188,8 @@ const ReviewChart = ({
         <SectionTitle title="Respostas" info={"Mostra quantas vezes você apertou cada botão nos últimos 30 dias."} />
         <div className="space-y-3">
           {buttonData.map(btn => {
-            const pct = bc.total > 0 ? (btn.count / bc.total * 100) : 0;
+            const bcTotal = bc.again + bc.hard + bc.good + bc.easy;
+            const pct = bcTotal > 0 ? (btn.count / bcTotal * 100) : 0;
             const maxCount = Math.max(...buttonData.map(b => b.count), 1);
             const barWidth = (btn.count / maxCount) * 100;
             return (
