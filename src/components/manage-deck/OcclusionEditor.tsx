@@ -429,7 +429,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
       const data = await invokeDetectOcclusion(imageUrl);
       if (data?.regions && Array.isArray(data.regions) && data.regions.length > 0) {
         pushHistory();
-        const newShapes: OcclusionShape[] = data.regions.map((r: any) => ({
+        const newShapes: OcclusionShape[] = data.regions.map((r: Record<string, number>) => ({
           id: crypto.randomUUID(),
           type: 'rect' as const,
           x: r.x * imgSize.w,
