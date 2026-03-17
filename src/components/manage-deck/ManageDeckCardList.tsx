@@ -34,7 +34,7 @@ interface CardRowData {
   setSuggestCard: (card: any) => void;
 }
 
-const CardRow = React.memo(({ index, style, ...data }: RowComponentProps<CardRowData>) => {
+const CardRow = ({ index, style, ...data }: RowComponentProps<CardRowData>) => {
   const { cards, isCommunityDeck, openEdit, setDeleteId, setSuggestCard } = data;
   const card = cards[index];
   if (!card) return null;
