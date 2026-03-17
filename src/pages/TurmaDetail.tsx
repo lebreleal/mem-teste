@@ -225,8 +225,9 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
         queryClient.invalidateQueries({ queryKey: ['folders'] });
         queryClient.invalidateQueries({ queryKey: ['decks'] });
         toast({ title: '✅ Sala adicionada ao seu menu Início!' });
-      } catch (e: any) {
-        if (e.code !== '23505') {
+      } catch (e: unknown) {
+        const err = e as { code?: string };
+        if (err.code !== '23505') {
           toast({ title: 'Erro ao entrar na sala', variant: 'destructive' });
         }
       }

@@ -176,7 +176,7 @@ const AdminTags = () => {
     });
   };
 
-  const handleSaveEdit = (updates: any) => {
+  const handleSaveEdit = (updates: { id: string; name: string; parent_id: string | null; synonyms: string[] }) => {
     updateTag.mutate(updates, {
       onSuccess: () => {
         toast.success('Tag atualizada');

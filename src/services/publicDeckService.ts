@@ -362,6 +362,7 @@ export async function fetchSuggestionComments(suggestionId: string) {
 }
 
 export async function insertSuggestionComment(suggestionId: string, userId: string, content: string) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await supabase.from('suggestion_comments').insert({
     suggestion_id: suggestionId,
     user_id: userId,

@@ -101,7 +101,7 @@ interface TurmaDetailContextValue {
   // Handlers
   handleCreateSubject: () => void;
   handleCreateLesson: () => void;
-  handleImportExam: (exam: any) => Promise<void>;
+  handleImportExam: (exam: TurmaExam) => Promise<void>;
 
   // Loading
   isLoading: boolean;

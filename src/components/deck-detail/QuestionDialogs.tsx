@@ -245,7 +245,7 @@ export const CreateQuestionDialog = ({
           // Shuffle options so correct answer isn't always in the same position
           const opts = qi.options || [];
           const correctIdx = qi.correct_index ?? 0;
-          const indices = opts.map((_: any, i: number) => i);
+          const indices = opts.map((_: string, i: number) => i);
           // Fisher-Yates shuffle
           for (let j = indices.length - 1; j > 0; j--) {
             const k = Math.floor(Math.random() * (j + 1));
