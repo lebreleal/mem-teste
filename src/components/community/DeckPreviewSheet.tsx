@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchPreviewCards } from '@/services/dashboardService';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
