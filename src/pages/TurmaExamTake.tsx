@@ -37,11 +37,7 @@ const TurmaExamTake = () => {
 
   const { data: exam } = useQuery({
     queryKey: ['turma-exam-detail', examId],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('turma_exams').select('*').eq('id', examId!).single();
-      if (error) throw error;
-      return data as any;
-    },
+    queryFn: () => fetchTurmaExamDetail(examId!),
     enabled: !!examId,
   });
 
