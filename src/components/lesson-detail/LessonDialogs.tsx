@@ -68,7 +68,6 @@ const LessonDialogs = ({
   renamingFile, setRenamingFile, renameFileName, setRenameFileName, onRenameFile, isRenaming,
   previewDeck, setPreviewDeck, userHasLinkedDeck, userOwnsDeck,
   onAddToCollection, onDownloadDeck, isAddingToCollection, isDownloading,
-  pdfPreviewUrl, setPdfPreviewUrl, pdfPreviewRestricted,
 }: LessonDialogsProps) => (
   <>
     {/* Add Deck Dialog */}
