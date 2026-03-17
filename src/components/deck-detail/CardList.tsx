@@ -1,6 +1,6 @@
 /**
  * CardList – renders the card list with search, filter, selection, and progress bar.
- * Uses client-side pagination to handle large decks (50k+ cards).
+ * Uses react-window virtualisation to handle large decks (50k+ cards).
  */
 
 import { useDeckDetail } from './DeckDetailContext';
