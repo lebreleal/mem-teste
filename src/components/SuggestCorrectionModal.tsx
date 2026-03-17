@@ -6,7 +6,7 @@ import { Switch } from '@/components/ui/switch';
 import LazyRichEditor from '@/components/LazyRichEditor';
 import { TagInput } from '@/components/TagInput';
 import { CardContent, type VirtualCard } from '@/components/deck-detail/CardPreviewSheet';
-import { supabase } from '@/integrations/supabase/client';
+import { resolveDeckSource, insertDeckSuggestion } from '@/services/dashboardService';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useDeckTags } from '@/hooks/useTags';
