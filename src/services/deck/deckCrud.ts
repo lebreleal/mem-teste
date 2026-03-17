@@ -95,7 +95,7 @@ export async function bulkDeleteDecks(ids: string[]) {
 
 /** Fetch a single deck by ID. */
 export async function fetchDeck(deckId: string) {
-  const { data, error } = await supabase.from('decks').select('*').eq('id', deckId).single();
+  const { data, error } = await supabase.from('decks').select(DECK_ALL_COLS).eq('id', deckId).single();
   if (error) throw error;
   return data;
 }
