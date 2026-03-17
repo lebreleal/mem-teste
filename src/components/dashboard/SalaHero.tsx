@@ -302,35 +302,29 @@ const SalaHero = ({
             </Button>
           </div>
 
-          {/* Time estimate — below, centered, tap to expand */}
+          {/* Summary line: icon card + count + icon clock + time + ? */}
           {salaStudyStats.totalDue > 0 && (
-            <div className="space-y-1">
+            <>
               <button
-                onClick={() => setInfoOpen(!infoOpen)}
+                onClick={() => setInfoOpen(true)}
                 className="flex items-center justify-center gap-1.5 w-full text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
               >
                 <IconDeck className="h-3 w-3" />
-                <span>{salaStudyStats.totalDue} cartões pra estudar em {salaStudyStats.timeLabel}</span>
+                <span>{salaStudyStats.totalDue}</span>
+                <Clock className="h-3 w-3" />
+                <span>{salaStudyStats.timeLabel}</span>
                 <IconInfo className="h-3 w-3 ml-0.5" />
               </button>
 
-              {infoOpen && (
-                <div className="mt-2 mx-auto max-w-xs p-3 bg-muted/50 rounded-xl text-xs space-y-2 animate-fade-in">
-                  <p className="font-semibold text-foreground flex items-center gap-1.5">
-                    📚 Pra hoje
+              <Dialog open={infoOpen} onOpenChange={setInfoOpen}>
+                <DialogContent className="max-w-xs p-4 rounded-2xl">
+                  <p className="text-sm text-foreground leading-relaxed">
+                    Você tem <span className="font-semibold">{salaStudyStats.totalDue} cartões</span> pra estudar hoje, com tempo estimado de <span className="font-semibold">{salaStudyStats.timeLabel}</span>, calculado pela sua velocidade média por cartão.
                   </p>
-                  <p className="text-muted-foreground flex items-center gap-1">
-                    Você tem <IconDeck className="h-3 w-3 mx-0.5" /> <span className="font-medium text-foreground">{salaStudyStats.totalDue} cartões</span> pra estudar hoje
-                  </p>
-                  <p className="text-muted-foreground">
-                    Tempo estimado: <span className="font-medium text-foreground">{salaStudyStats.timeLabel}</span>
-                  </p>
-                  <p className="text-[10px] text-muted-foreground/70 pt-1 border-t border-border/30">
-                    Calculado pela sua velocidade média por cartão
-                  </p>
-                </div>
-              )}
-            </div>
+                </DialogContent>
+              </Dialog>
+            </>
+          )}
           )}
         </div>
       )}
