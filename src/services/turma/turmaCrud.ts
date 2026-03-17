@@ -325,7 +325,7 @@ interface RpcLesson {
 
 export async function fetchCommunityContentStats(turmaId: string): Promise<CommunityContentStats> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC not in generated types
-  const { data, error } = await supabase.rpc('get_community_preview_stats' as 'get_user_ranking', { p_turma_id: turmaId } as Record<string, unknown>);
+  const { data, error } = await (supabase.rpc as any)('get_community_preview_stats', { p_turma_id: turmaId });
   if (error || !data) return { subjects: [], rootLessons: [] };
   const d = data as unknown as { subjects?: RpcSubject[]; rootLessons?: RpcLesson[] };
   return {
