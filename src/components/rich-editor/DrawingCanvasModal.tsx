@@ -364,9 +364,44 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
     const canvas = canvasRef.current;
     if (!canvas || !open) return;
 
+    const drawDot = (ctx: CanvasRenderingContext2D, point: RelativePoint) => {
+      ctx.save();
+      applyBrushStyle(ctx);
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, Math.max(thicknessRef.current / 2, 1), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    };
+
+    const drawCurveToPoint = (ctx: CanvasRenderingContext2D, point: RelativePoint) => {
+      const lastPoint = lastPointRef.current;
+      if (!lastPoint) {
+        lastPointRef.current = point;
+        lastMidPointRef.current = point;
+        drawDot(ctx, point);
+        return;
+      }
+
+      const nextMidPoint = getMidpoint(lastPoint, point);
+      const startPoint = lastMidPointRef.current ?? lastPoint;
+
+      ctx.save();
+      applyBrushStyle(ctx);
+      ctx.beginPath();
+      ctx.moveTo(startPoint.x, startPoint.y);
+      ctx.quadraticCurveTo(lastPoint.x, lastPoint.y, nextMidPoint.x, nextMidPoint.y);
+      ctx.stroke();
+      ctx.restore();
+
+      lastPointRef.current = point;
+      lastMidPointRef.current = nextMidPoint;
+    };
+
     const finishStroke = () => {
       if (!isDrawingRef.current) return;
       isDrawingRef.current = false;
+      lastPointRef.current = null;
+      lastMidPointRef.current = null;
 
       const ctx = getCtx();
       if (!ctx || !canvas) return;
@@ -384,6 +419,14 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
       setHistoryIdx(idx + 1);
     };
 
+    const stopPointer = (e: PointerEvent) => {
+      if (activePointerIdRef.current !== e.pointerId) return;
+      e.preventDefault();
+      canvas.releasePointerCapture?.(e.pointerId);
+      activePointerIdRef.current = null;
+      finishStroke();
+    };
+
     const handlePointerDown = (e: PointerEvent) => {
       if (e.pointerType === 'mouse' && e.button !== 0) return;
 
@@ -391,23 +434,15 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
       const ctx = getCtx();
       if (!ctx) return;
 
+      const pos = getPos(e.clientX, e.clientY);
       activePointerIdRef.current = e.pointerId;
       isDrawingRef.current = true;
       hasInteractionRef.current = true;
+      lastPointRef.current = pos;
+      lastMidPointRef.current = pos;
       canvas.setPointerCapture?.(e.pointerId);
 
-      const pos = getPos(e.clientX, e.clientY);
-      ctx.beginPath();
-      ctx.moveTo(pos.x, pos.y);
-      ctx.strokeStyle = colorRef.current;
-      ctx.lineWidth = thicknessRef.current;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.globalAlpha = opacityRef.current / 100;
-      ctx.lineTo(pos.x, pos.y);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(pos.x, pos.y);
+      drawDot(ctx, pos);
     };
 
     const handlePointerMove = (e: PointerEvent) => {
@@ -417,40 +452,21 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
       const ctx = getCtx();
       if (!ctx) return;
 
-      const pos = getPos(e.clientX, e.clientY);
-      ctx.lineTo(pos.x, pos.y);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(pos.x, pos.y);
-    };
-
-    const handlePointerUp = (e: PointerEvent) => {
-      if (activePointerIdRef.current !== e.pointerId) return;
-      e.preventDefault();
-      canvas.releasePointerCapture?.(e.pointerId);
-      activePointerIdRef.current = null;
-      finishStroke();
-    };
-
-    const handlePointerCancel = (e: PointerEvent) => {
-      if (activePointerIdRef.current !== e.pointerId) return;
-      canvas.releasePointerCapture?.(e.pointerId);
-      activePointerIdRef.current = null;
-      finishStroke();
+      drawCurveToPoint(ctx, getPos(e.clientX, e.clientY));
     };
 
     canvas.addEventListener('pointerdown', handlePointerDown);
     window.addEventListener('pointermove', handlePointerMove, { passive: false });
-    window.addEventListener('pointerup', handlePointerUp, { passive: false });
-    window.addEventListener('pointercancel', handlePointerCancel);
+    window.addEventListener('pointerup', stopPointer, { passive: false });
+    window.addEventListener('pointercancel', stopPointer);
 
     return () => {
       canvas.removeEventListener('pointerdown', handlePointerDown);
       window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', handlePointerUp);
-      window.removeEventListener('pointercancel', handlePointerCancel);
+      window.removeEventListener('pointerup', stopPointer);
+      window.removeEventListener('pointercancel', stopPointer);
     };
-  }, [open, getPos]);
+  }, [applyBrushStyle, getPos, open]);
 
   const undo = useCallback(() => {
     if (historyIdx <= 0) return;
