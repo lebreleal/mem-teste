@@ -117,7 +117,8 @@ export const useAdminUsers = () => {
       description = '🎁 Premium Mensal (1 mês) presenteado pelo administrador';
     }
 
-    const { error } = await supabase.rpc('admin_update_profile', {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await supabase.rpc('admin_update_profile' as any, {
       p_user_id: userId,
       p_premium_expires_at: expiresAt,
     });
