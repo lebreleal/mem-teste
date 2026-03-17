@@ -5,6 +5,8 @@
  */
 import { supabase } from '@/integrations/supabase/client';
 
+const GLOBAL_CONCEPT_COLS = 'id, user_id, name, slug, description, category, subcategory, parent_concept_id, concept_tag_id, state, stability, difficulty, scheduled_date, learning_step, last_reviewed_at, correct_count, wrong_count, created_at, updated_at' as const;
+
 export interface GlobalConcept {
   id: string;
   user_id: string;
