@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchTurmaExamDetail, fetchTurmaExamAttemptForResults, fetchTurmaExamAnswers, gradeExamQuestion, updateTurmaExamAnswer, updateTurmaExamAttemptScore } from '@/services/adminService';
 import { useAuth } from '@/hooks/useAuth';
 import { useTurmaExamQuestions } from '@/hooks/useTurmaExams';
 import { useToast } from '@/hooks/use-toast';
@@ -24,41 +24,19 @@ const TurmaExamResults = () => {
 
   const { data: exam } = useQuery({
     queryKey: ['turma-exam-detail', examId],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('turma_exams').select('*').eq('id', examId!).single();
-      if (error) throw error;
-      return data as any;
-    },
+    queryFn: () => fetchTurmaExamDetail(examId!),
     enabled: !!examId,
   });
 
   const { data: attempt } = useQuery({
     queryKey: ['turma-exam-attempt', attemptId],
-    queryFn: async () => {
-      if (!attemptId) {
-        // Get latest completed attempt
-        const { data } = await supabase.from('turma_exam_attempts')
-          .select('*').eq('exam_id', examId!).eq('user_id', user!.id)
-          .eq('status', 'completed').order('completed_at', { ascending: false }).limit(1);
-        return data?.[0] || null;
-      }
-      const { data, error } = await supabase.from('turma_exam_attempts')
-        .select('*').eq('id', attemptId).single();
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => fetchTurmaExamAttemptForResults(examId!, user!.id, attemptId),
     enabled: !!user && !!examId,
   });
 
   const { data: examAnswers = [] } = useQuery({
     queryKey: ['turma-exam-answers', attempt?.id],
-    queryFn: async () => {
-      if (!attempt?.id) return [];
-      const { data, error } = await supabase.from('turma_exam_answers')
-        .select('*').eq('attempt_id', attempt.id);
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => fetchTurmaExamAnswers(attempt!.id),
     enabled: !!attempt?.id,
   });
 
@@ -67,33 +45,23 @@ const TurmaExamResults = () => {
   const handleGradeWritten = async (questionId: string, userAnswer: string, correctAnswer: string, questionText: string) => {
     setGradingId(questionId);
     try {
-      const { data, error } = await supabase.functions.invoke('grade-exam', {
-        body: { questionId, userAnswer, correctAnswer, questionText, aiModel: 'flash' },
-      });
-      if (error) throw error;
-      if (data.error) throw new Error(data.error);
+      const data = await gradeExamQuestion(questionId, userAnswer, correctAnswer, questionText);
 
       const question = questions.find(q => q.id === questionId);
       const maxPoints = question?.points ?? 1;
       const scored = (data.score / 100) * maxPoints;
 
-      // Update the answer
       const answer = examAnswers.find(a => a.question_id === questionId);
       if (answer) {
-        await supabase.from('turma_exam_answers')
-          .update({ scored_points: scored, is_graded: true, ai_feedback: data.feedback } as any)
-          .eq('id', answer.id);
+        await updateTurmaExamAnswer(answer.id, scored, data.feedback);
       }
 
-      // Update attempt total
       const newTotal = examAnswers.reduce((sum, a) => {
         if (a.question_id === questionId) return sum + scored;
         return sum + (a.scored_points || 0);
       }, 0);
       if (attempt) {
-        await supabase.from('turma_exam_attempts')
-          .update({ scored_points: newTotal } as any)
-          .eq('id', attempt.id);
+        await updateTurmaExamAttemptScore(attempt.id, newTotal);
       }
 
       toast({

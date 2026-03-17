@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchGlobalTokenUsage, deleteTokenUsageEntry, type UsageEntry } from '@/services/adminService';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -50,19 +50,7 @@ const calcCostUSD = (model: string, promptTokens: number, completionTokens: numb
   return (promptTokens / 1_000_000) * pricing.input + (realOutputTokens / 1_000_000) * pricing.output;
 };
 
-interface UsageEntry {
-  id: string;
-  created_at: string;
-  user_id: string;
-  user_name: string | null;
-  user_email: string | null;
-  feature_key: string;
-  model: string;
-  prompt_tokens: number;
-  completion_tokens: number;
-  total_tokens: number;
-  energy_cost: number;
-}
+// UsageEntry type imported from adminService
 
 type DatePreset = 'today' | '7d' | '30d' | 'custom';
 
@@ -108,16 +96,11 @@ const AdminUsageReport = () => {
   const fetchData = useCallback(async () => {
     setLoading(true);
     const { from, to } = getDateRange();
-    const { data, error } = await supabase.rpc('admin_get_global_token_usage' as any, {
-      p_user_id: null,
-      p_date_from: from,
-      p_date_to: to,
-      p_limit: 500,
-    });
-    if (error) {
+    try {
+      const data = await fetchGlobalTokenUsage({ dateFrom: from, dateTo: to, limit: 500 });
+      setEntries(data);
+    } catch {
       toast({ title: 'Erro', description: 'Falha ao carregar dados.', variant: 'destructive' });
-    } else {
-      setEntries((data as UsageEntry[]) || []);
     }
     setLoading(false);
   }, [getDateRange, toast]);
@@ -127,12 +110,12 @@ const AdminUsageReport = () => {
   }, [isAdmin, datePreset, customFrom, customTo, fetchData]);
 
   const deleteEntry = async (entryId: string) => {
-    const { error } = await supabase.from('ai_token_usage').delete().eq('id', entryId);
-    if (error) {
-      toast({ title: 'Erro', description: 'Falha ao deletar.', variant: 'destructive' });
-    } else {
+    try {
+      await deleteTokenUsageEntry(entryId);
       setEntries(prev => prev.filter(e => e.id !== entryId));
       toast({ title: 'Registro deletado!' });
+    } catch {
+      toast({ title: 'Erro', description: 'Falha ao deletar.', variant: 'destructive' });
     }
   };
 

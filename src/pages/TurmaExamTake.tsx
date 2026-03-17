@@ -8,7 +8,7 @@ import { useTurmas } from '@/hooks/useTurmas';
 import { useToast } from '@/hooks/use-toast';
 import { useTheme } from '@/hooks/useTheme';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchTurmaExamDetail, fetchActiveSubscription } from '@/services/adminService';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -37,23 +37,13 @@ const TurmaExamTake = () => {
 
   const { data: exam } = useQuery({
     queryKey: ['turma-exam-detail', examId],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('turma_exams').select('*').eq('id', examId!).single();
-      if (error) throw error;
-      return data as any;
-    },
+    queryFn: () => fetchTurmaExamDetail(examId!),
     enabled: !!examId,
   });
 
   const { data: activeSubscription } = useQuery({
     queryKey: ['turma-active-sub', turmaId, user?.id],
-    queryFn: async () => {
-      if (!user || !turmaId) return null;
-      const { data } = await supabase.from('turma_subscriptions').select('*')
-        .eq('turma_id', turmaId).eq('user_id', user.id).gt('expires_at', new Date().toISOString())
-        .order('expires_at', { ascending: false }).limit(1);
-      return data && data.length > 0 ? data[0] : null;
-    },
+    queryFn: () => fetchActiveSubscription(turmaId!, user!.id),
     enabled: !!user && !!turmaId,
   });
 

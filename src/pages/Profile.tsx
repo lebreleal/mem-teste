@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchProfileName, updateProfileName, verifyPassword, updatePassword, uploadAvatar } from '@/services/profileService';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { useToast } from '@/hooks/use-toast';
@@ -36,8 +36,8 @@ const Profile = () => {
   useEffect(() => {
     if (!user) return;
     setEmail(user.email ?? '');
-    supabase.from('profiles').select('name').eq('id', user.id).single().then(({ data }) => {
-      setName(data?.name ?? user.user_metadata?.name ?? '');
+    fetchProfileName(user.id).then((n) => {
+      setName(n || user.user_metadata?.name || '');
       setLoading(false);
     });
   }, [user]);
@@ -45,13 +45,14 @@ const Profile = () => {
   const handleSaveName = async () => {
     if (!user || !name.trim()) return;
     setSavingName(true);
-    const { error } = await supabase.from('profiles').update({ name: name.trim() }).eq('id', user.id);
-    setSavingName(false);
-    if (error) {
-      toast({ title: 'Erro', description: 'Não foi possível atualizar o nome.', variant: 'destructive' });
-    } else {
+    try {
+      await updateProfileName(user.id, name.trim());
       toast({ title: 'Nome atualizado!' });
       setEditNameOpen(false);
+    } catch {
+      toast({ title: 'Erro', description: 'Não foi possível atualizar o nome.', variant: 'destructive' });
+    } finally {
+      setSavingName(false);
     }
   };
 
@@ -65,22 +66,24 @@ const Profile = () => {
       return;
     }
     setSavingPassword(true);
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password: currentPassword });
-    if (signInError) {
+    try {
+      await verifyPassword(email, currentPassword);
+    } catch {
       setSavingPassword(false);
       toast({ title: 'Erro', description: 'Senha atual incorreta.', variant: 'destructive' });
       return;
     }
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
-    setSavingPassword(false);
-    if (error) {
-      toast({ title: 'Erro', description: 'Não foi possível alterar a senha.', variant: 'destructive' });
-    } else {
+    try {
+      await updatePassword(newPassword);
       toast({ title: 'Senha alterada com sucesso!' });
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
       setEditPasswordOpen(false);
+    } catch {
+      toast({ title: 'Erro', description: 'Não foi possível alterar a senha.', variant: 'destructive' });
+    } finally {
+      setSavingPassword(false);
     }
   };
 
@@ -98,20 +101,11 @@ const Profile = () => {
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
-    const ext = file.name.split('.').pop();
-    const path = `${user.id}/avatar.${ext}`;
-    const { error: uploadErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
-    if (uploadErr) {
-      toast({ title: 'Erro', description: 'Falha ao enviar imagem.', variant: 'destructive' });
-      return;
-    }
-    const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
-    const publicUrl = urlData.publicUrl + '?t=' + Date.now();
-    const { error: updateErr } = await supabase.auth.updateUser({ data: { avatar_url: publicUrl } });
-    if (updateErr) {
-      toast({ title: 'Erro', description: 'Falha ao atualizar avatar.', variant: 'destructive' });
-    } else {
+    try {
+      await uploadAvatar(user.id, file);
       toast({ title: 'Foto atualizada!' });
+    } catch {
+      toast({ title: 'Erro', description: 'Falha ao atualizar avatar.', variant: 'destructive' });
     }
   };
 

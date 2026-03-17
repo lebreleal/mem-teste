@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { fetchErrorLogs, deleteOldErrorLogs, type ErrorLog } from "@/services/adminService";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -16,17 +16,7 @@ import { ArrowLeft, Copy, Trash2, RefreshCw, Search } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
-interface ErrorLog {
-  id: string;
-  user_id: string | null;
-  error_message: string;
-  error_stack: string;
-  component_name: string;
-  route: string;
-  metadata: Record<string, unknown>;
-  severity: string;
-  created_at: string;
-}
+// ErrorLog type imported from adminService
 
 const AdminLogs = () => {
   const { isAdmin, loading: adminLoading } = useIsAdmin();
@@ -40,22 +30,8 @@ const AdminLogs = () => {
   const fetchLogs = async () => {
     setLoading(true);
     try {
-      let query = (supabase as any)
-        .from("app_error_logs")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(200);
-
-      if (severity !== "all") {
-        query = query.eq("severity", severity);
-      }
-      if (search.trim()) {
-        query = query.ilike("error_message", `%${search.trim()}%`);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      setLogs(data || []);
+      const data = await fetchErrorLogs({ severity, search });
+      setLogs(data);
     } catch (err: any) {
       toast({ title: "Erro ao carregar logs", description: err.message, variant: "destructive" });
     } finally {
@@ -92,16 +68,8 @@ ${JSON.stringify(log.metadata, null, 2)}
   };
 
   const handleDeleteOld = async () => {
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
     try {
-      const { error } = await (supabase as any)
-        .from("app_error_logs")
-        .delete()
-        .lt("created_at", thirtyDaysAgo.toISOString());
-
-      if (error) throw error;
+      await deleteOldErrorLogs(30);
       toast({ title: "Logs antigos removidos" });
       fetchLogs();
     } catch (err: any) {

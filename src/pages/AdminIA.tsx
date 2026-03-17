@@ -12,7 +12,7 @@ import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, Save, Loader2, Bot, ChevronRight, RotateCcw, Users, Settings, Volume2, Play, BarChart3, Tag } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { getAuthToken } from '@/services/adminService';
 import { useToast } from '@/hooks/use-toast';
 
 const PLACEHOLDER_MAP: Record<string, string[]> = {
@@ -136,13 +136,13 @@ const AdminIA = () => {
         : 'Hello! This is a preview of the selected voice for American English.';
 
       // Use fetch directly for binary audio response (supabase.functions.invoke doesn't handle binary well)
-      const { data: { session } } = await supabase.auth.getSession();
+      const token = await getAuthToken();
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const res = await fetch(`${supabaseUrl}/functions/v1/tts`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token || ''}`,
+          'Authorization': `Bearer ${token}`,
           'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
         body: JSON.stringify({ text: sampleText, voice: voiceName }),

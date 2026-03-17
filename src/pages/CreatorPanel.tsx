@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useCreatorCommunities, useCreatorStats, usePendingSuggestions, type PendingSuggestion } from '@/hooks/useCreatorPanel';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { reviewSuggestion } from '@/services/adminService';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -70,10 +70,7 @@ const CreatorPanel = () => {
 
   const reviewMutation = useMutation({
     mutationFn: async ({ id, status, content }: { id: string; status: 'accepted' | 'rejected'; content?: { front_content: string; back_content: string } }) => {
-      const updateData: any = { status, moderator_user_id: user!.id };
-      if (content) updateData.suggested_content = content;
-      const { error } = await supabase.from('deck_suggestions').update(updateData).eq('id', id);
-      if (error) throw error;
+      await reviewSuggestion(id, status, user!.id, content);
     },
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ['creator-pending-suggestions'] });

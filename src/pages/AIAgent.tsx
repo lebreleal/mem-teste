@@ -3,7 +3,7 @@ import { Brain, Send, Loader2, Plus, Trash2, MessageSquare, PanelLeftClose, Pane
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { supabase } from '@/integrations/supabase/client';
+import { createAIConversation, saveAIChatMessage, deleteAIConversation, getAuthToken } from '@/services/adminService';
 import { useToast } from '@/hooks/use-toast';
 import { useEnergy } from '@/hooks/useEnergy';
 import { useAIModel } from '@/hooks/useAIModel';
@@ -61,11 +61,9 @@ const AIAgent = () => {
   }, [user]);
 
   const loadConversations = async () => {
-    const { data } = await supabase
-      .from('ai_conversations')
-      .select('*')
-      .order('updated_at', { ascending: false });
-    if (data) setConversations(data);
+    const { fetchAIConversations } = await import('@/services/adminService');
+    const data = await fetchAIConversations(user!.id);
+    setConversations(data);
   };
 
   const justCreatedRef = useRef(false);
@@ -85,12 +83,9 @@ const AIAgent = () => {
   }, [activeConversationId]);
 
   const loadMessages = async (convId: string) => {
-    const { data } = await supabase
-      .from('ai_chat_messages')
-      .select('*')
-      .eq('conversation_id', convId)
-      .order('created_at', { ascending: true });
-    if (data) setMessages(data.map(m => ({ id: m.id, role: m.role as 'user' | 'assistant', content: m.content })));
+    const { fetchAIChatMessages } = await import('@/services/adminService');
+    const data = await fetchAIChatMessages(convId);
+    setMessages(data.map(m => ({ id: m.id, role: m.role as 'user' | 'assistant', content: m.content })));
   };
 
   // Auto-scroll only when user sends a new message (not on every streaming update)
@@ -105,24 +100,13 @@ const AIAgent = () => {
 
   const createConversation = async (firstMessage: string): Promise<string> => {
     const title = firstMessage.slice(0, 60) + (firstMessage.length > 60 ? '...' : '');
-    const { data, error } = await supabase
-      .from('ai_conversations')
-      .insert({ user_id: user!.id, title })
-      .select()
-      .single();
-    if (error || !data) throw new Error('Failed to create conversation');
+    const data = await createAIConversation(user!.id, title);
     setConversations(prev => [data, ...prev]);
     return data.id;
   };
 
   const saveMessage = async (convId: string, role: string, content: string) => {
-    await supabase.from('ai_chat_messages').insert({
-      conversation_id: convId,
-      user_id: user!.id,
-      role,
-      content,
-    });
-    await supabase.from('ai_conversations').update({ updated_at: new Date().toISOString() }).eq('id', convId);
+    await saveAIChatMessage(convId, user!.id, role, content);
   };
 
   const handleSend = useCallback(async () => {
@@ -150,8 +134,7 @@ const AIAgent = () => {
 
       const apiMessages = [...messages, userMsg].map(m => ({ role: m.role, content: m.content }));
 
-      const session = await supabase.auth.getSession();
-      const token = session.data.session?.access_token || '';
+      const token = await getAuthToken();
 
       const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`, {
         method: 'POST',
@@ -274,8 +257,7 @@ const AIAgent = () => {
   };
 
   const handleDeleteConversation = async (convId: string) => {
-    await supabase.from('ai_chat_messages').delete().eq('conversation_id', convId);
-    await supabase.from('ai_conversations').delete().eq('id', convId);
+    await deleteAIConversation(convId);
     setConversations(prev => prev.filter(c => c.id !== convId));
     if (activeConversationId === convId) {
       setActiveConversationId(null);
@@ -287,8 +269,7 @@ const AIAgent = () => {
   const handleClearAll = async () => {
     setClearAllConfirm(false);
     for (const conv of conversations) {
-      await supabase.from('ai_chat_messages').delete().eq('conversation_id', conv.id);
-      await supabase.from('ai_conversations').delete().eq('id', conv.id);
+      await deleteAIConversation(conv.id);
     }
     setConversations([]);
     setActiveConversationId(null);

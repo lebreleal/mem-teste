@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchActivityBreakdown } from '@/services/studyService';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ArrowLeft, Flame, Trophy, CheckCircle, ChevronLeft, ChevronRight, Calendar, Snowflake, Info, Clock, SquarePlus, RotateCcw, Layers, Zap } from 'lucide-react';
@@ -46,13 +46,7 @@ const ActivityView = () => {
 
       const tzOffsetMinutes = TZ_OFFSET_SP;
 
-      const { data, error } = await supabase.rpc('get_activity_daily_breakdown', {
-        p_user_id: user.id,
-        p_tz_offset_minutes: tzOffsetMinutes,
-        p_days: 365,
-      } as any);
-
-      if (error) throw error;
+      const data = await fetchActivityBreakdown(user.id, 365, tzOffsetMinutes);
       const result = data as any;
       if (!result || !result.dayMap || Object.keys(result.dayMap).length === 0) {
         return { dayMap: {} as Record<string, DayData>, streak: 0, bestStreak: 0, totalActiveDays: 0, freezesAvailable: 0, freezesUsed: 0, frozenDays: new Set<string>() };
