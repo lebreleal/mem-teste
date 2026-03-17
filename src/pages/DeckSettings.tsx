@@ -300,7 +300,7 @@ const DeckSettings = () => {
       queryClient.invalidateQueries({ queryKey: ['decks'] });
       toast({ title: 'Deck copiado!', description: 'Uma cópia pessoal independente foi criada.' });
       setDetachConfirm(false);
-      navigate(`/decks/${(newDeck as any).id}`);
+      navigate(`/decks/${(newDeck as { id: string }).id}`);
     } catch {
       toast({ title: 'Erro ao copiar', variant: 'destructive' });
     } finally {
