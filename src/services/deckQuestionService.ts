@@ -131,7 +131,7 @@ export async function getGlobalConceptBySlug(userId: string, slug: string) {
     .eq('user_id', userId)
     .eq('slug', slug)
     .maybeSingle();
-  return data as { id: string; name: string; description: string | null } | null;
+  return data as unknown as { id: string; name: string; description: string | null } | null;
 }
 
 // ─── Mutations ───
