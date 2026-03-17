@@ -183,6 +183,7 @@ export const CardEditorForm = ({
   mcOptions = [], onMcOptionsChange, mcCorrectIndex = 0, onMcCorrectIndexChange,
   occlusionImageUrl, onOpenOcclusion, onRemoveOcclusion,
   onImprove, isImproving = false,
+  onAICreate, isAICreating = false,
   onSave, onSaveAndAdd, onCancel, isSaving = false,
   extraContent, hideCloze = false, compact = false,
 }: CardEditorFormProps) => {
