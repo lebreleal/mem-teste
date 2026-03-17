@@ -10,8 +10,6 @@ import { Input } from '@/components/ui/input';
 import { CardEditorForm } from '@/components/card-editor/CardEditorForm';
 import { ChevronLeft, Check, Pencil, Trash2, Loader2, Tag as TagIcon, Sparkles, Plus, X, MessageSquareText, CheckSquare, PenLine } from 'lucide-react';
 import { sanitizeHtml } from '@/lib/sanitize';
-import { ChevronLeft, Check, Pencil, Trash2, Loader2, Tag as TagIcon, Sparkles, Plus, X, MessageSquareText, CheckSquare, PenLine } from 'lucide-react';
-import { sanitizeHtml } from '@/lib/sanitize';
 import { useTagSearch, useTagSuggestions } from '@/hooks/useTags';
 import { useToast } from '@/hooks/use-toast';
 import {
