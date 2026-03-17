@@ -357,13 +357,8 @@ const DeckSettings = () => {
     if (!deckId) return;
     setExportingCsv(true);
     try {
-      const { data: cards, error } = await supabase
-        .from('cards')
-        .select('front_content, back_content, card_type')
-        .eq('deck_id', deckId)
-        .order('created_at', { ascending: true });
-      if (error) throw error;
-      if (!cards || cards.length === 0) {
+      const cards = await fetchCardsForExport(deckId);
+      if (cards.length === 0) {
         toast({ title: 'Nenhum cartão para exportar', variant: 'destructive' });
         setExportingCsv(false);
         return;
