@@ -518,7 +518,6 @@ LIMITES:
     .limit(10);
 
   if (insertError) {
-    console.error('generateReinforcementCards card insert error:', insertError);
     return [];
   }
 
