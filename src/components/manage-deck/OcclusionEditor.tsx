@@ -148,10 +148,11 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
   // Clamp coordinates within image bounds
   const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, val));
 
-  const hitTest = (pos: { x: number; y: number }) => {
+  const hitTest = (pos: { x: number; y: number }, options?: { selectableOnly?: boolean }) => {
     return [...shapes].reverse().find(s => {
+      if (options?.selectableOnly && s.type === 'freehand') return false;
       if (s.type === 'rect') return pos.x >= s.x! && pos.x <= s.x! + s.w! && pos.y >= s.y! && pos.y <= s.y! + s.h!;
-      if (s.points && s.points.length > 2) {
+      if (s.points && s.points.length > 1) {
         const xs = s.points.map(p => p.x);
         const ys = s.points.map(p => p.y);
         return pos.x >= Math.min(...xs) && pos.x <= Math.max(...xs) && pos.y >= Math.min(...ys) && pos.y <= Math.max(...ys);
@@ -175,6 +176,28 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
       setShapeColor(COLORS[nextIdx].fill);
     }
   }, [shapeColor]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    const selectedShape = shapes.find(shape => shape.id === selectedId);
+    if (selectedShape?.color) setShapeColor(selectedShape.color);
+  }, [selectedId, shapes]);
+
+  const activateSelection = useCallback((shape: OcclusionShape, pointerPos?: { x: number; y: number }) => {
+    setTool('select');
+    setSelectedId(shape.id);
+    setShapeColor(shape.color || COLORS[0].fill);
+    setDrawing(false);
+    setStartPos(null);
+    setCurrentRect(null);
+    setCurrentPoints([]);
+    setPolygonPreviewPoint(null);
+    setHoveredSelectableId(shape.id);
+
+    if (shape.type === 'rect' && pointerPos) {
+      setDragging({ startX: pointerPos.x, startY: pointerPos.y, origShape: cloneShape(shape) });
+    }
+  }, []);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     e.preventDefault();
