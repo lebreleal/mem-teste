@@ -21,11 +21,13 @@ interface CardEditorDialogProps {
   setMcCorrectIndex: (v: number) => void;
   isSaving: boolean;
   isImproving: boolean;
+  isAICreating?: boolean;
   occlusionModalOpen: boolean;
   setOcclusionModalOpen: (v: boolean) => void;
   resetForm: () => void;
   handleSave: (addAnother: boolean) => void;
   handleImprove: () => void;
+  handleAICreate?: (templatePrompt: string) => void;
   addMcOption: () => void;
   removeMcOption: (idx: number) => void;
 }
