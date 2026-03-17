@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, lazy, Suspense, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ChevronUp, ChevronDown, Trash2, Copy, Plus, Loader2, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, ChevronUp, ChevronDown, Trash2, Copy, Plus, Loader2, Image as ImageIcon, Check, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { CardContent as CardPreviewContent, buildVirtualCards } from '@/components/deck-detail/CardPreviewSheet';
 import { useCards } from '@/hooks/useCards';
 import { useEnergy } from '@/hooks/useEnergy';
 import { useAIModel } from '@/hooks/useAIModel';
@@ -37,6 +38,7 @@ const ManageDeck = () => {
   const [back, setBack] = useState('');
   const [isDirty, setIsDirty] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   // Image occlusion state
   const [occlusionImageUrl, setOcclusionImageUrl] = useState('');
@@ -283,8 +285,33 @@ const ManageDeck = () => {
               </button>
             </div>
           )}
-
-          <div className="w-16" />
+          {/* Right header: Preview + Save */}
+          <div className="flex items-center gap-1.5">
+            {totalCards > 0 && (
+              <button
+                onClick={() => { if (isDirty) saveCurrentCard(); setPreviewOpen(true); }}
+                className="h-9 w-9 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+                title="Previsualizar"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="4" width="20" height="16" rx="2" />
+                  <line x1="12" y1="4" x2="12" y2="20" />
+                </svg>
+              </button>
+            )}
+            {isDirty ? (
+              <button
+                onClick={saveCurrentCard}
+                disabled={updateCard.isPending}
+                className="h-9 w-9 rounded-full bg-primary flex items-center justify-center text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+                title="Salvar"
+              >
+                {updateCard.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              </button>
+            ) : (
+              <div className="w-9" />
+            )}
+          </div>
         </div>
       </header>
 
@@ -311,7 +338,7 @@ const ManageDeck = () => {
         {/* Main editor area */}
         <main className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-6">
           {currentCard ? (
-            <div className="mx-auto flex h-full min-h-0 max-w-2xl flex-col gap-0">
+            <div className="mx-auto flex h-full min-h-0 max-w-2xl flex-row gap-2">
               {/* Cards column */}
               <div className="flex-1 min-w-0 flex flex-col gap-3">
 
@@ -370,6 +397,40 @@ const ManageDeck = () => {
                 </div>
               </div>
 
+              {/* Right sidebar - actions */}
+              <div className="flex flex-col items-center justify-center gap-2 shrink-0">
+                <button
+                  onClick={() => setDeleteConfirmOpen(true)}
+                  className="h-9 w-9 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-destructive hover:border-destructive/40 transition-colors"
+                  title="Excluir"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={handleDuplicate}
+                  className="h-9 w-9 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+                  title="Duplicar"
+                >
+                  <Copy className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={handleAddCard}
+                  className="h-9 w-9 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+                  title="Novo cartão"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+                {occlusionImageUrl && (
+                  <button
+                    onClick={() => setOcclusionModalOpen(true)}
+                    className="h-9 w-9 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+                    title="Editar oclusão"
+                  >
+                    <ImageIcon className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-center">
@@ -382,49 +443,13 @@ const ManageDeck = () => {
         </main>
       </div>
 
-      {/* Bottom action bar - always visible */}
-      {currentCard && (
-        <div className="shrink-0 border-t border-border bg-background px-4 py-2">
-          <div className="mx-auto max-w-2xl flex items-center gap-1">
-            <button
-              onClick={() => setDeleteConfirmOpen(true)}
-              className="p-2 text-muted-foreground hover:text-destructive transition-colors"
-              title="Excluir"
-            >
-              <Trash2 className="h-[18px] w-[18px]" />
-            </button>
-            <button
-              onClick={handleDuplicate}
-              className="p-2 text-muted-foreground hover:text-foreground transition-colors"
-              title="Duplicar"
-            >
-              <Copy className="h-[18px] w-[18px]" />
-            </button>
-            <button
-              onClick={handleAddCard}
-              className="p-2 text-muted-foreground hover:text-foreground transition-colors"
-              title="Novo cartão"
-            >
-              <Plus className="h-[18px] w-[18px]" />
-            </button>
-            {occlusionImageUrl && (
-              <button
-                onClick={() => setOcclusionModalOpen(true)}
-                className="p-2 text-muted-foreground hover:text-foreground transition-colors"
-                title="Editar oclusão"
-              >
-                <ImageIcon className="h-[18px] w-[18px]" />
-              </button>
-            )}
-            {isDirty && (
-              <Button onClick={saveCurrentCard} size="sm" className="ml-auto gap-1.5" disabled={updateCard.isPending}>
-                {updateCard.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                Salvar
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
+      {/* Card Preview Modal */}
+      <ManageDeckPreview
+        cards={sortedCards}
+        initialIndex={selectedIndex}
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+      />
 
       {/* Occlusion Editor Dialog (for upload + draw) */}
       <Dialog open={occlusionModalOpen} onOpenChange={setOcclusionModalOpen}>
@@ -483,5 +508,87 @@ const ManageDeck = () => {
     </div>
   );
 };
+
+/* ─── Lightweight preview modal for ManageDeck ─── */
+
+function ManageDeckPreview({ cards, initialIndex, open, onClose }: {
+  cards: any[];
+  initialIndex: number;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const virtualCards = useMemo(() => buildVirtualCards(cards), [cards]);
+  const [index, setIndex] = useState(initialIndex);
+  const [revealed, setRevealed] = useState(false);
+
+  useEffect(() => { if (open) { setIndex(initialIndex); setRevealed(false); } }, [open, initialIndex]);
+
+  const safeIndex = virtualCards.length > 0 ? Math.min(index, virtualCards.length - 1) : 0;
+  const vc = virtualCards[safeIndex] ?? null;
+
+  const goPrev = useCallback(() => { if (safeIndex > 0) { setIndex(i => i - 1); setRevealed(false); } }, [safeIndex]);
+  const goNext = useCallback(() => { if (safeIndex < virtualCards.length - 1) { setIndex(i => i + 1); setRevealed(false); } }, [safeIndex, virtualCards.length]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') goPrev();
+      else if (e.key === 'ArrowRight') goNext();
+      else if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); setRevealed(r => !r); }
+      else if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [open, goPrev, goNext, onClose]);
+
+  // Swipe
+  const touchRef = useRef<{ x: number } | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onTS = (e: TouchEvent) => { touchRef.current = { x: e.touches[0].clientX }; };
+    const onTE = (e: TouchEvent) => {
+      if (!touchRef.current) return;
+      const dx = e.changedTouches[0].clientX - touchRef.current.x;
+      if (Math.abs(dx) > 60) { dx > 0 ? goPrev() : goNext(); }
+      touchRef.current = null;
+    };
+    window.addEventListener('touchstart', onTS, { passive: true });
+    window.addEventListener('touchend', onTE, { passive: true });
+    return () => { window.removeEventListener('touchstart', onTS); window.removeEventListener('touchend', onTE); };
+  }, [open, goPrev, goNext]);
+
+  if (!open || !vc) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-background flex flex-col">
+      <header className="flex items-center justify-between px-4 py-3 shrink-0">
+        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full" onClick={onClose}>
+          <X className="h-5 w-5" />
+        </Button>
+        <span className="inline-flex items-center rounded-full border border-border/50 bg-card/80 px-3 py-1 text-xs font-semibold text-foreground shadow-sm tabular-nums">
+          <span className="text-primary">{safeIndex + 1}</span>/{virtualCards.length}
+        </span>
+        <div className="w-9" />
+      </header>
+
+      <div className="flex-1 flex items-center justify-center px-4 pb-6 min-h-0">
+        <div className="w-full max-w-lg">
+          <CardPreviewContent vc={vc} revealed={revealed} onClick={() => setRevealed(r => !r)} />
+        </div>
+      </div>
+
+      {/* Navigation dots */}
+      <div className="shrink-0 flex items-center justify-center gap-3 pb-4">
+        <button onClick={goPrev} disabled={safeIndex === 0} className="h-10 w-10 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors">
+          <ChevronUp className="h-5 w-5 -rotate-90" />
+        </button>
+        <span className="text-xs text-muted-foreground">Toque para revelar</span>
+        <button onClick={goNext} disabled={safeIndex >= virtualCards.length - 1} className="h-10 w-10 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors">
+          <ChevronDown className="h-5 w-5 -rotate-90" />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default ManageDeck;
