@@ -97,8 +97,8 @@ const ManageDeck = () => {
         setOcclusionCanvasSize(data.canvasWidth ? { w: data.canvasWidth, h: data.canvasHeight } : null);
         const { text, images } = extractImages(data.frontText || '');
         setFront(text);
-        setAttachedImages(images);
-      } catch { setFront(''); setOcclusionImageUrl(''); setOcclusionRects([]); setAttachedImages([]); }
+        setFrontAttachedImages(images);
+      } catch { setFront(''); setOcclusionImageUrl(''); setOcclusionRects([]); setFrontAttachedImages([]); }
       let backRaw = currentCard.back_content || '';
       try { const p = JSON.parse(backRaw); if (p && typeof p.clozeTarget === 'number') backRaw = p.extra || ''; } catch {}
       setBack(backRaw);
