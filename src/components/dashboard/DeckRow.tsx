@@ -122,6 +122,8 @@ interface DeckRowProps {
   disableManagementActions?: boolean;
   /** Navigation state passed when clicking decks in readOnly mode (e.g. { from: 'community', turmaId }) */
   readOnlyNavState?: Record<string, any>;
+  /** When true, shows drag handles for reordering */
+  organizeMode?: boolean;
 }
 
 /** Aggregate 5-segment classification counts across deck + descendants */
