@@ -16,7 +16,7 @@ import { parseStepToMinutes, shuffleArray, collectDescendantIds, collectFolderDe
 import { TZ_OFFSET_SP } from '@/lib/dateUtils';
 
 export type { StudyQueueResult, StudyCard, DeckStudyConfig, CardReviewResult, StudyQueueLimitsRow, StudyPlanRow, StudyProfileRow, CardUpdatePayload, StudyStatsSummaryRow, ActivityDayRow, HourlyBreakdownRow, RetentionRow, CardsAddedRow } from '@/types/study';
-import type { StudyQueueResult, StudyCard, DeckStudyConfig, CardReviewResult, StudyQueueLimitsRow, StudyPlanRow, StudyProfileRow, CardUpdatePayload, StudyStatsSummaryRow, HourlyBreakdownRow, RetentionRow, CardsAddedRow } from '@/types/study';
+import type { StudyQueueResult, StudyCard, DeckStudyConfig, CardReviewResult, StudyQueueLimitsRow, StudyPlanRow, StudyProfileRow, CardUpdatePayload, StudyStatsSummaryRow, ActivityDayRow, HourlyBreakdownRow, RetentionRow, CardsAddedRow } from '@/types/study';
 
 const DECK_SELECT_COLS = 'id, name, parent_deck_id, folder_id, daily_new_limit, daily_review_limit, algorithm_mode, learning_steps, requested_retention, max_interval, interval_modifier, easy_bonus, easy_graduating_interval, shuffle_cards, is_live_deck, source_turma_deck_id, source_listing_id, bury_siblings, bury_new_siblings, bury_review_siblings, bury_learning_siblings, is_archived' as const;
 
