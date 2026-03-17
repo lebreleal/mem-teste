@@ -18,9 +18,7 @@ const PLACEHOLDER_MAP: Record<string, string[]> = {
   generate_deck: ['{{cardCount}}', '{{detailInstruction}}', '{{customInstructions}}', '{{formatInstructions}}', '{{material}}'],
   enhance_card: ['{{cardType}}', '{{front}}', '{{back}}'],
   enhance_import: ['{{cardCount}}', '{{cardsText}}'],
-  grade_exam: ['{{questionText}}', '{{correctAnswer}}', '{{userAnswer}}'],
   ai_tutor: ['{{front}}', '{{backHint}}'],
-  generate_onboarding: ['{{course}}', '{{semester}}'],
 };
 
 const PT_VOICES = [
