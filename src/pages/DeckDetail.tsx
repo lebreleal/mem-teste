@@ -50,15 +50,15 @@ function checkIsLinkedDeck(deck: LinkableDeck | null | undefined, decks: Linkabl
 
 
 /** @deprecated Sub-deck list view — no longer used, kept temporarily for reference */
-const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: string; subDecks: any[]; allDecks: any[] }) => {
+const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: string; subDecks: DeckWithStats[]; allDecks: DeckWithStats[] }) => {
   const navigate = useNavigate();
 
   const getMastery = (deckId: string): { total: number; mastered: number } => {
-    const deck = allDecks.find((d: any) => d.id === deckId);
+    const deck = allDecks.find(d => d.id === deckId);
     if (!deck) return { total: 0, mastered: 0 };
     let total = deck.total_cards ?? 0;
     let mastered = deck.mastered_cards ?? 0;
-    const children = allDecks.filter((d: any) => d.parent_deck_id === deckId && !d.is_archived);
+    const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
     for (const child of children) {
       const cm = getMastery(child.id);
       total += cm.total;
@@ -68,51 +68,51 @@ const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: stri
   };
 
   const getDueCount = (deckId: string): number => {
-    const deck = allDecks.find((d: any) => d.id === deckId);
+    const deck = allDecks.find(d => d.id === deckId);
     if (!deck) return 0;
     let due = (deck.new_count ?? 0) + (deck.learning_count ?? 0) + (deck.review_count ?? 0);
-    const children = allDecks.filter((d: any) => d.parent_deck_id === deckId && !d.is_archived);
+    const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
     for (const child of children) due += getDueCount(child.id);
     return due;
   };
 
   const getNewCount = (deckId: string): number => {
-    const deck = allDecks.find((d: any) => d.id === deckId);
+    const deck = allDecks.find(d => d.id === deckId);
     if (!deck) return 0;
     let n = deck.new_count ?? 0;
-    const children = allDecks.filter((d: any) => d.parent_deck_id === deckId && !d.is_archived);
+    const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
     for (const child of children) n += getNewCount(child.id);
     return n;
   };
 
   const getLearningCount = (deckId: string): number => {
-    const deck = allDecks.find((d: any) => d.id === deckId);
+    const deck = allDecks.find(d => d.id === deckId);
     if (!deck) return 0;
     let l = deck.learning_count ?? 0;
-    const children = allDecks.filter((d: any) => d.parent_deck_id === deckId && !d.is_archived);
+    const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
     for (const child of children) l += getLearningCount(child.id);
     return l;
   };
 
   const getReviewCount = (deckId: string): number => {
-    const deck = allDecks.find((d: any) => d.id === deckId);
+    const deck = allDecks.find(d => d.id === deckId);
     if (!deck) return 0;
     let r = deck.review_count ?? 0;
-    const children = allDecks.filter((d: any) => d.parent_deck_id === deckId && !d.is_archived);
+    const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
     for (const child of children) r += getReviewCount(child.id);
     return r;
   };
 
   // Apply parent deck governance: cap new cards by daily_new_limit
-  const parentDeck = allDecks.find((d: any) => d.id === parentDeckId);
+  const parentDeck = allDecks.find(d => d.id === parentDeckId);
   const dailyNewLimit = parentDeck?.daily_new_limit ?? 20;
   const newReviewedToday = parentDeck?.new_reviewed_today ?? 0;
   // Also account for new_graduated_today from all children
   const getNewGraduatedToday = (deckId: string): number => {
-    const deck = allDecks.find((d: any) => d.id === deckId);
+    const deck = allDecks.find(d => d.id === deckId);
     if (!deck) return 0;
     let n = deck.new_graduated_today ?? 0;
-    const children = allDecks.filter((d: any) => d.parent_deck_id === deckId && !d.is_archived);
+    const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
     for (const child of children) n += getNewGraduatedToday(child.id);
     return n;
   };
@@ -127,10 +127,10 @@ const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: stri
   const rawReview = getReviewCount(parentDeckId);
   // Compute reviewed today early so we can cap review count
   const getReviewedTodayEarly = (deckId: string): number => {
-    const dk = allDecks.find((d: any) => d.id === deckId);
+    const dk = allDecks.find(d => d.id === deckId);
     if (!dk) return 0;
     let r = dk.reviewed_today ?? 0;
-    const children = allDecks.filter((d: any) => d.parent_deck_id === deckId && !d.is_archived);
+    const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
     for (const child of children) r += getReviewedTodayEarly(child.id);
     return r;
   };
@@ -156,7 +156,7 @@ const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: stri
 
   const getQuestionCount = (deckId: string): number => {
     let count = questionCounts?.get(deckId) ?? 0;
-    const children = allDecks.filter((d: any) => d.parent_deck_id === deckId && !d.is_archived);
+    const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
     for (const child of children) count += getQuestionCount(child.id);
     return count;
   };
@@ -165,10 +165,10 @@ const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: stri
 
   // Compute reviewed today across hierarchy for progress
   const getReviewedToday = (deckId: string): number => {
-    const deck = allDecks.find((d: any) => d.id === deckId);
+    const deck = allDecks.find(d => d.id === deckId);
     if (!deck) return 0;
     let r = deck.reviewed_today ?? 0;
-    const children = allDecks.filter((d: any) => d.parent_deck_id === deckId && !d.is_archived);
+    const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
     for (const child of children) r += getReviewedToday(child.id);
     return r;
   };
