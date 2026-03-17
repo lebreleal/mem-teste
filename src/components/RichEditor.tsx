@@ -516,9 +516,9 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   const handleSetHighlight = (color: string) => {
     if (!editor) return;
     if (color === '') {
-      editor.chain().focus().unsetHighlight().run();
+      (editor.chain().focus() as any).unsetHighlight().run();
     } else {
-      editor.chain().focus().setHighlight({ color }).run();
+      (editor.chain().focus() as any).setHighlight({ color }).run();
     }
     setColorOpen(false);
   };
