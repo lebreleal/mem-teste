@@ -64,7 +64,8 @@ const DashboardModals = (props: DashboardModalsProps) => {
                {props.addMenuInfoType === 'deck-manual' && 'Criar baralho manualmente'}
                {props.addMenuInfoType === 'deck-ia' && 'Criar baralho com IA'}
             </DialogTitle>
-            <DialogDescription className="text-sm text-muted-foreground leading-relaxed pt-2 space-y-2">
+            <DialogDescription asChild>
+            <div className="text-sm text-muted-foreground leading-relaxed pt-2 space-y-2">
               {props.addMenuInfoType === 'materia' && (
                 <>
                   <p>
