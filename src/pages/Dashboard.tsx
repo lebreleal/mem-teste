@@ -1245,7 +1245,7 @@ const Dashboard = () => {
                   if (!userTurma?.id || !shareSlugEdit) return;
                   setSavingSlug(true);
                   try {
-                    await supabase.from('turmas').update({ share_slug: shareSlugEdit } as any).eq('id', userTurma.id);
+                    await updateTurma(userTurma.id, { shareSlug: shareSlugEdit });
                     await refetchTurma();
                     toast({ title: 'Link atualizado!' });
                     setShareModalOpen(false);
