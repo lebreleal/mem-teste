@@ -57,10 +57,6 @@ interface LessonDialogsProps {
   onDownloadDeck: (td: any) => void;
   isAddingToCollection: boolean;
   isDownloading: boolean;
-  // PDF preview
-  pdfPreviewUrl: string | null;
-  setPdfPreviewUrl: (v: string | null) => void;
-  pdfPreviewRestricted: boolean;
 }
 
 const LessonDialogs = ({
