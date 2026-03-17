@@ -412,11 +412,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
 
     // Auto-save to DB and update the study session immediately
     try {
-      const { error } = await supabase
-        .from('cards')
-        .update({ front_content: improvePreview.front, back_content: backContent })
-        .eq('id', card.id);
-      if (error) throw error;
+      await patchCard(card.id, { front_content: improvePreview.front, back_content: backContent });
       onCardUpdated({ front_content: improvePreview.front, back_content: backContent });
       queryClient.invalidateQueries({ queryKey: ['cards'] });
     } catch {
