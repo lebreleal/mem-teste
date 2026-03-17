@@ -24,8 +24,6 @@ const TurmaHeader = () => {
   const { energy } = useEnergy();
   const { data: studyStats } = useStudyStats();
   const { theme, toggleTheme } = useTheme();
-  const { notifications, hasUnread, markRead } = useExamNotifications();
-  const [notifOpen, setNotifOpen] = useState(false);
   const [creditsOpen, setCreditsOpen] = useState(false);
 
   const streak = studyStats?.streak ?? 0;
