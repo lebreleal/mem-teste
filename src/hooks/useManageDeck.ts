@@ -210,6 +210,42 @@ export function useManageDeck() {
     toast({ title: 'Melhoria aplicada!' });
   }, [improvePreview, toast]);
 
+  const handleAICreate = useCallback(async (templatePrompt: string) => {
+    const strippedFront = front.replace(/<[^>]*>/g, '').trim();
+    if (!strippedFront) {
+      toast({ title: 'Escreva algo na frente do cartão primeiro', variant: 'destructive' });
+      return;
+    }
+    if (energy < 1) {
+      toast({ title: 'Créditos insuficientes', description: 'Você precisa de 1 crédito IA.', variant: 'destructive' });
+      return;
+    }
+    setIsAICreating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('enhance-card', {
+        body: {
+          front,
+          back,
+          cardType: 'basic',
+          aiModel: model,
+          energyCost: 1,
+          customPrompt: templatePrompt,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) { toast({ title: data.error, variant: 'destructive' }); return; }
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      if (data?.front) setFront(data.front);
+      if (data?.back) setBack(data.back);
+      toast({ title: '✨ Cartão gerado com IA!' });
+    } catch (e: any) {
+      console.error('AI Create error:', e);
+      toast({ title: 'Erro ao gerar cartão', description: e.message, variant: 'destructive' });
+    } finally {
+      setIsAICreating(false);
+    }
+  }, [front, back, energy, model, queryClient, toast]);
+
   return {
     deckId, navigate, cards, isLoading, isCommunityDeck,
     editorOpen, setEditorOpen, editingId, front, setFront, back, setBack,
@@ -217,9 +253,9 @@ export function useManageDeck() {
     occlusionModalOpen, setOcclusionModalOpen,
     suggestCard, setSuggestCard,
     mcOptions, setMcOptions, mcCorrectIndex, setMcCorrectIndex,
-    isImproving, improvePreview, improveModalOpen, setImproveModalOpen,
+    isImproving, isAICreating, improvePreview, improveModalOpen, setImproveModalOpen,
     isSaving: createCard.isPending || updateCard.isPending,
     resetForm, openNew, openEdit, addMcOption, removeMcOption,
-    handleSave, handleDelete, handleImprove, applyImprovement,
+    handleSave, handleDelete, handleImprove, applyImprovement, handleAICreate,
   };
 }
