@@ -120,11 +120,7 @@ const Dashboard = () => {
   // Fetch user's turma for publish toggle
   const { data: userTurma, refetch: refetchTurma } = useQuery({
     queryKey: ['user-turma', user?.id],
-    queryFn: async () => {
-      if (!user) return null;
-      const { data } = await supabase.from('turmas').select('id, name, is_private, share_slug').eq('owner_id', user.id).limit(1).maybeSingle();
-      return data as { id: string; name: string; is_private: boolean; share_slug: string | null } | null;
-    },
+    queryFn: () => fetchUserOwnTurma(user!.id),
     enabled: !!user,
     staleTime: 60_000,
   });
