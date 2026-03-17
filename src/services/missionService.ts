@@ -29,7 +29,7 @@ export async function fetchMissions(userId: string, stats: MissionStats): Promis
       .order('sort_order'),
     supabase
       .from('user_missions')
-      .select('*')
+      .select('id, user_id, mission_id, progress, is_completed, is_claimed, period_start, completed_at, claimed_at')
       .eq('user_id', userId),
   ]);
 

@@ -22,7 +22,7 @@ export interface AISource {
 export async function fetchAISources(): Promise<AISource[]> {
   const { data, error } = await supabase
     .from('user_ai_sources')
-    .select('*')
+    .select('id, user_id, source_type, name, text_content, file_path, file_size, mime_type, expires_at, created_at')
     .gte('expires_at', new Date().toISOString())
     .order('created_at', { ascending: false });
 

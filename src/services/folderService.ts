@@ -8,7 +8,7 @@ import type { Folder, FolderSection } from '@/types/folder';
 export async function fetchFolders(userId: string): Promise<Folder[]> {
   const { data, error } = await supabase
     .from('folders')
-    .select('*')
+    .select('id, name, parent_id, is_archived, created_at, updated_at, user_id, section, source_turma_id, source_turma_subject_id, image_url, sort_order')
     .eq('user_id', userId)
     .order('sort_order', { ascending: true })
     .order('name', { ascending: true });

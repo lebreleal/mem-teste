@@ -11,7 +11,7 @@ const examFoldersTable = () => supabase.from('exam_folders' as 'exam_folders');
 /** Fetch all exam folders for the user. */
 export async function fetchExamFolders(): Promise<ExamFolder[]> {
   const { data, error } = await examFoldersTable()
-    .select('*')
+    .select('id, name, parent_id, is_archived, created_at, updated_at, user_id')
     .order('name', { ascending: true });
   if (error) throw error;
   return (data ?? []) as unknown as ExamFolder[];

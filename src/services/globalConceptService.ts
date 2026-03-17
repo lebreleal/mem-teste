@@ -1322,7 +1322,7 @@ export async function mapPrerequisitesViaAI(userId: string): Promise<number> {
 export async function fetchDiagnosticConcepts(userId: string): Promise<GlobalConcept[]> {
   const { data: all } = await supabase
     .from('global_concepts' as any)
-    .select('*')
+    .select(GLOBAL_CONCEPT_COLS)
     .eq('user_id', userId);
 
   if (!all || all.length === 0) return [];

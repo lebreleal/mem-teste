@@ -233,7 +233,7 @@ export async function removeCardTag(cardId: string, tagId: string): Promise<void
 export async function getAllTags(limit = 100): Promise<Tag[]> {
   const { data, error } = await supabase
     .from('tags')
-    .select('*')
+    .select(TAG_COLS)
     .is('merged_into_id', null)
     .order('usage_count', { ascending: false })
     .limit(limit);

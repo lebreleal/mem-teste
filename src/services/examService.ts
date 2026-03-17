@@ -137,7 +137,7 @@ export async function updateExamSyncedAt(examId: string) {
 /** Fetch local exam linked to a turma exam. */
 export async function fetchLinkedExam(userId: string, sourceTurmaExamId: string): Promise<Exam | null> {
   const { data, error } = await examsTable()
-    .select('*')
+    .select(EXAM_COLS)
     .eq('user_id', userId)
     .eq('source_turma_exam_id', sourceTurmaExamId)
     .limit(1);

@@ -15,7 +15,7 @@ export async function fetchWallet(userId: string): Promise<WalletData> {
 
   const { data: transactions } = await supabase
     .from('memocoin_transactions')
-    .select('*')
+    .select('id, user_id, amount, type, description, reference_id, created_at')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(50);

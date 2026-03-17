@@ -83,7 +83,7 @@ export async function deleteFeatureRequest(featureId: string) {
 export async function fetchFeatureComments(featureId: string): Promise<FeatureComment[]> {
   const { data, error } = await supabase
     .from('feature_comments')
-    .select('*')
+    .select('id, feature_id, user_id, content, created_at')
     .eq('feature_id', featureId)
     .order('created_at', { ascending: true });
   if (error) throw error;
