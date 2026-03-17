@@ -31,7 +31,7 @@ export async function fetchLessonFiles(lessonId: string): Promise<LessonFile[]> 
     .eq('lesson_id', lessonId)
     .order('created_at', { ascending: false });
   if (error) throw error;
-  return (data ?? []) as LessonFile[];
+  return (data ?? []) as unknown as LessonFile[];
 }
 
 export async function uploadLessonFile(params: {
