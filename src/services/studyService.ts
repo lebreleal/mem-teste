@@ -465,7 +465,7 @@ import type { StudyStats } from '@/types/study';
 export type { StudyStats } from '@/types/study';
 
 /** Fetch study statistics using server-side RPC (eliminates 1500+ row transfer). */
-export async function fetchStudyStats(userId: string, _cachedProfile?: any): Promise<StudyStats> {
+export async function fetchStudyStats(userId: string, _cachedProfile?: StudyProfileRow): Promise<StudyStats> {
   const tzOffsetMinutes = TZ_OFFSET_SP;
   const { data, error } = await supabase.rpc('get_study_stats_summary', {
     p_user_id: userId, p_tz_offset_minutes: tzOffsetMinutes,
