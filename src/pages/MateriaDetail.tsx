@@ -25,11 +25,18 @@ const MATERIA_COLORS = [
   '#8B5CF6', '#EC4899', '#06B6D4', '#F97316',
 ];
 
-/** Parse color from deck name prefix convention: we store in a separate query */
-function parseMateriaColor(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-  const match = raw.match(/^color:(#[0-9A-Fa-f]{6})$/);
-  return match ? match[1] : null;
+const COLOR_STORAGE_KEY = 'memo-materia-colors';
+
+function getMateriaColors(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem(COLOR_STORAGE_KEY) || '{}');
+  } catch { return {}; }
+}
+
+function setMateriaColor(deckId: string, color: string | null) {
+  const colors = getMateriaColors();
+  if (color) { colors[deckId] = color; } else { delete colors[deckId]; }
+  localStorage.setItem(COLOR_STORAGE_KEY, JSON.stringify(colors));
 }
 
 /** 5-segment classification bar */
