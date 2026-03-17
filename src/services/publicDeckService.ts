@@ -34,10 +34,11 @@ export async function fetchDeckSubtreeCards(deckId: string) {
       .from('decks')
       .select('id, parent_deck_id')
       .in('parent_deck_id', parentIds);
-    const newChildren = (children ?? []).filter((c: any) => !allSubtreeIds.has(c.id));
+    interface ChildRow { id: string; parent_deck_id: string | null }
+    const newChildren = (children ?? []).filter((c: ChildRow) => !allSubtreeIds.has(c.id));
     if (newChildren.length === 0) break;
-    newChildren.forEach((c: any) => allSubtreeIds.add(c.id));
-    parentIds = newChildren.map((c: any) => c.id);
+    newChildren.forEach((c: ChildRow) => allSubtreeIds.add(c.id));
+    parentIds = newChildren.map((c: ChildRow) => c.id);
   }
 
   const subtreeIds = [...allSubtreeIds];
