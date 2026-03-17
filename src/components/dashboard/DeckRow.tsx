@@ -243,14 +243,17 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
             onDrop: dragHandlers.onDrop,
             onDragEnd: dragHandlers.onDragEnd,
           } : {})}
-          className={`group flex items-center gap-3 px-4 py-3.5 cursor-pointer transition-all hover:bg-muted/30 border-b border-border/30 ${dragHandlers ? dragHandlers.className : ''}`}
+          className={`group flex items-center gap-3 px-4 py-3.5 cursor-pointer transition-all hover:bg-muted/30 border-b border-border/50 ${dragHandlers ? dragHandlers.className : ''}`}
           onClick={handleClick}
         >
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 shrink-0">
+          {organizeMode && (
+            <GripVertical className="h-4 w-4 text-muted-foreground/50 shrink-0 cursor-grab active:cursor-grabbing" />
+          )}
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 shrink-0">
             <IconFolder className="h-5 w-5 text-primary" />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-semibold text-foreground truncate">{displayName}</h3>
+            <h3 className="text-[15px] font-semibold text-foreground truncate">{displayName}</h3>
             {isEmptyMateria && !readOnly && (
               <button
                 onClick={(e) => { e.stopPropagation(); setShowAddDeckMenu(true); }}
