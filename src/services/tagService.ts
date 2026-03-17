@@ -45,7 +45,7 @@ function flattenTree(nodes: TagTreeNode[]): TagTreeNode[] {
 export async function getTagTree(): Promise<TagTreeNode[]> {
   const { data, error } = await supabase
     .from('tags')
-    .select('*')
+    .select(TAG_COLS)
     .is('merged_into_id', null)
     .order('usage_count', { ascending: false });
   if (error) throw error;
