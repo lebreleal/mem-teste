@@ -139,10 +139,11 @@ const ManageDeck = () => {
   const buildSavePayload = useCallback(() => {
     const detectedType = detectCardType();
     // Merge attached images back as <img> tags
-    const imgTags = attachedImages.map(url => `<img src="${url}">`).join('');
-    const frontWithImages = front + imgTags;
+    const frontImgTags = frontAttachedImages.map(url => `<img src="${url}">`).join('');
+    const backImgTags = backAttachedImages.map(url => `<img src="${url}">`).join('');
+    const frontWithImages = front + frontImgTags;
     let frontContent = frontWithImages;
-    let backContent = back;
+    let backContent = back + backImgTags;
     if (detectedType === 'image_occlusion') {
       frontContent = JSON.stringify({
         imageUrl: occlusionImageUrl, frontText: frontWithImages, rects: occlusionRects, allRects: occlusionRects,
@@ -152,10 +153,10 @@ const ManageDeck = () => {
     if (detectedType === 'cloze' || detectedType === 'image_occlusion') {
       const nums = [...front.replace(/<[^>]*>/g, '').matchAll(/\{\{c(\d+)::/g)].map(m => parseInt(m[1]));
       const unique = [...new Set(nums)].sort((a, b) => a - b);
-      if (unique.length > 0) backContent = JSON.stringify({ clozeTarget: unique[0] || 1, extra: back });
+      if (unique.length > 0) backContent = JSON.stringify({ clozeTarget: unique[0] || 1, extra: back + backImgTags });
     }
     return { frontContent, backContent, cardType: detectedType };
-  }, [front, back, attachedImages, occlusionImageUrl, occlusionRects, occlusionCanvasSize, detectCardType]);
+  }, [front, back, frontAttachedImages, backAttachedImages, occlusionImageUrl, occlusionRects, occlusionCanvasSize, detectCardType]);
 
   const saveCurrentCard = useCallback(async () => {
     if (!currentCard || !isDirty) return;
