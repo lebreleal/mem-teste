@@ -266,7 +266,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   }, [editor, clozeActive]);
 
   /* ─── Shared image upload helpers ─── */
-  const uploadToStorage = async (file: File): Promise<string | null> => {
+  const handleUploadImage = async (file: File): Promise<string | null> => {
     if (!user) return null;
     if (file.size > 5 * 1024 * 1024) {
       toast({ title: 'Máximo 5MB', variant: 'destructive' }); return null;
@@ -285,7 +285,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return;
-      const url = await uploadToStorage(file);
+      const url = await handleUploadImage(file);
       if (url) onUrl(url);
     };
     input.click();
@@ -300,7 +300,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
           const blob = await item.getType(imageType);
           const ext = imageType.split('/')[1] || 'png';
           const file = new File([blob], `paste.${ext}`, { type: imageType });
-          const url = await uploadToStorage(file);
+          const url = await handleUploadImage(file);
           if (url) onUrl(url);
           return;
         }
@@ -317,7 +317,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   };
 
   const uploadImageFile = async (file: File) => {
-    const url = await uploadToStorage(file);
+    const url = await handleUploadImage(file);
     if (url) {
       if (onImageAttached) onImageAttached(url);
       else insertImageUrl(url);
