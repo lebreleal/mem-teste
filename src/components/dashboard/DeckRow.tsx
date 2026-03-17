@@ -397,7 +397,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
       <Dialog open={showInfoModal} onOpenChange={setShowInfoModal}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>📕 Baralho de Erros</DialogTitle>
+            <DialogTitle>Baralho de Erros</DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground leading-relaxed pt-2">
               Este deck reúne automaticamente os cartões que você errou durante suas sessões de estudo.
               Revise-os aqui para fortalecer os pontos mais fracos e melhorar sua retenção geral.
