@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
   let userId = "";
 
   try {
-    const { front, back, cardType, aiModel, energyCost } = await req.json();
+    const { front, back, cardType, aiModel, energyCost, customPrompt } = await req.json();
     const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
     if (!AI_KEY) throw new Error("GOOGLE_AI_KEY is not configured");
     if (!front || !front.trim()) return jsonResponse({ error: "Escreva algo no card antes de melhorar." }, 400);
