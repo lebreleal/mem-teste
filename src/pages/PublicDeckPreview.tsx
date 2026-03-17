@@ -975,15 +975,7 @@ const PublicDeckPreview = () => {
           toast({ title: 'Arquivo muito grande', description: 'Máximo 20MB.', variant: 'destructive' });
           continue;
         }
-        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-        const filePath = `${user.id}/${turmaDeck.turma_id}/${lessonId}/${Date.now()}_${safeName}`;
-        const { error: uploadError } = await supabase.storage.from('lesson-files').upload(filePath, file);
-        if (uploadError) throw uploadError;
-        const { data: urlData } = supabase.storage.from('lesson-files').getPublicUrl(filePath);
-        await supabase.from('turma_lesson_files' as any).insert({
-          lesson_id: lessonId, turma_id: turmaDeck.turma_id, file_name: file.name,
-          file_url: urlData.publicUrl, file_size: file.size, file_type: file.type, uploaded_by: user.id,
-        } as any);
+        await uploadLessonFile({ file, userId: user.id, turmaId: turmaDeck.turma_id, lessonId });
       }
       queryClient.invalidateQueries({ queryKey: ['turma-deck-files'] });
       toast({ title: 'Arquivo(s) enviado(s)!' });
