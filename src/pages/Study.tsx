@@ -173,19 +173,6 @@ const Study = () => {
   useEffect(() => { if (explainInChat && activeStreamingResponse && !chatOpen) setChatOpen(true); }, [explainInChat, activeStreamingResponse, chatOpen]);
   useEffect(() => () => { if (fastWarningTimer.current) clearTimeout(fastWarningTimer.current); }, []);
 
-  // Hydrate leech from DB
-  useEffect(() => { if (currentCard) leech.hydrateLeechCount(currentCard); }, [currentCard, leech.hydrateLeechCount]);
-  useEffect(() => { leech.restoreInterruption(); }, [leech.restoreInterruption]);
-
-  const exitLeechMode = useCallback(() => {
-    if (!leech.leechMode) return;
-    leech.failCountRef.current.delete(getLeechKey(leech.leechMode.leechCard));
-    leech.persistLeechFailCounts();
-    setLocalQueue(prev => prev.map(c => c.id === leech.leechMode!.leechCard.id ? { ...c, learning_step: 0 } : c));
-    leech.leechAdvanceLockRef.current = false;
-    leech.setLeechMode(null);
-    setCardKey(prev => prev + 1); cardShownAt.current = Date.now();
-  }, [leech]);
 
   const submittingRef = useRef<string | null>(null);
 
