@@ -14,6 +14,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import OcclusionEditor from '@/components/manage-deck/OcclusionEditor';
 import AttachmentPreviewModal from '@/components/manage-deck/AttachmentPreviewModal';
 import { enhanceCard } from '@/services/card/cardAI';
+import type { } from '@/integrations/supabase/client';
 import { markdownToHtml } from '@/lib/markdownToHtml';
 import type { ImageAttachment } from '@/components/RichEditor';
 

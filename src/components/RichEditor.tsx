@@ -273,7 +273,6 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     }
     const compressed = await compressImage(file);
     try {
-    try {
       const publicUrl = await uploadToStorage(user.id, compressed);
       return publicUrl;
     } catch { toast({ title: 'Erro no upload', variant: 'destructive' }); return null; }
