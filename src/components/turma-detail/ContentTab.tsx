@@ -10,8 +10,8 @@ import { countTurmaDeckDownloads, countTurmaFilesByLesson, countTurmaExamsByLess
 import { useTurmaDetail } from './TurmaDetailContext';
 import { useContentMutations } from './content/useContentMutations';
 import { useContentImport } from './content/useContentImport';
-import { useDeckTagsBatch, useTagDescendants } from '@/hooks/useTags';
-import type { Tag } from '@/types/tag';
+/** Minimal tag shape for ContentTab */
+interface Tag { id: string; name: string; }
 import type { TurmaDeck, TurmaSubject, TurmaExam } from '@/types/turma';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
