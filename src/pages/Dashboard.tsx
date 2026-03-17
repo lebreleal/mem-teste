@@ -221,26 +221,11 @@ const Dashboard = () => {
 
       // Auto-create turma if user doesn't have one
       if (!turmaId) {
-        const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-        const { data: newTurma, error: createErr } = await supabase.from('turmas').insert({
-          name: folderName,
-          description: '',
-          owner_id: user.id,
-          invite_code: inviteCode,
-          is_private: false,
-          cover_image_url: folderImage,
-        } as any).select('id').single();
-        if (createErr || !newTurma) throw createErr || new Error('Failed to create turma');
-        turmaId = (newTurma as any).id;
-        // Add owner as admin member
-        await supabase.from('turma_members').insert({
-          turma_id: turmaId,
-          user_id: user.id,
-          role: 'admin',
-        } as any);
+        const newTurma = await createTurmaWithOwner(user.id, folderName, { isPrivate: false, coverImageUrl: folderImage });
+        turmaId = newTurma.id;
       } else {
         const newPrivate = !userTurma!.is_private;
-        await supabase.from('turmas').update({ is_private: newPrivate, name: folderName, cover_image_url: folderImage } as any).eq('id', turmaId);
+        await updateTurma(turmaId, { isPrivate: newPrivate, name: folderName, coverImageUrl: folderImage ?? undefined });
         if (newPrivate) {
           // Unpublishing
           await refetchTurma();
@@ -253,24 +238,7 @@ const Dashboard = () => {
 
       // Publishing: sync folder decks to turma_decks
       const folderDecks = state.decks.filter(d => d.folder_id === state.currentFolderId && !d.is_archived && !d.parent_deck_id);
-      const { data: existingTurmaDecks } = await supabase.from('turma_decks').select('deck_id').eq('turma_id', turmaId!);
-      const existingIds = new Set((existingTurmaDecks ?? []).map((td: any) => td.deck_id));
-
-      const newDecks = folderDecks.filter(d => !existingIds.has(d.id));
-      if (newDecks.length > 0) {
-        await supabase.from('turma_decks').insert(
-          newDecks.map(d => ({
-            turma_id: turmaId,
-            deck_id: d.id,
-            shared_by: user.id,
-            price: 0,
-            price_type: 'free',
-            allow_download: true,
-            is_published: true,
-          }) as any)
-        );
-        await supabase.from('decks').update({ is_public: true } as any).in('id', newDecks.map(d => d.id));
-      }
+      await publishDecksToTurma(turmaId!, user.id, folderDecks.map(d => d.id));
 
       await refetchTurma();
       queryClient.invalidateQueries({ queryKey: ['discover-turmas'] });
