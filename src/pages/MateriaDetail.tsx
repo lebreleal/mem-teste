@@ -22,11 +22,12 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import DeckRow from '@/components/dashboard/DeckRow';
 import DashboardModals from '@/components/dashboard/DashboardModals';
 import { calculateRealStudyTime } from '@/lib/studyUtils';
+import { renameDeck, archiveDeck, deleteDeck, updateDeck } from '@/services/deck';
+import { invalidateDeckRelatedQueries } from '@/lib/queryKeys';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 
 const StudySettingsSheet = lazy(() => import('@/components/dashboard/StudySettingsSheet'));
@@ -60,6 +61,25 @@ const MateriaDetail: React.FC = () => {
     () => (decks ?? []).filter(d => d.parent_deck_id === id && !d.is_archived),
     [decks, id],
   );
+
+  // Build childrenIndex for hierarchical limit calculation
+  const childrenIndex = useMemo(() => {
+    const map = new Map<string, DeckWithStats[]>();
+    for (const d of (decks ?? [])) {
+      if (d.parent_deck_id && !d.is_archived) {
+        const list = map.get(d.parent_deck_id) ?? [];
+        list.push(d);
+        map.set(d.parent_deck_id, list);
+      }
+    }
+    return map;
+  }, [decks]);
+
+  const deckMap = useMemo(() => {
+    const map = new Map<string, DeckWithStats>();
+    for (const d of (decks ?? [])) map.set(d.id, d);
+    return map;
+  }, [decks]);
 
   // Parent sala (folder)
   const parentFolder = useMemo(() => {
@@ -102,16 +122,15 @@ const MateriaDetail: React.FC = () => {
     setShowEdit(true);
   }, [materia, materiaColor]);
 
-  // Mutations
+  // Mutations — using service layer (Law 2A)
   const updateMutation = useMutation({
     mutationFn: async ({ name, color }: { name: string; color: string | null }) => {
       if (!id) throw new Error('No materia id');
       setMateriaColor(id, color);
-      const { error } = await supabase.from('decks').update({ name }).eq('id', id);
-      if (error) throw error;
+      await updateDeck(id, { name });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['decks'] });
+      invalidateDeckRelatedQueries(queryClient);
       setColorVersion(v => v + 1);
       setShowEdit(false);
       toast({ title: 'Pasta atualizada' });
@@ -124,11 +143,10 @@ const MateriaDetail: React.FC = () => {
   const archiveMutation = useMutation({
     mutationFn: async () => {
       if (!id) throw new Error('No materia id');
-      const { error } = await supabase.from('decks').update({ is_archived: true }).eq('id', id);
-      if (error) throw error;
+      await archiveDeck(id);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['decks'] });
+      invalidateDeckRelatedQueries(queryClient);
       toast({ title: 'Pasta arquivada' });
       navigate(-1);
     },
@@ -138,11 +156,10 @@ const MateriaDetail: React.FC = () => {
   const deleteMutation = useMutation({
     mutationFn: async () => {
       if (!id) throw new Error('No materia id');
-      const { error } = await supabase.from('decks').delete().eq('id', id);
-      if (error) throw error;
+      await deleteDeck(id);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['decks'] });
+      invalidateDeckRelatedQueries(queryClient);
       toast({ title: 'Pasta excluída' });
       navigate(-1);
     },
@@ -150,7 +167,7 @@ const MateriaDetail: React.FC = () => {
   });
 
   // DeckRow helpers
-  const getSubDecks = useCallback(() => [] as DeckWithStats[], []);
+  const getSubDecks = useCallback((deckId: string) => childrenIndex.get(deckId) ?? [] as DeckWithStats[], [childrenIndex]);
   const getAggregateStats = useCallback((deck: DeckWithStats) => ({
     new_count: deck.new_count ?? 0,
     learning_count: deck.learning_count ?? 0,
@@ -160,56 +177,93 @@ const MateriaDetail: React.FC = () => {
   const getCommunityLinkId = useCallback(() => null, []);
   const noop = useCallback(() => {}, []);
 
-  // Study stats scoped to this pasta
+  // Study stats scoped to this pasta — using daily limits like SalaHero
   const studyStats = useMemo(() => {
-    let newCount = 0, learningCount = 0, reviewCount = 0, reviewedToday = 0;
-    for (const d of subDecks) {
-      newCount += d.new_count ?? 0;
-      learningCount += d.learning_count ?? 0;
-      reviewCount += d.review_count ?? 0;
-      reviewedToday += d.reviewed_today ?? 0;
+    const collectHierarchyNew = (parentId: string): { newCount: number; newReviewed: number } => {
+      let nc = 0, nr = 0;
+      for (const c of (childrenIndex.get(parentId) ?? [])) {
+        if (c.is_archived) continue;
+        nc += c.new_count ?? 0;
+        nr += c.new_reviewed_today ?? 0;
+        const sub = collectHierarchyNew(c.id);
+        nc += sub.newCount;
+        nr += sub.newReviewed;
+      }
+      return { newCount: nc, newReviewed: nr };
+    };
+
+    let newCountTodayByDeckLimits = 0;
+    let learningCount = 0;
+    let reviewCount = 0;
+    let reviewedToday = 0;
+    let totalDailyReviewLimit = 0;
+    let totalReviewReviewedToday = 0;
+
+    const collectStudyStats = (deckId: string, isRoot: boolean) => {
+      const dk = deckMap.get(deckId);
+      if (!dk || dk.is_archived) return;
+
+      learningCount += dk.learning_count ?? 0;
+      reviewCount += dk.review_count ?? 0;
+      reviewedToday += dk.reviewed_today ?? 0;
+      const deckNewGraduatedToday = dk.new_graduated_today ?? 0;
+      totalReviewReviewedToday += Math.max(0, (dk.reviewed_today ?? 0) - deckNewGraduatedToday);
+
+      if (isRoot) {
+        totalDailyReviewLimit += dk.daily_review_limit ?? 100;
+        let hierarchyNewCount = dk.new_count ?? 0;
+        let hierarchyNewReviewed = dk.new_reviewed_today ?? 0;
+        const childNew = collectHierarchyNew(deckId);
+        hierarchyNewCount += childNew.newCount;
+        hierarchyNewReviewed += childNew.newReviewed;
+        const remaining = Math.max(0, (dk.daily_new_limit ?? 20) - hierarchyNewReviewed);
+        newCountTodayByDeckLimits += Math.min(hierarchyNewCount, remaining);
+      }
+
+      for (const c of (childrenIndex.get(deckId) ?? [])) {
+        if (!c.is_archived) collectStudyStats(c.id, false);
+      }
+    };
+
+    for (const deck of subDecks) {
+      collectStudyStats(deck.id, true);
     }
-    const totalDue = newCount + learningCount + reviewCount;
-    const remainingSeconds = calculateRealStudyTime(newCount, learningCount, reviewCount, realStudyMetrics);
+
+    const cappedReviewCount = Math.max(0, Math.min(reviewCount, totalDailyReviewLimit - totalReviewReviewedToday));
+    const totalDue = newCountTodayByDeckLimits + learningCount + cappedReviewCount;
+
+    const remainingSeconds = calculateRealStudyTime(newCountTodayByDeckLimits, learningCount, cappedReviewCount, realStudyMetrics);
     const remainingMin = Math.ceil(remainingSeconds / 60);
     const timeLabel = remainingMin >= 60
       ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
       : `${remainingMin}min`;
     return { totalDue, timeLabel };
-  }, [subDecks, realStudyMetrics]);
+  }, [subDecks, childrenIndex, deckMap, realStudyMetrics]);
 
-  // Deck actions
+  // Deck actions — using service layer (Law 2A)
   const handleRename = useCallback((deck: DeckWithStats) => {
-    // Simple rename via prompt
     const newName = window.prompt('Renomear baralho', deck.name);
     if (newName && newName.trim() !== deck.name) {
-      supabase.from('decks').update({ name: newName.trim() }).eq('id', deck.id)
-        .then(({ error }) => {
-          if (error) { toast({ title: 'Erro ao renomear', variant: 'destructive' }); }
-          else { queryClient.invalidateQueries({ queryKey: ['decks'] }); toast({ title: 'Baralho renomeado' }); }
-        });
+      renameDeck(deck.id, newName.trim())
+        .then(() => { invalidateDeckRelatedQueries(queryClient); toast({ title: 'Baralho renomeado' }); })
+        .catch(() => { toast({ title: 'Erro ao renomear', variant: 'destructive' }); });
     }
   }, [queryClient]);
 
   const handleArchive = useCallback((deckId: string) => {
-    supabase.from('decks').update({ is_archived: true }).eq('id', deckId)
-      .then(({ error }) => {
-        if (error) { toast({ title: 'Erro ao arquivar', variant: 'destructive' }); }
-        else { queryClient.invalidateQueries({ queryKey: ['decks'] }); toast({ title: 'Baralho arquivado' }); }
-      });
+    archiveDeck(deckId)
+      .then(() => { invalidateDeckRelatedQueries(queryClient); toast({ title: 'Baralho arquivado' }); })
+      .catch(() => { toast({ title: 'Erro ao arquivar', variant: 'destructive' }); });
   }, [queryClient]);
 
   const handleDelete = useCallback((deck: DeckWithStats) => {
     if (!window.confirm(`Excluir "${deck.name}"? Esta ação não pode ser desfeita.`)) return;
-    supabase.from('decks').delete().eq('id', deck.id)
-      .then(({ error }) => {
-        if (error) { toast({ title: 'Erro ao excluir', variant: 'destructive' }); }
-        else { queryClient.invalidateQueries({ queryKey: ['decks'] }); toast({ title: 'Baralho excluído' }); }
-      });
+    deleteDeck(deck.id)
+      .then(() => { invalidateDeckRelatedQueries(queryClient); toast({ title: 'Baralho excluído' }); })
+      .catch(() => { toast({ title: 'Erro ao excluir', variant: 'destructive' }); });
   }, [queryClient]);
 
   const handleMove = useCallback((deck: DeckWithStats) => {
-    // Navigate to dashboard where move dialog is available
     navigate(`/dashboard?action=move&deckId=${deck.id}`);
   }, [navigate]);
 
@@ -248,7 +302,7 @@ const MateriaDetail: React.FC = () => {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuItem onClick={() => setOrganizeMode(!organizeMode)}>
-                  <GripVertical className="h-4 w-4 mr-2" /> {organizeMode ? 'Concluir organização' : 'Organizar pasta'}
+                  <GripVertical className="h-4 w-4 mr-2" /> {organizeMode ? 'Concluir organização' : 'Organizar baralhos'}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => archiveMutation.mutate()}>
                   <IconArchive className="h-4 w-4 mr-2" /> Arquivar pasta
@@ -260,23 +314,25 @@ const MateriaDetail: React.FC = () => {
             </DropdownMenu>
           </div>
 
-          {/* Pasta name + edit */}
-          <div className="flex items-center justify-center gap-2 px-4 pb-1">
-            <h1 className="text-lg font-display font-bold text-foreground truncate">{materia.name}</h1>
-            <button onClick={openEdit} className="shrink-0 text-muted-foreground hover:text-foreground transition-colors">
-              <IconEdit className="h-3.5 w-3.5" />
-            </button>
-          </div>
-
-          {/* User info */}
-          <div className="flex items-center justify-center gap-1.5 mt-0.5">
-            <span className="text-xs text-muted-foreground">Por</span>
-            <span className="text-xs font-medium text-foreground">{displayName}</span>
-            {avatarUrl && (
-              <div className="h-5 w-5 rounded-full overflow-hidden bg-muted shrink-0">
-                <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+          {/* Pasta name + author — LEFT-ALIGNED like SalaHero */}
+          <div className="flex items-center gap-3 mb-2">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <h1 className="text-lg font-display font-bold text-foreground truncate">{materia.name}</h1>
+                <button onClick={openEdit} className="shrink-0 text-muted-foreground hover:text-foreground transition-colors">
+                  <IconEdit className="h-3.5 w-3.5" />
+                </button>
               </div>
-            )}
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="text-xs text-muted-foreground">Por</span>
+                <span className="text-xs font-medium text-foreground">{displayName}</span>
+                {avatarUrl && (
+                  <div className="h-5 w-5 rounded-full overflow-hidden bg-muted shrink-0">
+                    <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -382,12 +438,11 @@ const MateriaDetail: React.FC = () => {
           });
         }}
         onCreateDeckAI={() => {
-          // Navigate to dashboard with AI deck creation in context of this materia
-          navigate(`/dashboard?action=ai-deck`);
+          navigate(`/dashboard?action=ai-deck&parentDeckId=${id}`);
         }}
         onCreateMateria={noop}
         onImportCards={() => {
-          navigate(`/dashboard?action=import`);
+          navigate(`/dashboard?action=import&parentDeckId=${id}`);
         }}
         hideCreatePasta
       />
@@ -433,13 +488,13 @@ const MateriaDetail: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Study settings */}
+      {/* Study settings — filtered to only decks inside this pasta */}
       <Suspense fallback={null}>
         {studySettingsOpen && (
           <StudySettingsSheet
             open={studySettingsOpen}
             onOpenChange={setStudySettingsOpen}
-            decks={decks ?? []}
+            decks={subDecks}
             getSubDecks={getSubDecks}
             getAggregateStats={getAggregateStats}
             currentFolderId={materia.folder_id ?? null}
