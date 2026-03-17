@@ -350,7 +350,7 @@ const ContentTab = () => {
   // ── Subscriber-only validation ──
   const canSetSubscribersOnly = (turma?.subscription_price ?? 0) > 0;
 
-  const handleSetDeckPriceType = (newPriceType: string, setter: (v: any) => void) => {
+  const handleSetDeckPriceType = (newPriceType: string, setter: (v: 'free' | 'money' | 'credits') => void) => {
     if (newPriceType === 'members_only' && !canSetSubscribersOnly) {
       toast({ title: 'Defina um preço de assinatura primeiro', description: 'Vá em Configurações → Assinatura para definir o preço.', variant: 'destructive' });
       return;
