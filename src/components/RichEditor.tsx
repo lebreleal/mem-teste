@@ -94,11 +94,19 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
 
+  // Sync toolbar config across all RichEditor instances
+  useEffect(() => {
+    const handler = () => setToolbarItems(loadToolbarConfig());
+    window.addEventListener('toolbar-config-changed', handler);
+    return () => window.removeEventListener('toolbar-config-changed', handler);
+  }, []);
+
   const isToolVisible = (id: string) => toolbarItems.find(t => t.id === id)?.visible !== false;
 
   const handleSaveToolbarConfig = (items: ToolbarItem[]) => {
     setToolbarItems(items);
     saveToolbarConfig(items);
+    window.dispatchEvent(new Event('toolbar-config-changed'));
   };
 
   const editor = useEditor({
