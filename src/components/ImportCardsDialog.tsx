@@ -353,9 +353,9 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
             : undefined,
         duration: result.missingMediaCount > 0 ? 10000 : 5000,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Anki parse error:', err);
-      const msg = err?.message || 'Erro desconhecido';
+      const msg = err instanceof Error ? err.message : 'Erro desconhecido';
       toast({ 
         title: 'Erro ao ler arquivo Anki', 
         description: msg.length > 200 ? msg.slice(0, 200) + '...' : msg, 

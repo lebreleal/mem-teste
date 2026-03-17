@@ -443,9 +443,9 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
       } else {
         toast({ title: 'Nenhum texto detectado na imagem' });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('AI detect error:', err);
-      toast({ title: 'Erro ao detectar', description: err.message, variant: 'destructive' });
+      toast({ title: 'Erro ao detectar', description: err instanceof Error ? err.message : 'Erro desconhecido', variant: 'destructive' });
     } finally {
       setIsDetecting(false);
     }
