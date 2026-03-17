@@ -294,20 +294,23 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
 
   const uploadImageFile = async (file: File) => {
     const url = await uploadToStorage(file);
-    if (url) insertImageUrl(url);
+    if (url) {
+      if (onImageAttached) onImageAttached(url);
+      else insertImageUrl(url);
+    }
   };
   uploadImageFileRef.current = uploadImageFile;
 
   const handleImageAttach = () => {
-    if (!user || !editor) return;
+    if (!user || (!editor && !onImageAttached)) return;
     setImageMenuOpen(false);
-    pickFileAndUpload(insertImageUrl);
+    pickFileAndUpload(onImageAttached || insertImageUrl);
   };
 
   const handleImagePaste = () => {
-    if (!user || !editor) return;
+    if (!user || (!editor && !onImageAttached)) return;
     setImageMenuOpen(false);
-    pasteClipboardAndUpload(insertImageUrl);
+    pasteClipboardAndUpload(onImageAttached || insertImageUrl);
   };
 
   /* ─── Occlusion image — reuses shared helpers ─── */
