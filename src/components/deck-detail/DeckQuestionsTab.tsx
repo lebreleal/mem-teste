@@ -2014,18 +2014,9 @@ const PasteQuestionsDialog = ({
     setParsing(true);
     try {
       // Fetch existing global concepts for reuse
-      const { data: existingConcepts } = await supabase
-        .from('global_concepts' as any)
-        .select('name')
-        .eq('user_id', user.id)
-        .limit(200);
+      const conceptNames = await fetchUserGlobalConceptNames(user.id);
 
-      const conceptNames = (existingConcepts ?? []).map((c: any) => c.name);
-
-      const { data, error } = await supabase.functions.invoke('parse-questions', {
-        body: { text: pastedText, aiModel, existingConcepts: conceptNames },
-      });
-      if (error) throw error;
+      const data = await invokeParseQuestions({ text: pastedText, aiModel, existingConcepts: conceptNames });
       if (!data?.questions?.length) {
         toast({ title: 'Nenhuma questão encontrada no texto', variant: 'destructive' });
         setParsing(false);
