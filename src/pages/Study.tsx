@@ -631,20 +631,7 @@ const Study = () => {
       // Extra fallback for resumed sessions: recover previous streak from DB if local count was lost.
       if (previousFails === 0 && user) {
         try {
-          const { data } = await supabase
-            .from('review_logs')
-            .select('rating')
-            .eq('user_id', user.id)
-            .eq('card_id', currentCard.id)
-            .order('reviewed_at', { ascending: false })
-            .limit(LEECH_THRESHOLD - 1);
-
-          let recoveredStreak = 0;
-          for (const row of data ?? []) {
-            if (row.rating === 1) recoveredStreak += 1;
-            else break;
-          }
-
+          const recoveredStreak = await fetchLeechStreak(user.id, currentCard.id, LEECH_THRESHOLD - 1);
           if (recoveredStreak > 0) {
             previousFails = recoveredStreak;
             failCountRef.current.set(leechKey, recoveredStreak);
