@@ -13,7 +13,7 @@ import {
   List, ListOrdered, Code, Volume2, Palette, ImagePlus, ScanEye,
   ClipboardPaste, Paperclip, Settings2,
 } from 'lucide-react';
-import { IconImage } from '@/components/icons';
+import { IconImage, IconImageOcclusion } from '@/components/icons';
 import { loadToolbarConfig, saveToolbarConfig, type ToolbarItem } from '@/components/rich-editor/toolbarConfig';
 import { lazy, Suspense } from 'react';
 const ToolbarConfigSheet = lazy(() => import('@/components/rich-editor/ToolbarConfigSheet'));
