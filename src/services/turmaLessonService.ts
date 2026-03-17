@@ -9,10 +9,6 @@ import { supabase } from '@/integrations/supabase/client';
 // ── Typed table helpers (tables not in generated types) ──
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- turma_lesson_files not in generated types
 const lessonFilesTable = () => (supabase.from as (t: string) => ReturnType<typeof supabase.from>)('turma_lesson_files');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- turma_exams not in generated types
-const turmaExamsTable = () => (supabase.from as (t: string) => ReturnType<typeof supabase.from>)('turma_exams');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- turma_exam_questions not in generated types
-const turmaExamQuestionsTable = () => (supabase.from as (t: string) => ReturnType<typeof supabase.from>)('turma_exam_questions');
 
 // ── Lesson Files ──
 
