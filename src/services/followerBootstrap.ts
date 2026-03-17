@@ -24,7 +24,6 @@ export async function bootstrapFollowerDecks(
     p_folder_id: folderId,
   });
   if (error) {
-    console.error('[bootstrapFollowerDecks] Error:', error);
     throw error;
   }
   return (data as any) ?? { decks_created: 0, cards_created: 0 };

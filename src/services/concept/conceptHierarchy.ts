@@ -65,8 +65,7 @@ export async function mapPrerequisitesViaAI(userId: string): Promise<number> {
   });
 
   if (error || data?.error) {
-    console.error('mapPrerequisitesViaAI error:', error ?? data?.error);
-    throw new Error(data?.error ?? 'Failed to map prerequisites');
+    throw new Error(data?.error ?? error?.message ?? 'Failed to map prerequisites');
   }
 
   const pairs: { concept: string; prerequisite: string }[] = data?.pairs ?? [];

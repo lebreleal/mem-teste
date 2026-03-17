@@ -469,7 +469,6 @@ LIMITES:
   });
 
   if (error || data?.error) {
-    console.error('generateReinforcementCards error:', error ?? data?.error);
     return [];
   }
 
@@ -485,7 +484,6 @@ LIMITES:
       .single();
 
     if (deckError || !createdDeck) {
-      console.error('generateReinforcementCards deck create error:', deckError);
       return [];
     }
 
@@ -499,7 +497,7 @@ LIMITES:
     .eq('deck_id', reinforcementDeckId);
 
   if (deleteError) {
-    console.error('generateReinforcementCards card cleanup error:', deleteError);
+    throw deleteError;
   }
 
   const cardRows = generatedCards
@@ -520,7 +518,6 @@ LIMITES:
     .limit(10);
 
   if (insertError) {
-    console.error('generateReinforcementCards card insert error:', insertError);
     return [];
   }
 
@@ -548,12 +545,10 @@ export async function generateConceptQuestions(
   });
 
   if (error) {
-    console.error('generateConceptQuestions error:', error);
     return null;
   }
 
   if (data?.error) {
-    console.error('generateConceptQuestions AI error:', data.error);
     return null;
   }
 
@@ -596,7 +591,6 @@ Crie cartões objetivos sobre "${conceptName}".
   });
 
   if (genError || genData?.error || !Array.isArray(genData?.cards) || genData.cards.length === 0) {
-    console.error('generateQuestionsForConcept card gen error:', genError ?? genData?.error);
     return null;
   }
 

@@ -298,7 +298,6 @@ export async function moveConceptCardsToErrorDeck(
   // Strategy 3 (text fallback) REMOVED — too aggressive, caused mass migrations.
 
   if (cardIdsToMove.size === 0) {
-    console.warn('[ErrorDeck] No cards found for concepts:', terms, 'in deck scope:', deckScopeIds);
     return 0;
   }
 
@@ -323,11 +322,8 @@ export async function moveConceptCardsToErrorDeck(
   const candidateCards = allCandidateCards.slice(0, MAX_CARDS_PER_EVENT);
 
   if (candidateCards.length === 0) {
-    console.warn('[ErrorDeck] Candidates found by concept, but none eligible to move in current scope.');
     return 0;
   }
-
-  console.log(`[ErrorDeck] Found ${cardIdsToMove.size} candidate card IDs, ${candidateCards.length} eligible (capped at ${MAX_CARDS_PER_EVENT})`);
 
   // Preserve each card's real source deck for accurate return after mastery.
   const bySourceDeck = new Map<string, string[]>();
@@ -353,6 +349,5 @@ export async function moveConceptCardsToErrorDeck(
   );
 
   const movedCount = updates.reduce((sum, n) => sum + n, 0);
-  console.log('[ErrorDeck] Moved', movedCount, 'cards to error deck from', bySourceDeck.size, 'source decks');
   return movedCount;
 }
