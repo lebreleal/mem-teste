@@ -172,8 +172,7 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
         const editingCard = allCards.find(c => c.id === editingId);
         let frontContentForCloze = editingCard?.front_content;
         if (!frontContentForCloze && editingId) {
-          const { data } = await supabase.from('cards').select('front_content').eq('id', editingId).single();
-          frontContentForCloze = data?.front_content;
+          frontContentForCloze = await fetchCardFrontContent(editingId);
         }
         const allSiblingCards = frontContentForCloze
           ? await cardService.fetchClozeSiblings(allDeckIds, frontContentForCloze)
