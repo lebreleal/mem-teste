@@ -68,7 +68,7 @@ const Study = () => {
   const getCardDeckConfig = useCallback((_card: StudyCard) => deckConfig, [deckConfig]);
 
   // Local queue state
-  const [localQueue, setLocalQueue] = useState<any[]>([]);
+  const [localQueue, setLocalQueue] = useState<StudyCard[]>([]);
   const [queueInitialized, setQueueInitialized] = useState(false);
   const [reviewCount, setReviewCount] = useState(0);
   const [cardKey, setCardKey] = useState(0);
