@@ -677,6 +677,19 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
           />
         )}
       </Suspense>
+      <Suspense fallback={null}>
+        {aiCreatorOpen && onAICreate && (
+          <AICreatorSheet
+            open={aiCreatorOpen}
+            onOpenChange={setAiCreatorOpen}
+            onGenerate={(prompt) => {
+              onAICreate(prompt);
+              setAiCreatorOpen(false);
+            }}
+            isGenerating={isAICreating}
+          />
+        )}
+      </Suspense>
     </div>
   );
 };
