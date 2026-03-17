@@ -62,7 +62,7 @@ export async function getTagsFlat(): Promise<TagTreeNode[]> {
 export async function getTagChildren(parentId: string): Promise<Tag[]> {
   const { data, error } = await supabase
     .from('tags')
-    .select('*')
+    .select(TAG_COLS)
     .eq('parent_id', parentId)
     .is('merged_into_id', null)
     .order('usage_count', { ascending: false });
