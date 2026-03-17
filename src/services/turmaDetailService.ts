@@ -20,7 +20,7 @@ export async function fetchTurmaLessonFiles(turmaId: string): Promise<{ id: stri
 }
 
 export async function fetchActiveSubscription(turmaId: string, userId: string) {
-  const { data } = await supabase.from('turma_subscriptions').select('*')
+  const { data } = await supabase.from('turma_subscriptions').select('id, turma_id, user_id, plan_type, status, amount, started_at, expires_at, created_at')
     .eq('turma_id', turmaId).eq('user_id', userId)
     .gt('expires_at', new Date().toISOString())
     .order('expires_at', { ascending: false }).limit(1);
