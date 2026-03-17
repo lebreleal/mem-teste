@@ -318,7 +318,7 @@ const ContentTab = () => {
   const [editingDeck, setEditingDeck] = useState<TurmaDeck | null>(null);
   const [editPriceType, setEditPriceType] = useState<'free' | 'money' | 'credits'>('free');
   const [editAllowDownload, setEditAllowDownload] = useState(false);
-  const [confirmImportItem, setConfirmImportItem] = useState<{ type: 'deck' | 'exam'; data: TurmaDeck } | null>(null);
+  const [confirmImportItem, setConfirmImportItem] = useState<{ type: 'deck' | 'exam'; data: TurmaDeck | TurmaExam } | null>(null);
   const [gateDeck, setGateDeck] = useState<TurmaDeck | null>(null);
   const [trialDeck, setTrialDeck] = useState<{ deckId: string; deckName: string } | null>(null);
   
