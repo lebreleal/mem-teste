@@ -649,15 +649,7 @@ const CommunitySuggestions = ({ deckId }: { deckId: string }) => {
   const handleVote = async (suggestionId: string, vote: number) => {
     if (!user) return;
     try {
-      if (vote === 0) {
-        await supabase.from('suggestion_votes').delete().eq('suggestion_id', suggestionId).eq('user_id', user.id);
-      } else {
-        await supabase.from('suggestion_votes').upsert({
-          suggestion_id: suggestionId,
-          user_id: user.id,
-          vote,
-        } as any, { onConflict: 'suggestion_id,user_id' });
-      }
+      await voteSuggestion(suggestionId, user.id, vote);
       queryClient.invalidateQueries({ queryKey: ['deck-suggestions-public', deckId] });
     } catch {}
   };
