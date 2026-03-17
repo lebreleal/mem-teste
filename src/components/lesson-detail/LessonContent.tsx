@@ -45,12 +45,31 @@ interface ContentFolder {
   created_by: string;
 }
 
+/** Shape of a lesson file row */
+interface LessonFile {
+  id: string;
+  file_name: string;
+  file_url: string;
+  file_type: string;
+  file_size: number;
+  price_type?: string;
+  folder_id?: string | null;
+}
+
+/** Shape of a user deck row used in this component */
+interface UserDeckRow {
+  id: string;
+  name: string;
+  is_archived: boolean;
+  source_turma_deck_id?: string | null;
+}
+
 interface LessonContentProps {
-  lessonFiles: any[];
-  lessonDecks: any[];
-  lessonExams: any[];
+  lessonFiles: LessonFile[];
+  lessonDecks: TurmaDeck[];
+  lessonExams: TurmaExam[];
   contentFolders: ContentFolder[];
-  userDecks: any[];
+  userDecks: UserDeckRow[];
   canEdit: boolean;
   isAdmin: boolean;
   isMod: boolean;
@@ -63,10 +82,10 @@ interface LessonContentProps {
   onPreviewPdf: (url: string, restricted: boolean) => void;
   onUpdateFileVisibility?: (fileId: string, priceType: string) => void;
   onShowAddDeck: () => void;
-  onPreviewDeck: (td: any) => void;
-  onAddToCollection: (td: any) => void;
-  onDownloadDeck: (td: any) => void;
-  onEditPricing: (td: any) => void;
+  onPreviewDeck: (td: TurmaDeck) => void;
+  onAddToCollection: (td: TurmaDeck) => void;
+  onDownloadDeck: (td: TurmaDeck) => void;
+  onEditPricing: (td: TurmaDeck) => void;
   onUnshareDeck: (tdId: string) => void;
   isAddingToCollection: boolean;
   isDownloading: boolean;
@@ -79,9 +98,9 @@ interface LessonContentProps {
   onRenameFolder: (folderId: string, newName: string) => void;
   onDeleteFolder: (folderId: string) => void;
   onMoveItem?: (itemType: 'file' | 'deck', itemId: string, targetFolderId: string | null) => void;
-  onImportExam: (exam: any) => void;
+  onImportExam: (exam: TurmaExam) => void;
   onDeleteExam?: (examId: string) => void;
-  onOpenExam?: (exam: any) => void;
+  onOpenExam?: (exam: TurmaExam) => void;
 }
 
 const LessonContent = ({
