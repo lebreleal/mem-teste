@@ -19,6 +19,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const isOnDashboard = location.pathname === '/dashboard';
+  const isOnMateria = location.pathname.startsWith('/materia/');
   const folderId = searchParams.get('folder');
   const isInsideSala = isOnDashboard && !!folderId;
 
@@ -33,7 +34,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     }
     return false;
   }, [folderId, queryClient, user]);
-  const showNavRoutes = ['/dashboard', '/turmas', '/profile', '/desempenho'];
+  const showNavRoutes = ['/dashboard', '/turmas', '/profile', '/desempenho', '/materia'];
   const hideNavPatterns = ['/study/', '/exam/', '/lessons/'];
   const showNav = showNavRoutes.some(r => location.pathname === r || location.pathname.startsWith(r + '/'))
     && !hideNavPatterns.some(p => location.pathname.includes(p));
@@ -56,6 +57,11 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     const pomodoroHandler = () => setShowPomodoro(true);
     const addMenuHandler = () => {
+      // Handle /materia/* pages — dispatch pasta-specific event
+      if (isOnMateria) {
+        window.dispatchEvent(new CustomEvent('open-pasta-add-menu'));
+        return;
+      }
       // "+" only works on dashboard (not on other pages) and not inside community folders
       if (!isOnDashboard) return;
       if (isInsideSala && isCommunityFolder) return;
@@ -73,7 +79,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
       window.removeEventListener('open-pomodoro', pomodoroHandler);
       window.removeEventListener('open-add-menu', addMenuHandler);
     };
-  }, [isOnDashboard, isInsideSala, isCommunityFolder, navigate]);
+  }, [isOnDashboard, isOnMateria, isInsideSala, isCommunityFolder, navigate]);
 
   const startPomodoro = (forceIsBreak?: boolean) => {
     // Always clear any existing interval first to prevent stacking

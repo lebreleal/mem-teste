@@ -17,6 +17,7 @@ const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
   };
 
   const isOnDashboard = location.pathname === '/dashboard';
+  const isOnMateria = location.pathname.startsWith('/materia/');
 
   // Check if current folder is a community (followed) folder
   const isCommunityFolder = React.useMemo(() => {
@@ -33,7 +34,7 @@ const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
   }, [isOnDashboard, location.search, user, queryClient]);
 
   const isInsideSala = isOnDashboard && location.search.includes('folder=');
-  const isDisabledAdd = !isOnDashboard || (isInsideSala && isCommunityFolder);
+  const isDisabledAdd = (!isOnDashboard && !isOnMateria) || (isInsideSala && isCommunityFolder);
 
   const handleExplorar = () => {
     navigate('/turmas');
