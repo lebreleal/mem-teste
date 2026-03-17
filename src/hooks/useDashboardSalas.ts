@@ -216,8 +216,20 @@ export function useDashboardSalas({ currentFolderId, setCurrentFolderId, folders
 
   const handleSaveSlug = useCallback(async () => {
     if (!userTurma?.id || !shareSlugEdit) return;
+    if (shareSlugEdit.length < 3) {
+      toast({ title: 'O link precisa ter pelo menos 3 caracteres', variant: 'destructive' });
+      return;
+    }
     setSavingSlug(true);
     try {
+      // Check uniqueness before saving
+      const { supabase } = await import('@/integrations/supabase/client');
+      const { data: clash } = await supabase.from('turmas').select('id').eq('share_slug', shareSlugEdit).neq('id', userTurma.id).limit(1);
+      if (clash && clash.length > 0) {
+        toast({ title: 'Esse link já está em uso. Escolha outro!', variant: 'destructive' });
+        setSavingSlug(false);
+        return;
+      }
       await updateTurma(userTurma.id, { shareSlug: shareSlugEdit });
       await refetchTurma();
       toast({ title: 'Link atualizado!' });
