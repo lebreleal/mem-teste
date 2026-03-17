@@ -32,8 +32,6 @@ export {
   fetchLinkedDeckSource,
   fetchPendingSuggestions,
   countPendingSuggestions,
-  countDeckQuestionsRecursive,
-  fetchQuestionCountsByDeck,
 } from './deckCrud';
 
 // Import operations

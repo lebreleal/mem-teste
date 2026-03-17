@@ -140,38 +140,6 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
               </button>
             </PopoverTrigger>
             <PopoverContent className="w-56 p-3" side="bottom" align="start">
-              {isQMode ? (
-                <>
-                  <p className="text-xs font-semibold text-foreground mb-2">Desempenho nas questões</p>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2.5 w-2.5 rounded-full bg-success" />
-                        <span className="text-xs text-muted-foreground">Corretas</span>
-                      </div>
-                      <span className="text-xs font-semibold text-foreground">{qd.correct}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2.5 w-2.5 rounded-full bg-destructive" />
-                        <span className="text-xs text-muted-foreground">Erradas</span>
-                      </div>
-                      <span className="text-xs font-semibold text-foreground">{qd.wrong}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2.5 w-2.5 rounded-full bg-muted" />
-                        <span className="text-xs text-muted-foreground">A responder</span>
-                      </div>
-                      <span className="text-xs font-semibold text-foreground">{qd.unanswered}</span>
-                    </div>
-                    <div className="border-t border-border/50 pt-2 mt-2 flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">Total</span>
-                      <span className="text-xs font-semibold text-foreground">{qd.total}</span>
-                    </div>
-                  </div>
-                </>
-              ) : (
                 <>
                   <p className="text-xs font-semibold text-foreground mb-2">Classificação dos cards</p>
                   <div className="space-y-2">
@@ -216,7 +184,6 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
                     </div>
                   </div>
                 </>
-              )}
             </PopoverContent>
           </Popover>
         </div>

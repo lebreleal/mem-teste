@@ -527,7 +527,7 @@ const DeckDetailContent = () => {
           </div>
 
           {/* DeckStatsCard – time estimate + study bar */}
-          <DeckStatsCard mode={activeTab as 'cards' | 'questions'} />
+          <DeckStatsCard mode="cards" />
         </div>
       </div>
 

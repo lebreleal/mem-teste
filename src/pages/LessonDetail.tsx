@@ -42,9 +42,7 @@ import {
   insertCardCopies,
   unarchiveDeck,
   linkDeckToTurmaSource,
-  unarchiveFolder,
-  importExamToTurma,
-  importTurmaExamToPersonal,
+  unarchiveDeck,
 } from '@/services/turmaLessonService';
 
 const LessonDetail = () => {
