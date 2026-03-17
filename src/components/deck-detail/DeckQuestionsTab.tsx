@@ -569,10 +569,7 @@ const QuestionPractice = ({
     setHintLoading(true);
     try {
       spendEnergy.mutate(1);
-      const { data, error } = await supabase.functions.invoke('ai-tutor', {
-        body: { type: 'question-hint', question: q.question_text, options: q.options, correctIndex: q.correct_indices?.[0] ?? 0 },
-      });
-      if (error) throw error;
+      const data = await invokeAITutor({ type: 'question-hint', question: q.question_text, options: q.options, correctIndex: q.correct_indices?.[0] ?? 0 });
       setHintText(data?.response || 'Tente analisar cada alternativa com cuidado.');
     } catch { toast({ title: 'Erro ao gerar dica', variant: 'destructive' }); }
     finally { setHintLoading(false); }
