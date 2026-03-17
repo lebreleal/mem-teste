@@ -14,7 +14,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TurmaDetailProvider, useTurmaDetail } from '@/components/turma-detail/TurmaDetailContext';
 import { Button } from '@/components/ui/button';
-import { fetchSalaDecksData, fetchSalaQuestionCounts, insertTurmaMember, getOrCreateTurmaFolder, fetchTurmaFolderId } from '@/services/adminService';
+import { fetchSalaDecksData, insertTurmaMember, getOrCreateTurmaFolder, fetchTurmaFolderId } from '@/services/adminService';
 import { ChevronLeft, Star, FolderOpen, Share2, Play, Plus, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -103,18 +103,11 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
     return latest || null;
   }, [salaDecks]);
 
-  // Question counts per deck
   const allDeckIds = useMemo(() => salaDecks.map(d => d.id), [salaDecks]);
-  const { data: questionCountMap } = useQuery({
-    queryKey: ['sala-question-counts', turmaId, allDeckIds.join(',')],
-    queryFn: () => fetchSalaQuestionCounts(allDeckIds),
-    enabled: allDeckIds.length > 0,
-    staleTime: 60_000,
-  });
 
   // Aggregated stats
   const totalStats = useMemo(() => {
-    let totalCards = 0, mastered = 0, novo = 0, facil = 0, bom = 0, dificil = 0, errei = 0, totalQuestions = 0;
+    let totalCards = 0, mastered = 0, novo = 0, facil = 0, bom = 0, dificil = 0, errei = 0;
     for (const d of salaDecks) {
       totalCards += d.total_cards;
       mastered += d.mastered_cards;
@@ -124,12 +117,9 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
       dificil += d.class_dificil ?? 0;
       errei += d.class_errei ?? 0;
     }
-    if (questionCountMap) {
-      for (const c of questionCountMap.values()) totalQuestions += c;
-    }
     const progressPct = totalCards > 0 ? Math.round(((totalCards - novo) / totalCards) * 100) : 0;
-    return { totalCards, mastered, novo, facil, bom, dificil, errei, totalQuestions, progressPct };
-  }, [salaDecks, questionCountMap]);
+    return { totalCards, mastered, novo, facil, bom, dificil, errei, progressPct };
+  }, [salaDecks]);
 
   // DeckRow helpers
   const rootDecks = useMemo(
@@ -305,9 +295,6 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
             <div className="flex items-center gap-3 text-[11px] text-muted-foreground mb-2">
               <span>{rootDecks.length} {rootDecks.length === 1 ? 'deck' : 'decks'}</span>
               <span>{totalStats.totalCards} {totalStats.totalCards === 1 ? 'cartão' : 'cartões'}</span>
-              {totalStats.totalQuestions > 0 && (
-                <span>{totalStats.totalQuestions} {totalStats.totalQuestions === 1 ? 'questão' : 'questões'}</span>
-              )}
             </div>
           )}
 
@@ -392,7 +379,7 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
                 toggleExpand={toggleExpand}
                 expandedAccordionId={expandedAccordionId}
                 onAccordionToggle={(id) => setExpandedAccordionId(prev => prev === id ? null : id)}
-                questionCountMap={questionCountMap}
+                questionCountMap={undefined}
               />
             ))}
           </div>

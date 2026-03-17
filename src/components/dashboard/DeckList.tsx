@@ -6,15 +6,13 @@
 
 import { useState, useMemo } from 'react';
 import {
-  GraduationCap, ChevronRight, Loader2, Search, Tag as TagIcon, CheckCircle2, XCircle,
+  GraduationCap, ChevronRight, Loader2, Search, CheckCircle2, XCircle,
 } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { Progress } from '@/components/ui/progress';
 import DeckRow from './DeckRow';
 import { usePendingDecks, type PendingDeck } from '@/stores/usePendingDecks';
 import { useDragReorder } from '@/hooks/useDragReorder';
-import { fetchDeckQuestionCounts } from '@/services/dashboardService';
 import type { DeckWithStats } from '@/hooks/useDecks';
 
 const ERROR_DECK_NAME = '📕 Baralho de Erros';
@@ -65,27 +63,7 @@ const DeckList = ({
   organizeMode = false,
   ...deckRowProps
 }: DeckListProps) => {
-  const { user } = useAuth();
   const { pendingDecks } = usePendingDecks();
-
-  // Fetch question counts per deck via service (Lei 2A compliant)
-  const allDeckIdsWithSubs = useMemo(() => {
-    const ids = new Set<string>();
-    const collect = (parentId: string) => {
-      ids.add(parentId);
-      const subs = deckRowProps.getSubDecks(parentId);
-      for (const s of subs) collect(s.id);
-    };
-    for (const d of currentDecks) collect(d.id);
-    return [...ids];
-  }, [currentDecks, deckRowProps.getSubDecks]);
-
-  const { data: questionCountMap } = useQuery({
-    queryKey: ['deck-question-counts-list', user?.id, allDeckIdsWithSubs.join(',')],
-    queryFn: () => fetchDeckQuestionCounts(allDeckIdsWithSubs),
-    enabled: !!user && allDeckIdsWithSubs.length > 0,
-    staleTime: 60_000,
-  });
 
   const [expandedAccordionId, setExpandedAccordionId] = useState<string | null>(null);
 
@@ -156,14 +134,14 @@ const DeckList = ({
       }
       return 'Salvando...';
     }
-    if (pending.status === 'done') return 'Criando tags...';
+    if (pending.status === 'done') return 'Finalizando...';
     if (pending.status === 'error') return 'Erro — toque para remover';
     return `Gerando lote ${pending.progress.current}/${pending.progress.total}`;
   };
 
   const getPendingIcon = (pending: PendingDeck) => {
     if (pending.status === 'review_ready') return <CheckCircle2 className="h-5 w-5 text-success animate-in zoom-in-50" />;
-    if (pending.status === 'done') return <TagIcon className="h-5 w-5 text-primary animate-pulse" />;
+    if (pending.status === 'done') return <Loader2 className="h-5 w-5 text-primary animate-pulse" />;
     if (pending.status === 'error') return <XCircle className="h-5 w-5 text-destructive" />;
     return <Loader2 className="h-5 w-5 text-primary animate-spin" />;
   };
@@ -227,7 +205,7 @@ const DeckList = ({
             hasPendingUpdate={decksWithPendingUpdates instanceof Set ? decksWithPendingUpdates.has(deck.id) : false}
             expandedAccordionId={expandedAccordionId}
             onAccordionToggle={handleAccordionToggle}
-            questionCountMap={questionCountMap}
+            questionCountMap={undefined}
             organizeMode={organizeMode}
             {...deckRowProps}
           />
@@ -266,7 +244,7 @@ const DeckList = ({
             hasPendingUpdate={decksWithPendingUpdates instanceof Set ? decksWithPendingUpdates.has(deck.id) : false}
             expandedAccordionId={expandedAccordionId}
             onAccordionToggle={handleAccordionToggle}
-            questionCountMap={questionCountMap}
+            questionCountMap={undefined}
             organizeMode={organizeMode}
             {...deckRowProps}
           />

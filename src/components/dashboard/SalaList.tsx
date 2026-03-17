@@ -6,7 +6,7 @@
 import { useMemo } from 'react';
 import { GraduationCap } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { fetchDeckQuestionCounts, fetchCommunityFolderMeta } from '@/services/dashboardService';
+import { fetchCommunityFolderMeta } from '@/services/dashboardService';
 import { useAuth } from '@/hooks/useAuth';
 import SalaCard from './SalaCard';
 import type { Folder } from '@/types/folder';
@@ -19,7 +19,6 @@ interface SalaInfo {
   deckCount: number;
   totalCards: number;
   masteredCards: number;
-  questionCount: number;
   dueCount: number;
   ownerName?: string;
   lastUpdated?: string;
@@ -34,7 +33,6 @@ interface SalaListProps {
 }
 
 const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }: SalaListProps) => {
-  const { user } = useAuth();
 
   // Build O(1) lookup indexes once
   const { childrenIndex, decksByFolder } = useMemo(() => {
@@ -84,19 +82,7 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
     return ids;
   };
 
-  // Fetch question counts per deck (batch query)
-  const allDeckIds = useMemo(() => decks.filter(d => !d.is_archived).map(d => d.id), [decks]);
-  const { data: questionCounts } = useQuery({
-    queryKey: ['deck-question-counts', user?.id],
-    queryFn: () => fetchDeckQuestionCounts(allDeckIds),
-    enabled: !!user && allDeckIds.length > 0 && !isLoading,
-    staleTime: 120_000,
-  });
-
-  const getQuestionCount = (deckIds: string[]): number => {
-    if (!questionCounts) return 0;
-    return deckIds.reduce((sum, id) => sum + (questionCounts.get(id) ?? 0), 0);
-  };
+  // Fetch question counts removed
 
   // Identify community-followed folders
   const communityFolderIds = useMemo(() =>
@@ -151,13 +137,12 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
           deckCount: countAllDecksRecursive(folderDecks),
           totalCards,
           masteredCards,
-          questionCount: getQuestionCount(allIds),
           dueCount,
           ownerName: meta?.ownerName,
           lastUpdated: meta?.lastUpdated,
         };
       }),
-    [folders, decksByFolder, childrenIndex, communityMeta, getAggregateStats, questionCounts]
+    [folders, decksByFolder, childrenIndex, communityMeta, getAggregateStats]
   );
 
   if (isLoading) {
@@ -198,7 +183,6 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
           deckCount={sala.deckCount}
           totalCards={sala.totalCards}
           masteredCards={sala.masteredCards}
-          questionCount={sala.questionCount}
           dueCount={sala.dueCount}
           imageUrl={sala.imageUrl}
           ownerName={sala.ownerName}

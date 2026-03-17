@@ -24,40 +24,7 @@ export async function fetchDeckHierarchyIds(rootDeckId: string, userId?: string)
   return allIds;
 }
 
-// ─── Deck Questions & Attempts (for stats cards) ───
-
-export interface QuestionStatsResult {
-  total: number;
-  correct: number;
-  wrong: number;
-  unanswered: number;
-}
-
-export async function fetchDeckQuestionStats(deckIds: string[], userId: string): Promise<QuestionStatsResult> {
-  const { data: questions } = await supabase
-    .from('deck_questions')
-    .select('id')
-    .in('deck_id', deckIds);
-  const qIds = (questions ?? []).map((q: { id: string }) => q.id);
-  if (qIds.length === 0) return { total: 0, correct: 0, wrong: 0, unanswered: 0 };
-
-  const { data: attempts } = await supabase
-    .from('deck_question_attempts')
-    .select('question_id, is_correct, answered_at')
-    .eq('user_id', userId)
-    .in('question_id', qIds);
-
-  const latestMap = new Map<string, { is_correct: boolean; answered_at: string }>();
-  for (const a of (attempts ?? []) as Array<{ question_id: string; is_correct: boolean; answered_at: string }>) {
-    const prev = latestMap.get(a.question_id);
-    if (!prev || a.answered_at > prev.answered_at) latestMap.set(a.question_id, a);
-  }
-  let correct = 0, wrong = 0;
-  for (const [, a] of latestMap) {
-    if (a.is_correct) correct++; else wrong++;
-  }
-  return { total: qIds.length, correct, wrong, unanswered: qIds.length - latestMap.size };
-}
+// Question stats removed
 
 // ─── Concept Cards ───
 

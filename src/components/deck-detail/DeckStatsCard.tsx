@@ -12,10 +12,10 @@ import { deriveAvgSecondsPerCard, calculateRealStudyTime, DEFAULT_STUDY_METRICS 
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useStudyPlan } from '@/hooks/useStudyPlan';
-import { fetchDeckHierarchyIds, fetchDeckQuestionStats } from '@/services/uiQueryService';
+import { fetchDeckHierarchyIds } from '@/services/uiQueryService';
 
 interface DeckStatsCardProps {
-  mode?: 'cards' | 'questions';
+  mode?: 'cards';
 }
 
 const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
@@ -40,36 +40,22 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
     };
   }, [serverCardCounts]);
 
-  // === Question stats (always fetch so hooks are stable) ===
-  const { data: questionData } = useQuery({
-    queryKey: ['deck-stats-questions', deckId],
-    queryFn: async () => {
-      const allIds = await fetchDeckHierarchyIds(deckId!);
-      return fetchDeckQuestionStats(allIds, user!.id);
-    },
-    enabled: !!deckId && !!user,
-    staleTime: 30_000,
-  });
+  // Question stats removed
 
-  const isQMode = mode === 'questions';
-  const qd = questionData ?? { total: 0, correct: 0, wrong: 0, unanswered: 0 };
+  const qd = { total: 0, correct: 0, wrong: 0, unanswered: 0 };
 
   // Progress — use server total, not paginated allCards.length
   const serverTotal = serverCardCounts?.total ?? 0;
-  const total = isQMode ? qd.total : serverTotal;
-  const progressPct = isQMode
-    ? (qd.total > 0 ? Math.round((qd.correct / qd.total) * 100) : 0)
-    : (serverTotal > 0 ? Math.round(((serverTotal - diffCounts.novo) / serverTotal) * 100) : 0);
+  const total = serverTotal;
+  const progressPct = serverTotal > 0 ? Math.round(((serverTotal - diffCounts.novo) / serverTotal) * 100) : 0;
 
   // Time estimate — based on today's due cards (capped by daily limits from context)
-  const dueNew = isQMode ? qd.unanswered + qd.wrong : newCountToday;
-  const dueLearning = isQMode ? 0 : ctxLearningCount;
-  const dueReview = isQMode ? 0 : masteredToday;
-  const pendingForTime = isQMode ? (qd.unanswered + qd.wrong) : (dueNew + dueLearning + dueReview);
+  const dueNew = newCountToday;
+  const dueLearning = ctxLearningCount;
+  const dueReview = masteredToday;
+  const pendingForTime = dueNew + dueLearning + dueReview;
   const studyMetrics = realStudyMetrics ?? DEFAULT_STUDY_METRICS;
-  const remainingSeconds = isQMode
-    ? pendingForTime * deriveAvgSecondsPerCard(studyMetrics)
-    : calculateRealStudyTime(dueNew, dueLearning, dueReview, studyMetrics);
+  const remainingSeconds = calculateRealStudyTime(dueNew, dueLearning, dueReview, studyMetrics);
   const remainingMin = Math.ceil(remainingSeconds / 60);
   const timeLabel = remainingMin >= 60
     ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
@@ -79,36 +65,22 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
   const R = 22;
   const C = 2 * Math.PI * R;
 
-  const segments = isQMode
-    ? (qd.total > 0 ? [
-        { pct: qd.correct / qd.total, color: 'hsl(var(--success))', key: 'correct' },
-        { pct: qd.wrong / qd.total, color: 'hsl(var(--destructive))', key: 'wrong' },
-        { pct: qd.unanswered / qd.total, color: 'hsl(var(--muted))', key: 'unanswered' },
-      ] : [])
-    : (serverTotal > 0 ? [
+  const segments = serverTotal > 0 ? [
         { pct: diffCounts.facil / serverTotal, color: 'hsl(var(--info))', key: 'facil' },
         { pct: diffCounts.bom / serverTotal, color: 'hsl(var(--success))', key: 'bom' },
         { pct: diffCounts.dificil / serverTotal, color: 'hsl(var(--warning))', key: 'dificil' },
         { pct: diffCounts.errei / serverTotal, color: 'hsl(var(--destructive))', key: 'errei' },
         { pct: diffCounts.novo / serverTotal, color: 'hsl(var(--muted))', key: 'novo' },
-      ] : []);
+      ] : [];
 
   let offset = 0;
 
   // Study action
   const handleStudy = () => {
-    if (isQMode) {
-      // Navigate to question practice (the tab handles it via autoStart)
-      // We need a way to trigger practice - use a custom event or state
-      window.dispatchEvent(new CustomEvent('start-question-practice'));
-    } else {
-      navigate(`/study/${deckId}`, { replace: true });
-    }
+    navigate(`/study/${deckId}`, { replace: true });
   };
 
-  const canStudy = isQMode
-    ? qd.total > 0
-    : (isQuickReview ? totalCards > 0 : studyPending > 0);
+  const canStudy = isQuickReview ? totalCards > 0 : studyPending > 0;
 
   return (
     <div className="space-y-1">
@@ -124,9 +96,7 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
               </button>
             </PopoverTrigger>
             <PopoverContent side="top" className="text-xs w-56 p-2">
-              {isQMode
-                ? 'Tempo estimado para praticar todas as questões pendentes.'
-                : 'Tempo estimado para revisar todos os cartões pendentes deste baralho, com base na sua velocidade média de estudo.'}
+              {'Tempo estimado para revisar todos os cartões pendentes deste baralho, com base na sua velocidade média de estudo.'}
             </PopoverContent>
           </Popover>
         </div>
@@ -164,44 +134,12 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
             <PopoverTrigger asChild>
               <button
                 className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-muted border border-border/50 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                aria-label={isQMode ? 'Desempenho nas questões' : 'Classificação dos cards'}
+                aria-label={'Classificação dos cards'}
               >
                 <Info className="h-3 w-3" />
               </button>
             </PopoverTrigger>
             <PopoverContent className="w-56 p-3" side="bottom" align="start">
-              {isQMode ? (
-                <>
-                  <p className="text-xs font-semibold text-foreground mb-2">Desempenho nas questões</p>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2.5 w-2.5 rounded-full bg-success" />
-                        <span className="text-xs text-muted-foreground">Corretas</span>
-                      </div>
-                      <span className="text-xs font-semibold text-foreground">{qd.correct}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2.5 w-2.5 rounded-full bg-destructive" />
-                        <span className="text-xs text-muted-foreground">Erradas</span>
-                      </div>
-                      <span className="text-xs font-semibold text-foreground">{qd.wrong}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2.5 w-2.5 rounded-full bg-muted" />
-                        <span className="text-xs text-muted-foreground">A responder</span>
-                      </div>
-                      <span className="text-xs font-semibold text-foreground">{qd.unanswered}</span>
-                    </div>
-                    <div className="border-t border-border/50 pt-2 mt-2 flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">Total</span>
-                      <span className="text-xs font-semibold text-foreground">{qd.total}</span>
-                    </div>
-                  </div>
-                </>
-              ) : (
                 <>
                   <p className="text-xs font-semibold text-foreground mb-2">Classificação dos cards</p>
                   <div className="space-y-2">
@@ -246,7 +184,6 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
                     </div>
                   </div>
                 </>
-              )}
             </PopoverContent>
           </Popover>
         </div>

@@ -17,16 +17,11 @@ import { useToast } from '@/hooks/use-toast';
 const FEATURE_NAMES: Record<string, string> = {
   generate_deck: 'Gerar Deck',
   ai_tutor: 'Tutor IA',
-  grade_exam: 'Corrigir Prova',
   enhance_card: 'Aprimorar Card',
   enhance_import: 'Aprimorar Importação',
   ai_chat: 'Chat IA',
-  generate_onboarding: 'Onboarding IA',
-  auto_tag: 'Auto-Tag',
-  suggest_tags: 'Sugerir Tags',
   detect_import_format: 'Detectar Formato',
   organize_import: 'Organizar Importação',
-  tts: 'Text-to-Speech',
 };
 
 // Pricing per 1M tokens (USD) — calibrated against Google Cloud Billing (Feb 2026)

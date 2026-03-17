@@ -18,7 +18,6 @@ interface SalaCardProps {
   deckCount: number;
   totalCards: number;
   masteredCards: number;
-  questionCount: number;
   dueCount: number;
   isVirtual?: boolean;
   imageUrl?: string | null;
@@ -29,7 +28,7 @@ interface SalaCardProps {
   onClick: () => void;
 }
 
-const SalaCard = ({ name, deckCount, totalCards, masteredCards, questionCount, dueCount, isVirtual, imageUrl, ownerName, lastUpdated, onClick }: SalaCardProps) => {
+const SalaCard = ({ name, deckCount, totalCards, masteredCards, dueCount, isVirtual, imageUrl, ownerName, lastUpdated, onClick }: SalaCardProps) => {
   const masteryPct = totalCards > 0 ? Math.round((masteredCards / totalCards) * 1000) / 10 : 0;
   const isCommunity = !!ownerName;
 
@@ -52,7 +51,6 @@ const SalaCard = ({ name, deckCount, totalCards, masteredCards, questionCount, d
           <p className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
             <span>{deckCount} {deckCount === 1 ? 'deck' : 'decks'}</span>
             {totalCards > 0 && <span>{totalCards} {totalCards === 1 ? 'cartão' : 'cartões'}</span>}
-            {questionCount > 0 && <span>{questionCount} {questionCount === 1 ? 'questão' : 'questões'}</span>}
           </p>
           <span className="text-xs text-muted-foreground ml-auto">{masteryPct}%</span>
         </div>

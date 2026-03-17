@@ -158,24 +158,9 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
       setPages(textPages.map(p => ({ ...p, selected: true })));
       setStep('pages');
     } else {
-      setStep('loading-pages');
-      try {
-        const { extractDocumentText } = await import('@/lib/docUtils');
-        const text = await extractDocumentText(file);
-        const cleaned = text.trim();
-        if (cleaned.length > 50) {
-          const textPages = splitTextIntoPages(cleaned);
-          setPages(textPages.map(p => ({ ...p, selected: true })));
-          setStep('pages');
-        } else {
-          toast({ title: 'Conteúdo limitado', description: 'Para melhores resultados, copie e cole o texto.', variant: 'destructive' });
-          setStep('upload'); setInputMode('text'); setFileName('');
-        }
-      } catch (err: unknown) {
-        console.error('Document extraction error:', err);
-        toast({ title: 'Erro ao processar arquivo', description: err instanceof Error ? err.message : 'Tente colar o texto diretamente.', variant: 'destructive' });
-        setStep('upload'); setInputMode(null); setFileName('');
-      }
+      // Unsupported file type — ask user to paste text
+      toast({ title: 'Formato não suportado', description: 'Use PDF, TXT ou cole o texto diretamente.', variant: 'destructive' });
+      setStep('upload'); setInputMode('text'); setFileName('');
     }
   }, [deckName, toast, user, saveFileSource]);
 
