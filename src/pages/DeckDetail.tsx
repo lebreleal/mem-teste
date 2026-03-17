@@ -541,15 +541,6 @@ const DeckDetailContent = () => {
 
       <DeckDetailDialogs />
 
-      {suggestOpen && (
-        <Suspense fallback={null}>
-          <SuggestCorrectionModal
-            open={suggestOpen}
-            onOpenChange={setSuggestOpen}
-            deckId={deckId!}
-          />
-        </Suspense>
-      )}
     </div>
   );
 };
