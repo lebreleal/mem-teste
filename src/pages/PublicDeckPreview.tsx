@@ -900,45 +900,12 @@ const PublicDeckPreview = () => {
   // Check if user already follows this deck (has a linked copy)
   const { data: isFollowing = false } = useQuery({
     queryKey: ['deck-following', deckId, user?.id],
-    queryFn: async () => {
-      if (turmaDeck?.id) {
-        const { data } = await supabase
-          .from('decks')
-          .select('id')
-          .eq('user_id', user!.id)
-          .eq('source_turma_deck_id', turmaDeck.id)
-          .limit(1)
-          .maybeSingle();
-        return !!data;
-      }
-      // For non-turma public decks, check via marketplace listing or is_live_deck + name
-      const { data: listing } = await supabase
-        .from('marketplace_listings')
-        .select('id')
-        .eq('deck_id', deckId!)
-        .eq('is_published', true)
-        .maybeSingle();
-      if (listing) {
-        const { data } = await supabase
-          .from('decks')
-          .select('id')
-          .eq('user_id', user!.id)
-          .eq('source_listing_id', listing.id)
-          .limit(1)
-          .maybeSingle();
-        return !!data;
-      }
-      // Fallback: check by name match + is_live_deck
-      const { data } = await supabase
-        .from('decks')
-        .select('id')
-        .eq('user_id', user!.id)
-        .eq('is_live_deck', true)
-        .eq('name', deck?.name ?? '')
-        .limit(1)
-        .maybeSingle();
-      return !!data;
-    },
+    queryFn: () => checkDeckFollowing({
+      deckId: deckId!,
+      userId: user!.id,
+      turmaDeckId: turmaDeck?.id ?? null,
+      deckName: deck?.name ?? '',
+    }),
     enabled: !!user && !!deckId && !isOwner,
   });
 
