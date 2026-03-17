@@ -435,9 +435,30 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
 
   return (
     <div className="flex flex-col gap-2">
+      {/* Header: back + title + save */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={onCancel}
+          className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-accent transition-colors shrink-0"
+          title="Voltar"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-foreground truncate">Oclusão de Imagem</p>
+          <p className="text-[10px] text-muted-foreground leading-tight">
+            {shapes.length} área{shapes.length !== 1 ? 's' : ''} · {cardCount} cartão{cardCount !== 1 ? 'ões' : ''}
+          </p>
+        </div>
+        <Button size="sm" className="h-8 rounded-xl text-xs px-4" onClick={handleSave} disabled={isSaving || shapes.length === 0}>
+          {isSaving ? 'Salvando...' : 'Salvar'}
+        </Button>
+      </div>
+
       {/* Compact toolbar row */}
       <div className="flex items-center gap-0.5">
-        {/* Drawing tools */}
         {tools.map(t => (
           <button
             key={t.id}
@@ -455,7 +476,6 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
 
         <div className="h-4 w-px bg-border mx-1" />
 
-        {/* Zoom */}
         <button className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent" onClick={() => setZoom(z => Math.max(0.3, z - 0.25))} title="Reduzir">
           <IconZoomOut />
         </button>
@@ -464,23 +484,16 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
           <IconZoomIn />
         </button>
 
-        {/* Spacer */}
         <div className="flex-1" />
 
-        {/* Delete selected */}
-        {selectedId && (
-          <button className="h-7 w-7 flex items-center justify-center rounded-md text-destructive hover:bg-destructive/10" onClick={deleteSelected} title="Excluir">
-            <IconTrash />
+        {shapes.length > 0 && (
+          <button
+            className="h-7 flex items-center gap-1 px-2 rounded-md text-xs text-muted-foreground hover:bg-accent"
+            onClick={() => { setShapes([]); setSelectedId(null); setCurrentPoints([]); }}
+          >
+            <IconClear /> Limpar
           </button>
         )}
-
-        {/* Clear */}
-        <button
-          className="h-7 flex items-center gap-1 px-2 rounded-md text-xs text-muted-foreground hover:bg-accent"
-          onClick={() => { setShapes([]); setSelectedId(null); setCurrentPoints([]); }}
-        >
-          <IconClear /> Limpar
-        </button>
       </div>
 
       {/* Color dots — progressive */}
@@ -513,15 +526,8 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
         </p>
       )}
 
-      {/* Polygon hint */}
-      {tool === 'polygon' && currentPoints.length > 0 && (
-        <p className="text-[11px] text-muted-foreground bg-muted/50 rounded-lg px-2.5 py-1">
-          Clique para vértices. Feche no primeiro ponto. ({currentPoints.length} pt{currentPoints.length !== 1 ? 's' : ''})
-        </p>
-      )}
-
       {/* Canvas + right sidebar */}
-      <div className="flex gap-2">
+      <div className="flex gap-1.5">
         {/* Image canvas */}
         <div
           ref={containerRef}
@@ -639,33 +645,12 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
         </div>
       </div>
 
-      {/* Status + info */}
-      <div className="flex items-center gap-2">
-        <p className="text-[11px] text-muted-foreground leading-snug flex-1">
-          {shapes.length} área{shapes.length !== 1 ? 's' : ''} · {cardCount} cartão{cardCount !== 1 ? 'ões' : ''}
-          {selectedId && <span className="text-primary font-medium ml-1">· selecionado</span>}
-        </p>
-        <button
-          className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
-          onClick={() => { setShapes([]); setSelectedId(null); setCurrentPoints([]); }}
-        >
-          Limpar tudo
+      {/* Remove image link */}
+      {onRemoveImage && (
+        <button className="inline-flex items-center gap-1 text-[11px] text-destructive hover:text-destructive/80 font-medium self-start" onClick={onRemoveImage}>
+          <IconImageOff /> Remover imagem
         </button>
-      </div>
-
-      {/* Bottom actions */}
-      <div className="flex items-center gap-2 pt-0.5">
-        {onRemoveImage && (
-          <button className="inline-flex items-center gap-1 text-[11px] text-destructive hover:text-destructive/80 font-medium" onClick={onRemoveImage}>
-            <IconImageOff /> Remover imagem
-          </button>
-        )}
-        <div className="flex-1" />
-        <Button variant="outline" size="sm" className="h-8 rounded-xl text-xs" onClick={onCancel}>Cancelar</Button>
-        <Button size="sm" className="h-8 rounded-xl text-xs" onClick={handleSave} disabled={isSaving || shapes.length === 0}>
-          {isSaving ? 'Salvando...' : `Salvar (${cardCount})`}
-        </Button>
-      </div>
+      )}
     </div>
   );
 };
