@@ -28,7 +28,7 @@ interface SalaCardProps {
   onClick: () => void;
 }
 
-const SalaCard = ({ name, deckCount, totalCards, masteredCards, questionCount, dueCount, isVirtual, imageUrl, ownerName, lastUpdated, onClick }: SalaCardProps) => {
+const SalaCard = ({ name, deckCount, totalCards, masteredCards, dueCount, isVirtual, imageUrl, ownerName, lastUpdated, onClick }: SalaCardProps) => {
   const masteryPct = totalCards > 0 ? Math.round((masteredCards / totalCards) * 1000) / 10 : 0;
   const isCommunity = !!ownerName;
 
