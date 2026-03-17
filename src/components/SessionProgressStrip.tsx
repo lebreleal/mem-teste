@@ -3,6 +3,8 @@
  * Shows card counter, accuracy, and time elapsed.
  */
 
+import { IconDeck } from '@/components/icons';
+
 export interface DeckSessionStats {
   deckId: string;
   deckName: string;
