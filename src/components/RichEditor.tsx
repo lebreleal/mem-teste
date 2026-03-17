@@ -221,6 +221,8 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   }, [editor, clozeActive]);
 
   const uploadImageFile = async (file: File) => {
+    uploadImageFileRef.current = uploadImageFile;
+    // actual logic below — re-declared to keep ref fresh
     if (!user || !editor) return;
     if (file.size > 5 * 1024 * 1024) {
       toast({ title: 'Máximo 5MB', variant: 'destructive' }); return;
