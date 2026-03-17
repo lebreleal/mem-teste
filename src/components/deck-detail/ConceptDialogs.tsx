@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Search } from 'lucide-react';
 import { useCards } from '@/hooks/useCards';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchConceptCardIds } from '@/services/uiQueryService';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 // ─── Create Concept Dialog ───────────────────────
