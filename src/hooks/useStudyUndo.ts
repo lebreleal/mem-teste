@@ -5,9 +5,10 @@ import { useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import type { StudyCard } from '@/types/study';
 
 export interface UndoSnapshot {
-  queue: any[];
+  queue: StudyCard[];
   reviewCount: number;
   cardKey: number;
   cardId: string;
@@ -21,7 +22,7 @@ export interface UndoSnapshot {
 }
 
 export function useStudyUndo(
-  setLocalQueue: React.Dispatch<React.SetStateAction<any[]>>,
+  setLocalQueue: React.Dispatch<React.SetStateAction<StudyCard[]>>,
   setReviewCount: React.Dispatch<React.SetStateAction<number>>,
   setCardKey: React.Dispatch<React.SetStateAction<number>>,
   reviewedCardIdsRef: React.MutableRefObject<Set<string>>,
@@ -51,7 +52,7 @@ export function useStudyUndo(
           state: undoSnapshot.prevCardState.state,
           scheduled_date: undoSnapshot.prevCardState.scheduled_date,
           last_reviewed_at: undoSnapshot.prevCardState.last_reviewed_at,
-        } as any)
+        })
         .eq('id', undoSnapshot.cardId);
 
       const { data: logs } = await supabase

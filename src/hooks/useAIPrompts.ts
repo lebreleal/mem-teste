@@ -28,7 +28,7 @@ export const useAIPrompts = () => {
     if (error) {
       toast({ title: 'Erro', description: 'Não foi possível carregar prompts.', variant: 'destructive' });
     } else {
-      setPrompts((data as any[]) || []);
+      setPrompts((data as AIPrompt[]) || []);
     }
     setLoading(false);
   }, [toast]);
@@ -38,7 +38,7 @@ export const useAIPrompts = () => {
   const updatePrompt = async (id: string, updates: Partial<AIPrompt>) => {
     const { error } = await supabase
       .from('ai_prompts')
-      .update({ ...updates, updated_at: new Date().toISOString() } as any)
+      .update({ ...updates, updated_at: new Date().toISOString() })
       .eq('id', id);
 
     if (error) {

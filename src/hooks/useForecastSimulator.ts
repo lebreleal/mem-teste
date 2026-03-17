@@ -180,7 +180,7 @@ export function useForecastView() {
     queryClient.setQueryData(['forecast-view', userId], view);
     await supabase
       .from('profiles')
-      .update({ forecast_view: view } as any)
+      .update({ forecast_view: view })
       .eq('id', userId);
   }, [userId, queryClient]);
 
