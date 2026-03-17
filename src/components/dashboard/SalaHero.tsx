@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Compass, EyeOff, LogOut, MoreVertical, Play, RefreshCw, Share2, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
@@ -303,55 +303,23 @@ const SalaHero = ({
 
           {/* Time estimate — below, centered, tap to expand */}
           {salaStudyStats.totalDue > 0 && (
-            <>
+            <div className="space-y-1">
               <button
-                onClick={() => setInfoOpen(true)}
+                onClick={() => setInfoOpen(!infoOpen)}
                 className="flex items-center justify-center gap-1.5 w-full text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
               >
                 <IconDeck className="h-3 w-3" />
-                <span>{salaStudyStats.totalDue} cartões</span>
-                <span className="text-muted-foreground/50">·</span>
-                <span>{salaStudyStats.timeLabel}</span>
+                <span>{salaStudyStats.totalDue} cartões pra estudar em {salaStudyStats.timeLabel}</span>
                 <IconInfo className="h-3 w-3 ml-0.5" />
               </button>
 
-              <Dialog open={infoOpen} onOpenChange={setInfoOpen}>
-                <DialogContent className="max-w-xs">
-                  <DialogHeader>
-                    <DialogTitle className="text-base">Estudo de hoje</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-3 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Novos</span>
-                      <span className="font-medium text-foreground">{salaStudyStats.newCountToday}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Aprendendo</span>
-                      <span className="font-medium text-foreground">{salaStudyStats.learningCount}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Revisão</span>
-                      <span className="font-medium text-foreground">{salaStudyStats.reviewCount}</span>
-                    </div>
-                    <div className="border-t border-border pt-2 flex justify-between">
-                      <span className="text-muted-foreground">Cartões pendentes</span>
-                      <span className="font-semibold text-foreground">{salaStudyStats.totalDue}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Tempo estimado</span>
-                      <span className="font-medium text-foreground">{salaStudyStats.timeLabel}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Revisados hoje</span>
-                      <span className="font-medium text-foreground">{salaStudyStats.reviewedToday}</span>
-                    </div>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground/70 mt-1">
-                    Tempo baseado na sua velocidade média por cartão
-                  </p>
-                </DialogContent>
-              </Dialog>
-            </>
+              {infoOpen && (
+                <p className="text-[11px] text-muted-foreground text-center leading-relaxed px-2 animate-fade-in">
+                  Esse tempo é calculado com base na sua velocidade média por cartão.
+                  {salaStudyStats.reviewedToday > 0 && ` Você já estudou ${salaStudyStats.reviewedToday} cartões hoje!`}
+                </p>
+              )}
+            </div>
           )}
         </div>
       )}
