@@ -286,7 +286,7 @@ const DeckSettings = () => {
     while (parentId) {
       const parent = decks.find(d => d.id === parentId);
       if (!parent) break;
-      if ((parent as Record<string, unknown>).source_turma_deck_id || (parent as Record<string, unknown>).source_listing_id || (parent as Record<string, unknown>).is_live_deck || (parent as Record<string, unknown>).community_id) return true;
+      if (parent.source_turma_deck_id || parent.source_listing_id || parent.is_live_deck || parent.community_id) return true;
       parentId = parent.parent_deck_id;
     }
     return false;
