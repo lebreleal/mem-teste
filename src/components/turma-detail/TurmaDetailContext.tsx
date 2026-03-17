@@ -187,8 +187,8 @@ export const TurmaDetailProvider = ({ children }: { children: ReactNode }) => {
     if (!user || !turmaId || !turma) return;
     setSubscribing(true);
     try {
-      const { error } = await supabase.rpc('process_turma_subscription', { p_turma_id: turmaId });
-      if (error) {
+      await processSubscription(turmaId);
+      const error = null as any;
         if (error.message.includes('Insufficient credits')) toast({ title: 'Créditos insuficientes', description: `Você precisa de ${subscriptionPrice} créditos.`, variant: 'destructive' });
         else if (error.message.includes('Already subscribed')) toast({ title: 'Já assinado', description: 'Sua assinatura ainda está ativa.' });
         else throw error;
