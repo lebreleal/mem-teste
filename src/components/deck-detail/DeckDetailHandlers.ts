@@ -358,7 +358,7 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
       const url = await cardService.uploadCardImage(user.id, file);
       setOcclusionImageUrl(url);
       setOcclusionModalOpen(true);
-    } catch (e: any) { toast({ title: e.message || 'Erro no upload', variant: 'destructive' }); }
+    } catch (e: unknown) { toast({ title: e instanceof Error ? e.message : 'Erro no upload', variant: 'destructive' }); }
   }, [user, toast, setOcclusionImageUrl, setOcclusionModalOpen]);
 
   const handleOcclusionAttach = useCallback(async () => {
