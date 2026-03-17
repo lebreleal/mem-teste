@@ -183,7 +183,6 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
           deckCount={sala.deckCount}
           totalCards={sala.totalCards}
           masteredCards={sala.masteredCards}
-          questionCount={sala.questionCount}
           dueCount={sala.dueCount}
           imageUrl={sala.imageUrl}
           ownerName={sala.ownerName}

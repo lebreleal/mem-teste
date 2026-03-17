@@ -51,7 +51,6 @@ const SalaCard = ({ name, deckCount, totalCards, masteredCards, dueCount, isVirt
           <p className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
             <span>{deckCount} {deckCount === 1 ? 'deck' : 'decks'}</span>
             {totalCards > 0 && <span>{totalCards} {totalCards === 1 ? 'cartão' : 'cartões'}</span>}
-            {questionCount > 0 && <span>{questionCount} {questionCount === 1 ? 'questão' : 'questões'}</span>}
           </p>
           <span className="text-xs text-muted-foreground ml-auto">{masteryPct}%</span>
         </div>

@@ -244,7 +244,7 @@ const DeckList = ({
             hasPendingUpdate={decksWithPendingUpdates instanceof Set ? decksWithPendingUpdates.has(deck.id) : false}
             expandedAccordionId={expandedAccordionId}
             onAccordionToggle={handleAccordionToggle}
-            questionCountMap={questionCountMap}
+            questionCountMap={undefined}
             organizeMode={organizeMode}
             {...deckRowProps}
           />
