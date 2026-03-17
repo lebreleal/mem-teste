@@ -146,13 +146,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
 
   const handleFreeze = async () => {
     try {
-      const farFuture = new Date();
-      farFuture.setFullYear(farFuture.getFullYear() + 100);
-      const { error } = await supabase
-        .from('cards')
-        .update({ scheduled_date: farFuture.toISOString(), state: 2 })
-        .eq('id', card.id);
-      if (error) throw error;
+      await freezeCardService(card.id);
       toast({ title: '❄️ Card congelado', description: 'Este card não aparecerá mais nas revisões.' });
       setFreezeConfirmOpen(false);
       onCardFrozen();
