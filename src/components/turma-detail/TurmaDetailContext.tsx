@@ -193,12 +193,15 @@ export const TurmaDetailProvider = ({ children }: { children: ReactNode }) => {
         else if (error.message.includes('Already subscribed')) toast({ title: 'Já assinado', description: 'Sua assinatura ainda está ativa.' });
         else throw error;
         return;
-      }
       queryClient.invalidateQueries({ queryKey: ['turma-members', turmaId] });
       queryClient.invalidateQueries({ queryKey: ['turma-active-sub', turmaId] });
       queryClient.invalidateQueries({ queryKey: ['profile'] });
       toast({ title: 'Assinatura ativada! 🎉', description: 'Você agora tem acesso por 7 dias.' });
-    } catch (e: any) { toast({ title: 'Erro ao assinar', description: e.message, variant: 'destructive' }); }
+    } catch (e: any) {
+      if (e.message?.includes('Insufficient credits')) toast({ title: 'Créditos insuficientes', description: `Você precisa de ${subscriptionPrice} créditos.`, variant: 'destructive' });
+      else if (e.message?.includes('Already subscribed')) toast({ title: 'Já assinado', description: 'Sua assinatura ainda está ativa.' });
+      else toast({ title: 'Erro ao assinar', description: e.message, variant: 'destructive' });
+    }
     finally { setSubscribing(false); }
   };
 
