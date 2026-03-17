@@ -10,7 +10,7 @@ export const useStudySession = (deckId: string, folderId?: string) => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  const studyQueue = useQuery<studyService.StudyQueueResult>({
+  const studyQueue = useQuery<StudyQueueResult>({
     queryKey: ['study-queue', folderId ? `folder-${folderId}` : deckId],
     queryFn: () => studyService.fetchStudyQueue(user!.id, deckId, folderId),
     enabled: !!user && !!(deckId || folderId),
