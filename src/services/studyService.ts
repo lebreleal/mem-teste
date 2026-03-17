@@ -407,7 +407,7 @@ export async function submitCardReview(
   const learningStepsMinutes = learningStepsRaw.map(parseStepToMinutes);
   const maxIntervalDays = deckConfig?.max_interval ?? 36500;
 
-  let result: any;
+  let result: FSRSOutput | SM2Output;
 
   if (algorithmMode === 'fsrs') {
     const requestedRetention = deckConfig?.requested_retention ?? 0.85;
