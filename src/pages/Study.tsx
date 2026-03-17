@@ -214,7 +214,6 @@ const Study = () => {
     submitReview.mutate({ card, rating, elapsedMs: elapsed }, {
       onSuccess: (result) => {
         if (shouldKeep && result.interval_days === 0) { setLocalQueue(prev => prev.map(c => c.id === card.id ? { ...c, state: result.state, stability: result.stability, difficulty: result.difficulty, scheduled_date: result.scheduled_date, learning_step: result.learning_step ?? 0 } : c)); }
-        if (user) { const isCorrect = rating >= 3; getCardConcepts(card.id, user.id).then(concepts => { for (const concept of concepts) { updateConceptMastery(concept.id, isCorrect).catch(() => {}); } }).catch(() => {}); }
       },
     });
   }, [localQueue, reviewCount, cardKey, deckConfig, deckConfigs, getCardDeckConfig, undo, tutor, addSuccessfulCard, submitReview, user]);
