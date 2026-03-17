@@ -17,6 +17,7 @@ import { loadToolbarConfig, saveToolbarConfig, type ToolbarItem } from '@/compon
 import { lazy, Suspense } from 'react';
 const ToolbarConfigSheet = lazy(() => import('@/components/rich-editor/ToolbarConfigSheet'));
 const DrawingCanvasModal = lazy(() => import('@/components/rich-editor/DrawingCanvasModal'));
+const AICreatorSheet = lazy(() => import('@/components/rich-editor/AICreatorSheet'));
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
