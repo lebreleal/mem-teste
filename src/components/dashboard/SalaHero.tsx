@@ -324,7 +324,7 @@ const SalaHero = ({
             <div className="flex items-center justify-center gap-1.5 w-full py-1 text-xs text-muted-foreground">
               <IconDeck className="h-3 w-3" />
               <span>{salaStudyStats.totalDue}</span>
-              <span>·</span>
+              <span>em</span>
               <span>{salaStudyStats.timeLabel}</span>
 
               <Popover open={infoOpen} onOpenChange={setInfoOpen}>
