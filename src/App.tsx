@@ -11,17 +11,26 @@ import { AuthProvider } from "@/hooks/useAuth";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import ScrollToTop from "@/components/ScrollToTop";
 
-// Retry wrapper for lazy imports — auto-reloads on stale chunk errors
+// Retry wrapper for lazy imports — auto-reloads on stale chunk/module errors
 function lazyRetry(factory: () => Promise<{ default: React.ComponentType<any> }>) {
   return lazy(() =>
     factory().catch((err) => {
+      const message = err instanceof Error ? err.message : String(err);
+      const isStaleModuleError = message.includes('does not provide an export named') || message.includes('Failed to fetch dynamically imported module');
       const key = 'chunk_reload';
       const hasReloaded = sessionStorage.getItem(key);
-      if (!hasReloaded) {
+
+      if (isStaleModuleError && !hasReloaded) {
         sessionStorage.setItem(key, '1');
+        try {
+          window.localStorage.removeItem('memo-query-cache');
+        } catch {
+          // ignore
+        }
         window.location.reload();
         return new Promise(() => {});
       }
+
       sessionStorage.removeItem(key);
       throw err;
     })

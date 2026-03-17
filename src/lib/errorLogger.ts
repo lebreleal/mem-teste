@@ -46,25 +46,57 @@ export async function logError({
   }
 }
 
+function isStaleModuleError(message: string) {
+  const normalized = message.toLowerCase();
+  return normalized.includes('does not provide an export named') || normalized.includes('failed to fetch dynamically imported module');
+}
+
+function recoverFromStaleModuleError() {
+  const key = 'stale-module-reload';
+  if (sessionStorage.getItem(key)) return;
+  sessionStorage.setItem(key, '1');
+
+  try {
+    window.localStorage.removeItem('memo-query-cache');
+  } catch {
+    // ignore
+  }
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations()
+      .then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
+      .finally(() => window.location.reload());
+    return;
+  }
+
+  window.location.reload();
+}
+
 export function setupGlobalErrorHandlers() {
   window.onerror = (message, source, lineno, colno, error) => {
+    const text = String(message);
     logError({
-      message: String(message),
+      message: text,
       stack: error?.stack || `${source}:${lineno}:${colno}`,
       component: "window.onerror",
       severity: "error",
       metadata: { source, lineno, colno },
     });
+
+    if (isStaleModuleError(text)) recoverFromStaleModuleError();
   };
 
   window.onunhandledrejection = (event: PromiseRejectionEvent) => {
     const err = event.reason;
+    const message = err?.message || String(err);
     logError({
-      message: err?.message || String(err),
+      message,
       stack: err?.stack || "",
       component: "unhandledrejection",
       severity: "error",
       metadata: { reason: String(err) },
     });
+
+    if (isStaleModuleError(message)) recoverFromStaleModuleError();
   };
 }
