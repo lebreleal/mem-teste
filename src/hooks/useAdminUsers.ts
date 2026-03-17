@@ -143,9 +143,10 @@ export const useAdminUsers = () => {
   };
 
   const getUserDecks = async (userId: string): Promise<UserDeck[]> => {
-    const { data, error } = await supabase.rpc('admin_get_user_decks', { p_user_id: userId });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await supabase.rpc('admin_get_user_decks' as any, { p_user_id: userId });
     if (error) { toast({ title: 'Erro', description: 'Falha ao carregar decks.', variant: 'destructive' }); return []; }
-    return (data as any[]) || [];
+    return ((data ?? []) as unknown as UserDeck[]);
   };
 
   const getUserTokenUsage = async (userId: string, days = 30): Promise<TokenUsageSummary[]> => {
