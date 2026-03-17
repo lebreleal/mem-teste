@@ -14,7 +14,7 @@ export class SupabaseCardRepository implements ICardRepository {
   async findById(id: string): Promise<Card | null> {
     const { data, error } = await supabase
       .from('cards')
-      .select('*')
+      .select(CARD_COLS)
       .eq('id', id)
       .maybeSingle();
     if (error) throw error;
