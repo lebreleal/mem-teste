@@ -297,6 +297,7 @@ export const CardEditorDialog = ({
                 <path d="M14 18v2h-4v-2z" />
               </svg>
               Oclusão de Imagem
+            </DialogTitle>
           </DialogHeader>
           <OcclusionEditor
             initialFront={front}
