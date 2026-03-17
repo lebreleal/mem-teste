@@ -203,8 +203,9 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
     e.preventDefault();
     e.stopPropagation();
     const pos = toImgCoords(e.clientX, e.clientY);
+    const clampedPos = { x: clamp(pos.x, 0, imgSize.w), y: clamp(pos.y, 0, imgSize.h) };
+    const selectableHit = hitTest(clampedPos, { selectableOnly: true });
 
-    // Hand tool — start panning
     if (tool === 'hand') {
       setPanning(true);
       setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
@@ -213,13 +214,22 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
     }
 
     if (tool === 'select') {
-      const hit = hitTest(pos);
-      setSelectedId(hit ? hit.id : null);
+      if (selectableHit) {
+        setSelectedId(selectableHit.id);
+        setShapeColor(selectableHit.color || COLORS[0].fill);
+        if (selectableHit.type === 'rect') {
+          pushHistory();
+          setDragging({ startX: clampedPos.x, startY: clampedPos.y, origShape: cloneShape(selectableHit) });
+          (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+        }
+      } else {
+        setSelectedId(null);
+      }
       return;
     }
 
     if (tool === 'eraser') {
-      const hit = hitTest(pos);
+      const hit = hitTest(clampedPos);
       if (hit) {
         pushHistory();
         setShapes(prev => prev.filter(s => s.id !== hit.id));
@@ -227,40 +237,45 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
       return;
     }
 
-    // Drawing tools — auto-select if clicking on existing shape
-    const hitShape = hitTest(pos);
-    if (hitShape && (tool === 'rect' || tool === 'freehand')) {
-      setPrevDrawTool(tool);
-      setTool('select');
-      setSelectedId(hitShape.id);
+    if (selectableHit) {
+      if (selectableHit.type === 'rect') pushHistory();
+      activateSelection(selectableHit, clampedPos);
+      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
       return;
     }
 
     if (tool === 'rect') {
       setSelectedId(null);
+      setHoveredSelectableId(null);
       pushHistory();
       setDrawing(true);
-      setStartPos(pos);
+      setStartPos(clampedPos);
       (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     } else if (tool === 'polygon') {
+      setSelectedId(null);
+      setHoveredSelectableId(null);
       if (currentPoints.length >= 3) {
         const first = currentPoints[0];
-        if (Math.hypot(pos.x - first.x, pos.y - first.y) < 15 / scale) {
-          pushHistory();
+        if (Math.hypot(clampedPos.x - first.x, clampedPos.y - first.y) < 15 / scale) {
           const newShape: OcclusionShape = { id: crypto.randomUUID(), type: 'polygon', points: [...currentPoints], color: shapeColor };
           const newShapes = [...shapes, newShape];
           setShapes(newShapes);
           setCurrentPoints([]);
+          setPolygonPreviewPoint(null);
+          setSelectedId(newShape.id);
           autoSwitchColor(newShapes);
           return;
         }
       }
       if (currentPoints.length === 0) pushHistory();
-      setCurrentPoints(prev => [...prev, pos]);
+      setCurrentPoints(prev => [...prev, clampedPos]);
+      setPolygonPreviewPoint(clampedPos);
     } else if (tool === 'freehand') {
+      setSelectedId(null);
+      setHoveredSelectableId(null);
       pushHistory();
       setDrawing(true);
-      setCurrentPoints([pos]);
+      setCurrentPoints([clampedPos]);
       (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     }
   };
