@@ -449,9 +449,9 @@ const LessonDetail = () => {
           onRenameFolder={(folderId, newName) => renameContentFolderMutation.mutate({ folderId, newName })}
           onDeleteFolder={(folderId) => deleteContentFolderMutation.mutate(folderId)}
           onMoveItem={(itemType, itemId, targetFolderId) => moveItemMutation.mutate({ itemType, itemId, targetFolderId })}
-          onImportExam={handleImportExamToTurma}
-          onDeleteExam={(examId) => examMutations.deleteExam.mutate(examId, { onSuccess: () => toast({ title: 'Prova excluída' }) })}
-          onOpenExam={handleOpenExam}
+           onImportExam={() => {}}
+           onDeleteExam={() => {}}
+           onOpenExam={handleOpenExam}
         />
       </main>
 
