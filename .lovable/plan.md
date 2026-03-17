@@ -1,173 +1,81 @@
-# Sistema ALEKS — Grafo de Pré-requisitos entre Conceitos
 
-## Implementado
 
-### 1. Coluna `parent_concept_id` em `global_concepts`
-- `ALTER TABLE global_concepts ADD parent_concept_id uuid REFERENCES global_concepts(id) ON DELETE SET NULL`
-- Índice criado para queries eficientes
+# Plano: Corrigir Bug do Cloze + Redesenhar Seletor de Cor/Grifo
 
-### 2. `conceptHierarchyService.ts` reescrito para grafo de conceitos
-- `buildHierarchyDiagnostic` navega `parent_concept_id` (ancestors/descendants/siblings) em vez de `parent_deck_id`
-- ConceptNode agora inclui `depth` (profundidade no grafo) e `parent_concept_id`
-- Removidas dependências de deck hierarchy (getAncestorDeckIds, getSiblingDeckIds, etc.)
+## Problema 1 — Cloze perde formatação após 2a letra
 
-### 3. Cascade automático no erro (`useGlobalConcepts.ts`)
-- Quando rating = 1 (Again) e conceito tem parent_concept_id, chama `cascadeOnError`
-- `cascadeOnError` caminha ancestrais e reagenda os que estão em state 0/3 ou stability < 5
+**Causa raiz**: `ClozeMark` está definido com `inclusive: false` (linha 35). Isso faz o TipTap NÃO estender a mark para novos caracteres digitados na borda. Quando `clozeActive` é true e o usuário digita, cada novo caractere cai fora da mark após o primeiro.
 
-### 4. Fronteira de aprendizagem "Prontos para aprender" (`Concepts.tsx`)
-- `fetchReadyToLearnConcepts`: conceitos em state=0 cujo parent está em state=2 (dominado)
-- Seção visual com badges clicáveis na aba "Meus"
+**Solução**: Adicionar um listener de `transaction` que, enquanto `clozeActive` for true, re-aplica a mark cloze ao texto recém-digitado. Concretamente:
+- No `useEffect` que já escuta `transaction` (linhas 211-228), detectar quando `clozeActive` é true e o cursor está logo após a borda de um `clozeMark`
+- Re-aplicar `setMark('clozeMark', { num: clozeCounter })` na posição atual
+- Isso mantém `inclusive: false` para comportamento normal (digitar depois de um cloze finalizado fica fora) enquanto força extensão durante criação ativa
 
-### 5. Auto-linking de pré-requisitos via IA (`generate-questions`)
-- Prompt atualizado para retornar campo `prerequisites` (0-2 Knowledge Components)
-- Tool schema inclui `prerequisites` como campo obrigatório
-- `linkQuestionsToConcepts` agora seta `parent_concept_id` automaticamente com o primeiro pré-requisito
+**Arquivo**: `src/components/RichEditor.tsx`
+- Modificar o `useEffect` de transaction (linhas 211-228) para incluir lógica de re-aplicação de mark
+- O cloze só para de "grudar" quando o usuário clica no botão cloze de novo, aperta Enter ou Escape (já implementado nas linhas 231-243)
 
-### 6. ErrorNotebook atualizado para grafo de conceitos
-- Breadcrumb mostra caminho de pré-requisitos (conceitos, não decks)
-- "Lacunas Fundacionais" → "Pré-requisitos Fracos"
-- Suporta múltiplos source concepts
+---
 
-### 7. Donut Chart de Progresso por Categoria
-- Gráfico de rosca (Recharts) na aba "Meus" agrupando conceitos por `category`
-- Cada fatia = uma grande área médica, colorida por % de domínio
-- Clicar na fatia filtra a lista por aquela categoria
-- Exibe % total de domínio no centro
+## Problema 2 — Seletor de Cor precisa de Grifo (highlight/fundo)
 
-### 8. Fronteira Enforced (Conceitos Bloqueados)
-- Conceitos cujo `parent_concept_id` aponta para conceito com `state !== 2` ficam bloqueados
-- UI: opacity reduzida, ícone de cadeado, tooltip "Domine {prereq} primeiro"
-- Conceitos bloqueados não podem ser estudados diretamente
+**Estado atual**: Apenas cor de texto via `@tiptap/extension-color`. Sem suporte a highlight/fundo. O popover é um grid 4x2 de quadrados coloridos sem separação entre texto e fundo.
 
-### 9. Auto-mapeamento de Pré-requisitos via IA
-- Botão "Mapear pré-requisitos com IA" na página de Conceitos
-- Edge function `map-prerequisites` usa Lovable AI (gemini-2.5-flash) com tool calling
-- Analisa todos os conceitos do usuário e retorna pares `{ concept, prerequisite }`
-- Atualiza `parent_concept_id` em batch (não sobrescreve mapeamentos manuais)
+**Solução**: Redesenhar conforme a referência (Noji):
 
-### 10. Avaliação Diagnóstica Inicial (Knowledge Check)
-- Botão "Diagnóstico Inicial" na página de Conceitos
-- Seleciona ~20 conceitos distribuídos por profundidade no grafo
-- Para cada conceito, busca uma questão vinculada
-- Se acerta 2x consecutivas → marca conceito como dominado (state=2, stability=10)
-- Se erra → marca como fraco (state=0) para revisão futura
-- Exibe resultado final com contagem de acertos/erros
+### Layout novo do Popover (duas linhas horizontais):
 
-### 11. Princípios de Neurociência Aplicados (Learning Science)
+```text
+Grifo:   [⊘] [verde-claro] [rosa-claro] [azul-claro] [amarelo-claro] [roxo-claro]
+         ─── separador ───
+Texto:   [preto] [verde] [vermelho] [azul] [laranja] [roxo]
+```
 
-#### Rating Automático Binário (StudyMode)
-- Removidos botões manuais "Errei/Bom/Fácil"
-- Sistema atribui rating=3 (correto) ou rating=1 (incorreto) automaticamente
-- Base: Dunning-Kruger — alunos são maus autoavaliadores
+### Mudanças técnicas:
+1. **Instalar** `@tiptap/extension-highlight` com `multicolor: true`
+2. **Adicionar** Highlight às extensions do editor (linha 141-149)
+3. **Redesenhar** o popover de cor (linhas 663-688):
+   - Linha 1: label "Grifo" + círculos de cores de fundo (pastéis)
+   - Linha 2: label "Texto" + círculos de cores de texto (sólidas)
+   - Cada círculo é redondo (`rounded-full`) em vez de quadrado
+4. **Dividir** `handleSetColor` em `handleSetTextColor` e `handleSetHighlight`
+5. **Atualizar** o ícone do botão para refletir estado de highlight ativo (barra inferior mostra cor ativa)
 
-#### Mastery Threshold (MASTERY_THRESHOLD = 2)
-- Exige 2 acertos consecutivos para confirmar domínio de um conceito
-- Aplicado tanto no StudyMode quanto no DiagnosticMode
-- Base: Bloom 1968 (mastery learning), reduz falso positivo de 25% (chute em 4 alternativas)
+### Cores:
+- **Grifo (fundo)**: nenhum, `#E1FFBE`, `#FFE6E8`, `#DDF1FF`, `#FFF3CE`, `#E8E8FF`
+- **Texto**: default (foreground), `#47C700`, `#FF375B`, `#0093F0`, `#FF8B00`, `#4E5EE5`
 
-#### Interleaved Practice (ErrorNotebook)
-- Botão "Estudar todos (prática intercalada)" embaralha todos os conceitos fracos
-- Fisher-Yates shuffle garante aleatoriedade uniforme
-- Base: Rohrer & Taylor 2007 (+20-40% retenção vs blocked practice)
+**Arquivos**:
+- `src/components/RichEditor.tsx` — redesenhar popover, adicionar Highlight extension, split handler
+- `package.json` — adicionar `@tiptap/extension-highlight`
 
-#### Elaborative Interrogation (StudyMode)
-- Após erro, campo de texto: "Por que a alternativa X está correta?"
-- Aluno tenta explicar antes de ver a explicação da IA
-- Opcional (pode pular), mas ativa encoding profundo
-- Base: Chi et al. 1994, Dunlosky et al. 2013 (+30% retenção)
+---
 
-#### Confidence-Based Assessment (StudyMode)
-- Após acertar, pergunta "Você tinha certeza?"
-- Se "Chutei" → não incrementa streak, exige mais uma questão
-- Impede que chutes sortudos confirmem domínio
-- Base: Hunt 2003, Dunlosky & Rawson 2012 (calibração metacognitiva)
+## Problema 3 — Recursos que faltam vs Noji/Brainscape
 
-## Correções Arquiteturais — Unificação Cards ↔ Temas
+Análise de funcionalidades que competidores têm e MemoCards não:
 
-### 12. Card Review → Concept Mastery Sync (Fase 1a)
-- `Study.tsx` → `executeReview()` agora chama `getCardConcepts` + `updateConceptMastery` após cada review
-- Se rating≥3: incrementa correct_count do tema vinculado
-- Se rating=1: incrementa wrong_count do tema vinculado
-- Execução non-blocking (fire-and-forget) para não impactar performance do estudo
+| Recurso | Noji | Brainscape | MemoCards | Prioridade |
+|---------|------|------------|-----------|------------|
+| Compartilhar streak nas redes sociais | Sim | Sim | Nao | Alta — engajamento viral |
+| Operações em lote (selecionar + mover/deletar/taguear) | Sim | Sim | Parcial | Media |
+| Marketplace de decks pagos | Nao | Sim | Nao | Baixa — requer infraestrutura |
+| Edição colaborativa de deck | Nao | Sim | Nao | Baixa |
+| Notas pessoais em cards de comunidade | Sim | Nao | Parcial (PersonalNotes.tsx existe) | Media |
+| Modo offline completo | Sim | Parcial | Nao | Alta — essencial mobile |
 
-### 13. Temas Due → Flashcard Retrieval (Fase 1b)
-- `DashboardDueThemes.tsx` agora navega para `/study/{deckId}` ao clicar em um tema
-- Busca deck vinculado via `question_concepts` → `deck_questions` → `deck_id`
-- Fallback para `/conceitos` se não houver deck vinculado
-- Removido StudyMode inline — temas due sugerem flashcards (recall real > recognition)
+Os 2 recursos de maior impacto que faltam:
+1. **Compartilhar streak/conquistas** — imagem gerável para Instagram/WhatsApp com stats do dia
+2. **Modo offline** — Service Worker com cache de cards da sessão atual para estudo sem internet
 
-### 14. Auto-trigger Diagnóstico Inicial (Fase 2a)
-- Novo componente `DiagnosticBanner.tsx` no Dashboard
-- Aparece automaticamente quando 10+ conceitos existem sem `last_reviewed_at`
-- Botão "Iniciar diagnóstico" abre `DiagnosticMode` inline
-- Dismissível com persistência em localStorage
+---
 
-### 15. Auto-trigger Mapeamento de Pré-requisitos (Fase 2b)
-- Função `tryAutoMapPrerequisites` adicionada em `globalConceptService.ts`
-- Chamada automaticamente após `linkQuestionsToConcepts` (fire-and-forget)
-- Só executa se >80% dos conceitos não têm `parent_concept_id` (first-time scenario)
-- Guard contra execução duplicada via `_autoMapInFlight` Set
+## Resumo de Implementação
 
-### 16. Daily Theme Limit (Fase 3a)
-- Constante `DAILY_NEW_THEME_LIMIT = 5` em `useGlobalConcepts.ts`
-- `newThemeRemaining` calculado com base em temas revisados hoje pela primeira vez
-- Exposto no hook para UI consumir (banners, limites)
+| Passo | O que | Arquivo |
+|-------|-------|---------|
+| 1 | Instalar `@tiptap/extension-highlight` | `package.json` |
+| 2 | Corrigir cloze: re-aplicar mark via transaction listener enquanto `clozeActive` | `RichEditor.tsx` |
+| 3 | Redesenhar popover de cor com 2 linhas (grifo + texto) e círculos | `RichEditor.tsx` |
+| 4 | Adicionar Highlight extension ao editor | `RichEditor.tsx` |
 
-## Arquivos Modificados
-| Arquivo | Mudança |
-|---|---|
-| Supabase migration | `parent_concept_id` + index |
-| `src/services/conceptHierarchyService.ts` | Reescrito: grafo de conceitos |
-| `src/services/globalConceptService.ts` | `parent_concept_id` no tipo, `cascadeOnError`, `fetchReadyToLearnConcepts`, `linkQuestionsToConcepts` com prerequisites, `mapPrerequisitesViaAI`, `fetchDiagnosticConcepts`, `markConceptMastered`, `markConceptWeak`, `tryAutoMapPrerequisites` |
-| `src/hooks/useGlobalConcepts.ts` | Cascade automático no rating=1, `DAILY_NEW_THEME_LIMIT`, `newThemeRemaining` |
-| `src/pages/Concepts.tsx` | Donut chart, fronteira enforced, botão diagnóstico, botão mapear prereqs |
-| `src/pages/ErrorNotebook.tsx` | Interleaved practice, botão "Estudar todos" com shuffle |
-| `src/components/concepts/StudyMode.tsx` | Rating binário automático, mastery threshold, elaborative interrogation, confidence check |
-| `src/components/concepts/DiagnosticMode.tsx` | Mastery threshold de 2 questões, useEffect fix |
-| `src/components/deck-detail/DeckQuestionsTab.tsx` | Passa prerequisites no linking |
-| `supabase/functions/generate-questions/index.ts` | Campo prerequisites no schema + prompt |
-| `supabase/functions/map-prerequisites/index.ts` | Nova edge function para IA mapear pré-requisitos |
-| `supabase/config.toml` | Adicionada config map-prerequisites |
-| `src/pages/Study.tsx` | Sync card review → concept mastery |
-| `src/components/dashboard/DashboardDueThemes.tsx` | Navega para deck ao invés de StudyMode |
-| `src/components/dashboard/DiagnosticBanner.tsx` | **Novo** — Auto-trigger diagnóstico |
-| `src/pages/Dashboard.tsx` | Adicionado DiagnosticBanner |
-
-### 17. Edição de Conceitos no EditQuestionDialog
-- EditQuestionDialog expandido com: chips de conceitos removíveis, busca debounced em `global_concepts`, criação inline de novos conceitos
-- Clique no chip abre editor inline (nome + descrição) com `updateConceptMeta`
-- Campo de explicação editável
-- Ao salvar, sincroniza `question_concepts` via `linkQuestionsToConcepts`
-
-### 18. Reuso Inteligente de Conceitos pela IA
-- `generate-questions` e `ai-tutor` (type `question-concepts`) agora buscam conceitos do deck via `get_deck_concept_names` RPC
-- Fallback: top 100 conceitos do usuário por uso
-- Lista curta injetada no prompt: "REUTILIZE estes conceitos se aplicável"
-- Custo: ~500 tokens extras (~centavos)
-- RPC `get_deck_concept_names` criada: `question_concepts → deck_questions → global_concepts` filtrado por deck_id e user_id, LIMIT 200
-
-### 19. Descrição Contextual por Questão (context_description)
-- **Arquitetura**: `context_description` vive em `question_concepts` (junção), não em `global_concepts`
-  - **Conceito** = Knowledge Component reutilizável entre questões/usuários (nome curto, 2-6 palavras)
-  - **context_description** = como esse conceito se aplica NESTA questão específica (15-30 palavras)
-- Dados limpos: todos os `global_concepts` e `question_concepts` foram deletados para recomeço limpo
-- AI prompts atualizados: IA agora gera descrições contextuais ("Nesta questão, aplicar X permite Y") em vez de definições genéricas
-- UI (`ConceptMasterySection`): busca `context_description` de `question_concepts` em vez de `global_concepts.description`
-- `linkQuestionsToConcepts`: agora insere `context_description` no upsert de `question_concepts`
-
-### 20. Modelo de Cópia Local para Salas Seguidas (Explorar)
-- **RPC `bootstrap_follower_decks`**: Ao seguir uma sala, cria cópias locais dos decks (com `source_turma_deck_id`) e copia cards com `state=0`
-- **Auto-bootstrap no Dashboard**: Ao entrar em uma sala seguida sem decks locais, executa bootstrap automaticamente
-- **Sync incremental**: Ao entrar em uma sala com decks locais, sincroniza novos cards do dono
-- **Stats independentes**: Gauge, estudo e configurações usam os decks/cards LOCAIS do seguidor
-- **Dashboard unificado**: Removido `communityTurmaInfo` com rendering separado; salas seguidas usam o mesmo `DeckList`
-- **Cleanup ao sair**: `cleanupFollowerDecks` deleta decks e cards locais; `review_logs` ficam 30 dias
-
-#### Arquivos Modificados
-| Arquivo | Mudança |
-|---|---|
-| `supabase/migrations/` | RPC `bootstrap_follower_decks` |
-| `src/services/followerBootstrap.ts` | **Novo** — bootstrap, sync incremental, cleanup |
-| `src/pages/TurmaDetail.tsx` | `handleFollow` e `handleStudy` chamam bootstrap após criar folder |
-| `src/pages/Dashboard.tsx` | Auto-bootstrap via useEffect, DeckList unificado, cleanup on leave |
