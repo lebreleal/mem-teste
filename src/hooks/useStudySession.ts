@@ -46,10 +46,10 @@ export const useStudySession = (deckId: string, folderId?: string) => {
   });
 
   return {
-    queue: studyQueue.data?.cards ?? [],
+    queue: studyQueue.data?.cards ?? [] as StudyCard[],
     algorithmMode: studyQueue.data?.algorithmMode || 'fsrs',
-    deckConfig: studyQueue.data?.deckConfig,
-    deckConfigs: {} as Record<string, any>,
+    deckConfig: studyQueue.data?.deckConfig as DeckStudyConfig | undefined,
+    deckConfigs: {} as Record<string, DeckStudyConfig>,
     isLiveDeck: studyQueue.data?.isLiveDeck ?? false,
     isLoading: studyQueue.isLoading,
     isFetching: studyQueue.isFetching,
