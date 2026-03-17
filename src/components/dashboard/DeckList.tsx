@@ -62,6 +62,7 @@ const DeckList = ({
   onRenameDeck, onMoveDeck, onArchiveDeck, onDeleteDeck, onDetachCommunityDeck,
   navigateToCommunity, onReorderDecks,
   decksWithPendingUpdates, onPendingClick,
+  organizeMode = false,
   ...deckRowProps
 }: DeckListProps) => {
   const { user } = useAuth();
