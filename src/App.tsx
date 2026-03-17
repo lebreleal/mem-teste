@@ -103,6 +103,14 @@ function deserializeCache(str: string): unknown {
   });
 }
 
+// Clear stale cache from before the custom serializer was added
+try {
+  const raw = window.localStorage.getItem('memo-query-cache');
+  if (raw && !raw.includes('"__type":"Map"')) {
+    window.localStorage.removeItem('memo-query-cache');
+  }
+} catch { /* ignore */ }
+
 const persister = createSyncStoragePersister({
   storage: window.localStorage,
   key: 'memo-query-cache',
