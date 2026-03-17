@@ -2,14 +2,15 @@
  * Custom hook encapsulating all Dashboard local state and derived data.
  */
 
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useDecks, type DeckWithStats } from '@/hooks/useDecks';
 import { useFolders } from '@/hooks/useFolders';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchCommunityDeckUpdates } from '@/services/dashboardService';
+import type { Folder } from '@/types/folder';
 
 export interface BreadcrumbItem { id: string | null; name: string }
 
@@ -114,7 +115,7 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
     const path: BreadcrumbItem[] = [{ id: null, name: 'Início' }];
     if (!currentFolderId) return path;
     const buildPath = (fId: string) => {
-      const folder = folders.find(f => f.id === fId);
+      const folder = folders.find((f: Folder) => f.id === fId);
       if (!folder) return;
       if (folder.parent_id) buildPath(folder.parent_id);
       path.push({ id: folder.id, name: folder.name });
@@ -124,13 +125,13 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
   }, [currentFolderId, folders]);
 
   const currentFolders = useMemo(
-    () => folders.filter(f => f.parent_id === currentFolderId && !f.is_archived)
-      .sort((a, b) => (a as any).sort_order - (b as any).sort_order || a.name.localeCompare(b.name)),
+    () => (folders as Folder[]).filter(f => f.parent_id === currentFolderId && !f.is_archived)
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name)),
     [folders, currentFolderId]
   );
 
   /** A deck is community-imported if it has source_turma_deck_id, source_listing_id, or is_live_deck */
-  const isCommunityDeck = (d: DeckWithStats) => !!(d.source_turma_deck_id || d.source_listing_id || (d as any).is_live_deck);
+  const isCommunityDeck = (d: DeckWithStats) => !!(d.source_turma_deck_id || d.source_listing_id);
 
   /** Are we at the root level (showing salas) or inside a folder? */
   const isInsideSala = currentFolderId !== null;
@@ -140,7 +141,11 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
       if (!isInsideSala) return []; // At root, we show salas, not decks
       // Show only root-level decks in this folder (sub-decks rendered via expand)
       const filtered = decks.filter(d => !d.is_archived && d.folder_id === currentFolderId && !d.parent_deck_id);
-      return filtered.sort((a, b) => (a as any).sort_order - (b as any).sort_order || a.name.localeCompare(b.name));
+      return filtered.sort((a, b) => {
+        const sortA = (a as DeckWithStats & { sort_order?: number }).sort_order ?? 0;
+        const sortB = (b as DeckWithStats & { sort_order?: number }).sort_order ?? 0;
+        return sortA - sortB || a.name.localeCompare(b.name);
+      });
     },
     [decks, currentFolderId, isInsideSala]
   );
@@ -148,7 +153,11 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
   /** All root decks (used by SalaList at the root level) */
   const allRootDecks = useMemo(
     () => decks.filter(d => !d.parent_deck_id && !d.is_archived)
-      .sort((a, b) => (a as any).sort_order - (b as any).sort_order || a.name.localeCompare(b.name)),
+      .sort((a, b) => {
+        const sortA = (a as DeckWithStats & { sort_order?: number }).sort_order ?? 0;
+        const sortB = (b as DeckWithStats & { sort_order?: number }).sort_order ?? 0;
+        return sortA - sortB || a.name.localeCompare(b.name);
+      }),
     [decks]
   );
 
@@ -163,15 +172,7 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
   const hasCommunityDecks = communityDecks.length > 0;
   const pendingUpdatesQuery = useQuery({
     queryKey: ['community-deck-updates', user?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_community_deck_updates' as any, { p_user_id: user!.id });
-      if (error) return new Set<string>();
-      const pending = new Set<string>();
-      for (const row of (data as any[]) ?? []) {
-        if (row.has_update) pending.add(row.local_deck_id);
-      }
-      return pending;
-    },
+    queryFn: () => fetchCommunityDeckUpdates(user!.id),
     enabled: !!user && hasCommunityDecks,
     staleTime: 5 * 60_000,
   });
@@ -184,16 +185,16 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
       // Include archived sub-decks whose parent is in the current folder (and parent is NOT archived)
       const archivedSubs = decks.filter(d => d.is_archived && d.parent_deck_id && !topLevel.some(t => t.id === d.id));
       const subsInFolder = archivedSubs.filter(d => {
-        const parent = decks.find(p => p.id === d.parent_deck_id);
+        const parent = deckMap.get(d.parent_deck_id!);
         return parent && parent.folder_id === currentFolderId && !parent.is_archived;
       });
       return [...topLevel, ...subsInFolder];
     },
-    [decks, currentFolderId]
+    [decks, currentFolderId, deckMap]
   );
 
   const archivedFolders = useMemo(
-    () => folders.filter(f => f.is_archived && f.parent_id === currentFolderId),
+    () => folders.filter((f: Folder) => f.is_archived && f.parent_id === currentFolderId),
     [folders, currentFolderId]
   );
 
@@ -250,12 +251,12 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
   };
 
   const getDescendantIds = (folderId: string): string[] => {
-    const children = folders.filter(f => f.parent_id === folderId);
-    return [folderId, ...children.flatMap(c => getDescendantIds(c.id))];
+    const children = folders.filter((f: Folder) => f.parent_id === folderId);
+    return [folderId, ...children.flatMap((c: Folder) => getDescendantIds(c.id))];
   };
 
   const getDescendantDeckIds = (deckId: string): string[] => {
-    const children = decks.filter(d => d.parent_deck_id === deckId);
+    const children = (childrenIndex.get(deckId) ?? []);
     return [deckId, ...children.flatMap(c => getDescendantDeckIds(c.id))];
   };
 
@@ -263,7 +264,7 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
     if (!moveTarget) return [];
     if (moveParentDeckId) return []; // browsing inside a deck — no folders to show
     const excludeIds = moveTarget.type === 'folder' ? getDescendantIds(moveTarget.id) : [];
-    return folders.filter(f =>
+    return folders.filter((f: Folder) =>
       f.parent_id === moveBrowseFolderId && !f.is_archived && !excludeIds.includes(f.id)
     );
   }, [moveTarget, moveBrowseFolderId, moveParentDeckId, folders]);
@@ -274,21 +275,21 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
     const excludeIds = getDescendantDeckIds(moveTarget.id);
     if (moveParentDeckId) {
       // Show sub-decks of the currently browsed deck
-      return decks.filter(d =>
-        d.parent_deck_id === moveParentDeckId && !d.is_archived && !excludeIds.includes(d.id)
+      return (childrenIndex.get(moveParentDeckId) ?? []).filter(d =>
+        !d.is_archived && !excludeIds.includes(d.id)
       );
     }
     // Show root decks in the current browsed folder
     return decks.filter(d =>
       d.folder_id === moveBrowseFolderId && !d.parent_deck_id && !d.is_archived && !excludeIds.includes(d.id)
     );
-  }, [moveTarget, moveBrowseFolderId, moveParentDeckId, decks]);
+  }, [moveTarget, moveBrowseFolderId, moveParentDeckId, decks, childrenIndex]);
 
   const moveBreadcrumb = useMemo(() => {
     const path: BreadcrumbItem[] = [{ id: null, name: 'Início' }];
     if (moveBrowseFolderId) {
       const buildFolderPath = (fId: string) => {
-        const folder = folders.find(f => f.id === fId);
+        const folder = folders.find((f: Folder) => f.id === fId);
         if (!folder) return;
         if (folder.parent_id) buildFolderPath(folder.parent_id);
         path.push({ id: folder.id, name: folder.name });
@@ -297,7 +298,7 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
     }
     if (moveParentDeckId) {
       const buildDeckPath = (dId: string) => {
-        const deck = decks.find(d => d.id === dId);
+        const deck = deckMap.get(dId);
         if (!deck) return;
         if (deck.parent_deck_id) buildDeckPath(deck.parent_deck_id);
         path.push({ id: `deck:${deck.id}`, name: deck.name });
@@ -305,7 +306,7 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
       buildDeckPath(moveParentDeckId);
     }
     return path;
-  }, [moveBrowseFolderId, moveParentDeckId, folders, decks]);
+  }, [moveBrowseFolderId, moveParentDeckId, folders, deckMap]);
 
   const getCommunityLinkId = (deck: DeckWithStats): string | null => {
     if (deck.source_turma_deck_id) return deck.source_turma_deck_id;
@@ -380,7 +381,7 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
   };
 
   function getFolderDueCount(folderId: string): number {
-    const childFolderIds = folders.filter(f => f.parent_id === folderId && !f.is_archived).map(f => f.id);
+    const childFolderIds = (folders as Folder[]).filter(f => f.parent_id === folderId && !f.is_archived).map(f => f.id);
     const folderDecksHere = decks.filter(d => d.folder_id === folderId && !d.parent_deck_id && !d.is_archived);
     let total = 0;
     for (const d of folderDecksHere) {
@@ -401,7 +402,7 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
       if (getCommunityLinkId(d)) return true;
     }
     // Check sub-folders recursively (including non-archived ones)
-    const childFolders = folders.filter(f => f.parent_id === folderId);
+    const childFolders = (folders as Folder[]).filter(f => f.parent_id === folderId);
     for (const cf of childFolders) {
       if (folderHasCommunityLink(cf.id)) return true;
     }

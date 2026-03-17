@@ -70,8 +70,9 @@ const SalaHero = ({
   const folderName = cf?.name ?? 'Sala';
   const folderImage = cf?.image_url;
   const isComm = isCommunityFolder;
-  const displayName = isComm ? (communityTurmaInfo?.ownerName ?? 'Criador') : (user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Você');
-  const avatarUrl = isComm ? undefined : (user?.user_metadata?.avatar_url as string | undefined);
+  const userMeta = user?.user_metadata as Record<string, string> | undefined;
+  const displayName = isComm ? (communityTurmaInfo?.ownerName ?? 'Criador') : (userMeta?.full_name || userMeta?.name || user?.email?.split('@')[0] || 'Você');
+  const avatarUrl = isComm ? undefined : userMeta?.avatar_url;
   const heroImage = isComm ? (communityTurmaInfo?.coverUrl || folderImage) : folderImage;
 
   // Sala-scoped study stats for the compact study card
