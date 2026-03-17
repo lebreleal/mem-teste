@@ -9,7 +9,7 @@ import type { FeatureRequest, FeatureComment } from '@/types/feedback';
 export async function fetchFeatureRequests(userId: string, category?: string): Promise<FeatureRequest[]> {
   let query = supabase
     .from('feature_requests')
-    .select('*')
+    .select('id, user_id, title, description, category, status, vote_count, created_at, updated_at')
     .order('vote_count', { ascending: false })
     .order('created_at', { ascending: false });
 
