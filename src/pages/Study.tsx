@@ -225,10 +225,6 @@ const Study = () => {
     executeReview(currentCard, rating);
   }, [currentCard, isTransitioning, executeReview]);
 
-  // ─── Render: Leech Mode ───
-  if (leech.leechMode) {
-    return <LeechMode leechMode={leech.leechMode} setLeechMode={leech.setLeechMode} exitLeechMode={exitLeechMode} leechAdvanceLockRef={leech.leechAdvanceLockRef} />;
-  }
 
   if (isLoading || (!queueInitialized && isFetching)) {
     return <div className="flex min-h-screen items-center justify-center bg-background"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>;
