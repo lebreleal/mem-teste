@@ -370,24 +370,20 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
   const handleImportCards = useCallback(async (subDeckName: string, importedCards: { frontContent: string; backContent: string; cardType?: string }[], subdecks?: any[]) => {
     if (!deckId) return;
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+      const userId = await getCurrentUserId();
+      if (!userId) throw new Error('Not authenticated');
 
       if (subdecks && subdecks.length > 0) {
         await deckService.importDeckWithSubdecks(
-          user.id, subDeckName, deck?.folder_id ?? null,
+          userId, subDeckName, deck?.folder_id ?? null,
           importedCards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType || 'basic' })),
           subdecks, deck?.algorithm_mode,
         );
         toast({ title: `${importedCards.length} cartões importados em subdecks!` });
       } else {
         const newName = subDeckName || 'Importado';
-        const { data: newDeck, error } = await supabase
-          .from('decks')
-          .insert({ name: newName, user_id: user.id, folder_id: deck?.folder_id ?? null, parent_deck_id: deckId, algorithm_mode: deck?.algorithm_mode || 'sm2' } as any)
-          .select().single();
-        if (error || !newDeck) throw error;
-        await cardService.createCards((newDeck as any).id, importedCards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType || 'basic' })));
+        const newDeck = await deckService.createDeck(userId, newName, deck?.folder_id ?? null, deckId, deck?.algorithm_mode || 'sm2');
+        await cardService.createCards((newDeck as Record<string, string>).id, importedCards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType || 'basic' })));
         toast({ title: `${importedCards.length} cartões importados como subdeck "${newName}"!` });
       }
       invalidateDeckRelatedQueries(queryClient, deckId);
