@@ -484,7 +484,7 @@ export async function fetchStudyStats(userId: string, _cachedProfile?: Record<st
   const tzOffsetMinutes = TZ_OFFSET_SP;
   const { data, error } = await supabase.rpc('get_study_stats_summary', {
     p_user_id: userId, p_tz_offset_minutes: tzOffsetMinutes,
-  } as any);
+  });
   if (error) throw error;
   const result = data as unknown as StudyStatsSummaryRow | null;
   if (!result) {
