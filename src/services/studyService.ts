@@ -532,7 +532,7 @@ export async function fetchHourlyBreakdown(userId: string, days = 30, tzOffsetMi
     p_user_id: userId,
     p_tz_offset_minutes: tzOffsetMinutes,
     p_days: days,
-  } as unknown as Record<string, never>);
+  });
   if (error) throw error;
   return (data as unknown as HourlyBreakdownRow[]) ?? [];
 }
