@@ -7,7 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 // ─── TurmaDetailContext ───
 
 export async function fetchTurmaPublic(turmaId: string) {
-  const { data } = await supabase.from('turmas').select('*').eq('id', turmaId).single();
+  const { data } = await supabase.from('turmas').select('id, name, description, cover_image_url, subscription_price, owner_id, is_private, invite_code, category, share_slug, subscription_price_yearly, avg_rating, rating_count, created_at, updated_at').eq('id', turmaId).single();
   if (!data) return null;
   const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: [(data as any).owner_id] });
   const ownerName = (profiles && profiles.length > 0) ? (profiles[0] as any).name || 'Anônimo' : 'Anônimo';
