@@ -13,7 +13,7 @@ function GlobalFallback({ error, resetErrorBoundary }: FallbackProps) {
         <p className="text-muted-foreground">
           Um erro inesperado aconteceu. O problema já foi registrado automaticamente.
         </p>
-        {error?.message && (
+        {error instanceof Error && error.message && (
           <pre className="text-xs text-muted-foreground bg-muted rounded-md p-3 overflow-auto max-h-24 text-left">
             {error.message}
           </pre>

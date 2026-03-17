@@ -10,7 +10,7 @@ function SectionFallback({ error, resetErrorBoundary }: FallbackProps) {
       <p className="text-sm text-muted-foreground text-center">
         Esta seção encontrou um erro.
       </p>
-      {error?.message && (
+      {error instanceof Error && error.message && (
         <pre className="text-xs text-muted-foreground bg-muted rounded p-2 overflow-auto max-h-16 max-w-full text-left">
           {error.message}
         </pre>
