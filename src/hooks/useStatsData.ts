@@ -191,7 +191,7 @@ export function useStatsData() {
   const reviewsPerDayFiltered = useMemo(() => filterDayMap(dayMap, reviewsPerDayFilter.range), [dayMap, reviewsPerDayFilter.range]);
   const reviewsPerDayChartData = useMemo(() => {
     const entries = Object.entries(reviewsPerDayFiltered)
-      .map(([key, val]: [string, any]) => ({
+      .map(([key, val]) => ({
         date: key,
         label: format(new Date(key), 'dd/MM'),
         cards: Number(val.cards) || 0,
