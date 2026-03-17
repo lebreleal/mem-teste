@@ -22,6 +22,13 @@ import {
 
 const ERROR_DECK_NAME = '📕 Baralho de Erros';
 
+function getMateriaColor(deckId: string): string | null {
+  try {
+    const colors = JSON.parse(localStorage.getItem('memo-materia-colors') || '{}');
+    return colors[deckId] ?? null;
+  } catch { return null; }
+}
+
 /**
 /**
  * 5-segment classification bar matching the deck detail gauge:
