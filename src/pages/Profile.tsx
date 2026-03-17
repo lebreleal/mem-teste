@@ -36,8 +36,8 @@ const Profile = () => {
   useEffect(() => {
     if (!user) return;
     setEmail(user.email ?? '');
-    supabase.from('profiles').select('name').eq('id', user.id).single().then(({ data }) => {
-      setName(data?.name ?? user.user_metadata?.name ?? '');
+    fetchProfileName(user.id).then((n) => {
+      setName(n || user.user_metadata?.name || '');
       setLoading(false);
     });
   }, [user]);
