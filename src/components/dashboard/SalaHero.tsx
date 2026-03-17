@@ -3,17 +3,17 @@
  * Extracted from Dashboard.tsx (copy-paste integral).
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Archive, ChevronDown, ChevronLeft, Compass, EyeOff, ImageIcon, Info, Layers, LogOut, MoreVertical, Pencil, Play, RefreshCw, Share2, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { ChevronLeft, Compass, EyeOff, LogOut, MoreVertical, Play, RefreshCw, Share2, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 import { calculateRealStudyTime } from '@/lib/studyUtils';
-
+import { IconTrash, IconImage, IconInfo, IconDeck, IconArchive, IconEdit } from '@/components/icons';
 interface SalaHeroProps {
   state: any;
   user: any;
