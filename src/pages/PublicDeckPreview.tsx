@@ -915,129 +915,17 @@ const PublicDeckPreview = () => {
     try {
       // Join turma if not already a member
       if (turmaDeck && !isTurmaMember && turmaDeck.turma_id) {
-        await supabase.from('turma_members').insert({
-          turma_id: turmaDeck.turma_id,
-          user_id: user.id,
-          role: 'member',
-        } as any).throwOnError();
+        await joinTurma(turmaDeck.turma_id, user.id);
         queryClient.invalidateQueries({ queryKey: ['turma-membership-check'] });
         queryClient.invalidateQueries({ queryKey: ['turmas'] });
       }
 
-      // ── No folder creation — decks go directly to root ──
-      let targetFolderId: string | null = null;
-
-      // ── Helper to copy a single deck with its cards ──
-      const copyDeck = async (sourceDeckId: string, deckName: string, parentDeckId: string | null, sourceTurmaDeckId: string | null, folderId: string | null) => {
-        const { data: srcDeck } = await supabase.from('decks').select('algorithm_mode, daily_new_limit, daily_review_limit').eq('id', sourceDeckId).single();
-        const sd = srcDeck as any;
-        const insertData: any = {
-          name: deckName, user_id: user!.id, is_public: false, is_live_deck: true,
-          folder_id: folderId, parent_deck_id: parentDeckId,
-          algorithm_mode: sd?.algorithm_mode ?? 'fsrs',
-          daily_new_limit: sd?.daily_new_limit ?? 20,
-          daily_review_limit: sd?.daily_review_limit ?? 9999,
-        };
-        if (sourceTurmaDeckId) insertData.source_turma_deck_id = sourceTurmaDeckId;
-        if (turmaDeck?.turma_id) insertData.community_id = turmaDeck.turma_id;
-
-        const { data: newDeck, error } = await supabase.from('decks').insert(insertData).select('id').single();
-        if (error) throw error;
-
-        // Copy cards in batches
-        if (newDeck) {
-          const BATCH = 500;
-          let offset = 0;
-          let hasMore = true;
-          while (hasMore) {
-            const { data: cards } = await supabase
-              .from('cards')
-              .select('front_content, back_content, card_type')
-              .eq('deck_id', sourceDeckId)
-              .range(offset, offset + BATCH - 1)
-              .order('created_at', { ascending: true });
-            if (!cards || cards.length === 0) break;
-            await supabase.from('cards').insert(cards.map((c: any) => ({
-              deck_id: newDeck.id, front_content: c.front_content,
-              back_content: c.back_content, card_type: c.card_type ?? 'basic',
-            })) as any);
-            if (cards.length < BATCH) hasMore = false;
-            else offset += BATCH;
-          }
-        }
-        return newDeck;
-      };
-
-      // ── For non-turma public decks (marketplace), simpler flow ──
-      if (!turmaDeck) {
-        const insertData: any = {
-          name: deck.name, user_id: user.id, is_public: false, is_live_deck: true,
-        };
-        const { data: listing } = await supabase
-          .from('marketplace_listings').select('id')
-          .eq('deck_id', deckId!).eq('is_published', true).maybeSingle();
-        if (listing) insertData.source_listing_id = listing.id;
-
-        // Try to resolve community_id from the source deck owner's turma membership
-        if (!listing) {
-          const { data: srcDeck } = await supabase.from('decks').select('user_id').eq('id', deckId!).single();
-          if (srcDeck) {
-            const { data: ownerMembership } = await supabase
-              .from('turma_members')
-              .select('turma_id')
-              .eq('user_id', (srcDeck as any).user_id)
-              .limit(1)
-              .maybeSingle();
-            if (ownerMembership) insertData.community_id = (ownerMembership as any).turma_id;
-          }
-        }
-
-        const { data: newDeck, error } = await supabase.from('decks').insert(insertData).select('id').single();
-        if (error) throw error;
-        if (newDeck) {
-          const BATCH = 500;
-          let offset = 0;
-          let hasMore = true;
-          while (hasMore) {
-            const { data: cards } = await supabase
-              .from('cards').select('front_content, back_content, card_type')
-              .eq('deck_id', deckId!).range(offset, offset + BATCH - 1)
-              .order('created_at', { ascending: true });
-            if (!cards || cards.length === 0) break;
-            await supabase.from('cards').insert(cards.map((c: any) => ({
-              deck_id: newDeck.id, front_content: c.front_content,
-              back_content: c.back_content, card_type: c.card_type ?? 'basic',
-            })) as any);
-            if (cards.length < BATCH) hasMore = false;
-            else offset += BATCH;
-          }
-        }
-      } else {
-        // ── Turma deck: copy with hierarchy (parent + sub-decks) ──
-        const mainDeck = await copyDeck(deckId!, deck.name, null, turmaDeck.id, targetFolderId);
-
-        // Copy sub-decks (children in turma)
-        if (mainDeck) {
-          const { data: childTurmaDeckRows } = await supabase
-            .from('turma_decks')
-            .select('id, deck_id')
-            .eq('turma_id', turmaDeck.turma_id);
-
-          // Find children of the source deck in the decks table
-          const { data: childDecks } = await supabase
-            .from('decks')
-            .select('id, name, parent_deck_id')
-            .eq('parent_deck_id', deckId!);
-
-          if (childDecks?.length) {
-            for (const child of childDecks) {
-              // Find turma_deck entry for this child
-              const childTd = (childTurmaDeckRows ?? []).find((r: any) => r.deck_id === child.id);
-              await copyDeck(child.id, child.name, mainDeck.id, childTd?.id ?? null, targetFolderId);
-            }
-          }
-        }
-      }
+      await followDeckWithHierarchy({
+        deckId: deckId!,
+        deckName: deck.name,
+        userId: user.id,
+        turmaDeck: turmaDeck ? { id: turmaDeck.id, turma_id: turmaDeck.turma_id, subject_id: turmaDeck.subject_id } : null,
+      });
 
       queryClient.invalidateQueries({ queryKey: ['deck-following', deckId] });
       queryClient.invalidateQueries({ queryKey: ['decks'] });
