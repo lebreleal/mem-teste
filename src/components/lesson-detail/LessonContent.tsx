@@ -196,7 +196,7 @@ const LessonContent = ({
   };
   const breadcrumb = buildBreadcrumb();
 
-  const openEditFile = (file: any) => {
+  const openEditFile = (file: LessonFile) => {
     setEditingFile(file);
     setEditFileName(file.file_name);
     setEditFilePriceType(file.price_type || 'free');
