@@ -375,6 +375,18 @@ const ManageDeck = () => {
                   placeholder=""
                   chromeless
                   hideCloze
+                  imageAttachments={backImageAttachments}
+                  onImageAttached={(url) => {
+                    setBackAttachedImages(prev => [...prev, url]);
+                    setIsDirty(true);
+                  }}
+                  onRemoveAttachment={(url) => {
+                    setBackAttachedImages(prev => prev.filter(u => u !== url));
+                    setIsDirty(true);
+                  }}
+                  onClickAttachment={(att) => {
+                    setPreviewAttachment({ attachment: att, allowOcclusion: false });
+                  }}
                   onAICreate={handleAICreate}
                   isAICreating={isAICreating}
                 />
