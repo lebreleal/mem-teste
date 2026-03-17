@@ -149,19 +149,6 @@ export function CatchUpDialog({ open, onOpenChange, totalReview, avgSecondsPerCa
       return;
     }
 
-    setDiluting(false);
-    onOpenChange(false);
-
-    if (hasError) {
-      toast({ title: 'Erro ao redistribuir alguns cards', variant: 'destructive' });
-    } else {
-      const minPerDay = Math.round((perDay * avgSecondsPerCard) / 60);
-      toast({
-        title: `${overdueCards.length} revisões redistribuídas em ${days} dias`,
-        description: `~${perDay} cards/dia · ${formatMinutes(minPerDay)} extra por dia`,
-      });
-    }
-
     qc.invalidateQueries({ queryKey: ['plan-metrics'] });
     qc.invalidateQueries({ queryKey: ['study-queue'] });
     qc.invalidateQueries({ queryKey: ['decks'] });
