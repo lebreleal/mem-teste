@@ -261,88 +261,91 @@ const ManageDeck = () => {
       {/* Main content — cards take full space */}
       <div className="flex-1 min-h-0 overflow-y-auto">
         {currentCard ? (
-          <div className="mx-auto max-w-2xl flex flex-col h-full p-3 sm:p-5 gap-2">
+          <div className="mx-auto max-w-2xl flex h-full p-3 sm:p-5 gap-1.5">
 
-            {/* Front card */}
-            <div className="flex-1 min-h-[100px] rounded-xl border border-border/60 bg-card overflow-hidden relative flex flex-col">
-              {(!front || front === '<p></p>') && !occlusionImageUrl ? (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <span className="text-muted-foreground/30 text-base font-medium">Frente</span>
-                </div>
-              ) : null}
-
-              {(occlusionImageUrl || hasRegularImage) && (
+            {/* Left sidebar — card index numbers (vertical) */}
+            <div className="shrink-0 flex flex-col items-center gap-1 overflow-y-auto no-scrollbar py-1">
+              {sortedCards.map((card, idx) => (
                 <button
-                  type="button"
-                  onClick={occlusionImageUrl ? () => setOcclusionModalOpen(true) : undefined}
-                  className={`absolute bottom-2 left-2 z-10 h-8 w-8 rounded-lg border border-border/60 bg-card/90 backdrop-blur-sm flex items-center justify-center shadow-sm transition-all ${
-                    occlusionImageUrl ? 'hover:shadow-md hover:border-primary/40 cursor-pointer' : 'cursor-default'
+                  key={card.id}
+                  onClick={() => selectCard(idx)}
+                  className={`shrink-0 h-7 w-7 rounded-full text-[12px] font-medium transition-all flex items-center justify-center ${
+                    idx === selectedIndex
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                   }`}
-                  title={occlusionImageUrl ? 'Editar oclusão' : 'Imagem anexada'}
                 >
-                  <img src={occlusionImageUrl ? iconClozeOcclusion : iconAttachImage} alt="" className="h-4.5 w-4.5 object-contain opacity-60" />
+                  {idx + 1}
                 </button>
-              )}
-
-              <LazyRichEditor
-                content={front}
-                onChange={(v) => { setFront(v); setIsDirty(true); }}
-                placeholder=""
-                chromeless
-                hideCloze={false}
-                onOcclusionPaste={() => { setOcclusionModalOpen(true); setIsDirty(true); }}
-                onOcclusionAttach={() => { setOcclusionModalOpen(true); setIsDirty(true); }}
-                onAICreate={handleAICreate}
-                isAICreating={isAICreating}
-              />
+              ))}
             </div>
 
-            {/* Card index strip — between front and back cards */}
-            <div className="flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-                {sortedCards.map((card, idx) => (
+            {/* Center — card editors */}
+            <div className="flex-1 min-w-0 flex flex-col gap-2">
+              {/* Front card */}
+              <div className="flex-1 min-h-[100px] rounded-xl border border-border/60 bg-card overflow-hidden relative flex flex-col">
+                {(!front || front === '<p></p>') && !occlusionImageUrl ? (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <span className="text-muted-foreground/30 text-base font-medium">Frente</span>
+                  </div>
+                ) : null}
+
+                {(occlusionImageUrl || hasRegularImage) && (
                   <button
-                    key={card.id}
-                    onClick={() => selectCard(idx)}
-                    className={`shrink-0 h-7 min-w-[28px] px-1.5 rounded-full text-[12px] font-medium transition-all ${
-                      idx === selectedIndex
-                        ? 'bg-primary text-primary-foreground shadow-sm'
-                        : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                    type="button"
+                    onClick={occlusionImageUrl ? () => setOcclusionModalOpen(true) : undefined}
+                    className={`absolute bottom-2 left-2 z-10 h-8 w-8 rounded-lg border border-border/60 bg-card/90 backdrop-blur-sm flex items-center justify-center shadow-sm transition-all ${
+                      occlusionImageUrl ? 'hover:shadow-md hover:border-primary/40 cursor-pointer' : 'cursor-default'
                     }`}
+                    title={occlusionImageUrl ? 'Editar oclusão' : 'Imagem anexada'}
                   >
-                    {idx + 1}
+                    <img src={occlusionImageUrl ? iconClozeOcclusion : iconAttachImage} alt="" className="h-4.5 w-4.5 object-contain opacity-60" />
                   </button>
-                ))}
+                )}
+
+                <LazyRichEditor
+                  content={front}
+                  onChange={(v) => { setFront(v); setIsDirty(true); }}
+                  placeholder=""
+                  chromeless
+                  hideCloze={false}
+                  onOcclusionPaste={() => { setOcclusionModalOpen(true); setIsDirty(true); }}
+                  onOcclusionAttach={() => { setOcclusionModalOpen(true); setIsDirty(true); }}
+                  onAICreate={handleAICreate}
+                  isAICreating={isAICreating}
+                />
               </div>
-              <div className="flex items-center gap-0.5 shrink-0 ml-2">
-                <button onClick={handleAddCard} className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors" title="Novo cartão">
-                  <Plus className="h-4 w-4" />
-                </button>
-                <button onClick={handleDuplicate} className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors" title="Duplicar">
-                  <Copy className="h-3.5 w-3.5" />
-                </button>
-                <button onClick={() => setDeleteConfirmOpen(true)} className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="Excluir">
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+
+              {/* Back card */}
+              <div className="flex-1 min-h-[100px] rounded-xl border border-border/60 bg-card overflow-hidden relative flex flex-col">
+                {!back || back === '<p></p>' ? (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <span className="text-muted-foreground/30 text-base font-medium">Verso</span>
+                  </div>
+                ) : null}
+                <LazyRichEditor
+                  content={back}
+                  onChange={(v) => { setBack(v); setIsDirty(true); }}
+                  placeholder=""
+                  chromeless
+                  hideCloze
+                  onAICreate={handleAICreate}
+                  isAICreating={isAICreating}
+                />
               </div>
             </div>
 
-            {/* Back card */}
-            <div className="flex-1 min-h-[100px] rounded-xl border border-border/60 bg-card overflow-hidden relative flex flex-col">
-              {!back || back === '<p></p>' ? (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <span className="text-muted-foreground/30 text-base font-medium">Verso</span>
-                </div>
-              ) : null}
-              <LazyRichEditor
-                content={back}
-                onChange={(v) => { setBack(v); setIsDirty(true); }}
-                placeholder=""
-                chromeless
-                hideCloze
-                onAICreate={handleAICreate}
-                isAICreating={isAICreating}
-              />
+            {/* Right sidebar — action buttons (vertical) */}
+            <div className="shrink-0 flex flex-col items-center gap-1 py-1">
+              <button onClick={handleAddCard} className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors" title="Novo cartão">
+                <Plus className="h-4.5 w-4.5" />
+              </button>
+              <button onClick={handleDuplicate} className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors" title="Duplicar">
+                <Copy className="h-4 w-4" />
+              </button>
+              <button onClick={() => setDeleteConfirmOpen(true)} className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="Excluir">
+                <Trash2 className="h-4 w-4" />
+              </button>
             </div>
           </div>
         ) : (
