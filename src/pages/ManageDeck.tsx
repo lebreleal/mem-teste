@@ -422,6 +422,7 @@ const ManageDeck = () => {
             onCancel={() => setOcclusionModalOpen(false)}
             isSaving={false}
           />
+          </div>
         </div>
       )}
 

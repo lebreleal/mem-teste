@@ -128,7 +128,8 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
     if (!container || imgSize.w === 0) return { w: 0, h: 0, scale: 1 };
     const maxW = container.clientWidth - 48; // leave space for zoom controls on right
     const maxH = container.clientHeight;
-    const scale = Math.min(maxW / imgSize.w, maxH / imgSize.h, 1) * zoom;
+    // Allow scaling up to fill the container when image is small
+    const scale = Math.min(maxW / imgSize.w, maxH / imgSize.h) * zoom;
     return { w: imgSize.w * scale, h: imgSize.h * scale, scale };
   }, [imgSize, zoom]);
 
