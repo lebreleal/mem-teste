@@ -136,9 +136,8 @@ const AdminUsers = () => {
     setGrantingPremium(true);
     const ok = await grantPremium(selectedUser.id, giftPlan);
     if (ok) {
-      // Refresh user data
-      const { data } = await supabase.from('profiles').select('premium_expires_at').eq('id', selectedUser.id).single();
-      setSelectedUser(prev => prev ? { ...prev, premium_expires_at: (data as any)?.premium_expires_at ?? null } : null);
+      const premiumExpiry = await fetchProfilePremiumExpiry(selectedUser.id);
+      setSelectedUser(prev => prev ? { ...prev, premium_expires_at: premiumExpiry } : null);
     }
     setGrantingPremium(false);
   };

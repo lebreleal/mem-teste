@@ -104,30 +104,7 @@ const PublicCommunity = () => {
   // Fetch published decks
   const { data: publishedDecks = [], isLoading: decksLoading } = useQuery({
     queryKey: ['public-community-decks', turma?.id],
-    queryFn: async () => {
-      const { data: tDecks } = await supabase
-        .from('turma_decks')
-        .select('id, deck_id, is_published')
-        .eq('turma_id', turma!.id)
-        .eq('is_published', true);
-      if (!tDecks || tDecks.length === 0) return [];
-
-      const deckIds = tDecks.map((d: any) => d.deck_id);
-      const { data: deckInfo } = await supabase.from('decks').select('id, name').in('id', deckIds);
-      const nameMap = new Map((deckInfo ?? []).map((d: any) => [d.id, d.name]));
-
-      const { data: countRows } = await supabase.rpc('count_cards_per_deck', { p_deck_ids: deckIds });
-      const countMap = new Map((countRows ?? []).map((r: any) => [r.deck_id, Number(r.card_count)]));
-
-      return tDecks
-        .map((td: any) => ({
-          turmaDeckId: td.id,
-          deckId: td.deck_id,
-          name: nameMap.get(td.deck_id) ?? 'Sem nome',
-          cardCount: countMap.get(td.deck_id) ?? 0,
-        }))
-        .filter((d: any) => !d.name.includes('Caderno de Erros'));
-    },
+    queryFn: () => fetchPublicCommunityDecks(turma!.id),
     enabled: !!turma?.id,
   });
 
