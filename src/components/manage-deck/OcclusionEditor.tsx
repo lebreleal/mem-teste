@@ -13,7 +13,7 @@ import { compressImage } from '@/lib/imageUtils';
 import { useToast } from '@/hooks/use-toast';
 import {
   IconRect, IconPolygon, IconFreehand, IconEraser, IconEyeOpen, IconEyeClosed,
-  IconSparkle, IconUpload, IconClose, IconCheck, IconInfo, IconTrash, IconCursor, IconHand,
+  IconSparkle, IconUpload, IconClose, IconCheck, IconTrash, IconCursor, IconHand,
 } from '@/components/icons';
 
 type Tool = 'select' | 'rect' | 'polygon' | 'freehand' | 'eraser' | 'hand';
@@ -49,6 +49,10 @@ const COLORS = [
 ];
 
 const getColorObj = (fill: string) => COLORS.find(c => c.fill === fill) || COLORS[0];
+const cloneShape = (shape: OcclusionShape): OcclusionShape => ({
+  ...shape,
+  points: shape.points?.map(point => ({ ...point })),
+});
 
 const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: OcclusionEditorProps) => {
   const { user } = useAuth();
@@ -59,11 +63,9 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
   const [uploading, setUploading] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [tool, setTool] = useState<Tool>('rect');
-  const [prevDrawTool, setPrevDrawTool] = useState<Tool>('rect');
   const [imgLoaded, setImgLoaded] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [previewOpaque, setPreviewOpaque] = useState(true);
-  const [colorInfoOpen, setColorInfoOpen] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [imgSize, setImgSize] = useState({ w: 0, h: 0 });
@@ -71,8 +73,11 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
   const [startPos, setStartPos] = useState<{ x: number; y: number } | null>(null);
   const [currentRect, setCurrentRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [currentPoints, setCurrentPoints] = useState<{ x: number; y: number }[]>([]);
+  const [polygonPreviewPoint, setPolygonPreviewPoint] = useState<{ x: number; y: number } | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [hoveredSelectableId, setHoveredSelectableId] = useState<string | null>(null);
   const [shapeColor, setShapeColor] = useState(COLORS[0].fill);
+  const [dragging, setDragging] = useState<{ startX: number; startY: number; origShape: OcclusionShape } | null>(null);
   const [resizing, setResizing] = useState<{ corner: string; startX: number; startY: number; origShape: OcclusionShape } | null>(null);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [panning, setPanning] = useState(false);
@@ -143,10 +148,11 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
   // Clamp coordinates within image bounds
   const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, val));
 
-  const hitTest = (pos: { x: number; y: number }) => {
+  const hitTest = (pos: { x: number; y: number }, options?: { selectableOnly?: boolean }) => {
     return [...shapes].reverse().find(s => {
+      if (options?.selectableOnly && s.type === 'freehand') return false;
       if (s.type === 'rect') return pos.x >= s.x! && pos.x <= s.x! + s.w! && pos.y >= s.y! && pos.y <= s.y! + s.h!;
-      if (s.points && s.points.length > 2) {
+      if (s.points && s.points.length > 1) {
         const xs = s.points.map(p => p.x);
         const ys = s.points.map(p => p.y);
         return pos.x >= Math.min(...xs) && pos.x <= Math.max(...xs) && pos.y >= Math.min(...ys) && pos.y <= Math.max(...ys);
@@ -171,12 +177,35 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
     }
   }, [shapeColor]);
 
+  useEffect(() => {
+    if (!selectedId) return;
+    const selectedShape = shapes.find(shape => shape.id === selectedId);
+    if (selectedShape?.color) setShapeColor(selectedShape.color);
+  }, [selectedId, shapes]);
+
+  const activateSelection = useCallback((shape: OcclusionShape, pointerPos?: { x: number; y: number }) => {
+    setTool('select');
+    setSelectedId(shape.id);
+    setShapeColor(shape.color || COLORS[0].fill);
+    setDrawing(false);
+    setStartPos(null);
+    setCurrentRect(null);
+    setCurrentPoints([]);
+    setPolygonPreviewPoint(null);
+    setHoveredSelectableId(shape.id);
+
+    if (shape.type === 'rect' && pointerPos) {
+      setDragging({ startX: pointerPos.x, startY: pointerPos.y, origShape: cloneShape(shape) });
+    }
+  }, []);
+
   const handlePointerDown = (e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
     const pos = toImgCoords(e.clientX, e.clientY);
+    const clampedPos = { x: clamp(pos.x, 0, imgSize.w), y: clamp(pos.y, 0, imgSize.h) };
+    const selectableHit = hitTest(clampedPos, { selectableOnly: true });
 
-    // Hand tool — start panning
     if (tool === 'hand') {
       setPanning(true);
       setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
@@ -185,13 +214,22 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
     }
 
     if (tool === 'select') {
-      const hit = hitTest(pos);
-      setSelectedId(hit ? hit.id : null);
+      if (selectableHit) {
+        setSelectedId(selectableHit.id);
+        setShapeColor(selectableHit.color || COLORS[0].fill);
+        if (selectableHit.type === 'rect') {
+          pushHistory();
+          setDragging({ startX: clampedPos.x, startY: clampedPos.y, origShape: cloneShape(selectableHit) });
+          (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+        }
+      } else {
+        setSelectedId(null);
+      }
       return;
     }
 
     if (tool === 'eraser') {
-      const hit = hitTest(pos);
+      const hit = hitTest(clampedPos);
       if (hit) {
         pushHistory();
         setShapes(prev => prev.filter(s => s.id !== hit.id));
@@ -199,65 +237,77 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
       return;
     }
 
-    // Drawing tools — auto-select if clicking on existing shape
-    const hitShape = hitTest(pos);
-    if (hitShape && (tool === 'rect' || tool === 'freehand')) {
-      setPrevDrawTool(tool);
-      setTool('select');
-      setSelectedId(hitShape.id);
+    if (selectableHit) {
+      if (selectableHit.type === 'rect') pushHistory();
+      activateSelection(selectableHit, clampedPos);
+      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
       return;
     }
 
     if (tool === 'rect') {
       setSelectedId(null);
+      setHoveredSelectableId(null);
       pushHistory();
       setDrawing(true);
-      setStartPos(pos);
+      setStartPos(clampedPos);
       (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     } else if (tool === 'polygon') {
+      setSelectedId(null);
+      setHoveredSelectableId(null);
       if (currentPoints.length >= 3) {
         const first = currentPoints[0];
-        if (Math.hypot(pos.x - first.x, pos.y - first.y) < 15 / scale) {
-          pushHistory();
+        if (Math.hypot(clampedPos.x - first.x, clampedPos.y - first.y) < 15 / scale) {
           const newShape: OcclusionShape = { id: crypto.randomUUID(), type: 'polygon', points: [...currentPoints], color: shapeColor };
           const newShapes = [...shapes, newShape];
           setShapes(newShapes);
           setCurrentPoints([]);
+          setPolygonPreviewPoint(null);
+          setSelectedId(newShape.id);
           autoSwitchColor(newShapes);
           return;
         }
       }
       if (currentPoints.length === 0) pushHistory();
-      setCurrentPoints(prev => [...prev, pos]);
+      setCurrentPoints(prev => [...prev, clampedPos]);
+      setPolygonPreviewPoint(clampedPos);
     } else if (tool === 'freehand') {
+      setSelectedId(null);
+      setHoveredSelectableId(null);
       pushHistory();
       setDrawing(true);
-      setCurrentPoints([pos]);
+      setCurrentPoints([clampedPos]);
       (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     }
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
     e.preventDefault();
+    const pos = toImgCoords(e.clientX, e.clientY);
+    const cx = clamp(pos.x, 0, imgSize.w);
+    const cy = clamp(pos.y, 0, imgSize.h);
 
-    // Hand panning
     if (panning && tool === 'hand') {
       setPanOffset({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
       return;
     }
 
+    if (dragging?.origShape.type === 'rect') {
+      const nextX = clamp(dragging.origShape.x! + (cx - dragging.startX), 0, imgSize.w - dragging.origShape.w!);
+      const nextY = clamp(dragging.origShape.y! + (cy - dragging.startY), 0, imgSize.h - dragging.origShape.h!);
+      setShapes(prev => prev.map(shape => shape.id === dragging.origShape.id ? { ...shape, x: nextX, y: nextY } : shape));
+      return;
+    }
+
     if (resizing) {
-      const pos = toImgCoords(e.clientX, e.clientY);
       const s = resizing.origShape;
       if (s.type === 'rect') {
         let newX = s.x!, newY = s.y!, newW = s.w!, newH = s.h!;
-        const dx = pos.x - resizing.startX;
-        const dy = pos.y - resizing.startY;
+        const dx = cx - resizing.startX;
+        const dy = cy - resizing.startY;
         if (resizing.corner.includes('e')) { newW = Math.max(10, s.w! + dx); }
         if (resizing.corner.includes('w')) { newX = s.x! + dx; newW = Math.max(10, s.w! - dx); }
         if (resizing.corner.includes('s')) { newH = Math.max(10, s.h! + dy); }
         if (resizing.corner.includes('n')) { newY = s.y! + dy; newH = Math.max(10, s.h! - dy); }
-        // Constrain within image bounds
         newX = clamp(newX, 0, imgSize.w - 10);
         newY = clamp(newY, 0, imgSize.h - 10);
         if (newX + newW > imgSize.w) newW = imgSize.w - newX;
@@ -269,11 +319,17 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
       return;
     }
 
+    const hoverHit = tool === 'hand' || tool === 'eraser' ? null : hitTest({ x: cx, y: cy }, { selectableOnly: true });
+    setHoveredSelectableId(hoverHit?.id ?? null);
+
+    if (tool === 'polygon' && currentPoints.length > 0) {
+      setPolygonPreviewPoint(hoverHit ? null : { x: cx, y: cy });
+    } else {
+      setPolygonPreviewPoint(null);
+    }
+
     if (!drawing) return;
-    const pos = toImgCoords(e.clientX, e.clientY);
-    // Clamp drawing position within image
-    const cx = clamp(pos.x, 0, imgSize.w);
-    const cy = clamp(pos.y, 0, imgSize.h);
+
     if (tool === 'rect' && startPos) {
       setCurrentRect({
         x: Math.min(startPos.x, cx), y: Math.min(startPos.y, cy),
@@ -285,9 +341,13 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
   };
 
   const handlePointerUp = () => {
-    // Hand panning
     if (panning) {
       setPanning(false);
+      return;
+    }
+
+    if (dragging) {
+      setDragging(null);
       return;
     }
 
@@ -298,7 +358,6 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
 
     if (tool === 'rect') {
       if (drawing && currentRect && currentRect.w > 5 && currentRect.h > 5) {
-        // Clamp final rect within image bounds
         const finalX = clamp(currentRect.x, 0, imgSize.w - 10);
         const finalY = clamp(currentRect.y, 0, imgSize.h - 10);
         const finalW = Math.min(currentRect.w, imgSize.w - finalX);
@@ -319,6 +378,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
         setShapes(newShapes);
         autoSwitchColor(newShapes);
       }
+      setSelectedId(null);
       setDrawing(false);
       setCurrentPoints([]);
     }
@@ -425,7 +485,6 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
     for (const c of COLORS) {
       if (usedColorFills.has(c.fill)) visible.push(c);
     }
-    // Always show the next unused color
     for (const c of COLORS) {
       if (!usedColorFills.has(c.fill)) {
         visible.push(c);
@@ -440,17 +499,26 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
     return visible;
   })();
 
-  const cardCount = usedColorFills.size;
+  const selectedShape = selectedId ? shapes.find(s => s.id === selectedId) : null;
+
+  const handleColorPick = (fill: string) => {
+    setShapeColor(fill);
+    if (!selectedId) return;
+    setShapes(prev => prev.map(shape => {
+      if (shape.id !== selectedId || shape.type === 'freehand') return shape;
+      return { ...shape, color: fill };
+    }));
+  };
 
   const getCursorStyle = () => {
     if (tool === 'hand') return panning ? 'grabbing' : 'grab';
-    if (tool === 'select') return 'default';
+    if (dragging) return 'grabbing';
+    if (tool === 'select') return selectedShape?.type === 'rect' ? 'move' : 'default';
     if (tool === 'eraser') return 'pointer';
+    if (hoveredSelectableId) return 'move';
     return 'crosshair';
   };
 
-  // Get selected shape for positioning trash button
-  const selectedShape = selectedId ? shapes.find(s => s.id === selectedId) : null;
   const getShapeBottom = (s: OcclusionShape): { x: number; y: number } => {
     if (s.type === 'rect') {
       return { x: (s.x! + s.w! / 2) * scale, y: (s.y! + s.h!) * scale };
@@ -494,67 +562,70 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
     if (s.type === 'rect') {
       return (
         <div key={s.id}>
-          <div
-            className="absolute pointer-events-auto"
-            style={{
-              left: s.x! * scale,
-              top: s.y! * scale,
-              width: s.w! * scale,
-              height: s.h! * scale,
-              backgroundColor: fillColor,
-              border: `2px solid ${colorObj.border}`,
-              borderRadius: 4,
-              boxShadow: isSelected ? `0 0 0 2px ${colorObj.border}, 0 0 8px ${colorObj.fill}` : undefined,
-              cursor: tool === 'hand' ? (panning ? 'grabbing' : 'grab') : tool === 'select' ? 'move' : tool === 'eraser' ? 'pointer' : 'crosshair',
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (tool === 'select' || tool === 'eraser') {
-                setSelectedId(s.id);
-              } else if (tool !== 'hand') {
-                // Auto-select when clicking on existing shape in draw mode
-                setPrevDrawTool(tool);
-                setTool('select');
-                setSelectedId(s.id);
-              }
-            }}
-          />
-          {/* Resize handles when selected */}
-          {isSelected && tool === 'select' && (
-            <>
-              {['nw', 'ne', 'sw', 'se'].map(corner => {
-                const left = corner.includes('w') ? s.x! * scale - 4 : (s.x! + s.w!) * scale - 4;
-                const top = corner.includes('n') ? s.y! * scale - 4 : (s.y! + s.h!) * scale - 4;
-                const cursor = corner === 'nw' || corner === 'se' ? 'nwse-resize' : 'nesw-resize';
-                return (
-                  <div
-                    key={corner}
-                    className="absolute z-20 pointer-events-auto"
-                    style={{
-                      left, top, width: 8, height: 8,
-                      backgroundColor: '#fff',
-                      border: `2px solid ${colorObj.border}`,
-                      borderRadius: 2,
-                      cursor,
-                    }}
-                    onPointerDown={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      pushHistory();
-                      setResizing({ corner, startX: toImgCoords(e.clientX, e.clientY).x, startY: toImgCoords(e.clientX, e.clientY).y, origShape: { ...s } });
-                      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-                    }}
-                  />
-                );
-              })}
-            </>
-          )}
+            <div
+              className="absolute pointer-events-auto"
+              style={{
+                left: s.x! * scale,
+                top: s.y! * scale,
+                width: s.w! * scale,
+                height: s.h! * scale,
+                backgroundColor: fillColor,
+                border: `2px solid ${colorObj.border}`,
+                borderRadius: 4,
+                boxShadow: isSelected ? `0 0 0 2px ${colorObj.border}, 0 0 8px ${colorObj.fill}` : undefined,
+                cursor: tool === 'hand'
+                  ? (panning ? 'grabbing' : 'grab')
+                  : tool === 'eraser'
+                    ? 'pointer'
+                    : hoveredSelectableId === s.id || tool === 'select'
+                      ? 'move'
+                      : 'crosshair',
+              }}
+            />
+            {/* Resize handles when selected */}
+            {isSelected && tool === 'select' && (
+              <>
+                {['nw', 'ne', 'sw', 'se'].map(corner => {
+                  const left = corner.includes('w') ? s.x! * scale - 4 : (s.x! + s.w!) * scale - 4;
+                  const top = corner.includes('n') ? s.y! * scale - 4 : (s.y! + s.h!) * scale - 4;
+                  const cursor = corner === 'nw' || corner === 'se' ? 'nwse-resize' : 'nesw-resize';
+                  return (
+                    <div
+                      key={corner}
+                      className="absolute z-20 pointer-events-auto"
+                      style={{
+                        left, top, width: 8, height: 8,
+                        backgroundColor: '#fff',
+                        border: `2px solid ${colorObj.border}`,
+                        borderRadius: 2,
+                        cursor,
+                      }}
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        pushHistory();
+                        setResizing({ corner, startX: toImgCoords(e.clientX, e.clientY).x, startY: toImgCoords(e.clientX, e.clientY).y, origShape: cloneShape(s) });
+                        (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+                      }}
+                    />
+                  );
+                })}
+              </>
+            )}
         </div>
       );
     }
 
     if ((s.type === 'polygon' || s.type === 'freehand') && s.points && s.points.length > 1) {
       const pts = s.points.map(p => `${p.x * scale},${p.y * scale}`).join(' ');
+      const sharedCursor = tool === 'hand'
+        ? 'grab'
+        : tool === 'eraser'
+          ? 'pointer'
+          : s.type === 'polygon' && (hoveredSelectableId === s.id || tool === 'select')
+            ? 'move'
+            : 'crosshair';
+
       return (
         <svg key={s.id} className="absolute inset-0 pointer-events-none" style={{ width: displaySize.w, height: displaySize.h }}>
           {s.type === 'polygon' ? (
@@ -564,16 +635,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
               stroke={colorObj.border}
               strokeWidth={isSelected ? 3 : 2}
               className="pointer-events-auto"
-              style={{ cursor: tool === 'hand' ? 'grab' : tool === 'select' ? 'move' : tool === 'eraser' ? 'pointer' : 'crosshair' }}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (tool === 'select' || tool === 'eraser') setSelectedId(s.id);
-                else if (tool !== 'hand') {
-                  setPrevDrawTool(tool);
-                  setTool('select');
-                  setSelectedId(s.id);
-                }
-              }}
+              style={{ cursor: sharedCursor }}
             />
           ) : (
             <polyline
@@ -584,16 +646,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
               strokeLinecap="round"
               strokeLinejoin="round"
               className="pointer-events-auto"
-              style={{ cursor: tool === 'hand' ? 'grab' : tool === 'select' ? 'move' : tool === 'eraser' ? 'pointer' : 'crosshair' }}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (tool === 'select' || tool === 'eraser') setSelectedId(s.id);
-                else if (tool !== 'hand') {
-                  setPrevDrawTool(tool);
-                  setTool('select');
-                  setSelectedId(s.id);
-                }
-              }}
+              style={{ cursor: sharedCursor }}
             />
           )}
         </svg>
@@ -632,9 +685,8 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
         </button>
       </header>
 
-      {/* ─── Content: toolbar + image + bottom bar ─── */}
+      {/* ─── Content: toolbar + image + floating controls ─── */}
       <div className="flex-1 min-h-0 flex flex-col items-center justify-center p-2 sm:p-3 overflow-hidden">
-        
         {/* Drawing toolbar — above image */}
         <div className="shrink-0 flex items-center gap-1 bg-card/90 backdrop-blur-sm rounded-xl border border-border/60 p-1 shadow-sm mb-2">
           {drawTools.map(t => (
@@ -645,7 +697,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
                   ? 'bg-primary text-primary-foreground shadow-sm'
                   : 'text-muted-foreground hover:bg-accent hover:text-foreground'
               }`}
-              onClick={() => { setTool(t.id); setSelectedId(null); setCurrentPoints([]); }}
+              onClick={() => { setTool(t.id); setSelectedId(null); setCurrentPoints([]); setPolygonPreviewPoint(null); }}
               title={t.label}
             >
               {t.icon}
@@ -662,9 +714,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
           </button>
         </div>
 
-        {/* Image canvas + zoom controls side by side */}
-        <div className="flex-1 min-h-0 w-full flex items-center justify-center gap-2">
-          {/* Image canvas — centered, responsive */}
+        <div className="flex-1 min-h-0 w-full flex items-center justify-center">
           <div
             ref={containerRef}
             className="relative flex items-center justify-center overflow-auto bg-muted/20 rounded-xl border border-border/30 flex-1 min-h-0 h-full"
@@ -684,7 +734,10 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
               onPointerLeave={() => {
+                setHoveredSelectableId(null);
+                setPolygonPreviewPoint(null);
                 if (panning) { setPanning(false); return; }
+                if (dragging) { setDragging(null); return; }
                 if (resizing) { setResizing(null); return; }
                 if (drawing && tool !== 'polygon') {
                   setDrawing(false);
@@ -713,8 +766,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
 
               {shapes.map(renderShape)}
 
-              {/* Trash button below selected shape */}
-              {selectedId && selectedShape && tool === 'select' && (
+              {selectedId && selectedShape && tool === 'select' && selectedShape.type !== 'freehand' && (
                 <div
                   className="absolute z-30 pointer-events-auto"
                   style={{
@@ -749,7 +801,10 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
               {currentPoints.length > 0 && (
                 <svg className="absolute inset-0 pointer-events-none" style={{ width: displaySize.w, height: displaySize.h }}>
                   <polyline
-                    points={currentPoints.map(p => `${p.x * scale},${p.y * scale}`).join(' ')}
+                    points={[
+                      ...currentPoints,
+                      ...(tool === 'polygon' && polygonPreviewPoint ? [polygonPreviewPoint] : []),
+                    ].map(p => `${p.x * scale},${p.y * scale}`).join(' ')}
                     fill="none"
                     stroke="rgba(59,130,246,0.8)"
                     strokeWidth="2"
@@ -762,51 +817,60 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
                 </svg>
               )}
             </div>
-          </div>
 
-          {/* Zoom controls — vertical right side */}
-          <div className="shrink-0 flex flex-col items-center gap-1 bg-card/90 backdrop-blur-sm rounded-xl border border-border/60 p-1 shadow-sm">
-            {/* Hand / pan tool */}
-            <button
-              className={`h-8 w-8 flex items-center justify-center rounded-lg transition-colors ${
-                tool === 'hand'
-                  ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-              }`}
-              onClick={() => { setTool('hand'); setSelectedId(null); }}
-              title="Mover (pan)"
-            >
-              <IconHand className="h-5 w-5" />
-            </button>
-            <div className="w-6 h-px bg-border" />
-            <button
-              className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-              onClick={() => setZoom(z => Math.min(3, z + 0.25))}
-              title="Zoom +"
-            >
-              <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5"><path d="M13 5a1 1 0 1 0-2 0v6H5a1 1 0 1 0 0 2h6v6a1 1 0 1 0 2 0v-6h6a1 1 0 1 0 0-2h-6z" /></svg>
-            </button>
-            <span className="text-[10px] text-muted-foreground tabular-nums select-none">{Math.round(zoom * 100)}%</span>
-            <button
-              className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-              onClick={() => setZoom(z => Math.max(0.3, z - 0.25))}
-              title="Zoom -"
-            >
-              <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5"><path d="M20 12a1 1 0 0 1-1 1H5a1 1 0 1 1 0-2h14a1 1 0 0 1 1 1" /></svg>
-            </button>
+            {/* Colors — left middle outside image */}
+            <div className="absolute left-2 top-1/2 z-20 -translate-y-1/2 flex flex-col items-center gap-2 rounded-xl border border-border/60 bg-card/90 p-2 shadow-sm backdrop-blur-sm">
+              {visibleColors.map(c => {
+                const isActive = shapeColor === c.fill;
+                return (
+                  <button
+                    key={c.label}
+                    className={`rounded-full transition-all shrink-0 ${isActive ? 'ring-2 ring-offset-1 ring-foreground/40 scale-110' : 'hover:scale-110'}`}
+                    style={{
+                      backgroundColor: c.fill.replace(/[\d.]+\)$/, '1)'),
+                      width: 22,
+                      height: 22,
+                    }}
+                    onClick={() => handleColorPick(c.fill)}
+                    title={c.label}
+                  />
+                );
+              })}
+            </div>
+
+            {/* Zoom controls — right middle */}
+            <div className="absolute right-2 top-1/2 z-20 -translate-y-1/2 flex flex-col items-center gap-1 bg-card/90 backdrop-blur-sm rounded-xl border border-border/60 p-1 shadow-sm">
+              <button
+                className={`h-8 w-8 flex items-center justify-center rounded-lg transition-colors ${
+                  tool === 'hand'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                }`}
+                onClick={() => { setTool('hand'); setSelectedId(null); }}
+                title="Mover (pan)"
+              >
+                <IconHand className="h-5 w-5" />
+              </button>
+              <div className="w-6 h-px bg-border" />
+              <button className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors" onClick={() => setZoom(z => Math.min(3, z + 0.25))} title="Zoom +">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5"><path d="M13 5a1 1 0 1 0-2 0v6H5a1 1 0 1 0 0 2h6v6a1 1 0 1 0 2 0v-6h6a1 1 0 1 0 0-2h-6z" /></svg>
+              </button>
+              <span className="text-[10px] text-muted-foreground tabular-nums select-none">{Math.round(zoom * 100)}%</span>
+              <button className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors" onClick={() => setZoom(z => Math.max(0.3, z - 0.25))} title="Zoom -">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5"><path d="M20 12a1 1 0 0 1-1 1H5a1 1 0 1 1 0-2h14a1 1 0 0 1 1 1" /></svg>
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Polygon hint */}
         {tool === 'polygon' && currentPoints.length > 0 && (
           <p className="text-[11px] text-muted-foreground mt-1">
             Clique para vértices. Feche no primeiro ponto. ({currentPoints.length} pt{currentPoints.length !== 1 ? 's' : ''})
           </p>
         )}
 
-        {/* Bottom bar — eye + colors + AI detect */}
+        {/* Bottom bar — eye + IA */}
         <div className="shrink-0 flex items-center justify-center gap-2 mt-2 flex-wrap">
-          {/* Eye toggle */}
           <button
             onClick={() => setPreviewOpaque(v => !v)}
             className={`h-8 w-8 shrink-0 flex items-center justify-center rounded-lg transition-colors ${
@@ -817,70 +881,13 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
             {previewOpaque ? <IconEyeClosed className="h-4 w-4" /> : <IconEyeOpen className="h-4 w-4" />}
           </button>
 
-          {/* Color dots */}
-          <div className="relative flex items-center gap-1">
-            {visibleColors.map(c => {
-              const isActive = shapeColor === c.fill;
-              return (
-                <button
-                  key={c.label}
-                  className={`rounded-full transition-all shrink-0 ${isActive ? 'ring-2 ring-offset-1 ring-foreground/40 scale-110' : 'hover:scale-110'}`}
-                  style={{
-                    backgroundColor: c.fill.replace(/[\d.]+\)$/, '1)'),
-                    width: 20,
-                    height: 20,
-                  }}
-                  onClick={() => setShapeColor(c.fill)}
-                  title={c.label}
-                />
-              );
-            })}
-            <button
-              onClick={() => setColorInfoOpen(v => !v)}
-              className="h-5 w-5 shrink-0 flex items-center justify-center text-primary/70 hover:text-primary transition-colors"
-              title="Como funcionam as cores"
-            >
-              <IconInfo className="h-3.5 w-3.5" />
-            </button>
-
-            {colorInfoOpen && (
-              <div className="absolute left-0 bottom-full mb-2 z-50 w-72 rounded-xl bg-card border border-border shadow-lg p-3 space-y-2.5">
-                <div className="flex items-start justify-between">
-                  <p className="text-xs text-muted-foreground leading-relaxed pr-2">
-                    Formas da mesma cor são agrupadas no mesmo cartão. Cores diferentes geram cartões diferentes. Você pode usar quantas cores quiser.
-                  </p>
-                  <button onClick={() => setColorInfoOpen(false)} className="shrink-0 h-5 w-5 flex items-center justify-center text-muted-foreground hover:text-foreground">
-                    <IconClose className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="rounded-lg border border-border bg-muted/30 p-2 text-center space-y-1.5">
-                    <p className="text-[10px] font-semibold text-foreground">Mesma cor = agrupadas</p>
-                    <div className="mx-auto w-14 h-8 rounded bg-muted relative flex items-center justify-center gap-0.5">
-                      <div className="w-4 h-2.5 rounded-sm" style={{ backgroundColor: COLORS[0].fill.replace(/[\d.]+\)$/, '1)') }} />
-                      <div className="w-4 h-2.5 rounded-sm" style={{ backgroundColor: COLORS[0].fill.replace(/[\d.]+\)$/, '1)') }} />
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-border bg-muted/30 p-2 text-center space-y-1.5">
-                    <p className="text-[10px] font-semibold text-foreground">Cores diferentes = cards</p>
-                    <div className="mx-auto w-14 h-8 rounded bg-muted relative flex items-center justify-center gap-0.5">
-                      <div className="w-4 h-2.5 rounded-sm" style={{ backgroundColor: COLORS[0].fill.replace(/[\d.]+\)$/, '1)') }} />
-                      <div className="w-4 h-2.5 rounded-sm" style={{ backgroundColor: COLORS[1].fill.replace(/[\d.]+\)$/, '1)') }} />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Detect AI — animated gradient border */}
           <button
             onClick={handleDetectAI}
             disabled={isDetecting || !imgLoaded}
             className="relative inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all disabled:opacity-50 shrink-0 overflow-hidden"
             style={{ background: 'hsl(var(--card))' }}
           >
-            <span className="absolute inset-0 rounded-full p-[1.5px] overflow-hidden" style={{ background: 'linear-gradient(90deg, #00B2FF, #3347FF, #FF306B, #FF9B23, #00B2FF)', backgroundSize: '200% 100%', animation: 'gradient-shift 3s linear infinite' }} >
+            <span className="absolute inset-0 rounded-full p-[1.5px] overflow-hidden" style={{ background: 'linear-gradient(90deg, #00B2FF, #3347FF, #FF306B, #FF9B23, #00B2FF)', backgroundSize: '200% 100%', animation: 'gradient-shift 3s linear infinite' }}>
               <span className="block w-full h-full rounded-full bg-card" />
             </span>
             <span className="relative flex items-center gap-1.5">
@@ -891,16 +898,6 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
         </div>
       </div>
 
-      {/* Info strip */}
-      {shapes.length > 0 && (
-        <div className="shrink-0 border-t border-border/40 px-3 py-1.5">
-          <p className="text-[11px] text-muted-foreground text-center">
-            {shapes.length} área{shapes.length !== 1 ? 's' : ''} · {cardCount} cartão{cardCount !== 1 ? 'ões' : ''}
-          </p>
-        </div>
-      )}
-
-      {/* Gradient animation keyframes */}
       <style>{`
         @keyframes gradient-shift {
           0% { background-position: 0% 50%; }
