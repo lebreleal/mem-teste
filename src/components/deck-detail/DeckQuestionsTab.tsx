@@ -518,20 +518,7 @@ const QuestionPractice = ({
 
         // Fallback: if question has no inline concepts, resolve from question_concepts
         if (conceptsToUse.length === 0) {
-          const { data: links } = await supabase
-            .from('question_concepts' as any)
-            .select('concept_id')
-            .eq('question_id', q.id)
-            .limit(8);
-
-          const conceptIds = (links ?? []).map((l: any) => l.concept_id).filter(Boolean);
-          if (conceptIds.length > 0) {
-            const { data: gc } = await supabase
-              .from('global_concepts' as any)
-              .select('name')
-              .in('id', conceptIds);
-            conceptsToUse = (gc ?? []).map((c: any) => c.name).filter(Boolean);
-          }
+          conceptsToUse = await resolveConceptNamesFromLinks(q.id);
         }
 
         const moved = conceptsToUse.length > 0
