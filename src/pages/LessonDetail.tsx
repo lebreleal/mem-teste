@@ -285,7 +285,7 @@ const LessonDetail = () => {
       if (!isDeckFreeCheck && !isSubscriber && !isAdmin && !isMod && td.shared_by !== user.id) {
         throw new Error('SUBSCRIBER_ONLY');
       }
-      const { data: freshDecks } = await supabase.from('decks').select('*').eq('user_id', user.id);
+      const { data: freshDecks } = await supabase.from('decks').select('id, name, folder_id, parent_deck_id, source_turma_deck_id, is_archived').eq('user_id', user.id);
       const latestDecks = (freshDecks || []) as any[];
 
       let turmaFolder = folders.find(f => f.name === turma.name && !f.parent_id);
@@ -299,7 +299,7 @@ const LessonDetail = () => {
         turmaFolder = result as any;
       }
 
-      const { data: originalDeck } = await supabase.from('decks').select('*').eq('id', td.deck_id).single();
+      const { data: originalDeck } = await supabase.from('decks').select('name, algorithm_mode, daily_new_limit, daily_review_limit').eq('id', td.deck_id).single();
       if (!originalDeck) throw new Error('Deck não encontrado');
       const od = originalDeck as any;
       const subjectName = subject?.name || 'Sem Matéria';
@@ -385,7 +385,7 @@ const LessonDetail = () => {
   const downloadDeck = useMutation({
     mutationFn: async (td: any) => {
       if (!user || !turma) throw new Error('Not authenticated');
-      const { data: freshDecks } = await supabase.from('decks').select('*').eq('user_id', user.id);
+      const { data: freshDecks } = await supabase.from('decks').select('id, name, folder_id, parent_deck_id, source_turma_deck_id, is_archived').eq('user_id', user.id);
       const latestDecks = (freshDecks || []) as any[];
 
       let turmaFolder = folders.find(f => f.name === turma.name && !f.parent_id);
@@ -395,7 +395,7 @@ const LessonDetail = () => {
         const result = await createFolder.mutateAsync({ name: folderName });
         turmaFolder = result as any;
       }
-      const { data: originalDeck } = await supabase.from('decks').select('*').eq('id', td.deck_id).single();
+      const { data: originalDeck } = await supabase.from('decks').select('name, algorithm_mode, daily_new_limit, daily_review_limit').eq('id', td.deck_id).single();
       if (!originalDeck) throw new Error('Deck não encontrado');
       const od = originalDeck as any;
       const subjectName = subject?.name || 'Sem Matéria';

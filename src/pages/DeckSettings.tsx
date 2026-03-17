@@ -164,7 +164,7 @@ const DeckSettings = () => {
 
   useEffect(() => {
     if (!deckId || !user) return;
-    supabase.from('decks').select('*').eq('id', deckId).single().then(({ data, error }) => {
+    supabase.from('decks').select('name, daily_new_limit, daily_review_limit, algorithm_mode, requested_retention, shuffle_cards, learning_steps, easy_bonus, interval_modifier, max_interval, easy_graduating_interval, parent_deck_id, is_public, allow_duplication, source_turma_deck_id, source_listing_id, community_id, bury_new_siblings, bury_review_siblings, bury_learning_siblings').eq('id', deckId).single().then(({ data, error }) => {
       if (error || !data) {
         toast({ title: 'Erro', description: 'Baralho não encontrado.', variant: 'destructive' });
         navigate('/dashboard');
@@ -305,7 +305,7 @@ const DeckSettings = () => {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) throw new Error('Not authenticated');
 
-      const { data: originalDeck } = await supabase.from('decks').select('*').eq('id', deckId).single();
+      const { data: originalDeck } = await supabase.from('decks').select('name').eq('id', deckId).single();
       if (!originalDeck) throw new Error('Deck not found');
 
       const { data: newDeck, error } = await supabase.from('decks').insert({
@@ -385,7 +385,7 @@ const DeckSettings = () => {
 
   const handleCopyWithAlgorithm = async () => {
     if (!algorithmChangeTarget || !deckId || !user) return;
-    const { data: currentDeck } = await supabase.from('decks').select('*').eq('id', deckId).single();
+    const { data: currentDeck } = await supabase.from('decks').select('name, folder_id').eq('id', deckId).single();
     if (!currentDeck) return;
     const newName = `${currentDeck.name} (${algorithmChangeTarget === 'fsrs' ? 'FSRS' : 'Revisão rápida'})`;
     const { data: newDeck, error } = await supabase
