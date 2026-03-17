@@ -82,16 +82,34 @@ function renderCloze(html: string, revealed: boolean, targetNum?: number): strin
   });
 }
 
+/** Occlusion rect shape */
+interface OcclusionRect {
+  id: string;
+  x: number; y: number; w: number; h: number;
+  type?: string; text?: string;
+  points?: { x: number; y: number }[];
+}
+
+interface OcclusionData {
+  imageUrl?: string;
+  allRects?: OcclusionRect[];
+  rects?: OcclusionRect[];
+  activeRectIds?: string[];
+  canvasWidth?: number;
+  canvasHeight?: number;
+  frontText?: string;
+}
+
 function renderOcclusion(frontContent: string, revealed: boolean, fallbackCanvas?: { w: number; h: number }): string {
   try {
-    const data = JSON.parse(frontContent);
+    const data: OcclusionData = JSON.parse(frontContent);
     const { imageUrl } = data;
     if (!imageUrl) return '<p>Erro ao carregar</p>';
-    const allRects: any[] = data.allRects || data.rects || [];
-    const activeRectIds: string[] = data.activeRectIds || allRects.map((r: any) => r.id);
+    const allRects: OcclusionRect[] = data.allRects || data.rects || [];
+    const activeRectIds: string[] = data.activeRectIds || allRects.map(r => r.id);
     if (allRects.length === 0) return `<img src="${imageUrl}" style="max-width:100%;border-radius:0.5rem" />`;
 
-    const svgShapes = allRects.map((r: any) => {
+    const svgShapes = allRects.map((r: OcclusionRect) => {
       const isActive = activeRectIds.includes(r.id);
       if (!isActive) return '';
       const shapeType = r.type || 'rect';
