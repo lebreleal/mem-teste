@@ -439,8 +439,9 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const rawGlobalLimit = profileData?.daily_new_cards_limit ?? 9999;
   const weeklyNewCards = profileData?.weekly_new_cards ?? null;
   const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
-  const todayGlobalLimit = (weeklyNewCards && (weeklyNewCards as any)[DAY_KEYS[new Date().getDay()]] != null)
-    ? (weeklyNewCards as any)[DAY_KEYS[new Date().getDay()]]
+  const weeklyMap = weeklyNewCards as Record<string, number> | null;
+  const todayGlobalLimit = (weeklyMap && weeklyMap[DAY_KEYS[new Date().getDay()]] != null)
+    ? weeklyMap[DAY_KEYS[new Date().getDay()]]
     : rawGlobalLimit;
 
   const learningCount = (stats?.learning_count ?? 0);
