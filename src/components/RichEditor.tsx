@@ -635,6 +635,26 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
           />
         )}
       </Suspense>
+      <Suspense fallback={null}>
+        {drawingOpen && (
+          <DrawingCanvasModal
+            open={drawingOpen}
+            onClose={() => setDrawingOpen(false)}
+            onSave={async (dataUrl) => {
+              setDrawingOpen(false);
+              if (!user || !editor) return;
+              try {
+                const res = await fetch(dataUrl);
+                const blob = await res.blob();
+                const file = new File([blob], `drawing-${Date.now()}.png`, { type: 'image/png' });
+                await uploadImageFile(file);
+              } catch {
+                toast({ title: 'Erro ao salvar desenho', variant: 'destructive' });
+              }
+            }}
+          />
+        )}
+      </Suspense>
     </div>
   );
 };
