@@ -193,10 +193,7 @@ const ConceptMasterySection = ({
     setConceptExplaining(concept);
     try {
       spendEnergy.mutate(1);
-      const { data, error } = await supabase.functions.invoke('ai-tutor', {
-        body: { type: 'explain-concept', concept, deckId },
-      });
-      if (error) throw error;
+      const data = await invokeAITutor({ type: 'explain-concept', concept, deckId });
       setConceptExplanations(prev => ({ ...prev, [concept]: data?.response || 'Explicação indisponível.' }));
     } catch { toast({ title: 'Erro ao explicar conceito', variant: 'destructive' }); }
     finally { setConceptExplaining(null); }
