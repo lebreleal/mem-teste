@@ -999,7 +999,7 @@ const Dashboard = () => {
               state.setImportOpen(false);
 
               try {
-                const { data: { user } } = await (await import('@/integrations/supabase/client')).supabase.auth.getUser();
+                const currentUser = user;
                 const progressCb = (current: number, total: number) => {
                   pendingStore.updatePending(pendingId, { progress: { current, total } });
                 };
