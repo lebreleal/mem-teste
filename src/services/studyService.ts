@@ -27,9 +27,10 @@ export async function fetchStudyQueue(
   folderId?: string,
 ): Promise<StudyQueueResult> {
   // ─── Round 1: base data (parallel) ───
+  const isStudyAll = !deckId && !folderId;
   const [decksResult, foldersResult] = await Promise.all([
     supabase.from('decks').select(DECK_SELECT_COLS).eq('user_id', userId),
-    folderId
+    (folderId || isStudyAll)
       ? supabase.from('folders').select('id, parent_id').eq('user_id', userId)
       : Promise.resolve({ data: [] as any[] }),
   ]);
@@ -56,7 +57,21 @@ export async function fetchStudyQueue(
   let limitScopeIds: string[] = [];
   let folderLimitDecks: typeof activeDecks = [];
 
-  if (folderId) {
+  // "Study All" mode: no specific deck or folder → use ALL active decks
+
+  if (isStudyAll) {
+    deckIds = activeDecks.map(d => d.id);
+    if (deckIds.length === 0) {
+      return { cards: [], algorithmMode: 'fsrs', deckConfig: undefined, isLiveDeck: false };
+    }
+    deckIds.forEach(buildZeroLimitSet);
+
+    // Use the first root-level deck as deckConfig reference
+    const rootDecks = activeDecks.filter(d => !d.parent_deck_id);
+    folderLimitDecks = rootDecks;
+    deckConfig = (rootDecks[0] as DeckStudyConfig | undefined);
+    limitScopeIds = deckIds;
+  } else if (folderId) {
     const collectRootDeckIds = () => collectFolderDeckIds(activeDecks, foldersData, folderId);
     let rootDeckIds = collectRootDeckIds();
 
@@ -121,10 +136,10 @@ export async function fetchStudyQueue(
   const deckNewLimit = deckConfig?.daily_new_limit ?? 20;
   const reviewLimit = deckConfig?.daily_review_limit ?? 100;
 
-  const folderNewLimit = folderId
+  const folderNewLimit = (folderId || isStudyAll)
     ? folderLimitDecks.reduce((sum, d) => sum + (d.daily_new_limit ?? 20), 0)
     : deckNewLimit;
-  const folderReviewLimit = folderId
+  const folderReviewLimit = (folderId || isStudyAll)
     ? folderLimitDecks.reduce((sum, d) => sum + (d.daily_review_limit ?? 100), 0)
     : reviewLimit;
 
