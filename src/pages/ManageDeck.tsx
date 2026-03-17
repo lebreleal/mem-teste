@@ -435,15 +435,6 @@ const ManageDeck = () => {
                 >
                   <Plus className="h-4 w-4" />
                 </button>
-                {occlusionImageUrl && (
-                  <button
-                    onClick={() => setOcclusionModalOpen(true)}
-                    className="h-9 w-9 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
-                    title="Editar oclusão"
-                  >
-                    <ImageIcon className="h-4 w-4" />
-                  </button>
-                )}
               </div>
 
             </div>
