@@ -383,7 +383,7 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
       } else {
         const newName = subDeckName || 'Importado';
         const newDeck = await deckService.createDeck(userId, newName, deck?.folder_id ?? null, deckId, deck?.algorithm_mode || 'sm2');
-        await cardService.createCards((newDeck as Record<string, string>).id, importedCards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType || 'basic' })));
+        await cardService.createCards((newDeck as unknown as { id: string }).id, importedCards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType || 'basic' })));
         toast({ title: `${importedCards.length} cartões importados como subdeck "${newName}"!` });
       }
       invalidateDeckRelatedQueries(queryClient, deckId);
