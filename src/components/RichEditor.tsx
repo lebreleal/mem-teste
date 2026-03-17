@@ -235,6 +235,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   };
   uploadImageFileRef.current = uploadImageFile;
 
+  const handleImageAttach = async () => {
     if (!user || !editor) return;
     setImageMenuOpen(false);
     const input = document.createElement('input');
