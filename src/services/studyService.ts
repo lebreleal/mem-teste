@@ -32,7 +32,7 @@ export async function fetchStudyQueue(
     supabase.from('decks').select(DECK_SELECT_COLS).eq('user_id', userId),
     (folderId || isStudyAll)
       ? supabase.from('folders').select('id, parent_id').eq('user_id', userId)
-      : Promise.resolve({ data: [] as any[] }),
+      : Promise.resolve({ data: [] as { id: string; parent_id: string | null }[] }),
   ]);
 
   let activeDecks = (decksResult.data ?? []).filter(d => !d.is_archived);
