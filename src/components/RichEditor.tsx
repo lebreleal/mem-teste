@@ -233,8 +233,8 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     const { data: urlData } = supabase.storage.from('card-images').getPublicUrl(path);
     editor.chain().focus().setImage({ src: urlData.publicUrl }).run();
   };
+  uploadImageFileRef.current = uploadImageFile;
 
-  const handleImageAttach = async () => {
     if (!user || !editor) return;
     setImageMenuOpen(false);
     const input = document.createElement('input');
