@@ -503,9 +503,9 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
       });
       const exam = await createExam.mutateAsync({ deckId, title: eTitle, questions, timeLimitSeconds: examTimeLimit > 0 ? examTimeLimit * 60 : undefined });
       updateNotification(notifId, { status: 'ready', examId: exam.id, message: 'Prova pronta!' });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      updateNotification(notifId, { status: 'error', message: err.message || 'Erro ao gerar prova' });
+      updateNotification(notifId, { status: 'error', message: err instanceof Error ? err.message : 'Erro ao gerar prova' });
     }
   }, [deckId, deck, examTotalQuestions, examWrittenCount, examTitle, examOptionsCount, examTimeLimit, model, addNotification, updateNotification, createExam, queryClient, toast, setExamModalOpen, setExamGenerating]);
 
