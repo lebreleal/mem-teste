@@ -279,7 +279,7 @@ export function useStudyPlan(options?: { full?: boolean }) {
         .in('id', allDeckIds);
       if (error) throw error;
       if (!data || data.length === 0) return 0.9;
-      const sum = data.reduce((acc: number, d: any) => acc + (d.requested_retention ?? 0.9), 0);
+      const sum = data.reduce((acc: number, d: { requested_retention: number }) => acc + (d.requested_retention ?? 0.9), 0);
       return sum / data.length;
     },
     enabled: full && allDeckIds.length > 0,
