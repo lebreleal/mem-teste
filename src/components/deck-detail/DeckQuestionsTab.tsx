@@ -1507,11 +1507,8 @@ const DeckQuestionsTab = ({
       if (!user) return [];
       const questionIds = questions.map(q => q.id);
       if (questionIds.length === 0) return [];
-      const { data } = await supabase
-        .from('deck_question_attempts' as any).select('*')
-        .eq('user_id', user.id)
-        .in('question_id', questionIds);
-      return (data ?? []) as unknown as QuestionAttempt[];
+      const data = await fetchQuestionAttempts(user.id, questionIds);
+      return data as unknown as QuestionAttempt[];
     },
     enabled: !!user && questions.length > 0,
     staleTime: 30_000,
