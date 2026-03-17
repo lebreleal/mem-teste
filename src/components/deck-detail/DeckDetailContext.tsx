@@ -6,6 +6,7 @@
  */
 
 import { createContext, useContext, useState, useMemo, useCallback, useEffect, useRef, type ReactNode } from 'react';
+import type { User } from '@supabase/supabase-js';
 import type { CardMeta, DescendantCardCounts } from '@/services/cardService';
 import { countReviewDueCards, fetchStudyPlanDeckIds, unfreezeCard as unfreezeCardService } from '@/services/card/cardMutations';
 import { useParams, useNavigate } from 'react-router-dom';
