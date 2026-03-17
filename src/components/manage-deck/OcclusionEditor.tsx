@@ -341,6 +341,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
   /* ─── Shape rendering helpers ─── */
   const renderShape = (s: OcclusionShape, idx: number) => {
     const isSelected = selectedId === s.id;
+    const colorObj = getColorObj(s.color || COLORS[0].fill);
 
     if (s.type === 'rect') {
       return (
@@ -354,8 +355,8 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
             top: s.y! * scale,
             width: s.w! * scale,
             height: s.h! * scale,
-            backgroundColor: isSelected ? 'rgba(59,130,246,0.45)' : 'rgba(59,130,246,0.6)',
-            border: `2px solid ${isSelected ? '#facc15' : 'rgba(59,130,246,0.9)'}`,
+            backgroundColor: colorObj.fill,
+            border: `2px solid ${isSelected ? '#facc15' : colorObj.border}`,
             borderRadius: 4,
           }}
           onClick={(e) => { e.stopPropagation(); setSelectedId(s.id); }}
@@ -374,8 +375,8 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
           {s.type === 'polygon' ? (
             <polygon
               points={pts}
-              fill={isSelected ? 'rgba(59,130,246,0.45)' : 'rgba(59,130,246,0.6)'}
-              stroke={isSelected ? '#facc15' : 'rgba(59,130,246,0.9)'}
+              fill={colorObj.fill}
+              stroke={isSelected ? '#facc15' : colorObj.border}
               strokeWidth="2"
               className="pointer-events-auto cursor-pointer"
               onClick={(e) => { e.stopPropagation(); setSelectedId(s.id); }}
@@ -384,7 +385,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
             <polyline
               points={pts}
               fill="none"
-              stroke={isSelected ? '#facc15' : 'rgba(59,130,246,0.9)'}
+              stroke={isSelected ? '#facc15' : colorObj.border}
               strokeWidth="3"
               strokeLinecap="round"
               strokeLinejoin="round"
