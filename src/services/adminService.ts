@@ -175,9 +175,10 @@ interface SuggestionUpdateData {
 }
 
 export async function reviewSuggestion(id: string, status: 'accepted' | 'rejected', moderatorId: string, content?: { front_content: string; back_content: string }) {
-  const updateData: SuggestionUpdateData = { status, moderator_user_id: moderatorId };
-  if (content) (updateData as SuggestionUpdateData & { suggested_content: unknown }).suggested_content = content;
-  const { error } = await supabase.from('deck_suggestions').update(updateData as Tables<'deck_suggestions'>['Update']).eq('id', id);
+  const updatePayload: Record<string, unknown> = { status, moderator_user_id: moderatorId };
+  if (content) updatePayload.suggested_content = content;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- partial update
+  const { error } = await supabase.from('deck_suggestions').update(updatePayload as any).eq('id', id);
   if (error) throw error;
 }
 
