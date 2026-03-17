@@ -274,147 +274,124 @@ const SalaHero = ({
             </div>
           </div>
 
-          {/* Time estimate with info tooltip */}
-          {salaStudyStats && salaStudyStats.totalDue > 0 && (
-            <div className="flex items-center gap-1.5 mt-1">
-              <span className="text-xs text-muted-foreground">~{salaStudyStats.timeLabel} restantes hoje</span>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button className="text-muted-foreground hover:text-foreground transition-colors">
-                    <Info className="h-3 w-3" />
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent side="top" className="text-xs w-56 p-2">
-                  Tempo de estudo restante para completar os cartões novos e revisões configurados nos ajustes de hoje, com base na sua velocidade média de estudo.
-                </PopoverContent>
-              </Popover>
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Study bar with circle + button */}
+      {/* Study bar — single line: [circle + time] ... [config + ESTUDAR] */}
       {salaStudyStats && (
-        <div className="flex items-center gap-4 px-4 py-3 max-w-md mx-auto md:max-w-lg">
-          <button
-            onClick={() => setStudySettingsOpen(true)}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0"
-            aria-label="Configurar estudo"
-          >
-            <SlidersHorizontal className="h-4 w-4" />
-          </button>
-
-          {/* Circular 5-segment classification progress */}
-          {(() => {
-            const R = 22;
-            const C = 2 * Math.PI * R;
-            const total = salaStudyStats.totalCards;
-            const masteryPct = total > 0 ? Math.round((salaStudyStats.masteredCount / total) * 100) : 0;
-            if (total === 0) return (
-              <div className="relative shrink-0">
-                <svg width="52" height="52" viewBox="0 0 52 52" className="transform -rotate-90">
-                  <circle cx="26" cy="26" r={R} fill="none" stroke="hsl(var(--muted))" strokeWidth="4" />
-                </svg>
-                <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-foreground tabular-nums">0%</span>
-              </div>
-            );
-            const segments = [
-              { pct: salaStudyStats.facil / total, color: 'hsl(var(--info))', key: 'facil' },
-              { pct: salaStudyStats.bom / total, color: 'hsl(var(--success))', key: 'bom' },
-              { pct: salaStudyStats.dificil / total, color: 'hsl(var(--warning))', key: 'dificil' },
-              { pct: salaStudyStats.errei / total, color: 'hsl(var(--destructive))', key: 'errei' },
-              { pct: salaStudyStats.novo / total, color: 'hsl(var(--muted))', key: 'novo' },
-            ];
-            let offset = 0;
-            return (
-              <div className="relative shrink-0">
-                <svg width="52" height="52" viewBox="0 0 52 52" className="transform -rotate-90">
-                  <circle cx="26" cy="26" r={R} fill="none" stroke="hsl(var(--muted) / 0.3)" strokeWidth="4" />
-                  {segments.map(seg => {
-                    const len = C * seg.pct;
-                    if (len <= 0) return null;
-                    const el = (
-                      <circle
-                        key={seg.key}
-                        cx="26" cy="26" r={R} fill="none"
-                        stroke={seg.color}
-                        strokeWidth="4"
-                        strokeLinecap="round"
-                        strokeDasharray={`${len} ${C - len}`}
-                        strokeDashoffset={`${-offset}`}
-                        className="transition-all duration-700"
-                      />
-                    );
-                    offset += len;
-                    return el;
-                  })}
-                </svg>
-                <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-foreground tabular-nums">
-                  {masteryPct}%
-                </span>
+        <div className="flex items-center justify-between px-4 py-3 max-w-md mx-auto md:max-w-lg">
+          {/* Left: circular progress + time estimate */}
+          <div className="flex items-center gap-2">
+            {(() => {
+              const R = 22;
+              const C = 2 * Math.PI * R;
+              const total = salaStudyStats.totalCards;
+              const masteryPct = total > 0 ? Math.round((salaStudyStats.masteredCount / total) * 100) : 0;
+              if (total === 0) return (
+                <div className="relative shrink-0">
+                  <svg width="48" height="48" viewBox="0 0 52 52" className="transform -rotate-90">
+                    <circle cx="26" cy="26" r={R} fill="none" stroke="hsl(var(--muted))" strokeWidth="4" />
+                  </svg>
+                  <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-foreground tabular-nums">0%</span>
+                </div>
+              );
+              const segments = [
+                { pct: salaStudyStats.facil / total, color: 'hsl(var(--info))', key: 'facil' },
+                { pct: salaStudyStats.bom / total, color: 'hsl(var(--success))', key: 'bom' },
+                { pct: salaStudyStats.dificil / total, color: 'hsl(var(--warning))', key: 'dificil' },
+                { pct: salaStudyStats.errei / total, color: 'hsl(var(--destructive))', key: 'errei' },
+                { pct: salaStudyStats.novo / total, color: 'hsl(var(--muted))', key: 'novo' },
+              ];
+              let offset = 0;
+              return (
                 <Popover>
                   <PopoverTrigger asChild>
-                    <button
-                      className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-muted border border-border/50 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                      aria-label="Classificação dos cards"
-                    >
-                      <Info className="h-3 w-3" />
+                    <button className="relative shrink-0" aria-label="Classificação dos cards">
+                      <svg width="48" height="48" viewBox="0 0 52 52" className="transform -rotate-90">
+                        <circle cx="26" cy="26" r={R} fill="none" stroke="hsl(var(--muted) / 0.3)" strokeWidth="4" />
+                        {segments.map(seg => {
+                          const len = C * seg.pct;
+                          if (len <= 0) return null;
+                          const el = (
+                            <circle
+                              key={seg.key}
+                              cx="26" cy="26" r={R} fill="none"
+                              stroke={seg.color}
+                              strokeWidth="4"
+                              strokeLinecap="round"
+                              strokeDasharray={`${len} ${C - len}`}
+                              strokeDashoffset={`${-offset}`}
+                              className="transition-all duration-700"
+                            />
+                          );
+                          offset += len;
+                          return el;
+                        })}
+                      </svg>
+                      <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-foreground tabular-nums">
+                        {masteryPct}%
+                      </span>
                     </button>
                   </PopoverTrigger>
                   <PopoverContent className="w-56 p-3" side="bottom" align="start">
                     <p className="text-xs font-semibold text-foreground mb-2">Classificação dos cards</p>
                     <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="h-2.5 w-2.5 rounded-full bg-info" />
-                          <span className="text-xs text-muted-foreground">Fácil</span>
+                      {[
+                        { color: 'bg-info', label: 'Fácil', count: salaStudyStats.facil },
+                        { color: 'bg-success', label: 'Bom', count: salaStudyStats.bom },
+                        { color: 'bg-warning', label: 'Difícil', count: salaStudyStats.dificil },
+                        { color: 'bg-destructive', label: 'Errei', count: salaStudyStats.errei },
+                        { color: 'bg-muted', label: 'Novo', count: salaStudyStats.novo },
+                      ].map(s => (
+                        <div key={s.label} className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className={`h-2.5 w-2.5 rounded-full ${s.color}`} />
+                            <span className="text-xs text-muted-foreground">{s.label}</span>
+                          </div>
+                          <span className="text-xs font-semibold text-foreground">{s.count}</span>
                         </div>
-                        <span className="text-xs font-semibold text-foreground">{salaStudyStats.facil}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="h-2.5 w-2.5 rounded-full bg-success" />
-                          <span className="text-xs text-muted-foreground">Bom</span>
-                        </div>
-                        <span className="text-xs font-semibold text-foreground">{salaStudyStats.bom}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="h-2.5 w-2.5 rounded-full bg-warning" />
-                          <span className="text-xs text-muted-foreground">Difícil</span>
-                        </div>
-                        <span className="text-xs font-semibold text-foreground">{salaStudyStats.dificil}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="h-2.5 w-2.5 rounded-full bg-destructive" />
-                          <span className="text-xs text-muted-foreground">Errei</span>
-                        </div>
-                        <span className="text-xs font-semibold text-foreground">{salaStudyStats.errei}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="h-2.5 w-2.5 rounded-full bg-muted" />
-                          <span className="text-xs text-muted-foreground">Novo</span>
-                        </div>
-                        <span className="text-xs font-semibold text-foreground">{salaStudyStats.novo}</span>
-                      </div>
+                      ))}
                     </div>
                   </PopoverContent>
                 </Popover>
-              </div>
-            );
-          })()}
+              );
+            })()}
 
-          <Button
-            onClick={() => navigate(`/study/folder/${state.currentFolderId}`)}
-            className="flex-1 h-11 md:h-10 rounded-full text-base md:text-sm font-bold gap-2"
-            size="lg"
-            disabled={salaStudyStats.totalDue === 0}
-          >
-            ESTUDAR
-            <Play className="h-4 w-4 fill-current" />
-          </Button>
+            {/* Time estimate */}
+            {salaStudyStats.totalDue > 0 && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                    <span>~{salaStudyStats.timeLabel}</span>
+                    <Info className="h-3 w-3" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent side="bottom" className="text-xs w-56 p-2">
+                  Tempo restante para completar os cartões novos e revisões de hoje, com base na sua velocidade média.
+                </PopoverContent>
+              </Popover>
+            )}
+          </div>
+
+          {/* Right: config + ESTUDAR */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setStudySettingsOpen(true)}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0"
+              aria-label="Configurar estudo"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+            </button>
+
+            <Button
+              onClick={() => navigate(`/study/folder/${state.currentFolderId}`)}
+              className="h-10 rounded-full text-sm font-bold gap-2 px-5"
+              disabled={salaStudyStats.totalDue === 0}
+            >
+              ESTUDAR
+              <Play className="h-4 w-4 fill-current" />
+            </Button>
+          </div>
         </div>
       )}
     </>
