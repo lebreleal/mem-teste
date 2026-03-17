@@ -190,8 +190,8 @@ interface DeckDetailContextValue {
   navigate: ReturnType<typeof useNavigate>;
   toast: ReturnType<typeof useToast>['toast'];
   queryClient: ReturnType<typeof useQueryClient>;
-  user: any;
-  otherDecks: any[];
+  user: User | null;
+  otherDecks: DeckWithStats[];
   isSaving: boolean;
   canImprove: boolean;
 }
