@@ -142,7 +142,7 @@ const AdminIA = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token || ''}`,
+          'Authorization': `Bearer ${token}`,
           'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
         body: JSON.stringify({ text: sampleText, voice: voiceName }),
