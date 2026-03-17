@@ -310,13 +310,9 @@ const ManageDeck = () => {
                   chromeless
                   hideCloze={false}
                   onOcclusionImageReady={(imageUrl) => {
-                    try {
-                      const existing = JSON.parse(front);
-                      existing.imageUrl = imageUrl;
-                      setFront(JSON.stringify(existing));
-                    } catch {
-                      setFront(JSON.stringify({ imageUrl, allRects: [] }));
-                    }
+                    setOcclusionImageUrl(imageUrl);
+                    setOcclusionRects([]);
+                    setOcclusionCanvasSize(null);
                     setOcclusionModalOpen(true);
                     setIsDirty(true);
                   }}
