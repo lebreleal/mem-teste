@@ -308,70 +308,6 @@ export async function fetchTurmaFolderId(userId: string, turmaId: string): Promi
   return data?.[0]?.id;
 }
 
-// ── Admin Impersonation ──
-
-export async function adminImpersonate(targetUserId: string): Promise<{ token: string } | null> {
-  const { data, error } = await supabase.functions.invoke('admin-impersonate', {
-    body: { target_user_id: targetUserId },
-  });
-  if (error || !data?.token) return null;
-  return { token: data.token };
-}
-
-export async function verifyImpersonationToken(tokenHash: string): Promise<boolean> {
-  const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'magiclink' });
-  return !error;
-}
-
-export async function fetchProfilePremiumExpiry(userId: string): Promise<string | null> {
-  const { data } = await supabase.from('profiles').select('premium_expires_at').eq('id', userId).single();
-  return (data as any)?.premium_expires_at ?? null;
-}
-
-// ── Public Community Service ──
-
-export async function fetchTurmaBySlugOrId(slugOrId: string) {
-  const { data: bySlug } = await supabase.from('turmas').select('*').eq('share_slug', slugOrId).maybeSingle();
-  if (bySlug) return bySlug;
-  const { data: byId } = await supabase.from('turmas').select('*').eq('id', slugOrId).maybeSingle();
-  return byId;
-}
-
-export async function fetchProfileNameById(userId: string): Promise<string> {
-  const { data } = await supabase.from('profiles').select('name').eq('id', userId).single();
-  return data?.name ?? 'Criador';
-}
-
-export async function fetchTurmaMemberCount(turmaId: string): Promise<number> {
-  const { count } = await supabase.from('turma_members').select('id', { count: 'exact', head: true }).eq('turma_id', turmaId);
-  return count ?? 0;
-}
-
-export async function fetchPublishedTurmaDecks(turmaId: string) {
-  const { data: tDecks } = await supabase
-    .from('turma_decks')
-    .select('id, deck_id, is_published')
-    .eq('turma_id', turmaId)
-    .eq('is_published', true);
-  if (!tDecks || tDecks.length === 0) return [];
-
-  const deckIds = tDecks.map((d: any) => d.deck_id);
-  const { data: deckInfo } = await supabase.from('decks').select('id, name').in('id', deckIds);
-  const nameMap = new Map((deckInfo ?? []).map((d: any) => [d.id, d.name]));
-
-  const { data: countRows } = await supabase.rpc('count_cards_per_deck', { p_deck_ids: deckIds });
-  const countMap = new Map((countRows ?? []).map((r: any) => [r.deck_id, Number(r.card_count)]));
-
-  return tDecks
-    .map((td: any) => ({
-      turmaDeckId: td.id,
-      deckId: td.deck_id,
-      name: nameMap.get(td.deck_id) ?? 'Sem nome',
-      cardCount: countMap.get(td.deck_id) ?? 0,
-    }))
-    .filter((d: any) => !d.name.includes('Caderno de Erros'));
-}
-
 // ── Sala Decks (TurmaDetail) ──
 
 export async function fetchSalaDecksData(turmaId: string) {
@@ -381,7 +317,7 @@ export async function fetchSalaDecksData(turmaId: string) {
     .eq('turma_id', turmaId)
     .eq('is_published', true);
 
-  if (!turmaDecks || turmaDecks.length === 0) return { turmaDecks: [], decks: [], cardCountMap: new Map() };
+  if (!turmaDecks || turmaDecks.length === 0) return { turmaDecks: [], decks: [], rootDeckIds: [] as string[], allDeckIds: [] as string[], cardCountMap: new Map() };
 
   const rootDeckIds = turmaDecks.map((td: any) => td.deck_id);
 
@@ -398,7 +334,6 @@ export async function fetchSalaDecksData(turmaId: string) {
     .select('*')
     .in('id', allDeckIds);
 
-  // Fetch card stats
   const cardCountMap = new Map<string, { total: number; mastered: number; novo: number; facil: number; bom: number; dificil: number; errei: number }>();
   const PAGE = 1000;
 
