@@ -57,6 +57,11 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     const pomodoroHandler = () => setShowPomodoro(true);
     const addMenuHandler = () => {
+      // Handle /materia/* pages — dispatch pasta-specific event
+      if (isOnMateria) {
+        window.dispatchEvent(new CustomEvent('open-pasta-add-menu'));
+        return;
+      }
       // "+" only works on dashboard (not on other pages) and not inside community folders
       if (!isOnDashboard) return;
       if (isInsideSala && isCommunityFolder) return;
