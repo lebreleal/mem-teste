@@ -257,7 +257,7 @@ const ManageDeck = () => {
     <div className="flex h-[100dvh] flex-col overflow-hidden bg-background">
       {/* Header — clean & minimal */}
       <header className="shrink-0 border-b border-border/40 bg-background">
-        <div className="flex items-center justify-between px-3 py-2.5">
+        <div className="flex items-center justify-between px-3 py-2.5 mx-auto max-w-2xl">
           <button onClick={handleBack} className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
             <ArrowLeft className="h-4.5 w-4.5" />
           </button>
