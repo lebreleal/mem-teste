@@ -500,14 +500,14 @@ export async function fetchStudyPlanDeckIds(userId: string): Promise<Array<{ dec
 }
 
 /** Fetch daily activity breakdown (heatmap + streak). */
-export async function fetchActivityBreakdown(userId: string, days = 365, tzOffsetMinutes = -180): Promise<ActivityDayRow[]> {
+export async function fetchActivityBreakdown(userId: string, days = 365, tzOffsetMinutes = -180): Promise<ActivityBreakdownResult | null> {
   const { data, error } = await supabase.rpc('get_activity_daily_breakdown', {
     p_user_id: userId,
     p_tz_offset_minutes: tzOffsetMinutes,
     p_days: days,
   } as any);
   if (error) throw error;
-  return (data as ActivityDayRow[]) ?? [];
+  return (data as unknown as ActivityBreakdownResult) ?? null;
 }
 
 /** Fetch hourly review breakdown. */

@@ -118,7 +118,18 @@ export interface CardReviewResult {
   originDeckName: string | null;
 }
 
-/** Row from get_activity_daily_breakdown RPC. */
+/** Row from get_activity_daily_breakdown RPC (returns a JSON object). */
+export interface ActivityBreakdownResult {
+  dayMap: Record<string, ActivityDayRow>;
+  streak: number;
+  bestStreak: number;
+  totalActiveDays: number;
+  freezesAvailable: number;
+  freezesUsed: number;
+  frozenDays: string[];
+}
+
+/** Single day entry inside ActivityBreakdownResult.dayMap. */
 export interface ActivityDayRow {
   date: string;
   cards: number;
