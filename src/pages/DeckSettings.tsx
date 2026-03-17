@@ -325,22 +325,19 @@ const DeckSettings = () => {
 
   const handleSwitchAndReset = async () => {
     if (!algorithmChangeTarget || !deckId) return;
-    const shouldReset = algorithmChangeTarget !== 'fsrs';
-    await supabase.from('decks').update({ algorithm_mode: algorithmChangeTarget } as any).eq('id', deckId);
-    if (shouldReset) {
-      await supabase.from('cards').update({ state: 0, stability: 0, difficulty: 0, scheduled_date: new Date().toISOString() } as any).eq('deck_id', deckId);
-    }
-    // Propagate to child decks
-    const { data: children } = await supabase.from('decks').select('id').eq('parent_deck_id', deckId);
-    if (children && children.length > 0) {
-      for (const child of children) {
-        await supabase.from('decks').update({ algorithm_mode: algorithmChangeTarget } as any).eq('id', child.id);
-        if (shouldReset) {
-          await supabase.from('cards').update({ state: 0, stability: 0, difficulty: 0, scheduled_date: new Date().toISOString() } as any).eq('deck_id', child.id);
-        }
-      }
-    }
+    const result = await deckService.changeAlgorithm(deckId, algorithmChangeTarget, algorithmChangeTarget !== 'fsrs');
     setAlgorithmMode(algorithmChangeTarget);
+    queryClient.invalidateQueries({ queryKey: ['deck', deckId] });
+    queryClient.invalidateQueries({ queryKey: ['decks'] });
+    queryClient.invalidateQueries({ queryKey: ['study-queue', deckId] });
+    toast({
+      title: 'Algoritmo alterado',
+      description: result.shouldReset
+        ? `Progresso redefinido${result.childCount > 0 ? ` (+ ${result.childCount} sub-baralho${result.childCount > 1 ? 's' : ''})` : ''}.`
+        : 'Progresso mantido.',
+    });
+    setAlgorithmChangeTarget(null);
+  };
     queryClient.invalidateQueries({ queryKey: ['deck', deckId] });
     queryClient.invalidateQueries({ queryKey: ['decks'] });
     queryClient.invalidateQueries({ queryKey: ['study-queue', deckId] });

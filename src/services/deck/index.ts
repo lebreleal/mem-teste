@@ -26,6 +26,7 @@ export {
   getTurmaDeckNavInfo,
   archiveDeck,
   duplicateDeck,
+  detachCommunityDeck,
   reorderDecks,
   resetDeckProgress,
 } from './deckCrud';
