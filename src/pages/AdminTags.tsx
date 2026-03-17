@@ -34,7 +34,7 @@ const TagEditDialog = ({
 }) => {
   const [name, setName] = useState(tag.name);
   const [parentId, setParentId] = useState<string | null>(tag.parent_id);
-  const [synonyms, setSynonyms] = useState<string[]>((tag as any).synonyms ?? []);
+  const [synonyms, setSynonyms] = useState<string[]>(tag.synonyms ?? []);
   const [synInput, setSynInput] = useState('');
 
   const possibleParents = allTags.filter(t => t.id !== tag.id && t.parent_id !== tag.id);
