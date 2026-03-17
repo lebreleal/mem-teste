@@ -4,6 +4,8 @@ import { ArrowLeft, ChevronUp, ChevronDown, Trash2, Copy, Plus, Loader2, Image a
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useCards } from '@/hooks/useCards';
+import { useEnergy } from '@/hooks/useEnergy';
+import { useAIModel } from '@/hooks/useAIModel';
 import { useToast } from '@/hooks/use-toast';
 import LazyRichEditor from '@/components/LazyRichEditor';
 import { Label } from '@/components/ui/label';
@@ -11,6 +13,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useQueryClient } from '@tanstack/react-query';
 import { Skeleton } from '@/components/ui/skeleton';
 import OcclusionEditor from '@/components/manage-deck/OcclusionEditor';
+import { supabase } from '@/integrations/supabase/client';
+import { markdownToHtml } from '@/lib/markdownToHtml';
 
 
 
@@ -19,8 +23,11 @@ const ManageDeck = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { cards, isLoading, createCard, updateCard, deleteCard } = useCards(deckId ?? '');
+  const { energy } = useEnergy();
+  const { model } = useAIModel();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [isAICreating, setIsAICreating] = useState(false);
 
   const initialCardId = searchParams.get('cardId');
   const hasAppliedInitialCardRef = useRef(false);
@@ -225,6 +232,26 @@ const ManageDeck = () => {
     setIsDirty(true);
   }, []);
 
+  const handleAICreate = useCallback(async (templatePrompt: string) => {
+    const strippedFront = front.replace(/<[^>]*>/g, '').trim();
+    if (!strippedFront) { toast({ title: 'Escreva algo na frente primeiro', variant: 'destructive' }); return; }
+    if (energy < 1) { toast({ title: 'Créditos insuficientes', variant: 'destructive' }); return; }
+    setIsAICreating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('enhance-card', {
+        body: { front, back, cardType: 'basic', aiModel: model, energyCost: 1, customPrompt: templatePrompt },
+      });
+      if (error) throw error;
+      if (data?.error) { toast({ title: data.error, variant: 'destructive' }); return; }
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      if (data?.front) { setFront(markdownToHtml(data.front)); setIsDirty(true); }
+      if (data?.back) { setBack(markdownToHtml(data.back)); setIsDirty(true); }
+      toast({ title: '✨ Cartão gerado com IA!' });
+    } catch (e: any) {
+      toast({ title: 'Erro ao gerar', description: e.message, variant: 'destructive' });
+    } finally { setIsAICreating(false); }
+  }, [front, back, energy, model, queryClient, toast]);
+
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -321,6 +348,8 @@ const ManageDeck = () => {
                     hideCloze={false}
                     onOcclusionPaste={handleOcclusionAction}
                     onOcclusionAttach={handleOcclusionAction}
+                    onAICreate={handleAICreate}
+                    isAICreating={isAICreating}
                   />
                 </div>
 

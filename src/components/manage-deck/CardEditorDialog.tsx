@@ -21,11 +21,13 @@ interface CardEditorDialogProps {
   setMcCorrectIndex: (v: number) => void;
   isSaving: boolean;
   isImproving: boolean;
+  isAICreating?: boolean;
   occlusionModalOpen: boolean;
   setOcclusionModalOpen: (v: boolean) => void;
   resetForm: () => void;
   handleSave: (addAnother: boolean) => void;
   handleImprove: () => void;
+  handleAICreate?: (templatePrompt: string) => void;
   addMcOption: () => void;
   removeMcOption: (idx: number) => void;
 }
@@ -34,9 +36,9 @@ export const CardEditorDialog = ({
   editorOpen, setEditorOpen, editingId, editorType, setEditorType,
   front, setFront, back, setBack,
   mcOptions, setMcOptions, mcCorrectIndex, setMcCorrectIndex,
-  isSaving, isImproving,
+  isSaving, isImproving, isAICreating = false,
   occlusionModalOpen, setOcclusionModalOpen,
-  resetForm, handleSave, handleImprove, addMcOption, removeMcOption,
+  resetForm, handleSave, handleImprove, handleAICreate, addMcOption, removeMcOption,
 }: CardEditorDialogProps) => {
 
   // Check if front content has image occlusion data
@@ -82,6 +84,8 @@ export const CardEditorDialog = ({
             }}
             onImprove={canImprove ? handleImprove : undefined}
             isImproving={isImproving}
+            onAICreate={handleAICreate}
+            isAICreating={isAICreating}
             onSave={() => handleSave(false)}
             onSaveAndAdd={!editingId ? () => handleSave(true) : undefined}
             onCancel={() => { setEditorOpen(false); resetForm(); }}

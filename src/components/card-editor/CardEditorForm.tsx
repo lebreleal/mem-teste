@@ -38,6 +38,10 @@ export interface CardEditorFormProps {
   onImprove?: () => void;
   isImproving?: boolean;
 
+  /** AI Creator — generate card from a template prompt */
+  onAICreate?: (templatePrompt: string) => void;
+  isAICreating?: boolean;
+
   /** Actions */
   onSave: () => void;
   onSaveAndAdd?: () => void;
@@ -179,6 +183,7 @@ export const CardEditorForm = ({
   mcOptions = [], onMcOptionsChange, mcCorrectIndex = 0, onMcCorrectIndexChange,
   occlusionImageUrl, onOpenOcclusion, onRemoveOcclusion,
   onImprove, isImproving = false,
+  onAICreate, isAICreating = false,
   onSave, onSaveAndAdd, onCancel, isSaving = false,
   extraContent, hideCloze = false, compact = false,
 }: CardEditorFormProps) => {
@@ -251,6 +256,8 @@ export const CardEditorForm = ({
           hideCloze={hideCloze}
           onOcclusionPaste={onOpenOcclusion}
           onOcclusionAttach={onOpenOcclusion}
+          onAICreate={onAICreate}
+          isAICreating={isAICreating}
         />
       </div>
 
