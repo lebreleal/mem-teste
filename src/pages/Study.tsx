@@ -3,7 +3,7 @@ import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStudySession } from '@/hooks/useStudySession';
 import { useEnergy } from '@/hooks/useEnergy';
-import { getNextReadyIndex, parseStepToMinutes } from '@/lib/studyUtils';
+import { getNextReadyIndex, parseStepToMinutes, extractImageUrls } from '@/lib/studyUtils';
 import { useAIModel } from '@/hooks/useAIModel';
 import { invalidateStudyQueries } from '@/lib/queryKeys';
 import { useTutorStream } from '@/hooks/useTutorStream';
@@ -314,6 +314,19 @@ const Study = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cardKey, isTransitioning, queueInitialized]);
   const currentCard = displayedCard ?? nextCard;
+
+  // Prefetch images for next 3 cards in queue
+  useEffect(() => {
+    if (!currentCard || localQueue.length === 0) return;
+    const currentIdx = localQueue.findIndex(c => c.id === currentCard.id);
+    const upcoming = currentIdx >= 0
+      ? localQueue.slice(currentIdx + 1, currentIdx + 4)
+      : localQueue.slice(0, 3);
+    const urls = upcoming.flatMap(c =>
+      extractImageUrls((c.front_content ?? '') + (c.back_content ?? ''))
+    );
+    urls.forEach(url => { const img = new Image(); img.src = url; });
+  }, [currentCard?.id, localQueue]);
 
   // Fetch community deck source info via RPC (SECURITY DEFINER bypasses RLS)
   const currentCardDeckId = currentCard?.deck_id ?? deckId ?? null;
