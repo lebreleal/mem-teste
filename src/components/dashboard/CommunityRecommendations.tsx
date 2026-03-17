@@ -5,7 +5,7 @@
 
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchCommunityRecommendations } from '@/services/dashboardService';
 import { useAuth } from '@/hooks/useAuth';
 import { ChevronRight, Layers, HelpCircle } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
