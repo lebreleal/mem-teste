@@ -34,7 +34,7 @@ const ExampleReferenceSection = ({
     setExampleImageUploading(true);
     try {
       const compressed = await compressImage(file);
-      const publicUrl = await uploadImage(userId, compressed);
+      const publicUrl = await uploadToStorage(userId, compressed);
       setExampleImageUrl(publicUrl);
       setExampleMode('image');
     } catch (err: any) {
