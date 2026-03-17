@@ -403,7 +403,7 @@ const LessonContent = ({
           })}
 
           {/* Decks (no icon before title) */}
-          {currentDecks.map((td: any) => {
+          {currentDecks.map((td) => {
             const isOwner = td.shared_by === userId;
             const alreadyLinked = userHasLinkedDeck(td.id);
             const alreadyOwns = userOwnsDeck(td.deck_id);
