@@ -36,7 +36,6 @@ const DashboardHeader = ({ onCreditsOpen, onPremiumOpen }: DashboardHeaderProps)
   const isIntense = streak >= 3;
 
   const [notifOpen, setNotifOpen] = useState(false);
-  const { notifications, hasUnread, markRead } = useExamNotifications();
 
   const showCrownActive = isPremium;
 
