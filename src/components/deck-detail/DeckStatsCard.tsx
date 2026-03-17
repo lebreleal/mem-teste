@@ -134,7 +134,7 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
             <PopoverTrigger asChild>
               <button
                 className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-muted border border-border/50 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                aria-label={isQMode ? 'Desempenho nas questões' : 'Classificação dos cards'}
+                aria-label={'Classificação dos cards'}
               >
                 <Info className="h-3 w-3" />
               </button>
