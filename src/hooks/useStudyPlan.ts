@@ -120,7 +120,7 @@ export function useStudyPlan(options?: { full?: boolean }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('study_plans' as any)
-        .select('*')
+        .select('id, user_id, name, daily_minutes, weekly_minutes, deck_ids, target_date, priority, created_at, updated_at')
         .eq('user_id', userId!)
         .order('priority', { ascending: true });
       if (error) throw error;
