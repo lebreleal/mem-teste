@@ -2318,10 +2318,7 @@ const EditQuestionDialog = ({
         name: editName.trim() || editingConcept.name,
       });
       // Update description separately
-      await supabase
-        .from('global_concepts' as any)
-        .update({ description: editDescription.trim() || null } as any)
-        .eq('id', editingConcept.id);
+      await updateGlobalConceptDescription(editingConcept.id, editDescription.trim() || null);
 
       // Update local concept name if changed
       if (editName.trim() && editName.trim() !== editingConcept.name) {
