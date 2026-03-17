@@ -114,7 +114,7 @@ export async function fetchAggregatedCards(deckIds: string[]) {
   if (deckIds.length === 0) return [];
   if (deckIds.length === 1) {
     return paginatedFetch((from) =>
-      supabase.from('cards').select('*').eq('deck_id', deckIds[0]).order('created_at', { ascending: false }).range(from, from + PAGE_SIZE - 1)
+      supabase.from('cards').select(CARD_COLS).eq('deck_id', deckIds[0]).order('created_at', { ascending: false }).range(from, from + PAGE_SIZE - 1)
     );
   }
   const results: any[] = [];
