@@ -302,12 +302,12 @@ const SalaHero = ({
             </Button>
           </div>
 
-          {/* Summary line: icon card + count + icon clock + time + ? */}
+          {/* Summary line: icon card + count + ? */}
           {salaStudyStats.totalDue > 0 && (
             <div className="flex items-center justify-center gap-1.5 w-full py-1 text-xs text-muted-foreground">
               <IconDeck className="h-3 w-3" />
               <span>{salaStudyStats.totalDue}</span>
-              <Clock className="h-3 w-3" />
+              <span>·</span>
               <span>{salaStudyStats.timeLabel}</span>
 
               <Popover open={infoOpen} onOpenChange={setInfoOpen}>
@@ -327,7 +327,7 @@ const SalaHero = ({
                   className="w-auto max-w-[18rem] rounded-2xl border border-border bg-background px-3 py-2 text-xs text-foreground shadow-md"
                 >
                   <p className="leading-relaxed">
-                    Hoje você tem <span className="font-semibold">{salaStudyStats.totalDue} cartões</span> para estudar, com tempo estimado de <span className="font-semibold">{salaStudyStats.timeLabel}</span>, calculado pela sua velocidade média por cartão.
+                    Você é rápido! Em <span className="font-semibold">{salaStudyStats.timeLabel}</span> você termina esses <IconDeck className="inline h-3 w-3 align-text-bottom" /> <span className="font-semibold">{salaStudyStats.totalDue} cartões</span>.
                   </p>
                 </PopoverContent>
               </Popover>
