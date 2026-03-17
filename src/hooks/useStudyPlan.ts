@@ -586,7 +586,7 @@ export function useStudyPlan(options?: { full?: boolean }) {
   // ─── Global capacity mutations (profile-level) ───
   const updateCapacity = useMutation({
     mutationFn: async (input: { daily_study_minutes: number; weekly_study_minutes?: WeeklyMinutes | null; daily_new_cards_limit?: number }) => {
-      const updateData: any = {
+      const updateData: Record<string, unknown> = {
         daily_study_minutes: input.daily_study_minutes,
         weekly_study_minutes: input.weekly_study_minutes ?? null,
       };
