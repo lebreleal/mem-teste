@@ -111,7 +111,7 @@ export async function completeTurmaExamAttempt(attemptId: string, scoredPoints: 
 }
 
 export async function fetchTurmaExamAttempts(examId: string, userId: string): Promise<TurmaExamAttempt[]> {
-  const { data, error } = await supabase.from('turma_exam_attempts').select('*').eq('exam_id', examId).eq('user_id', userId).order('created_at', { ascending: false });
+  const { data, error } = await supabase.from('turma_exam_attempts').select('id, exam_id, user_id, status, total_points, scored_points, started_at, completed_at, created_at').eq('exam_id', examId).eq('user_id', userId).order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []) as TurmaExamAttempt[];
 }
