@@ -1,10 +1,10 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { useAIPrompts, type AIPrompt } from '@/hooks/useAIPrompts';
 import { useAISettings } from '@/hooks/useAISettings';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,7 +21,6 @@ const PLACEHOLDER_MAP: Record<string, string[]> = {
   ai_tutor: ['{{front}}', '{{backHint}}'],
 };
 
-
 const AdminIA = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -34,13 +33,7 @@ const AdminIA = () => {
   const [flashModel, setFlashModel] = useState('');
   const [proModel, setProModel] = useState('');
   const [showModelConfig, setShowModelConfig] = useState(false);
-  const [showVoiceConfig, setShowVoiceConfig] = useState(false);
   const [savingModels, setSavingModels] = useState(false);
-  const [ptVoice, setPtVoice] = useState('');
-  const [enVoice, setEnVoice] = useState('');
-  const [savingVoices, setSavingVoices] = useState(false);
-  const [testingVoice, setTestingVoice] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   if (adminLoading || loading || settingsLoading) {
     return <div className="flex items-center justify-center min-h-screen"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
@@ -74,15 +67,6 @@ const AdminIA = () => {
     setProModel(getSetting('pro_model') || 'gemini-2.5-pro');
     setShowModelConfig(true);
     setSelectedKey(null);
-    setShowVoiceConfig(false);
-  };
-
-  const openVoiceConfig = () => {
-    setPtVoice(getSetting('tts_voice_pt') || 'pt-BR-Neural2-A');
-    setEnVoice(getSetting('tts_voice_en') || 'en-US-Neural2-J');
-    setShowVoiceConfig(true);
-    setSelectedKey(null);
-    setShowModelConfig(false);
   };
 
   const handleSaveModels = async () => {
@@ -92,64 +76,9 @@ const AdminIA = () => {
     setShowModelConfig(false);
   };
 
-  const handleSaveVoices = async () => {
-    setSavingVoices(true);
-    await Promise.all([updateSetting('tts_voice_pt', ptVoice), updateSetting('tts_voice_en', enVoice)]);
-    setSavingVoices(false);
-    setShowVoiceConfig(false);
-  };
-
-  const testVoice = async (voiceName: string, lang: 'pt' | 'en') => {
-    setTestingVoice(voiceName);
-    try {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-
-      // Create Audio element immediately in user gesture context
-      const audio = new Audio();
-      audioRef.current = audio;
-
-      const sampleText = lang === 'pt'
-        ? 'Olá! Esta é uma prévia da voz selecionada para o português brasileiro.'
-        : 'Hello! This is a preview of the selected voice for American English.';
-
-      // Use fetch directly for binary audio response (supabase.functions.invoke doesn't handle binary well)
-      const token = await getAuthToken();
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const res = await fetch(`${supabaseUrl}/functions/v1/tts`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        },
-        body: JSON.stringify({ text: sampleText, voice: voiceName }),
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(errText || `HTTP ${res.status}`);
-      }
-
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      audio.src = url;
-      audio.onended = () => { URL.revokeObjectURL(url); setTestingVoice(null); };
-      audio.onerror = () => { URL.revokeObjectURL(url); setTestingVoice(null); };
-      await audio.play();
-    } catch (e) {
-      console.error('TTS test error:', e);
-      toast({ title: 'Erro ao testar voz', description: String(e), variant: 'destructive' });
-      setTestingVoice(null);
-    }
-  };
-
   const goBack = () => {
     if (selectedKey) setSelectedKey(null);
     else if (showModelConfig) setShowModelConfig(false);
-    else if (showVoiceConfig) setShowVoiceConfig(false);
     else navigate('/profile');
   };
 
@@ -157,11 +86,9 @@ const AdminIA = () => {
     ? (selected?.label || 'Editor')
     : showModelConfig
       ? 'Configurar Modelos'
-      : showVoiceConfig
-        ? 'Configurar Voz'
-        : 'Admin IA';
+      : 'Admin IA';
 
-  const showMainMenu = !selectedKey && !showModelConfig && !showVoiceConfig;
+  const showMainMenu = !selectedKey && !showModelConfig;
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -204,19 +131,6 @@ const AdminIA = () => {
               </CardContent>
             </Card>
 
-            <Card className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => navigate('/admin/tags')}>
-              <CardContent className="flex items-center justify-between py-4">
-                <div className="flex items-center gap-3">
-                  <Tag className="w-5 h-5 text-primary" />
-                  <div>
-                    <p className="font-medium">Gerenciar Tags</p>
-                    <p className="text-xs text-muted-foreground">Hierarquia, sinônimos, oficializar e mesclar tags</p>
-                  </div>
-                </div>
-                <ChevronRight className="w-5 h-5 text-muted-foreground" />
-              </CardContent>
-            </Card>
-
             <Card className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={openModelConfig}>
               <CardContent className="flex items-center justify-between py-4">
                 <div className="flex items-center gap-3">
@@ -224,19 +138,6 @@ const AdminIA = () => {
                   <div>
                     <p className="font-medium">Configurar Modelos</p>
                     <p className="text-xs text-muted-foreground">Qual modelo do Gemini é Flash e qual é Pro</p>
-                  </div>
-                </div>
-                <ChevronRight className="w-5 h-5 text-muted-foreground" />
-              </CardContent>
-            </Card>
-
-            <Card className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={openVoiceConfig}>
-              <CardContent className="flex items-center justify-between py-4">
-                <div className="flex items-center gap-3">
-                  <Volume2 className="w-5 h-5 text-primary" />
-                  <div>
-                    <p className="font-medium">Configurar Voz</p>
-                    <p className="text-xs text-muted-foreground">Escolha e teste as vozes do Text-to-Speech</p>
                   </div>
                 </div>
                 <ChevronRight className="w-5 h-5 text-muted-foreground" />
@@ -256,59 +157,6 @@ const AdminIA = () => {
               </Card>
             ))}
           </>
-        ) : showVoiceConfig ? (
-          <div className="space-y-6">
-            <p className="text-sm text-muted-foreground">Escolha as vozes Neural2 do Google Cloud TTS. Todas têm o mesmo custo.</p>
-
-            <div className="space-y-3">
-              <Label>Voz Português (PT-BR)</Label>
-              <div className="flex gap-2">
-                <Select value={ptVoice} onValueChange={setPtVoice}>
-                  <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {PT_VOICES.map(v => (
-                      <SelectItem key={v.value} value={v.value}>{v.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => testVoice(ptVoice, 'pt')}
-                  disabled={testingVoice === ptVoice}
-                >
-                  {testingVoice === ptVoice ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-                </Button>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <Label>Voz Inglês (EN-US)</Label>
-              <div className="flex gap-2">
-                <Select value={enVoice} onValueChange={setEnVoice}>
-                  <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {EN_VOICES.map(v => (
-                      <SelectItem key={v.value} value={v.value}>{v.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => testVoice(enVoice, 'en')}
-                  disabled={testingVoice === enVoice}
-                >
-                  {testingVoice === enVoice ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-                </Button>
-              </div>
-            </div>
-
-            <Button onClick={handleSaveVoices} disabled={savingVoices} className="w-full">
-              {savingVoices ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-              Salvar Vozes
-            </Button>
-          </div>
         ) : showModelConfig ? (
           <div className="space-y-6">
             <p className="text-sm text-muted-foreground">Configure qual modelo do Gemini é usado para cada tier. Você pode colocar qualquer model ID válido do Google AI.</p>
