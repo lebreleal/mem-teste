@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { signOut, setSession } from '@/services/authService';
 import { Button } from '@/components/ui/button';
 import { LogOut, Eye } from 'lucide-react';
 
