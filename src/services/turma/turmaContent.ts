@@ -19,7 +19,7 @@ export async function fetchTurmaSubjects(turmaId: string): Promise<TurmaSubject[
 }
 
 export async function fetchTurmaLessons(turmaId: string): Promise<TurmaLesson[]> {
-  const { data } = await supabase.from('turma_lessons').select('*').eq('turma_id', turmaId).order('sort_order', { ascending: true });
+  const { data } = await supabase.from('turma_lessons').select('id, turma_id, subject_id, name, description, lesson_date, is_published, sort_order, created_at, created_by, summary, materials').eq('turma_id', turmaId).order('sort_order', { ascending: true });
   return (data ?? []) as TurmaLesson[];
 }
 
