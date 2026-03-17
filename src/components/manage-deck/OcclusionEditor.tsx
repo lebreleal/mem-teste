@@ -685,9 +685,8 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
         </button>
       </header>
 
-      {/* ─── Content: toolbar + image + bottom bar ─── */}
+      {/* ─── Content: toolbar + image + floating controls ─── */}
       <div className="flex-1 min-h-0 flex flex-col items-center justify-center p-2 sm:p-3 overflow-hidden">
-        
         {/* Drawing toolbar — above image */}
         <div className="shrink-0 flex items-center gap-1 bg-card/90 backdrop-blur-sm rounded-xl border border-border/60 p-1 shadow-sm mb-2">
           {drawTools.map(t => (
@@ -698,7 +697,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
                   ? 'bg-primary text-primary-foreground shadow-sm'
                   : 'text-muted-foreground hover:bg-accent hover:text-foreground'
               }`}
-              onClick={() => { setTool(t.id); setSelectedId(null); setCurrentPoints([]); }}
+              onClick={() => { setTool(t.id); setSelectedId(null); setCurrentPoints([]); setPolygonPreviewPoint(null); }}
               title={t.label}
             >
               {t.icon}
@@ -715,9 +714,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
           </button>
         </div>
 
-        {/* Image canvas + zoom controls side by side */}
-        <div className="flex-1 min-h-0 w-full flex items-center justify-center gap-2">
-          {/* Image canvas — centered, responsive */}
+        <div className="flex-1 min-h-0 w-full flex items-center justify-center">
           <div
             ref={containerRef}
             className="relative flex items-center justify-center overflow-auto bg-muted/20 rounded-xl border border-border/30 flex-1 min-h-0 h-full"
@@ -737,7 +734,10 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
               onPointerLeave={() => {
+                setHoveredSelectableId(null);
+                setPolygonPreviewPoint(null);
                 if (panning) { setPanning(false); return; }
+                if (dragging) { setDragging(null); return; }
                 if (resizing) { setResizing(null); return; }
                 if (drawing && tool !== 'polygon') {
                   setDrawing(false);
@@ -766,8 +766,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
 
               {shapes.map(renderShape)}
 
-              {/* Trash button below selected shape */}
-              {selectedId && selectedShape && tool === 'select' && (
+              {selectedId && selectedShape && tool === 'select' && selectedShape.type !== 'freehand' && (
                 <div
                   className="absolute z-30 pointer-events-auto"
                   style={{
@@ -802,7 +801,10 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
               {currentPoints.length > 0 && (
                 <svg className="absolute inset-0 pointer-events-none" style={{ width: displaySize.w, height: displaySize.h }}>
                   <polyline
-                    points={currentPoints.map(p => `${p.x * scale},${p.y * scale}`).join(' ')}
+                    points={[
+                      ...currentPoints,
+                      ...(tool === 'polygon' && polygonPreviewPoint ? [polygonPreviewPoint] : []),
+                    ].map(p => `${p.x * scale},${p.y * scale}`).join(' ')}
                     fill="none"
                     stroke="rgba(59,130,246,0.8)"
                     strokeWidth="2"
@@ -815,42 +817,52 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
                 </svg>
               )}
             </div>
-          </div>
 
-          {/* Zoom controls — vertical right side */}
-          <div className="shrink-0 flex flex-col items-center gap-1 bg-card/90 backdrop-blur-sm rounded-xl border border-border/60 p-1 shadow-sm">
-            {/* Hand / pan tool */}
-            <button
-              className={`h-8 w-8 flex items-center justify-center rounded-lg transition-colors ${
-                tool === 'hand'
-                  ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-              }`}
-              onClick={() => { setTool('hand'); setSelectedId(null); }}
-              title="Mover (pan)"
-            >
-              <IconHand className="h-5 w-5" />
-            </button>
-            <div className="w-6 h-px bg-border" />
-            <button
-              className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-              onClick={() => setZoom(z => Math.min(3, z + 0.25))}
-              title="Zoom +"
-            >
-              <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5"><path d="M13 5a1 1 0 1 0-2 0v6H5a1 1 0 1 0 0 2h6v6a1 1 0 1 0 2 0v-6h6a1 1 0 1 0 0-2h-6z" /></svg>
-            </button>
-            <span className="text-[10px] text-muted-foreground tabular-nums select-none">{Math.round(zoom * 100)}%</span>
-            <button
-              className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-              onClick={() => setZoom(z => Math.max(0.3, z - 0.25))}
-              title="Zoom -"
-            >
-              <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5"><path d="M20 12a1 1 0 0 1-1 1H5a1 1 0 1 1 0-2h14a1 1 0 0 1 1 1" /></svg>
-            </button>
+            {/* Colors — left middle outside image */}
+            <div className="absolute left-2 top-1/2 z-20 -translate-y-1/2 flex flex-col items-center gap-2 rounded-xl border border-border/60 bg-card/90 p-2 shadow-sm backdrop-blur-sm">
+              {visibleColors.map(c => {
+                const isActive = shapeColor === c.fill;
+                return (
+                  <button
+                    key={c.label}
+                    className={`rounded-full transition-all shrink-0 ${isActive ? 'ring-2 ring-offset-1 ring-foreground/40 scale-110' : 'hover:scale-110'}`}
+                    style={{
+                      backgroundColor: c.fill.replace(/[\d.]+\)$/, '1)'),
+                      width: 22,
+                      height: 22,
+                    }}
+                    onClick={() => handleColorPick(c.fill)}
+                    title={c.label}
+                  />
+                );
+              })}
+            </div>
+
+            {/* Zoom controls — right middle */}
+            <div className="absolute right-2 top-1/2 z-20 -translate-y-1/2 flex flex-col items-center gap-1 bg-card/90 backdrop-blur-sm rounded-xl border border-border/60 p-1 shadow-sm">
+              <button
+                className={`h-8 w-8 flex items-center justify-center rounded-lg transition-colors ${
+                  tool === 'hand'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                }`}
+                onClick={() => { setTool('hand'); setSelectedId(null); }}
+                title="Mover (pan)"
+              >
+                <IconHand className="h-5 w-5" />
+              </button>
+              <div className="w-6 h-px bg-border" />
+              <button className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors" onClick={() => setZoom(z => Math.min(3, z + 0.25))} title="Zoom +">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5"><path d="M13 5a1 1 0 1 0-2 0v6H5a1 1 0 1 0 0 2h6v6a1 1 0 1 0 2 0v-6h6a1 1 0 1 0 0-2h-6z" /></svg>
+              </button>
+              <span className="text-[10px] text-muted-foreground tabular-nums select-none">{Math.round(zoom * 100)}%</span>
+              <button className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors" onClick={() => setZoom(z => Math.max(0.3, z - 0.25))} title="Zoom -">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5"><path d="M20 12a1 1 0 0 1-1 1H5a1 1 0 1 1 0-2h14a1 1 0 0 1 1 1" /></svg>
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Polygon hint */}
         {tool === 'polygon' && currentPoints.length > 0 && (
           <p className="text-[11px] text-muted-foreground mt-1">
             Clique para vértices. Feche no primeiro ponto. ({currentPoints.length} pt{currentPoints.length !== 1 ? 's' : ''})
