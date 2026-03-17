@@ -9,7 +9,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { updateDeckDailyLimits } from '@/services/uiQueryService';
 import { useQueryClient } from '@tanstack/react-query';
 import type { DeckWithStats } from '@/hooks/useDecks';
 
