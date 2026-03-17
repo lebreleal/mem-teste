@@ -5,7 +5,7 @@
 
 import { GraduationCap } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchDeckQuestionCounts, fetchCommunityFolderMeta } from '@/services/dashboardService';
 import { useAuth } from '@/hooks/useAuth';
 import SalaCard from './SalaCard';
 import type { Folder } from '@/types/folder';
@@ -66,15 +66,7 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
     queryKey: ['deck-question-counts', user?.id],
     queryFn: async () => {
       if (allDeckIds.length === 0) return new Map<string, number>();
-      const { data } = await supabase
-        .from('deck_questions')
-        .select('deck_id')
-        .in('deck_id', allDeckIds);
-      const counts = new Map<string, number>();
-      for (const row of data ?? []) {
-        counts.set(row.deck_id, (counts.get(row.deck_id) ?? 0) + 1);
-      }
-      return counts;
+      return fetchDeckQuestionCounts(allDeckIds);
     },
     enabled: !!user && allDeckIds.length > 0 && !isLoading,
     staleTime: 120_000,
@@ -95,53 +87,8 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
   const { data: communityMeta } = useQuery({
     queryKey: ['sala-list-community-meta', turmaIds.join(',')],
     queryFn: async () => {
-      if (turmaIds.length === 0) return new Map<string, { ownerName: string; lastUpdated: string; coverUrl: string | null; deckCount: number; cardCount: number }>();
-      // Fetch turmas + profiles + turma_decks in parallel
-      const [turmasRes, turmaDecksRes] = await Promise.all([
-        supabase.from('turmas').select('id, owner_id, cover_image_url').in('id', turmaIds),
-        supabase.from('turma_decks').select('turma_id, deck_id').in('turma_id', turmaIds).eq('is_published', true),
-      ]);
-      const turmas = turmasRes.data;
-      if (!turmas) return new Map();
-
-      const ownerIds = [...new Set((turmas as any[]).map(t => t.owner_id))];
-      const deckIdsByTurma = new Map<string, string[]>();
-      for (const td of (turmaDecksRes.data ?? []) as any[]) {
-        const arr = deckIdsByTurma.get(td.turma_id) ?? [];
-        arr.push(td.deck_id);
-        deckIdsByTurma.set(td.turma_id, arr);
-      }
-      const allTDeckIds = (turmaDecksRes.data ?? []).map((td: any) => td.deck_id);
-
-      // Fetch profiles + deck dates in parallel
-      const [profilesRes, tDecksRes] = await Promise.all([
-        supabase.rpc('get_public_profiles' as any, { p_user_ids: ownerIds }),
-        allTDeckIds.length > 0
-          ? supabase.from('decks').select('id, updated_at').in('id', allTDeckIds)
-          : Promise.resolve({ data: [] }),
-      ]);
-
-      const profileMap = new Map((profilesRes.data as any[] ?? []).map((p: any) => [p.id, p.name]));
-      const lastUpdatedMap = new Map<string, string>();
-      for (const d of ((tDecksRes as any).data ?? []) as any[]) {
-        for (const [tid, dids] of deckIdsByTurma.entries()) {
-          if (dids.includes(d.id)) {
-            const cur = lastUpdatedMap.get(tid) ?? '';
-            if (d.updated_at > cur) lastUpdatedMap.set(tid, d.updated_at);
-          }
-        }
-      }
-      const result = new Map<string, { ownerName: string; lastUpdated: string; coverUrl: string | null; deckCount: number; cardCount: number }>();
-      for (const t of turmas as any[]) {
-        result.set(t.id, {
-          ownerName: profileMap.get(t.owner_id) || 'Anônimo',
-          lastUpdated: lastUpdatedMap.get(t.id) ?? '',
-          coverUrl: t.cover_image_url,
-          deckCount: deckIdsByTurma.get(t.id)?.length ?? 0,
-          cardCount: 0,
-        });
-      }
-      return result;
+      if (turmaIds.length === 0) return new Map();
+      return fetchCommunityFolderMeta(turmaIds);
     },
     enabled: turmaIds.length > 0,
     staleTime: 60_000,

@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Trash2, Loader2, Image, Type } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { uploadImage as uploadToStorage } from '@/services/storageService';
 import { compressImage } from '@/lib/imageUtils';
 
 interface ExampleReferenceSectionProps {
@@ -34,12 +34,8 @@ const ExampleReferenceSection = ({
     setExampleImageUploading(true);
     try {
       const compressed = await compressImage(file);
-      const ext = compressed.name.split('.').pop() || 'webp';
-      const path = `exam-examples/${userId}/${crypto.randomUUID()}.${ext}`;
-      const { error } = await supabase.storage.from('card-images').upload(path, compressed);
-      if (error) throw error;
-      const { data: urlData } = supabase.storage.from('card-images').getPublicUrl(path);
-      setExampleImageUrl(urlData.publicUrl);
+      const publicUrl = await uploadToStorage(userId, compressed);
+      setExampleImageUrl(publicUrl);
       setExampleMode('image');
     } catch (err: any) {
       toast({ title: 'Erro ao enviar imagem', description: err.message, variant: 'destructive' });

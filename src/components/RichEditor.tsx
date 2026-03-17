@@ -26,7 +26,7 @@ const AICreatorInlineRow = lazy(() => import('@/components/rich-editor/AICreator
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { supabase } from '@/integrations/supabase/client';
+import { uploadImage as uploadToStorage, uploadFile as uploadFileToStorage } from '@/services/storageService';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { compressImage } from '@/lib/imageUtils';
@@ -272,12 +272,10 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       toast({ title: 'Máximo 5MB', variant: 'destructive' }); return null;
     }
     const compressed = await compressImage(file);
-    const ext = compressed.name.split('.').pop() || 'webp';
-    const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
-    const { error } = await supabase.storage.from('card-images').upload(path, compressed);
-    if (error) { toast({ title: 'Erro no upload', variant: 'destructive' }); return null; }
-    const { data: urlData } = supabase.storage.from('card-images').getPublicUrl(path);
-    return urlData.publicUrl;
+    try {
+      const publicUrl = await uploadToStorage(user.id, compressed);
+      return publicUrl;
+    } catch { toast({ title: 'Erro no upload', variant: 'destructive' }); return null; }
   };
 
   const pickFileAndUpload = (onUrl: (url: string) => void) => {
@@ -362,13 +360,12 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
         toast({ title: 'Máximo 10MB', variant: 'destructive' }); return;
       }
       const ext = file.name.split('.').pop();
-      const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
-      const { error } = await supabase.storage.from('card-images').upload(path, file);
-      if (error) { toast({ title: 'Erro no upload', variant: 'destructive' }); return; }
-      const { data: urlData } = supabase.storage.from('card-images').getPublicUrl(path);
-      editor.chain().focus().insertContent(
-        `<audio controls src="${urlData.publicUrl}"></audio>`
-      ).run();
+      try {
+        const publicUrl = await uploadFileToStorage(user.id, file);
+        editor.chain().focus().insertContent(
+          `<audio controls src="${publicUrl}"></audio>`
+        ).run();
+      } catch { toast({ title: 'Erro no upload', variant: 'destructive' }); }
     };
     input.click();
   };

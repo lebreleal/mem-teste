@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Loader2, Undo2 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { uploadImage as uploadToStorage, invokeDetectOcclusion } from '@/services/storageService';
 import { useAuth } from '@/hooks/useAuth';
 import { compressImage } from '@/lib/imageUtils';
 import { useToast } from '@/hooks/use-toast';
@@ -393,11 +393,8 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
       const compressed = await compressImage(file);
       const ext = compressed.name.split('.').pop() || 'webp';
       const userId = user?.id || 'anonymous';
-      const path = `${userId}/${crypto.randomUUID()}.${ext}`;
-      const { error } = await supabase.storage.from('card-images').upload(path, compressed);
-      if (error) throw error;
-      const { data: urlData } = supabase.storage.from('card-images').getPublicUrl(path);
-      setImageUrl(urlData.publicUrl);
+      const publicUrl = await uploadToStorage(userId, compressed);
+      setImageUrl(publicUrl);
       setShapes([]);
       setImgLoaded(false);
     } catch (err: any) {
@@ -429,10 +426,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
     if (!imageUrl) return;
     setIsDetecting(true);
     try {
-      const { data, error } = await supabase.functions.invoke('detect-occlusion', {
-        body: { imageUrl },
-      });
-      if (error) throw error;
+      const data = await invokeDetectOcclusion(imageUrl);
       if (data?.regions && Array.isArray(data.regions) && data.regions.length > 0) {
         pushHistory();
         const newShapes: OcclusionShape[] = data.regions.map((r: any) => ({

@@ -6,7 +6,7 @@ import { Switch } from '@/components/ui/switch';
 import LazyRichEditor from '@/components/LazyRichEditor';
 import { TagInput } from '@/components/TagInput';
 import { CardContent, type VirtualCard } from '@/components/deck-detail/CardPreviewSheet';
-import { supabase } from '@/integrations/supabase/client';
+import { resolveDeckSource, insertDeckSuggestion } from '@/services/dashboardService';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useDeckTags } from '@/hooks/useTags';
@@ -48,47 +48,8 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
   useEffect(() => {
     if (!deckId || !open) return;
     (async () => {
-      const { data } = await supabase
-        .from('decks')
-        .select('source_turma_deck_id, community_id, is_live_deck, name, user_id, source_listing_id')
-        .eq('id', deckId)
-        .single();
-      if (!data) { setResolvedDeckId(deckId); return; }
-
-      // 1) Resolve via source_turma_deck_id
-      if (data.source_turma_deck_id) {
-        const { data: td } = await supabase
-          .from('turma_decks')
-          .select('deck_id')
-          .eq('id', data.source_turma_deck_id)
-          .single();
-        if (td?.deck_id) { setResolvedDeckId(td.deck_id); return; }
-      }
-
-      // 2) Resolve via source_listing_id
-      if (data.source_listing_id) {
-        const { data: listing } = await supabase
-          .from('marketplace_listings')
-          .select('deck_id')
-          .eq('id', data.source_listing_id)
-          .single();
-        if (listing?.deck_id) { setResolvedDeckId(listing.deck_id); return; }
-      }
-
-      // 3) Fallback for is_live_deck without direct reference: find original public deck by name
-      if (data.is_live_deck && !data.source_turma_deck_id && !data.source_listing_id) {
-        const { data: original } = await supabase
-          .from('decks')
-          .select('id')
-          .eq('name', data.name)
-          .eq('is_public', true)
-          .neq('user_id', data.user_id)
-          .limit(1)
-          .maybeSingle();
-        if (original?.id) { setResolvedDeckId(original.id); return; }
-      }
-
-      setResolvedDeckId(deckId);
+      const resolved = await resolveDeckSource(deckId);
+      setResolvedDeckId(resolved);
     })();
   }, [deckId, open]);
 
@@ -203,7 +164,7 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
         return;
       }
 
-      const { error } = await supabase.from('deck_suggestions').insert({
+      await insertDeckSuggestion({
         suggester_user_id: user.id,
         deck_id: resolvedDeckId,
         card_id: card?.id ?? null,
@@ -214,9 +175,7 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
         status: 'pending',
         content_status: Object.keys(suggestedContent).length > 0 ? 'pending' : 'none',
         tags_status: suggestedTagsPayload ? 'pending' : 'none',
-      } as any);
-
-      if (error) throw error;
+      });
 
       toast({ title: '✅ Sugestão enviada!', description: 'O criador do baralho será notificado.' });
       onOpenChange(false);

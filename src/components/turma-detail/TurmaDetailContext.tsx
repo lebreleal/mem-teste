@@ -7,7 +7,7 @@
 import { createContext, useContext, useState, useMemo, useEffect, type ReactNode } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchTurmaPublic, fetchTurmaLessonFiles, fetchActiveSubscription, restoreSubscriptionStatus, processSubscription, importTurmaExam } from '@/services/turmaDetailService';
 import { useAuth } from '@/hooks/useAuth';
 import { useTurmas } from '@/hooks/useTurmas';
 import {
@@ -124,12 +124,7 @@ export const TurmaDetailProvider = ({ children }: { children: ReactNode }) => {
     queryKey: ['turma-public', turmaId],
     queryFn: async () => {
       if (!turmaId) return null;
-      const { data } = await supabase.from('turmas').select('*').eq('id', turmaId).single();
-      if (!data) return null;
-      // Enrich with owner name
-      const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: [(data as any).owner_id] });
-      const ownerName = (profiles && profiles.length > 0) ? (profiles[0] as any).name || 'Anônimo' : 'Anônimo';
-      return { ...data, owner_name: ownerName };
+      return fetchTurmaPublic(turmaId);
     },
     enabled: !!turmaId && !myTurma,
     staleTime: 60_000,
@@ -152,8 +147,7 @@ export const TurmaDetailProvider = ({ children }: { children: ReactNode }) => {
     queryKey: ['turma-lesson-files', turmaId],
     queryFn: async () => {
       if (!turmaId) return [];
-      const { data } = await supabase.from('turma_lesson_files' as any).select('id, lesson_id').eq('turma_id', turmaId);
-      return (data ?? []) as unknown as { id: string; lesson_id: string }[];
+      return fetchTurmaLessonFiles(turmaId);
     },
     enabled: !!turmaId,
   });
@@ -175,20 +169,16 @@ export const TurmaDetailProvider = ({ children }: { children: ReactNode }) => {
     queryKey: ['turma-active-sub', turmaId, user?.id],
     queryFn: async () => {
       if (!user || !turmaId) return null;
-      const { data } = await supabase.from('turma_subscriptions').select('*')
-        .eq('turma_id', turmaId).eq('user_id', user.id)
-        .gt('expires_at', new Date().toISOString())
-        .order('expires_at', { ascending: false }).limit(1);
-      return (data && data.length > 0) ? data[0] : null;
+      return fetchActiveSubscription(turmaId, user.id);
     },
     enabled: !!user && !!turmaId,
   });
 
   useEffect(() => {
     if (activeSubscription && currentMember && !currentMember.is_subscriber && turmaId && user) {
-      supabase.rpc('restore_subscription_status', { p_turma_id: turmaId })
-        .then(({ data }) => {
-          if (data) queryClient.invalidateQueries({ queryKey: ['turma-members', turmaId] });
+      restoreSubscriptionStatus(turmaId)
+        .then((restored) => {
+          if (restored) queryClient.invalidateQueries({ queryKey: ['turma-members', turmaId] });
         });
     }
   }, [activeSubscription, currentMember, turmaId, user]);
@@ -197,18 +187,21 @@ export const TurmaDetailProvider = ({ children }: { children: ReactNode }) => {
     if (!user || !turmaId || !turma) return;
     setSubscribing(true);
     try {
-      const { error } = await supabase.rpc('process_turma_subscription', { p_turma_id: turmaId });
-      if (error) {
+      await processSubscription(turmaId);
+      const error = null as any;
         if (error.message.includes('Insufficient credits')) toast({ title: 'Créditos insuficientes', description: `Você precisa de ${subscriptionPrice} créditos.`, variant: 'destructive' });
         else if (error.message.includes('Already subscribed')) toast({ title: 'Já assinado', description: 'Sua assinatura ainda está ativa.' });
         else throw error;
         return;
-      }
       queryClient.invalidateQueries({ queryKey: ['turma-members', turmaId] });
       queryClient.invalidateQueries({ queryKey: ['turma-active-sub', turmaId] });
       queryClient.invalidateQueries({ queryKey: ['profile'] });
       toast({ title: 'Assinatura ativada! 🎉', description: 'Você agora tem acesso por 7 dias.' });
-    } catch (e: any) { toast({ title: 'Erro ao assinar', description: e.message, variant: 'destructive' }); }
+    } catch (e: any) {
+      if (e.message?.includes('Insufficient credits')) toast({ title: 'Créditos insuficientes', description: `Você precisa de ${subscriptionPrice} créditos.`, variant: 'destructive' });
+      else if (e.message?.includes('Already subscribed')) toast({ title: 'Já assinado', description: 'Sua assinatura ainda está ativa.' });
+      else toast({ title: 'Erro ao assinar', description: e.message, variant: 'destructive' });
+    }
     finally { setSubscribing(false); }
   };
 
@@ -285,32 +278,10 @@ export const TurmaDetailProvider = ({ children }: { children: ReactNode }) => {
 
   const handleImportExam = async (exam: any) => {
     try {
-      // Check if already imported
-      const { data: existing } = await supabase.from('exams').select('id').eq('user_id', user!.id).eq('source_turma_exam_id', exam.id).limit(1);
-      if (existing && existing.length > 0) {
-        // Already imported, navigate directly
-        navigate(`/exam/${existing[0].id}`);
-        return;
-      }
-
-      const { data: questions, error } = await supabase.from('turma_exam_questions').select('*').eq('exam_id', exam.id).order('sort_order', { ascending: true });
-      if (error) throw error;
-      // Community-imported exams don't need a deck_id
-      const deckId = null;
-      const totalPoints = (questions ?? []).reduce((sum: number, q: any) => sum + (q.points || 1), 0);
-      const { data: newExam, error: examError } = await (supabase.from('exams' as any) as any)
-        .insert({ user_id: user!.id, deck_id: deckId, title: exam.title, status: 'pending', total_points: totalPoints, time_limit_seconds: exam.time_limit_seconds || null, source_turma_exam_id: exam.id })
-        .select().single();
-      if (examError) throw examError;
-      const questionsToInsert = (questions ?? []).map((q: any, idx: number) => ({
-        exam_id: newExam.id, question_type: q.question_type, question_text: q.question_text,
-        options: q.options ?? null, correct_answer: q.correct_answer, correct_indices: q.correct_indices || null, points: q.points, sort_order: idx,
-      }));
-      const { error: qError } = await (supabase.from('exam_questions' as any) as any).insert(questionsToInsert);
-      if (qError) throw qError;
+      const examId = await importTurmaExam(user!.id, exam);
       queryClient.invalidateQueries({ queryKey: ['exams'] });
       toast({ title: 'Prova importada!', description: 'A prova foi adicionada à sua seção de provas.' });
-      navigate(`/exam/${newExam.id}`);
+      navigate(`/exam/${examId}`);
     } catch (err: any) { toast({ title: 'Erro ao importar', description: err.message, variant: 'destructive' }); }
   };
 

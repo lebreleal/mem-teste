@@ -13,7 +13,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useQueryClient } from '@tanstack/react-query';
 import OcclusionEditor from '@/components/manage-deck/OcclusionEditor';
 import AttachmentPreviewModal from '@/components/manage-deck/AttachmentPreviewModal';
-import { supabase } from '@/integrations/supabase/client';
+import { enhanceCard } from '@/services/card/cardAI';
 import { markdownToHtml } from '@/lib/markdownToHtml';
 import type { ImageAttachment } from '@/components/RichEditor';
 
@@ -217,10 +217,7 @@ const ManageDeck = () => {
     if (energy < 1) { toast({ title: 'Créditos insuficientes', variant: 'destructive' }); return; }
     setIsAICreating(true);
     try {
-      const { data, error } = await supabase.functions.invoke('enhance-card', {
-        body: { front, back, cardType: 'basic', aiModel: model, energyCost: 1, customPrompt: templatePrompt },
-      });
-      if (error) throw error;
+      const data = await enhanceCard({ front, back, cardType: 'basic', aiModel: model, energyCost: 1, customPrompt: templatePrompt });
       if (data?.error) { toast({ title: data.error, variant: 'destructive' }); return; }
       queryClient.invalidateQueries({ queryKey: ['profile'] });
       if (data?.front) { setFront(markdownToHtml(data.front)); setIsDirty(true); }

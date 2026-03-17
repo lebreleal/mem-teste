@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useStudyStats } from '@/hooks/useStudyStats';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchWeekReviewDates } from '@/services/dashboardService';
 import { Flame } from 'lucide-react';
 import { startOfDay, subDays, getDay, format } from 'date-fns';
 
@@ -22,15 +22,10 @@ const WeekStrip = () => {
       const todayDow = getDay(today);
       const sunday = subDays(today, todayDow);
 
-      const { data: logs } = await supabase
-        .from('review_logs')
-        .select('reviewed_at')
-        .eq('user_id', user.id)
-        .gte('reviewed_at', sunday.toISOString())
-        .order('reviewed_at', { ascending: false });
+      const logs = await fetchWeekReviewDates(user.id, sunday.toISOString());
 
       const set = new Set<string>();
-      logs?.forEach(l => set.add(format(startOfDay(new Date(l.reviewed_at)), 'yyyy-MM-dd')));
+      logs.forEach(l => set.add(format(startOfDay(new Date(l)), 'yyyy-MM-dd')));
       return set;
     },
     enabled: !!user,
