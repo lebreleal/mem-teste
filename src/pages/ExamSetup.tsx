@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchTurmaExamTurmaId } from '@/services/adminService';
 import { useDecks } from '@/hooks/useDecks';
 import { useExamNotifications } from '@/hooks/useExamNotifications';
 import { useExams } from '@/hooks/useExams';
