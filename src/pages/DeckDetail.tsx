@@ -362,10 +362,7 @@ const DeckDetailContent = () => {
 
   const { data: folderImageUrl } = useQuery({
     queryKey: ['folder-image', folderImage],
-    queryFn: async () => {
-      const { data } = await supabase.from('folders').select('image_url').eq('id', folderImage!).single();
-      return data?.image_url ?? null;
-    },
+    queryFn: () => fetchFolderImageUrl(folderImage!),
     enabled: !!folderImage,
     staleTime: 300_000,
   });
