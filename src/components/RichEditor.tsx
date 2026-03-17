@@ -512,6 +512,16 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     setColorOpen(false);
   };
 
+  const handleSetHighlight = (color: string) => {
+    if (!editor) return;
+    if (color === '') {
+      editor.chain().focus().unsetHighlight().run();
+    } else {
+      editor.chain().focus().setHighlight({ color }).run();
+    }
+    setColorOpen(false);
+  };
+
   if (!editor) return null;
 
   const ToolBtn = ({ onClick, active, children, title }: { onClick: () => void; active?: boolean; children: React.ReactNode; title?: string }) => (
