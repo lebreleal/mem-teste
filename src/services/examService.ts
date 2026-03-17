@@ -32,7 +32,7 @@ export async function fetchExam(examId: string): Promise<Exam> {
 /** Fetch questions for an exam, ordered by sort_order. */
 export async function fetchExamQuestions(examId: string): Promise<ExamQuestion[]> {
   const { data, error } = await examQuestionsTable()
-    .select('*')
+    .select(EXAM_QUESTION_COLS)
     .eq('exam_id', examId)
     .order('sort_order', { ascending: true });
   if (error) throw error;
