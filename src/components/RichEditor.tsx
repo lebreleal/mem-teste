@@ -225,101 +225,86 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     return () => window.removeEventListener('keydown', handleKey);
   }, [editor, clozeActive]);
 
-  const uploadImageFile = async (file: File) => {
-    if (!user || !editor) return;
+  /* ─── Shared image upload helpers ─── */
+  const uploadToStorage = async (file: File): Promise<string | null> => {
+    if (!user) return null;
     if (file.size > 5 * 1024 * 1024) {
-      toast({ title: 'Máximo 5MB', variant: 'destructive' }); return;
+      toast({ title: 'Máximo 5MB', variant: 'destructive' }); return null;
     }
     const compressed = await compressImage(file);
     const ext = compressed.name.split('.').pop() || 'webp';
     const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
     const { error } = await supabase.storage.from('card-images').upload(path, compressed);
-    if (error) { toast({ title: 'Erro no upload', variant: 'destructive' }); return; }
+    if (error) { toast({ title: 'Erro no upload', variant: 'destructive' }); return null; }
     const { data: urlData } = supabase.storage.from('card-images').getPublicUrl(path);
-    editor.chain().focus().setImage({ src: urlData.publicUrl }).run();
+    return urlData.publicUrl;
+  };
+
+  const pickFileAndUpload = (onUrl: (url: string) => void) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const url = await uploadToStorage(file);
+      if (url) onUrl(url);
+    };
+    input.click();
+  };
+
+  const pasteClipboardAndUpload = async (onUrl: (url: string) => void) => {
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        const imageType = item.types.find(t => t.startsWith('image/'));
+        if (imageType) {
+          const blob = await item.getType(imageType);
+          const ext = imageType.split('/')[1] || 'png';
+          const file = new File([blob], `paste.${ext}`, { type: imageType });
+          const url = await uploadToStorage(file);
+          if (url) onUrl(url);
+          return;
+        }
+      }
+      toast({ title: 'Nenhuma imagem na área de transferência', variant: 'destructive' });
+    } catch {
+      toast({ title: 'Não foi possível acessar a área de transferência', variant: 'destructive' });
+    }
+  };
+
+  /* ─── Image insert into editor ─── */
+  const insertImageUrl = (url: string) => {
+    editor?.chain().focus().setImage({ src: url }).run();
+  };
+
+  const uploadImageFile = async (file: File) => {
+    const url = await uploadToStorage(file);
+    if (url) insertImageUrl(url);
   };
   uploadImageFileRef.current = uploadImageFile;
 
-  const handleImageAttach = async () => {
+  const handleImageAttach = () => {
     if (!user || !editor) return;
     setImageMenuOpen(false);
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (file) await uploadImageFile(file);
-    };
-    input.click();
+    pickFileAndUpload(insertImageUrl);
   };
 
-  const handleImagePaste = async () => {
+  const handleImagePaste = () => {
     if (!user || !editor) return;
     setImageMenuOpen(false);
-    try {
-      const items = await navigator.clipboard.read();
-      for (const item of items) {
-        const imageType = item.types.find(t => t.startsWith('image/'));
-        if (imageType) {
-          const blob = await item.getType(imageType);
-          const ext = imageType.split('/')[1] || 'png';
-          const file = new File([blob], `paste.${ext}`, { type: imageType });
-          await uploadImageFile(file);
-          return;
-        }
-      }
-      toast({ title: 'Nenhuma imagem na área de transferência', variant: 'destructive' });
-    } catch {
-      toast({ title: 'Não foi possível acessar a área de transferência', variant: 'destructive' });
-    }
+    pasteClipboardAndUpload(insertImageUrl);
   };
 
-  /* ─── Occlusion image handlers ─── */
-  const uploadOcclusionFile = async (file: File) => {
-    if (!user) return;
-    try {
-      const compressed = await compressImage(file);
-      const ext = compressed.name.split('.').pop() || 'webp';
-      const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
-      const { error } = await supabase.storage.from('card-images').upload(path, compressed);
-      if (error) throw error;
-      const { data: urlData } = supabase.storage.from('card-images').getPublicUrl(path);
-      onOcclusionImageReady?.(urlData.publicUrl);
-    } catch {
-      toast({ title: 'Erro ao enviar imagem', variant: 'destructive' });
-    }
-  };
-
+  /* ─── Occlusion image — reuses shared helpers ─── */
   const handleOcclusionAttach = () => {
     if (!user) return;
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (file) await uploadOcclusionFile(file);
-    };
-    input.click();
+    pickFileAndUpload((url) => onOcclusionImageReady?.(url));
   };
 
-  const handleOcclusionPasteClipboard = async () => {
+  const handleOcclusionPasteClipboard = () => {
     if (!user) return;
-    try {
-      const items = await navigator.clipboard.read();
-      for (const item of items) {
-        const imageType = item.types.find(t => t.startsWith('image/'));
-        if (imageType) {
-          const blob = await item.getType(imageType);
-          const ext = imageType.split('/')[1] || 'png';
-          const file = new File([blob], `paste.${ext}`, { type: imageType });
-          await uploadOcclusionFile(file);
-          return;
-        }
-      }
-      toast({ title: 'Nenhuma imagem na área de transferência', variant: 'destructive' });
-    } catch {
-      toast({ title: 'Não foi possível acessar a área de transferência', variant: 'destructive' });
-    }
+    pasteClipboardAndUpload((url) => onOcclusionImageReady?.(url));
   };
 
   const handleAudioUpload = async () => {
