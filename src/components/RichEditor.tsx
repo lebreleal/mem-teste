@@ -119,7 +119,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ heading: { levels: [2, 3] } }),
-      Image.configure({ inline: true, allowBase64: false }),
+      Image.configure({ inline: true, allowBase64: true }),
       Underline,
       TextStyle,
       Color,
