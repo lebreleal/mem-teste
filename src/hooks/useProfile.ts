@@ -5,9 +5,10 @@
  */
 
 import { useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
 export interface ProfileData {
   id: string;
