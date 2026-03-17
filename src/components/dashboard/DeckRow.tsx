@@ -230,50 +230,40 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
     <>
       {/* Wrapper for Matéria: rounded container with subtle bg */}
       {isMateria && (
-        <div className="mx-3 mt-3 mb-1 rounded-xl border border-border/40 bg-muted/20 overflow-hidden">
-          {/* Matéria header */}
-          <div
-            {...(dragHandlers ? {
-              draggable: dragHandlers.draggable,
-              onDragStart: dragHandlers.onDragStart,
-              onDragOver: dragHandlers.onDragOver,
-              onDragEnter: dragHandlers.onDragEnter,
-              onDragLeave: dragHandlers.onDragLeave,
-              onDrop: dragHandlers.onDrop,
-              onDragEnd: dragHandlers.onDragEnd,
-            } : {})}
-            className={`group flex items-center gap-3 px-4 py-3 cursor-pointer transition-all hover:bg-muted/40 ${dragHandlers ? dragHandlers.className : ''}`}
-            onClick={handleClick}
-          >
-            <IconFolder className="h-5 w-5 shrink-0 text-primary" />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <h3 className="text-xs font-bold uppercase tracking-wide text-muted-foreground truncate">{displayName}</h3>
-                {hasPendingUpdate && (
-                  <span className="flex h-2 w-2 shrink-0 rounded-full bg-destructive animate-pulse" title="Atualização disponível" />
-                )}
-              </div>
-              {/* Matéria: show deck count only */}
-              {!isEmptyMateria && (
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  {subDecks.length} {subDecks.length === 1 ? 'deck' : 'decks'}
-                </p>
-              )}
-              {/* Empty matéria: "+ Adicionar Deck" */}
-              {isEmptyMateria && !readOnly && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); setShowAddDeckMenu(true); }}
-                  className="flex items-center gap-1.5 mt-0.5 text-xs text-muted-foreground hover:text-primary transition-colors"
-                >
-                  <Plus className="h-3 w-3" />
-                  <span>Adicionar Deck</span>
-                </button>
-              )}
-            </div>
-
-            {/* Chevron — always points right (navigates) */}
-            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+        <div
+          {...(dragHandlers ? {
+            draggable: dragHandlers.draggable,
+            onDragStart: dragHandlers.onDragStart,
+            onDragOver: dragHandlers.onDragOver,
+            onDragEnter: dragHandlers.onDragEnter,
+            onDragLeave: dragHandlers.onDragLeave,
+            onDrop: dragHandlers.onDrop,
+            onDragEnd: dragHandlers.onDragEnd,
+          } : {})}
+          className={`group flex items-center gap-3 px-4 py-3.5 cursor-pointer transition-all hover:bg-muted/30 border-b border-border/30 ${dragHandlers ? dragHandlers.className : ''}`}
+          onClick={handleClick}
+        >
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 shrink-0">
+            <IconFolder className="h-5 w-5 text-primary" />
           </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-semibold text-foreground truncate">{displayName}</h3>
+            {!isEmptyMateria && (
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                {subDecks.length} {subDecks.length === 1 ? 'deck' : 'decks'}
+              </p>
+            )}
+            {isEmptyMateria && !readOnly && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowAddDeckMenu(true); }}
+                className="flex items-center gap-1.5 mt-0.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+              >
+                <Plus className="h-3 w-3" />
+                <span>Adicionar Deck</span>
+              </button>
+            )}
+          </div>
+          <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
         </div>
       )}
 
@@ -293,7 +283,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           className={`group flex items-center gap-3 px-4 py-4 cursor-pointer transition-all hover:bg-muted/50 ${dragHandlers ? dragHandlers.className : ''}`}
           onClick={handleClick}
         >
-          {!isErrorDeck && <IconDeck className="h-5 w-5 text-muted-foreground shrink-0" />}
+          <IconDeck className="h-5 w-5 text-muted-foreground shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <h3 className="font-display font-semibold text-foreground truncate">{displayName}</h3>
