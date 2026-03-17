@@ -420,12 +420,7 @@ const SuggestionComments = ({ suggestionId, commentCount }: { suggestionId: stri
     if (!newComment.trim() || !user) return;
     setSubmitting(true);
     try {
-      const { error } = await supabase.from('suggestion_comments').insert({
-        suggestion_id: suggestionId,
-        user_id: user.id,
-        content: newComment.trim(),
-      } as any);
-      if (error) throw error;
+      await insertSuggestionComment(suggestionId, user.id, newComment.trim());
       setNewComment('');
       queryClient.invalidateQueries({ queryKey: ['suggestion-comments', suggestionId] });
     } catch {
