@@ -36,6 +36,8 @@ export interface CardEditorFormProps {
   occlusionImageUrl?: string;
   onOpenOcclusion?: () => void;
   onRemoveOcclusion?: () => void;
+  /** Called when user attaches/pastes an occlusion image via toolbar */
+  onOcclusionImageReady?: (imageUrl: string) => void;
 
   /** AI improve */
   onImprove?: () => void;
