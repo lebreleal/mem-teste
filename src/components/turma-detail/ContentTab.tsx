@@ -689,12 +689,12 @@ const ContentTab = () => {
             <Button size="sm" onClick={() => {
               if (confirmImportItem?.type === 'deck') {
                 importLogic.addToCollection.mutate(
-                  confirmImportItem.data,
-                  { onSuccess: (newDeck: any) => { if (newDeck?.id) navigate(`/decks/${newDeck.id}`, { state: { from: 'community', turmaId } }); } },
+                  confirmImportItem.data as TurmaDeck,
+                  { onSuccess: (newDeck) => { if (newDeck?.id) navigate(`/decks/${newDeck.id}`, { state: { from: 'community', turmaId } }); } },
                 );
               } else if (confirmImportItem?.type === 'exam') {
-                importLogic.addExamToCollection.mutate(confirmImportItem.data, {
-                  onSuccess: (result: any) => { if (result?.examId) navigate(`/exam/${result.examId}`, { state: { from: 'community', turmaId } }); },
+                importLogic.addExamToCollection.mutate(confirmImportItem.data as TurmaExam, {
+                  onSuccess: (result) => { if (result?.examId) navigate(`/exam/${result.examId}`, { state: { from: 'community', turmaId } }); },
                 });
               }
               setConfirmImportItem(null);
