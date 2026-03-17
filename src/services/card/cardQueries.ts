@@ -121,7 +121,7 @@ export async function fetchAggregatedCards(deckIds: string[]) {
   for (let i = 0; i < deckIds.length; i += IN_BATCH) {
     const batch = deckIds.slice(i, i + IN_BATCH);
     const rows = await paginatedFetch((from) =>
-      supabase.from('cards').select('*').in('deck_id', batch).order('created_at', { ascending: false }).range(from, from + PAGE_SIZE - 1)
+      supabase.from('cards').select(CARD_COLS).in('deck_id', batch).order('created_at', { ascending: false }).range(from, from + PAGE_SIZE - 1)
     );
     results.push(...rows);
   }
