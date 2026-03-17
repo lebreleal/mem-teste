@@ -11,6 +11,7 @@ import { ChevronLeft, Plus, Play, ChevronRight, MoreVertical, GripVertical } fro
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useDecks } from '@/hooks/useDecks';
+import { useFolders } from '@/hooks/useFolders';
 import type { DeckWithStats } from '@/types/deck';
 import { IconFolder, IconEdit, IconDeck, IconArchive, IconTrash } from '@/components/icons';
 import {
