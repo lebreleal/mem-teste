@@ -1,12 +1,12 @@
 /**
  * Error Deck Service
- * Manages the special "📕 Caderno de Erros" deck that temporarily holds
+ * Manages the special "📕 Baralho de Erros" deck that temporarily holds
  * cards the user got wrong. Cards return to their origin deck when mastered (state=2).
  */
 
 import { supabase } from '@/integrations/supabase/client';
 
-const ERROR_DECK_NAME = '📕 Caderno de Erros';
+const ERROR_DECK_NAME = '📕 Baralho de Erros';
 
 /** Get or create the error deck for a user */
 export async function getOrCreateErrorDeck(userId: string): Promise<string> {

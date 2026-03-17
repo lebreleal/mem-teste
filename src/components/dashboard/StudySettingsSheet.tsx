@@ -232,7 +232,7 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
                   </button>
                 </PopoverTrigger>
                 <PopoverContent side="top" className="w-64 text-xs">
-                  <p className="font-semibold text-foreground mb-1">Caderno de Erros</p>
+                  <p className="font-semibold text-foreground mb-1">Baralho de Erros</p>
                   <p className="text-muted-foreground">
                     Cards que você errou são movidos automaticamente para cá. 
                     Quando você dominar o card novamente (estado "Dominado"), ele volta automaticamente para o deck original. 
