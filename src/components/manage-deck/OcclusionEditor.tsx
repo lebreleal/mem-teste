@@ -562,61 +562,56 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
     if (s.type === 'rect') {
       return (
         <div key={s.id}>
-          <div
-            className="absolute pointer-events-auto"
-            style={{
-              left: s.x! * scale,
-              top: s.y! * scale,
-              width: s.w! * scale,
-              height: s.h! * scale,
-              backgroundColor: fillColor,
-              border: `2px solid ${colorObj.border}`,
-              borderRadius: 4,
-              boxShadow: isSelected ? `0 0 0 2px ${colorObj.border}, 0 0 8px ${colorObj.fill}` : undefined,
-              cursor: tool === 'hand' ? (panning ? 'grabbing' : 'grab') : tool === 'select' ? 'move' : tool === 'eraser' ? 'pointer' : 'crosshair',
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (tool === 'select' || tool === 'eraser') {
-                setSelectedId(s.id);
-              } else if (tool !== 'hand') {
-                // Auto-select when clicking on existing shape in draw mode
-                setPrevDrawTool(tool);
-                setTool('select');
-                setSelectedId(s.id);
-              }
-            }}
-          />
-          {/* Resize handles when selected */}
-          {isSelected && tool === 'select' && (
-            <>
-              {['nw', 'ne', 'sw', 'se'].map(corner => {
-                const left = corner.includes('w') ? s.x! * scale - 4 : (s.x! + s.w!) * scale - 4;
-                const top = corner.includes('n') ? s.y! * scale - 4 : (s.y! + s.h!) * scale - 4;
-                const cursor = corner === 'nw' || corner === 'se' ? 'nwse-resize' : 'nesw-resize';
-                return (
-                  <div
-                    key={corner}
-                    className="absolute z-20 pointer-events-auto"
-                    style={{
-                      left, top, width: 8, height: 8,
-                      backgroundColor: '#fff',
-                      border: `2px solid ${colorObj.border}`,
-                      borderRadius: 2,
-                      cursor,
-                    }}
-                    onPointerDown={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      pushHistory();
-                      setResizing({ corner, startX: toImgCoords(e.clientX, e.clientY).x, startY: toImgCoords(e.clientX, e.clientY).y, origShape: { ...s } });
-                      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-                    }}
-                  />
-                );
-              })}
-            </>
-          )}
+            <div
+              className="absolute pointer-events-auto"
+              style={{
+                left: s.x! * scale,
+                top: s.y! * scale,
+                width: s.w! * scale,
+                height: s.h! * scale,
+                backgroundColor: fillColor,
+                border: `2px solid ${colorObj.border}`,
+                borderRadius: 4,
+                boxShadow: isSelected ? `0 0 0 2px ${colorObj.border}, 0 0 8px ${colorObj.fill}` : undefined,
+                cursor: tool === 'hand'
+                  ? (panning ? 'grabbing' : 'grab')
+                  : tool === 'eraser'
+                    ? 'pointer'
+                    : hoveredSelectableId === s.id || tool === 'select'
+                      ? 'move'
+                      : 'crosshair',
+              }}
+            />
+            {/* Resize handles when selected */}
+            {isSelected && tool === 'select' && (
+              <>
+                {['nw', 'ne', 'sw', 'se'].map(corner => {
+                  const left = corner.includes('w') ? s.x! * scale - 4 : (s.x! + s.w!) * scale - 4;
+                  const top = corner.includes('n') ? s.y! * scale - 4 : (s.y! + s.h!) * scale - 4;
+                  const cursor = corner === 'nw' || corner === 'se' ? 'nwse-resize' : 'nesw-resize';
+                  return (
+                    <div
+                      key={corner}
+                      className="absolute z-20 pointer-events-auto"
+                      style={{
+                        left, top, width: 8, height: 8,
+                        backgroundColor: '#fff',
+                        border: `2px solid ${colorObj.border}`,
+                        borderRadius: 2,
+                        cursor,
+                      }}
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        pushHistory();
+                        setResizing({ corner, startX: toImgCoords(e.clientX, e.clientY).x, startY: toImgCoords(e.clientX, e.clientY).y, origShape: cloneShape(s) });
+                        (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+                      }}
+                    />
+                  );
+                })}
+              </>
+            )}
         </div>
       );
     }
