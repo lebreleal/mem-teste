@@ -101,7 +101,9 @@ const ManageDeck = () => {
       } catch { setFront(''); setOcclusionImageUrl(''); setOcclusionRects([]); setFrontAttachedImages([]); }
       let backRaw = currentCard.back_content || '';
       try { const p = JSON.parse(backRaw); if (p && typeof p.clozeTarget === 'number') backRaw = p.extra || ''; } catch {}
-      setBack(backRaw);
+      const { text: backText, images: backImgs } = extractImages(backRaw);
+      setBack(backText);
+      setBackAttachedImages(backImgs);
     } else {
       let clozeExtra = '';
       let backRaw = currentCard.back_content || '';
