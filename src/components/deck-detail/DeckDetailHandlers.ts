@@ -13,12 +13,59 @@ import type { CardRow } from '@/types/deck';
 import type { useToast } from '@/hooks/use-toast';
 import type { QueryClient } from '@tanstack/react-query';
 
+import type { UseMutationResult } from '@tanstack/react-query';
+
+/** Minimal deck shape needed by handlers */
+interface HandlerDeck {
+  name?: string;
+  folder_id?: string | null;
+  algorithm_mode?: string;
+}
+
+/** Shape of an occlusion rectangle */
+export interface OcclusionRect {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  type?: string;
+  text?: string;
+  groupId?: string;
+  points?: { x: number; y: number }[];
+}
+
+/** Shape returned by deckService.createAlgorithmCopy / detachCommunityDeck */
+interface CreatedDeck {
+  id: string;
+  name: string;
+}
+
+/** Generic mutation shape for createCard/updateCard/deleteCard */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyMutation = UseMutationResult<any, unknown, any, any>;
+
+/** Exam notification entry */
+interface ExamNotification {
+  id: string;
+  title: string;
+  examId: string;
+  status: string;
+  message: string;
+}
+
+/** Subdeck import shape */
+interface ImportSubdeck {
+  name: string;
+  cards: { frontContent: string; backContent: string; cardType?: string }[];
+}
+
 interface HandlerDeps {
   deckId: string;
-  deck: any;
+  deck: HandlerDeck | null | undefined;
   allCards: CardRow[];
   allDeckIds: string[];
-  user: any;
+  user: { id: string } | null;
   toast: ReturnType<typeof useToast>['toast'];
   queryClient: QueryClient;
   navigate: (path: string) => void;
@@ -33,7 +80,7 @@ interface HandlerDeps {
   selectedCards: Set<string>;
   filteredCards: CardRow[];
   occlusionImageUrl: string;
-  occlusionRects: any[];
+  occlusionRects: OcclusionRect[];
   occlusionCanvasSize: { w: number; h: number } | null;
   mcOptions: string[];
   mcCorrectIndex: number;
@@ -47,13 +94,13 @@ interface HandlerDeps {
   examTimeLimit: number;
   improvePreview: { front: string; back: string } | null;
   // Mutations from useCards
-  createCard: any;
-  updateCard: any;
-  deleteCard: any;
+  createCard: AnyMutation;
+  updateCard: AnyMutation;
+  deleteCard: AnyMutation;
   // From hooks
-  createExam: any;
-  addNotification: any;
-  updateNotification: any;
+  createExam: AnyMutation;
+  addNotification: (n: ExamNotification) => void;
+  updateNotification: (id: string, update: Partial<ExamNotification>) => void;
   // State setters (callbacks)
   setFront: (v: string) => void;
   setBack: (v: string) => void;
@@ -67,7 +114,7 @@ interface HandlerDeps {
   setBulkMoveOpen: (v: boolean) => void;
   setEditorOpen: (v: boolean) => void;
   setOcclusionImageUrl: (v: string) => void;
-  setOcclusionRects: (v: any[]) => void;
+  setOcclusionRects: (v: OcclusionRect[]) => void;
   setOcclusionCanvasSize: (v: { w: number; h: number } | null) => void;
   setOcclusionModalOpen: (v: boolean) => void;
   setMcOptions: (v: string[]) => void;
