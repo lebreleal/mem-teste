@@ -344,11 +344,11 @@ const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: stri
 const DeckDetailContent = () => {
   const { deck, deckLoading, allCardsLoading, deckId, navigate, toast, setAlgorithmModalOpen, cardCounts, decks } = useDeckDetail();
   const location = useLocation();
-  const queryClient = useQueryClient();
-  const fromCommunity = (location.state as any)?.from === 'community';
-  const fromDashboardSala = (location.state as any)?.from === 'dashboard-sala';
-  const dashboardSalaFolderId = (location.state as any)?.folderId;
-  const communityTurmaId = (location.state as any)?.turmaId;
+  const locState = location.state as { from?: string; folderId?: string; turmaId?: string } | null;
+  const fromCommunity = locState?.from === 'community';
+  const fromDashboardSala = locState?.from === 'dashboard-sala';
+  const dashboardSalaFolderId = locState?.folderId;
+  const communityTurmaId = locState?.turmaId;
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameName, setRenameName] = useState('');
