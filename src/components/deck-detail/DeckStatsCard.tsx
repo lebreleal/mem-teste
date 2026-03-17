@@ -46,10 +46,8 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
 
   // Progress — use server total, not paginated allCards.length
   const serverTotal = serverCardCounts?.total ?? 0;
-  const total = isQMode ? qd.total : serverTotal;
-  const progressPct = isQMode
-    ? (qd.total > 0 ? Math.round((qd.correct / qd.total) * 100) : 0)
-    : (serverTotal > 0 ? Math.round(((serverTotal - diffCounts.novo) / serverTotal) * 100) : 0);
+  const total = serverTotal;
+  const progressPct = serverTotal > 0 ? Math.round(((serverTotal - diffCounts.novo) / serverTotal) * 100) : 0;
 
   // Time estimate — based on today's due cards (capped by daily limits from context)
   const dueNew = isQMode ? qd.unanswered + qd.wrong : newCountToday;
