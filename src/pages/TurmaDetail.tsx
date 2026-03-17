@@ -30,60 +30,8 @@ function useSalaDecks(turmaId: string) {
   return useQuery<DeckWithStats[]>({
     queryKey: ['sala-decks', turmaId],
     queryFn: async () => {
-      const { data: turmaDecks } = await supabase
-        .from('turma_decks')
-        .select('id, deck_id, is_published')
-        .eq('turma_id', turmaId)
-        .eq('is_published', true);
-
-      if (!turmaDecks || turmaDecks.length === 0) return [];
-
-      const rootDeckIds = turmaDecks.map((td: any) => td.deck_id);
-
-      const { data: childDecks } = await supabase
-        .from('decks')
-        .select('id')
-        .in('parent_deck_id', rootDeckIds)
-        .eq('is_archived', false);
-
-      const allDeckIds = [...rootDeckIds, ...(childDecks ?? []).map((d: any) => d.id)];
-
-      const { data: decks } = await supabase
-        .from('decks')
-        .select('*')
-        .in('id', allDeckIds);
-
-      if (!decks) return [];
-
-      // Fetch card stats
-      const cardCountMap = new Map<string, { total: number; mastered: number; novo: number; facil: number; bom: number; dificil: number; errei: number }>();
-      const PAGE = 1000;
-
-      for (let i = 0; i < allDeckIds.length; i += 200) {
-        const batch = allDeckIds.slice(i, i + 200);
-        let offset = 0;
-        let hasMore = true;
-        while (hasMore) {
-          const { data: cards } = await supabase
-            .from('cards')
-            .select('id, deck_id, state, difficulty')
-            .in('deck_id', batch)
-            .order('id', { ascending: true })
-            .range(offset, offset + PAGE - 1);
-          if (cards) {
-            for (const c of cards as any[]) {
-              const entry = cardCountMap.get(c.deck_id) ?? { total: 0, mastered: 0, novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
-              entry.total++;
-              // Always show cards as "new" in the public Explore view
-              // Owner's personal progress (state/difficulty) must not leak
-              entry.novo++;
-              cardCountMap.set(c.deck_id, entry);
-            }
-          }
-          hasMore = (cards?.length ?? 0) === PAGE;
-          offset += PAGE;
-        }
-      }
+      const { decks, rootDeckIds, cardCountMap } = await fetchSalaDecksData(turmaId);
+      if (!decks || decks.length === 0) return [];
 
       return decks
         .filter((d: any) => !d.name?.includes('Caderno de Erros'))
@@ -95,7 +43,7 @@ function useSalaDecks(turmaId: string) {
             created_at: d.created_at,
             updated_at: d.updated_at,
             folder_id: d.folder_id,
-            parent_deck_id: rootDeckIds.includes(d.id) ? null : d.parent_deck_id,
+            parent_deck_id: rootDeckIds?.includes(d.id) ? null : d.parent_deck_id,
             is_archived: d.is_archived,
             new_count: cc.novo,
             learning_count: 0,
