@@ -437,6 +437,27 @@ const CardListContent = ({
     const nums = new Set(matches.map(m => parseInt(m.match(/\d+/)![0])));
     return Array.from(nums).sort((a, b) => a - b);
   };
+  interface CardListGroupRowProps {
+    groups: { cards: any[]; isClozeGroup: boolean }[];
+    selectionMode: boolean;
+    selectedCards: Set<string>;
+    toggleCardSelection: (id: string) => void;
+    setPreviewIndex: (idx: number) => void;
+    getStateInfo: (card: any) => { label: string; color: string };
+    stripHtml: (s: string) => string;
+    isFrozenCard: (card: any) => boolean;
+    unfreezeCard: (id: string) => void;
+    openEdit: (card: any) => void;
+    setDeleteId: (id: string | null) => void;
+    isLinkedDeck: boolean;
+    filteredCards: any[];
+    tagsMap: Record<string, { id: string; name: string; is_official: boolean }[]>;
+    setSuggestCard: (card: any) => void;
+    setCommunityWarningOpen: (v: boolean) => void;
+    isClozeCard: (card: any) => boolean;
+    getClozeDisplayText: (card: any) => string | null;
+    getClozeNumbers: (s: string) => number[];
+  }
 
   const groupRowRenderer = useCallback(({ index, style, groups: gs, selectionMode: sm, selectedCards: sc, toggleCardSelection: tcc, setPreviewIndex: spi, getStateInfo: gsi, stripHtml: shtml, isFrozenCard: ifc, unfreezeCard: ufc, openEdit: oe, setDeleteId: sdi, isLinkedDeck: ild, filteredCards: fc, tagsMap: tm, setSuggestCard: ssc, setCommunityWarningOpen: scwo, isClozeCard: icc, getClozeDisplayText: gcdt, getClozeNumbers: gcn }: RowComponentProps<CardListGroupRowProps>): React.ReactElement | null => {
     const group = gs[index];
