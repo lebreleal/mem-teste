@@ -26,8 +26,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
 const MATERIA_COLORS = [
-  '#6366F1', '#F59E0B', '#10B981', '#EF4444',
-  '#8B5CF6', '#EC4899', '#06B6D4', '#F97316',
+  null,           // default (no color — outlined circle)
+  '#C8B6FF',      // light purple
+  '#FFF3BF',      // light yellow
+  '#FFD6E0',      // light pink
+  '#D4FFDA',      // light green
 ];
 
 const COLOR_STORAGE_KEY = 'memo-materia-colors';
