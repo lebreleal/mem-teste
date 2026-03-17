@@ -32,8 +32,8 @@ const AdminLogs = () => {
     try {
       const data = await fetchErrorLogs({ severity, search });
       setLogs(data);
-    } catch (err: any) {
-      toast({ title: "Erro ao carregar logs", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      toast({ title: "Erro ao carregar logs", description: err instanceof Error ? err.message : 'Erro desconhecido', variant: "destructive" });
     } finally {
       setLoading(false);
     }
