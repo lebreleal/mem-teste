@@ -7,6 +7,7 @@ import Link from '@tiptap/extension-link';
 import Underline from '@tiptap/extension-underline';
 import Color from '@tiptap/extension-color';
 import { TextStyle } from '@tiptap/extension-text-style';
+// @ts-ignore - types may lag behind install
 import Highlight from '@tiptap/extension-highlight';
 // @ts-ignore - types may lag behind install
 import Placeholder from '@tiptap/extension-placeholder';
