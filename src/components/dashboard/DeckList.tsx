@@ -63,27 +63,7 @@ const DeckList = ({
   organizeMode = false,
   ...deckRowProps
 }: DeckListProps) => {
-  const { user } = useAuth();
   const { pendingDecks } = usePendingDecks();
-
-  // Fetch question counts per deck via service (Lei 2A compliant)
-  const allDeckIdsWithSubs = useMemo(() => {
-    const ids = new Set<string>();
-    const collect = (parentId: string) => {
-      ids.add(parentId);
-      const subs = deckRowProps.getSubDecks(parentId);
-      for (const s of subs) collect(s.id);
-    };
-    for (const d of currentDecks) collect(d.id);
-    return [...ids];
-  }, [currentDecks, deckRowProps.getSubDecks]);
-
-  const { data: questionCountMap } = useQuery({
-    queryKey: ['deck-question-counts-list', user?.id, allDeckIdsWithSubs.join(',')],
-    queryFn: () => fetchDeckQuestionCounts(allDeckIdsWithSubs),
-    enabled: !!user && allDeckIdsWithSubs.length > 0,
-    staleTime: 60_000,
-  });
 
   const [expandedAccordionId, setExpandedAccordionId] = useState<string | null>(null);
 
