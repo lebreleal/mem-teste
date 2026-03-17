@@ -337,28 +337,20 @@ const DeckSettings = () => {
         : 'Progresso mantido.',
     });
     setAlgorithmChangeTarget(null);
-
-
+  };
 
   const handleCopyWithAlgorithm = async () => {
     if (!algorithmChangeTarget || !deckId || !user) return;
-    const { data: currentDeck } = await supabase.from('decks').select('name, folder_id').eq('id', deckId).single();
-    if (!currentDeck) return;
-    const newName = `${currentDeck.name} (${algorithmChangeTarget === 'fsrs' ? 'FSRS' : 'Revisão rápida'})`;
-    const { data: newDeck, error } = await supabase
-      .from('decks')
-      .insert({ name: newName, user_id: user.id, folder_id: currentDeck.folder_id, algorithm_mode: algorithmChangeTarget } as any)
-      .select().single();
-    if (error || !newDeck) { toast({ title: 'Erro', variant: 'destructive' }); setAlgorithmChangeTarget(null); return; }
-    const { data: cards } = await supabase.from('cards').select('front_content, back_content, card_type').eq('deck_id', deckId);
-    if (cards && cards.length > 0) {
-      await supabase.from('cards').insert(cards.map((c: any) => ({
-        deck_id: (newDeck as any).id, front_content: c.front_content, back_content: c.back_content, card_type: c.card_type ?? 'basic',
-      })) as any);
+    try {
+      const algorithmLabel = algorithmChangeTarget === 'fsrs' ? 'FSRS' : 'Revisão rápida';
+      const newDeck = await deckService.createAlgorithmCopy(user.id, deckId, algorithmChangeTarget, algorithmLabel);
+      toast({ title: 'Novo baralho criado!', description: `"${(newDeck as any).name}" foi criado.` });
+      setAlgorithmChangeTarget(null);
+      navigate(`/decks/${(newDeck as any).id}`);
+    } catch {
+      toast({ title: 'Erro', variant: 'destructive' });
+      setAlgorithmChangeTarget(null);
     }
-    toast({ title: 'Novo baralho criado!', description: `"${newName}" foi criado.` });
-    setAlgorithmChangeTarget(null);
-    navigate(`/decks/${(newDeck as any).id}`);
   };
 
   const handleExportCSV = async () => {
