@@ -2337,14 +2337,13 @@ const EditQuestionDialog = ({
       if (!questionText.trim()) throw new Error('Enunciado obrigatório');
       if (correctIdx === null) throw new Error('Marque a alternativa correta');
 
-      const { error } = await supabase.from('deck_questions' as any).update({
+      await updateDeckQuestion(question.id, {
         question_text: questionText.trim(),
         options: validOptions,
         correct_indices: [correctIdx],
         explanation: explanation.trim(),
         concepts: concepts,
-      }).eq('id', question.id);
-      if (error) throw error;
+      });
 
       // Sync question_concepts junction
       if (user && concepts.length > 0) {
