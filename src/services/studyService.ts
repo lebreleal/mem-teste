@@ -471,7 +471,7 @@ export async function fetchStudyStats(userId: string, _cachedProfile?: StudyProf
     p_user_id: userId, p_tz_offset_minutes: tzOffsetMinutes,
   } as any);
   if (error) throw error;
-  const result = data as any;
+  const result = data as StudyStatsSummaryRow | null;
   if (!result) {
     return {
       lastStudyDate: null, streak: 0, energy: 0, dailyEnergyEarned: 0,
