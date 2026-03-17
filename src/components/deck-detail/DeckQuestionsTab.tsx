@@ -11,7 +11,15 @@ import { useAISources, type AISource } from '@/hooks/useAISources';
 import AISourceSelector from '@/components/AISourceSelector';
 import { useAuth } from '@/hooks/useAuth';
 import { useEnergy } from '@/hooks/useEnergy';
-import { supabase } from '@/integrations/supabase/client';
+import {
+  getCurrentUserId, fetchDeckQuestions, fetchQuestionAttempts, countDescendantCards,
+  fetchQuestionConceptDescriptions, searchCardsForConcept, resolveConceptNamesFromLinks,
+  saveQuestionAttempt, insertConceptCards, createQuestion, fetchLatestQuestionId,
+  updateQuestionConcepts, insertQuestionReturningId, deleteQuestion, bulkDeleteQuestions,
+  updateDeckQuestion, updateGlobalConceptDescription, searchGlobalConcepts,
+  getGlobalConceptBySlug, fetchUserGlobalConceptNames, invokeAITutor,
+  invokeGenerateQuestions, invokeParseQuestions,
+} from '@/services/deckQuestionService';
 import { moveConceptCardsToErrorDeck } from '@/services/errorDeckService';
 import { upsertQuestionIntoErrorDeck } from '@/services/errorQuestionCardService';
 import { useDecks } from '@/hooks/useDecks';
