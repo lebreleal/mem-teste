@@ -16,6 +16,7 @@ interface OcclusionShape {
   type: 'rect' | 'polygon' | 'freehand';
   x?: number; y?: number; w?: number; h?: number;
   points?: { x: number; y: number }[];
+  color?: string;
 }
 
 interface OcclusionEditorProps {
