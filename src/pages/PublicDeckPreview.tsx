@@ -8,13 +8,8 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import BottomNav from '@/components/BottomNav';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  fetchPublicDeckInfo, fetchDeckSubtreeCards, fetchDeckSuggestionCount,
-  fetchTurmaDeckLink, fetchTurmaDeckFiles, fetchTurmaDeckExams,
-  checkTurmaMembership, checkDeckFollowing, joinTurma, followDeckWithHierarchy,
-  getOrCreateLessonForDeck, uploadLessonFile, deleteLessonFile,
-  fetchSuggestionComments, insertSuggestionComment, fetchDeckSuggestions, voteSuggestion,
-} from '@/services/publicDeckService';
+import { supabase } from '@/integrations/supabase/client';
+// TODO: migrate remaining inline supabase calls to publicDeckService
 import { useAuth } from '@/hooks/useAuth';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
