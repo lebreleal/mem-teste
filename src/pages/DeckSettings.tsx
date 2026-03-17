@@ -158,33 +158,31 @@ const DeckSettings = () => {
 
   useEffect(() => {
     if (!deckId || !user) return;
-    supabase.from('decks').select('name, daily_new_limit, daily_review_limit, algorithm_mode, requested_retention, shuffle_cards, learning_steps, easy_bonus, interval_modifier, max_interval, easy_graduating_interval, parent_deck_id, is_public, allow_duplication, source_turma_deck_id, source_listing_id, community_id, bury_new_siblings, bury_review_siblings, bury_learning_siblings').eq('id', deckId).single().then(({ data, error }) => {
-      if (error || !data) {
-        toast({ title: 'Erro', description: 'Baralho não encontrado.', variant: 'destructive' });
-        navigate('/dashboard');
-        return;
-      }
+    deckService.fetchDeck(deckId).then((data) => {
       setName(data.name);
       setDailyNewLimit(data.daily_new_limit);
       setDailyReviewLimit(data.daily_review_limit);
       setAlgorithmMode(data.algorithm_mode === 'quick_review' ? 'quick_review' : 'fsrs');
-      setRequestedRetention((data as any).requested_retention ?? 0.85);
+      setRequestedRetention(data.requested_retention ?? 0.85);
       setShuffleCards(data.shuffle_cards ?? true);
       setLearningSteps(data.learning_steps || ['1m', '10m']);
       setEasyBonus(data.easy_bonus ?? 130);
       setIntervalModifier(data.interval_modifier ?? 100);
       setMaxInterval(data.max_interval ?? 1000);
-      setEasyGraduatingInterval((data as any).easy_graduating_interval ?? 15);
+      setEasyGraduatingInterval(data.easy_graduating_interval ?? 15);
       setParentDeckId(data.parent_deck_id ?? null);
-      setIsPublic((data as any).is_public ?? true);
-      setAllowDuplication((data as any).allow_duplication ?? false);
+      setIsPublic(data.is_public ?? true);
+      setAllowDuplication(data.allow_duplication ?? false);
       setSourceTurmaDeckId(data.source_turma_deck_id ?? null);
-      setSourceListingId((data as any).source_listing_id ?? null);
-      setCommunityId((data as any).community_id ?? null);
-      setBuryNewSiblings((data as any).bury_new_siblings !== false);
-      setBuryReviewSiblings((data as any).bury_review_siblings !== false);
-      setBuryLearningSiblings((data as any).bury_learning_siblings !== false);
+      setSourceListingId(data.source_listing_id ?? null);
+      setCommunityId(data.community_id ?? null);
+      setBuryNewSiblings(data.bury_new_siblings !== false);
+      setBuryReviewSiblings(data.bury_review_siblings !== false);
+      setBuryLearningSiblings(data.bury_learning_siblings !== false);
       setLoading(false);
+    }).catch(() => {
+      toast({ title: 'Erro', description: 'Baralho não encontrado.', variant: 'destructive' });
+      navigate('/dashboard');
     });
   }, [deckId, user]);
 
