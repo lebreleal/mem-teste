@@ -7,7 +7,7 @@ import { useState, useCallback } from 'react';
 import { Zap, CheckCircle2, XCircle, Loader2, ChevronRight, BrainCircuit, StopCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchConceptsBySlug } from '@/services/uiQueryService';
 import { useAuth } from '@/hooks/useAuth';
 import * as globalConceptService from '@/services/globalConceptService';
 import { toast } from 'sonner';
