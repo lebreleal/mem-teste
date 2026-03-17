@@ -140,8 +140,8 @@ interface DeckDetailContextValue {
   // Occlusion
   occlusionImageUrl: string;
   setOcclusionImageUrl: (v: string) => void;
-  occlusionRects: any[];
-  setOcclusionRects: (v: any[]) => void;
+  occlusionRects: OcclusionRect[];
+  setOcclusionRects: (v: OcclusionRect[]) => void;
   occlusionCanvasSize: { w: number; h: number } | null;
   setOcclusionCanvasSize: (v: { w: number; h: number } | null) => void;
   occlusionModalOpen: boolean;
