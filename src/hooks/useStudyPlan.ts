@@ -604,7 +604,7 @@ export function useStudyPlan(options?: { full?: boolean }) {
 
   const updateNewCardsLimit = useMutation({
     mutationFn: async (input: { limit: number; weeklyNewCards?: WeeklyNewCards | null }) => {
-      const updateData: any = { daily_new_cards_limit: input.limit };
+      const updateData: Record<string, unknown> = { daily_new_cards_limit: input.limit };
       if (input.weeklyNewCards !== undefined) {
         updateData.weekly_new_cards = input.weeklyNewCards;
       }
