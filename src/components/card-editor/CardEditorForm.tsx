@@ -38,6 +38,10 @@ export interface CardEditorFormProps {
   onImprove?: () => void;
   isImproving?: boolean;
 
+  /** AI Creator — generate card from a template prompt */
+  onAICreate?: (templatePrompt: string) => void;
+  isAICreating?: boolean;
+
   /** Actions */
   onSave: () => void;
   onSaveAndAdd?: () => void;
