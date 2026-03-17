@@ -188,9 +188,9 @@ const Dashboard = () => {
       const { cleanupFollowerDecks } = await import('@/services/followerBootstrap');
       await cleanupFollowerDecks(user.id, folderId);
       
-      await supabase.from('turma_members').delete().eq('turma_id', turmaId).eq('user_id', user.id);
-      await supabase.from('folders').update({ source_turma_id: null, source_turma_subject_id: null } as any).eq('id', folderId);
-      await supabase.from('folders').delete().eq('id', folderId);
+      await removeTurmaMember(turmaId, user.id);
+      await clearFolderTurmaLink(folderId);
+      await deleteFolder(folderId);
       queryClient.invalidateQueries({ queryKey: ['folders'] });
       queryClient.invalidateQueries({ queryKey: ['turmas'] });
       queryClient.invalidateQueries({ queryKey: ['turma-members'] });
