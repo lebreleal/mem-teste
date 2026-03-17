@@ -38,6 +38,7 @@ const ManageDeck = () => {
   const [back, setBack] = useState('');
   const [isDirty, setIsDirty] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   // Image occlusion state
   const [occlusionImageUrl, setOcclusionImageUrl] = useState('');
