@@ -9,13 +9,6 @@ import { fetchDeckConceptsByHierarchy, type DeckConcept } from '@/services/uiQue
 import { useAuth } from '@/hooks/useAuth';
 import { BrainCircuit, ChevronDown, ChevronUp } from 'lucide-react';
 
-interface DeckConcept {
-  id: string;
-  name: string;
-  state: number;
-  correct_count: number;
-  wrong_count: number;
-}
 
 const STATE_LABELS: Record<number, { label: string; className: string }> = {
   0: { label: 'Novo', className: 'bg-muted text-muted-foreground' },
