@@ -282,25 +282,32 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
 
   const handlePointerMove = (e: React.PointerEvent) => {
     e.preventDefault();
+    const pos = toImgCoords(e.clientX, e.clientY);
+    const cx = clamp(pos.x, 0, imgSize.w);
+    const cy = clamp(pos.y, 0, imgSize.h);
 
-    // Hand panning
     if (panning && tool === 'hand') {
       setPanOffset({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
       return;
     }
 
+    if (dragging?.origShape.type === 'rect') {
+      const nextX = clamp(dragging.origShape.x! + (cx - dragging.startX), 0, imgSize.w - dragging.origShape.w!);
+      const nextY = clamp(dragging.origShape.y! + (cy - dragging.startY), 0, imgSize.h - dragging.origShape.h!);
+      setShapes(prev => prev.map(shape => shape.id === dragging.origShape.id ? { ...shape, x: nextX, y: nextY } : shape));
+      return;
+    }
+
     if (resizing) {
-      const pos = toImgCoords(e.clientX, e.clientY);
       const s = resizing.origShape;
       if (s.type === 'rect') {
         let newX = s.x!, newY = s.y!, newW = s.w!, newH = s.h!;
-        const dx = pos.x - resizing.startX;
-        const dy = pos.y - resizing.startY;
+        const dx = cx - resizing.startX;
+        const dy = cy - resizing.startY;
         if (resizing.corner.includes('e')) { newW = Math.max(10, s.w! + dx); }
         if (resizing.corner.includes('w')) { newX = s.x! + dx; newW = Math.max(10, s.w! - dx); }
         if (resizing.corner.includes('s')) { newH = Math.max(10, s.h! + dy); }
         if (resizing.corner.includes('n')) { newY = s.y! + dy; newH = Math.max(10, s.h! - dy); }
-        // Constrain within image bounds
         newX = clamp(newX, 0, imgSize.w - 10);
         newY = clamp(newY, 0, imgSize.h - 10);
         if (newX + newW > imgSize.w) newW = imgSize.w - newX;
@@ -312,11 +319,17 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
       return;
     }
 
+    const hoverHit = tool === 'hand' || tool === 'eraser' ? null : hitTest({ x: cx, y: cy }, { selectableOnly: true });
+    setHoveredSelectableId(hoverHit?.id ?? null);
+
+    if (tool === 'polygon' && currentPoints.length > 0) {
+      setPolygonPreviewPoint(hoverHit ? null : { x: cx, y: cy });
+    } else {
+      setPolygonPreviewPoint(null);
+    }
+
     if (!drawing) return;
-    const pos = toImgCoords(e.clientX, e.clientY);
-    // Clamp drawing position within image
-    const cx = clamp(pos.x, 0, imgSize.w);
-    const cy = clamp(pos.y, 0, imgSize.h);
+
     if (tool === 'rect' && startPos) {
       setCurrentRect({
         x: Math.min(startPos.x, cx), y: Math.min(startPos.y, cy),
