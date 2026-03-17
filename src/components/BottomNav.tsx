@@ -17,6 +17,7 @@ const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
   };
 
   const isOnDashboard = location.pathname === '/dashboard';
+  const isOnMateria = location.pathname.startsWith('/materia/');
 
   // Check if current folder is a community (followed) folder
   const isCommunityFolder = React.useMemo(() => {
