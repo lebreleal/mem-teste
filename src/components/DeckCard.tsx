@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { MoreVertical, BookOpen, Trash2, Settings, Layers, Link2 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { findTurmaDeckSource } from '@/services/dashboardService';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
