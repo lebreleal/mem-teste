@@ -469,7 +469,6 @@ LIMITES:
   });
 
   if (error || data?.error) {
-    console.error('generateReinforcementCards error:', error ?? data?.error);
     return [];
   }
 
