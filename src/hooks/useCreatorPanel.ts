@@ -47,7 +47,7 @@ export const useCreatorCommunities = () => {
 
       const { data: turmas } = await supabase
         .from('turmas')
-        .select('*')
+        .select('id, name, description, cover_image_url, subscription_price, owner_id, is_private, invite_code, category, share_slug, subscription_price_yearly, avg_rating, rating_count, created_at, updated_at')
         .eq('owner_id', user.id);
 
       if (!turmas || turmas.length === 0) return [];
@@ -187,7 +187,7 @@ export const usePendingSuggestions = () => {
 
       const { data: suggestions } = await supabase
         .from('deck_suggestions')
-        .select('*')
+        .select('id, deck_id, card_id, suggester_user_id, suggestion_type, suggested_content, suggested_tags, rationale, status, content_status, tags_status, moderator_user_id, created_at, updated_at')
         .in('deck_id', deckIds)
         .eq('status', 'pending')
         .order('created_at', { ascending: false });

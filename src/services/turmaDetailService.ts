@@ -7,7 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 // ─── TurmaDetailContext ───
 
 export async function fetchTurmaPublic(turmaId: string) {
-  const { data } = await supabase.from('turmas').select('*').eq('id', turmaId).single();
+  const { data } = await supabase.from('turmas').select('id, name, description, cover_image_url, subscription_price, owner_id, is_private, invite_code, category, share_slug, subscription_price_yearly, avg_rating, rating_count, created_at, updated_at').eq('id', turmaId).single();
   if (!data) return null;
   const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: [(data as any).owner_id] });
   const ownerName = (profiles && profiles.length > 0) ? (profiles[0] as any).name || 'Anônimo' : 'Anônimo';
@@ -20,7 +20,7 @@ export async function fetchTurmaLessonFiles(turmaId: string): Promise<{ id: stri
 }
 
 export async function fetchActiveSubscription(turmaId: string, userId: string) {
-  const { data } = await supabase.from('turma_subscriptions').select('*')
+  const { data } = await supabase.from('turma_subscriptions').select('id, turma_id, user_id, plan_type, status, amount, started_at, expires_at, created_at')
     .eq('turma_id', turmaId).eq('user_id', userId)
     .gt('expires_at', new Date().toISOString())
     .order('expires_at', { ascending: false }).limit(1);
@@ -44,7 +44,7 @@ export async function importTurmaExam(userId: string, exam: any): Promise<string
     return existing[0].id;
   }
 
-  const { data: questions, error } = await supabase.from('turma_exam_questions').select('*').eq('exam_id', exam.id).order('sort_order', { ascending: true });
+  const { data: questions, error } = await supabase.from('turma_exam_questions').select('id, exam_id, question_type, question_text, options, correct_answer, correct_indices, points, sort_order, question_id, created_at').eq('exam_id', exam.id).order('sort_order', { ascending: true });
   if (error) throw error;
 
   const totalPoints = (questions ?? []).reduce((sum: number, q: any) => sum + (q.points || 1), 0);
@@ -103,7 +103,7 @@ export async function fetchPendingSuggestions(turmaId: string, userId: string): 
   const deckIds = (tDecks ?? []).map((d: any) => d.deck_id);
   if (deckIds.length === 0) return [];
 
-  const { data: suggestions } = await supabase.from('deck_suggestions').select('*').in('deck_id', deckIds).eq('status', 'pending').order('created_at', { ascending: false });
+  const { data: suggestions } = await supabase.from('deck_suggestions').select('id, deck_id, card_id, suggester_user_id, suggestion_type, suggested_content, suggested_tags, rationale, status, content_status, tags_status, moderator_user_id, created_at, updated_at').in('deck_id', deckIds).eq('status', 'pending').order('created_at', { ascending: false });
   if (!suggestions || suggestions.length === 0) return [];
 
   const suggesterIds = [...new Set(suggestions.map((s: any) => s.suggester_user_id))];

@@ -43,7 +43,7 @@ export async function fetchDeckSubtreeCards(deckId: string) {
   const subtreeIds = [...allSubtreeIds];
   const { data, error } = await supabase
     .from('cards')
-    .select('*')
+    .select('id, deck_id, front_content, back_content, card_type, state, stability, difficulty, scheduled_date, learning_step, last_reviewed_at, origin_deck_id, created_at, updated_at')
     .in('deck_id', subtreeIds)
     .order('created_at', { ascending: true })
     .limit(2000);
