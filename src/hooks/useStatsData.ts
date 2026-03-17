@@ -66,11 +66,11 @@ export function filterDayMap(dayMap: Record<string, DayEntry>, range: { from: Da
   return filtered;
 }
 
-export function computeFilteredStats(filteredMap: Record<string, any>, range: { from: Date | null; to: Date | null; expectedDays?: number }, totalDayMap: Record<string, any>) {
+export function computeFilteredStats(filteredMap: Record<string, DayEntry>, range: { from: Date | null; to: Date | null; expectedDays?: number }, totalDayMap: Record<string, DayEntry>) {
   const entries = Object.values(filteredMap);
-  const totalCards = entries.reduce((s: number, d: any) => s + (Number(d.cards) || 0), 0);
-  const totalMinutes = entries.reduce((s: number, d: any) => s + (Number(d.minutes) || 0), 0);
-  const daysStudied = entries.filter((d: any) => (Number(d.cards) || 0) > 0).length;
+  const totalCards = entries.reduce((s, d) => s + (Number(d.cards) || 0), 0);
+  const totalMinutes = entries.reduce((s, d) => s + (Number(d.minutes) || 0), 0);
+  const daysStudied = entries.filter(d => (Number(d.cards) || 0) > 0).length;
   const totalDays = range.expectedDays || (range.from ? Math.max(1, Math.ceil((range.to!.getTime() - range.from.getTime()) / 86400000) + 1) : Math.max(1, Object.keys(totalDayMap).length));
   const avgCards = daysStudied > 0 ? Math.round(totalCards / daysStudied) : 0;
   const avgMinutes = daysStudied > 0 ? Math.round(totalMinutes / daysStudied) : 0;
