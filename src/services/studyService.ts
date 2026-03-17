@@ -84,10 +84,10 @@ export async function fetchStudyQueue(
         .eq('user_id', userId)
         .maybeSingle();
 
-      if ((folderMeta as any)?.source_turma_id) {
-        await supabase.rpc('bootstrap_follower_decks' as any, {
+      if (folderMeta?.source_turma_id) {
+        await supabase.rpc('bootstrap_follower_decks', {
           p_user_id: userId,
-          p_turma_id: (folderMeta as any).source_turma_id,
+          p_turma_id: folderMeta.source_turma_id,
           p_folder_id: folderId,
         });
 
