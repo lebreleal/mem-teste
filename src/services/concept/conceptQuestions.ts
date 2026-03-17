@@ -545,12 +545,10 @@ export async function generateConceptQuestions(
   });
 
   if (error) {
-    console.error('generateConceptQuestions error:', error);
     return null;
   }
 
   if (data?.error) {
-    console.error('generateConceptQuestions AI error:', data.error);
     return null;
   }
 
