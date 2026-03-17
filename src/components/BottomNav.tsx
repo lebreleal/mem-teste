@@ -25,9 +25,10 @@ const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
     const params = new URLSearchParams(location.search);
     const folderId = params.get('folder');
     if (!folderId || !user) return false;
-    const foldersCache = queryClient.getQueryData<any[]>(['folders', user.id]);
+    interface FolderCache { id: string; source_turma_id?: string | null }
+    const foldersCache = queryClient.getQueryData<FolderCache[]>(['folders', user.id]);
     if (foldersCache) {
-      const folder = foldersCache.find((f: any) => f.id === folderId);
+      const folder = foldersCache.find(f => f.id === folderId);
       if (folder) return !!folder.source_turma_id;
     }
     return false;
