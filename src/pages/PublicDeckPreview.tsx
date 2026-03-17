@@ -862,15 +862,7 @@ const PublicDeckPreview = () => {
   // Fetch files linked to same lesson as this deck
   const { data: deckFiles = [] } = useQuery({
     queryKey: ['turma-deck-files', turmaDeck?.lesson_id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('turma_lesson_files')
-        .select('id, file_name, file_url, file_size, file_type, created_at')
-        .eq('lesson_id', turmaDeck!.lesson_id!)
-        .order('sort_order', { ascending: true });
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => fetchTurmaDeckFiles(turmaDeck!.lesson_id!),
     enabled: !!turmaDeck?.lesson_id,
   });
 
