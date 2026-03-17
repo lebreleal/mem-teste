@@ -78,14 +78,7 @@ const AdminUsers = () => {
         refresh_token: session.refresh_token,
       }));
       sessionStorage.setItem('impersonated_name', user.name || user.email);
-      const result = await adminImpersonate(user.id);
-      if (!result) {
-        sessionStorage.removeItem('admin_session');
-        sessionStorage.removeItem('impersonated_name');
-        toast({ title: 'Erro', description: 'Falha ao impersonar usuário.', variant: 'destructive' });
-        setImpersonating(false);
-        return;
-      }
+      const result = await invokeImpersonate(user.id);
       try {
         await verifyOtp(result.token);
       } catch {

@@ -234,9 +234,10 @@ export async function fetchActiveSubscription(turmaId: string, userId: string) {
 // ── PublicCommunity queries ──
 
 export async function fetchTurmaBySlugOrId(slugOrId: string) {
-  const { data: bySlug } = await supabase.from('turmas').select('id, name, description, owner_id, invite_code, created_at, is_private, avg_rating, rating_count, member_count, cover_image_url, subscription_price, share_slug').eq('share_slug', slugOrId).maybeSingle();
+  const cols = 'id, name, description, owner_id, invite_code, created_at, is_private, avg_rating, rating_count, cover_image_url, subscription_price, share_slug';
+  const { data: bySlug } = await supabase.from('turmas').select(cols).eq('share_slug', slugOrId).maybeSingle();
   if (bySlug) return bySlug;
-  const { data: byId } = await supabase.from('turmas').select('id, name, description, owner_id, invite_code, created_at, is_private, avg_rating, rating_count, member_count, cover_image_url, subscription_price, share_slug').eq('id', slugOrId).maybeSingle();
+  const { data: byId } = await supabase.from('turmas').select(cols).eq('id', slugOrId).maybeSingle();
   return byId;
 }
 
