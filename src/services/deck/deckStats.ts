@@ -168,7 +168,7 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
   const turmaAuthorMap = turmaAuthorResult.aMap;
   const sourceUpdatedAtMap = turmaAuthorResult.uMap;
 
-  return (decks || []).map((deck: any) => {
+  return (decks || []).map((deck: DeckRow) => {
     const s = statsMap.get(deck.id) ?? { new_count: 0, learning_count: 0, review_count: 0, reviewed_today: 0, new_reviewed_today: 0, new_graduated_today: 0 };
 
     // Resolve author with priority chain
