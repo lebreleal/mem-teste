@@ -245,7 +245,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
             className={`group flex items-center gap-3 px-4 py-3 cursor-pointer transition-all hover:bg-muted/40 ${dragHandlers ? dragHandlers.className : ''}`}
             onClick={handleClick}
           >
-            <IconFolder className="h-5 w-5 text-primary shrink-0" />
+            <IconFolder className="h-5 w-5 shrink-0 text-primary" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <h3 className="text-xs font-bold uppercase tracking-wide text-muted-foreground truncate">{displayName}</h3>
