@@ -187,7 +187,7 @@ export const usePendingSuggestions = () => {
 
       const { data: suggestions } = await supabase
         .from('deck_suggestions')
-        .select('*')
+        .select('id, deck_id, card_id, suggester_user_id, suggestion_type, suggested_content, suggested_tags, rationale, status, content_status, tags_status, moderator_user_id, created_at, updated_at')
         .in('deck_id', deckIds)
         .eq('status', 'pending')
         .order('created_at', { ascending: false });

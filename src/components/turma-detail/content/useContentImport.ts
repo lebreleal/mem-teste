@@ -257,7 +257,7 @@ export const useContentImport = () => {
         examFolder = newFolder;
       }
 
-      const { data: questions } = await supabase.from('turma_exam_questions').select('*').eq('exam_id', exam.id).order('sort_order', { ascending: true });
+      const { data: questions } = await supabase.from('turma_exam_questions').select('id, exam_id, question_type, question_text, options, correct_answer, correct_indices, points, sort_order, question_id, created_at').eq('exam_id', exam.id).order('sort_order', { ascending: true });
       // Community-imported exams don't need a deck_id
       const deckId = null;
       const totalPoints = (questions ?? []).reduce((sum: number, q: any) => sum + (q.points || 1), 0);

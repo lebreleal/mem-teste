@@ -332,7 +332,7 @@ export async function fetchSalaDecksData(turmaId: string) {
 
   const { data: decks } = await supabase
     .from('decks')
-    .select('*')
+    .select('id, name, user_id, parent_deck_id, folder_id, community_id, is_archived, is_public, is_live_deck, allow_duplication, is_free_in_community, algorithm_mode, daily_new_limit, daily_review_limit, requested_retention, max_interval, interval_modifier, easy_bonus, easy_graduating_interval, learning_steps, shuffle_cards, bury_siblings, bury_new_siblings, bury_review_siblings, bury_learning_siblings, sort_order, source_listing_id, source_turma_deck_id, synced_at, created_at, updated_at')
     .in('id', allDeckIds);
 
   const cardCountMap = new Map<string, { total: number; mastered: number; novo: number; facil: number; bom: number; dificil: number; errei: number }>();

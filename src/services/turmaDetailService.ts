@@ -103,7 +103,7 @@ export async function fetchPendingSuggestions(turmaId: string, userId: string): 
   const deckIds = (tDecks ?? []).map((d: any) => d.deck_id);
   if (deckIds.length === 0) return [];
 
-  const { data: suggestions } = await supabase.from('deck_suggestions').select('*').in('deck_id', deckIds).eq('status', 'pending').order('created_at', { ascending: false });
+  const { data: suggestions } = await supabase.from('deck_suggestions').select('id, deck_id, card_id, suggester_user_id, suggestion_type, suggested_content, suggested_tags, rationale, status, content_status, tags_status, moderator_user_id, created_at, updated_at').in('deck_id', deckIds).eq('status', 'pending').order('created_at', { ascending: false });
   if (!suggestions || suggestions.length === 0) return [];
 
   const suggesterIds = [...new Set(suggestions.map((s: any) => s.suggester_user_id))];

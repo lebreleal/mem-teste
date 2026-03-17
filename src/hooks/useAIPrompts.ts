@@ -22,7 +22,7 @@ export const useAIPrompts = () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('ai_prompts')
-      .select('*')
+      .select('id, feature_key, label, system_prompt, user_prompt_template, default_model, temperature, updated_at')
       .order('feature_key');
 
     if (error) {

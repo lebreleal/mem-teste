@@ -16,7 +16,7 @@ export const useAISettings = () => {
 
   const fetchSettings = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('ai_settings').select('*').order('key');
+    const { data, error } = await supabase.from('ai_settings').select('id, key, value, updated_at').order('key');
     if (error) {
       toast({ title: 'Erro', description: 'Falha ao carregar configurações.', variant: 'destructive' });
     } else {
