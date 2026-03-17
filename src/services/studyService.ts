@@ -441,10 +441,10 @@ export async function submitCardReview(
   }
 
   // Build update payload
-  const updatePayload: any = {
+  const updatePayload: CardUpdatePayload = {
     stability: result.stability, difficulty: result.difficulty,
     state: result.state, scheduled_date: result.scheduled_date,
-    last_reviewed_at: new Date().toISOString(), learning_step: result.learning_step ?? 0,
+    last_reviewed_at: new Date().toISOString(), learning_step: 'learning_step' in result ? result.learning_step : 0,
   };
 
   const [updateResult, logResult] = await Promise.all([
