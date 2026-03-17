@@ -402,7 +402,7 @@ const DeckDetailContent = () => {
 
   const handleRename = async () => {
     const trimmed = renameName.trim();
-    if (!trimmed || trimmed === (deck as any)?.name) { setIsRenaming(false); return; }
+    if (!trimmed || trimmed === deck?.name) { setIsRenaming(false); return; }
     try {
       const { renameDeck } = await import('@/services/deckService');
       await renameDeck(deckId!, trimmed);
