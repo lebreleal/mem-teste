@@ -33,7 +33,6 @@ interface SalaListProps {
 }
 
 const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }: SalaListProps) => {
-  const { user } = useAuth();
 
   // Build O(1) lookup indexes once
   const { childrenIndex, decksByFolder } = useMemo(() => {
