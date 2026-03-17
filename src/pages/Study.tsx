@@ -11,6 +11,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStudySession } from '@/hooks/useStudySession';
+import type { StudyCard, DeckStudyConfig } from '@/types/study';
 import { useEnergy } from '@/hooks/useEnergy';
 import { getNextReadyIndex, parseStepToMinutes, extractImageUrls } from '@/lib/studyUtils';
 import { useAIModel } from '@/hooks/useAIModel';
