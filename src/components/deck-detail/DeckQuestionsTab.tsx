@@ -601,20 +601,10 @@ const QuestionPractice = ({
     setGeneratingConcept(concept);
     try {
       spendEnergy.mutate(2);
-      const { data, error } = await supabase.functions.invoke('ai-tutor', {
-        body: { type: 'generate-concept-cards', concept, deckId, energyCost: 0 },
-      });
-      if (error) throw error;
+      const data = await invokeAITutor({ type: 'generate-concept-cards', concept, deckId, energyCost: 0 });
       const cards = data?.cards || [];
       if (cards.length > 0) {
-        for (const card of cards) {
-          await supabase.from('cards').insert({
-            deck_id: deckId,
-            front_content: card.front,
-            back_content: card.back,
-            card_type: card.card_type || 'basic',
-          });
-        }
+        await insertConceptCards(deckId, cards);
         toast({ title: `${cards.length} cards criados para "${concept}"` });
         queryClient.invalidateQueries({ queryKey: ['cards'] });
       } else {
