@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ChevronLeft, ChevronRight, Trash2, Copy, Plus, Loader2, Check, X } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+
 import { Button } from '@/components/ui/button';
 import { CardContent as CardPreviewContent, buildVirtualCards } from '@/components/deck-detail/CardPreviewSheet';
 import { useCards } from '@/hooks/useCards';
@@ -382,15 +382,9 @@ const ManageDeck = () => {
       {/* Preview Modal */}
       <ManageDeckPreview cards={sortedCards} initialIndex={selectedIndex} open={previewOpen} onClose={() => setPreviewOpen(false)} />
 
-      {/* Occlusion Editor Dialog */}
-      <Dialog open={occlusionModalOpen} onOpenChange={setOcclusionModalOpen}>
-        <DialogContent className="sm:max-w-4xl max-h-[90dvh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="font-display flex items-center gap-2">
-              <img src={iconClozeOcclusion} alt="" className="h-5 w-5 object-contain" />
-              Oclusão de Imagem
-            </DialogTitle>
-          </DialogHeader>
+      {/* Occlusion Editor — full-screen overlay */}
+      {occlusionModalOpen && (
+        <div className="fixed inset-0 z-50 bg-background flex flex-col">
           <OcclusionEditor
             initialFront={occlusionImageUrl ? JSON.stringify({
               imageUrl: occlusionImageUrl, rects: occlusionRects, allRects: occlusionRects,
@@ -413,8 +407,8 @@ const ManageDeck = () => {
             onCancel={() => setOcclusionModalOpen(false)}
             isSaving={false}
           />
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
 
       {/* Delete confirmation */}
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
