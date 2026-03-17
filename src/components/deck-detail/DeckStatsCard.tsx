@@ -15,7 +15,7 @@ import { useStudyPlan } from '@/hooks/useStudyPlan';
 import { fetchDeckHierarchyIds } from '@/services/uiQueryService';
 
 interface DeckStatsCardProps {
-  mode?: 'cards' | 'questions';
+  mode?: 'cards';
 }
 
 const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
