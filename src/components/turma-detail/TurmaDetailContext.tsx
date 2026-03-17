@@ -147,8 +147,7 @@ export const TurmaDetailProvider = ({ children }: { children: ReactNode }) => {
     queryKey: ['turma-lesson-files', turmaId],
     queryFn: async () => {
       if (!turmaId) return [];
-      const { data } = await supabase.from('turma_lesson_files' as any).select('id, lesson_id').eq('turma_id', turmaId);
-      return (data ?? []) as unknown as { id: string; lesson_id: string }[];
+      return fetchTurmaLessonFiles(turmaId);
     },
     enabled: !!turmaId,
   });
