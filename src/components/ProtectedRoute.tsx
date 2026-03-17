@@ -19,6 +19,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const isOnDashboard = location.pathname === '/dashboard';
+  const isOnMateria = location.pathname.startsWith('/materia/');
   const folderId = searchParams.get('folder');
   const isInsideSala = isOnDashboard && !!folderId;
 
