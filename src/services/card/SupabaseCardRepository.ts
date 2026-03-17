@@ -98,14 +98,15 @@ export class SupabaseCardRepository implements ICardRepository {
   }
 
   async move(ids: string[], targetDeckId: string): Promise<void> {
-    const { error } = await supabase.from('cards').update({ deck_id: targetDeckId } as any).in('id', ids);
+    const { error } = await supabase.from('cards').update({ deck_id: targetDeckId }).in('id', ids);
     if (error) throw error;
   }
 
   async countByState(deckId: string): Promise<Record<CardState, number>> {
     const { data, error } = await supabase.rpc('count_descendant_cards_by_state', { p_deck_id: deckId });
     if (error) throw error;
-    const row: any = Array.isArray(data) ? data[0] : data;
+    interface CountRow { new_count?: number; learning_count?: number; review_count?: number }
+    const row = (Array.isArray(data) ? data[0] : data) as CountRow | null;
     return {
       new: Number(row?.new_count ?? 0),
       learning: Number(row?.learning_count ?? 0),

@@ -49,7 +49,8 @@ export function useForecastSimulator(options: UseForecastSimulatorOptions) {
     queryKey: ['forecast-params', userId, deckIds],
     queryFn: async () => {
       if (!userId || deckIds.length === 0) return null;
-      const { data, error } = await supabase.rpc('get_forecast_params' as any, {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC not in generated types
+      const { data, error } = await (supabase.rpc as (fn: string, params: Record<string, unknown>) => ReturnType<typeof supabase.rpc>)('get_forecast_params', {
         p_user_id: userId,
         p_deck_ids: deckIds,
       });
@@ -167,7 +168,7 @@ export function useForecastView() {
         .eq('id', userId!)
         .single();
       if (error) throw error;
-      return ((data as any)?.forecast_view as ForecastView) ?? '7d';
+      return ((data as { forecast_view?: string } | null)?.forecast_view as ForecastView) ?? '7d';
     },
     enabled: !!userId,
     staleTime: Infinity,
@@ -179,7 +180,7 @@ export function useForecastView() {
     queryClient.setQueryData(['forecast-view', userId], view);
     await supabase
       .from('profiles')
-      .update({ forecast_view: view } as any)
+      .update({ forecast_view: view })
       .eq('id', userId);
   }, [userId, queryClient]);
 

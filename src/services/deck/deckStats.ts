@@ -75,7 +75,8 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
   const [decks, statsResult, cardCountsResult] = await Promise.all([
     fetchAllDecks(),
     supabase.rpc('get_all_user_deck_stats', { p_user_id: userId, p_tz_offset_minutes: TZ_OFFSET_SP }),
-    supabase.rpc('get_all_user_card_counts' as any, { p_user_id: userId }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- get_all_user_card_counts RPC not in generated types
+    (supabase.rpc as (fn: string, params: Record<string, unknown>) => ReturnType<typeof supabase.rpc>)('get_all_user_card_counts', { p_user_id: userId }),
   ]);
 
   const allStats = statsResult.data;
