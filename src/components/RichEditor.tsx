@@ -96,15 +96,22 @@ interface RichEditorProps {
   onClickAttachment?: (attachment: ImageAttachment) => void;
 }
 
+const HIGHLIGHT_COLORS = [
+  { label: 'Nenhum', value: '' },
+  { label: 'Verde claro', value: '#E1FFBE' },
+  { label: 'Rosa claro', value: '#FFE6E8' },
+  { label: 'Azul claro', value: '#DDF1FF' },
+  { label: 'Amarelo claro', value: '#FFF3CE' },
+  { label: 'Roxo claro', value: '#E8E8FF' },
+];
+
 const TEXT_COLORS = [
   { label: 'Padrão', value: '' },
-  { label: 'Vermelho', value: '#ef4444' },
-  { label: 'Laranja', value: '#f97316' },
-  { label: 'Amarelo', value: '#eab308' },
-  { label: 'Verde', value: '#22c55e' },
-  { label: 'Azul', value: '#3b82f6' },
-  { label: 'Roxo', value: '#8b5cf6' },
-  { label: 'Rosa', value: '#ec4899' },
+  { label: 'Verde', value: '#47C700' },
+  { label: 'Vermelho', value: '#FF375B' },
+  { label: 'Azul', value: '#0093F0' },
+  { label: 'Laranja', value: '#FF8B00' },
+  { label: 'Roxo', value: '#4E5EE5' },
 ];
 
 const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclusionAttach, onOcclusionImageReady, hideCloze, chromeless = false, hideToolbarUntilFocus = false, onAICreate, isAICreating = false, imageAttachments, onImageAttached, onRemoveAttachment, onClickAttachment }: RichEditorProps) => {
