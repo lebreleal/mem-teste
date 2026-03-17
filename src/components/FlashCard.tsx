@@ -134,11 +134,11 @@ function renderOcclusion(frontContent: string, revealed: boolean, fallbackCanvas
     }).join('');
 
     const vbW = data.canvasWidth || fallbackCanvas?.w || (() => {
-      const xs = allRects.flatMap((r: any) => r.points ? r.points.map((p: any) => p.x) : [r.x, r.x + r.w]);
+      const xs = allRects.flatMap((r: OcclusionRect) => r.points ? r.points.map(p => p.x) : [r.x, r.x + r.w]);
       return Math.max(...xs, 100) * 1.02;
     })();
     const vbH = data.canvasHeight || fallbackCanvas?.h || (() => {
-      const ys = allRects.flatMap((r: any) => r.points ? r.points.map((p: any) => p.y) : [r.y, r.y + r.h]);
+      const ys = allRects.flatMap((r: OcclusionRect) => r.points ? r.points.map(p => p.y) : [r.y, r.y + r.h]);
       return Math.max(...ys, 100) * 1.02;
     })();
 
