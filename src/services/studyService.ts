@@ -522,13 +522,13 @@ export async function fetchHourlyBreakdown(userId: string, days = 30, tzOffsetMi
 }
 
 /** Fetch retention over time (weekly buckets). */
-export async function fetchRetentionOverTime(userId: string, days = 180) {
+export async function fetchRetentionOverTime(userId: string, days = 180): Promise<RetentionRow[]> {
   const { data, error } = await supabase.rpc('get_retention_over_time' as any, {
     p_user_id: userId,
     p_days: days,
   });
   if (error) throw error;
-  return (data as any[]) ?? [];
+  return (data as RetentionRow[]) ?? [];
 }
 
 /** Fetch cards added per day. */
