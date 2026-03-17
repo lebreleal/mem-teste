@@ -400,7 +400,7 @@ export async function submitCardReview(
         difficulty: 0,
         scheduled_date: nowIso,
         elapsed_ms: cappedMs,
-      } as Record<string, unknown>),
+      }),
     ]);
 
     if (updateResult.error) throw updateResult.error;
