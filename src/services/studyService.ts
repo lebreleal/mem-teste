@@ -539,10 +539,11 @@ export async function fetchHourlyBreakdown(userId: string, days = 30, tzOffsetMi
 
 /** Fetch retention over time (weekly buckets). */
 export async function fetchRetentionOverTime(userId: string, days = 180): Promise<RetentionRow[]> {
-  const { data, error } = await supabase.rpc('get_retention_over_time' as 'get_user_ranking', {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC not in generated types
+  const { data, error } = await (supabase.rpc as any)('get_retention_over_time', {
     p_user_id: userId,
     p_days: days,
-  } as unknown as Record<string, never>);
+  });
   if (error) throw error;
   return (data as unknown as RetentionRow[]) ?? [];
 }
