@@ -64,8 +64,8 @@ function useSalaDecks(turmaId: string) {
           } satisfies DeckWithStats;
         })
         .sort((a: DeckWithStats, b: DeckWithStats) => {
-          const aHasChildren = decks.some((d: any) => d.parent_deck_id === a.id);
-          const bHasChildren = decks.some((d: any) => d.parent_deck_id === b.id);
+          const aHasChildren = decks.some((d: SalaDeckRow) => d.parent_deck_id === a.id);
+          const bHasChildren = decks.some((d: SalaDeckRow) => d.parent_deck_id === b.id);
           if (aHasChildren && !bHasChildren) return -1;
           if (!aHasChildren && bHasChildren) return 1;
           return 0;
