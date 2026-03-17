@@ -79,7 +79,8 @@ const MateriaDetail: React.FC = () => {
     () => (decks ?? []).filter(d => d.parent_deck_id === id && !d.is_archived),
     [decks, id]
   );
-  const materiaColor = useMemo(() => id ? getMateriaColors()[id] ?? null : null, [id, showEdit]);
+  const [colorVersion, setColorVersion] = useState(0);
+  const materiaColor = useMemo(() => id ? getMateriaColors()[id] ?? null : null, [id, colorVersion]);
 
   const [showEdit, setShowEdit] = useState(false);
   const [editName, setEditName] = useState('');
