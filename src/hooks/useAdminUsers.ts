@@ -135,7 +135,7 @@ export const useAdminUsers = () => {
       type: 'credit',
       description,
       reference_id: `admin_gift_${plan}_${new Date().toISOString().slice(0, 10)}`,
-    } as any);
+    });
 
     toast({ title: '🎁 Premium concedido!', description });
     await fetchUsers(search);
