@@ -21,23 +21,6 @@ const PLACEHOLDER_MAP: Record<string, string[]> = {
   ai_tutor: ['{{front}}', '{{backHint}}'],
 };
 
-const PT_VOICES = [
-  { value: 'pt-BR-Neural2-A', label: 'Neural2-A (Feminina)' },
-  { value: 'pt-BR-Neural2-B', label: 'Neural2-B (Masculina)' },
-  { value: 'pt-BR-Neural2-C', label: 'Neural2-C (Feminina)' },
-];
-
-const EN_VOICES = [
-  { value: 'en-US-Neural2-A', label: 'Neural2-A (Masculina)' },
-  { value: 'en-US-Neural2-C', label: 'Neural2-C (Feminina)' },
-  { value: 'en-US-Neural2-D', label: 'Neural2-D (Masculina)' },
-  { value: 'en-US-Neural2-E', label: 'Neural2-E (Feminina)' },
-  { value: 'en-US-Neural2-F', label: 'Neural2-F (Feminina)' },
-  { value: 'en-US-Neural2-G', label: 'Neural2-G (Feminina)' },
-  { value: 'en-US-Neural2-H', label: 'Neural2-H (Feminina)' },
-  { value: 'en-US-Neural2-I', label: 'Neural2-I (Masculina)' },
-  { value: 'en-US-Neural2-J', label: 'Neural2-J (Masculina)' },
-];
 
 const AdminIA = () => {
   const navigate = useNavigate();
