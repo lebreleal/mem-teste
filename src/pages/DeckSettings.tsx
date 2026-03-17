@@ -337,18 +337,8 @@ const DeckSettings = () => {
         : 'Progresso mantido.',
     });
     setAlgorithmChangeTarget(null);
-  };
-    queryClient.invalidateQueries({ queryKey: ['deck', deckId] });
-    queryClient.invalidateQueries({ queryKey: ['decks'] });
-    queryClient.invalidateQueries({ queryKey: ['study-queue', deckId] });
-    toast({
-      title: 'Algoritmo alterado',
-      description: shouldReset
-        ? `Progresso redefinido${children?.length ? ` (+ ${children.length} sub-baralho${children.length > 1 ? 's' : ''})` : ''}.`
-        : 'Progresso mantido.',
-    });
-    setAlgorithmChangeTarget(null);
-  };
+
+
 
   const handleCopyWithAlgorithm = async () => {
     if (!algorithmChangeTarget || !deckId || !user) return;
