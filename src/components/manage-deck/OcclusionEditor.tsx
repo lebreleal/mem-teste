@@ -203,7 +203,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
       if (currentPoints.length >= 3) {
         const first = currentPoints[0];
         if (Math.hypot(pos.x - first.x, pos.y - first.y) < 15 / scale) {
-          setShapes(prev => [...prev, { id: crypto.randomUUID(), type: 'polygon', points: [...currentPoints] }]);
+          setShapes(prev => [...prev, { id: crypto.randomUUID(), type: 'polygon', points: [...currentPoints], color: shapeColor }]);
           setCurrentPoints([]);
           return;
         }
