@@ -428,7 +428,7 @@ const LessonDetail = () => {
           onFileUpload={handleFileUpload}
           onDeleteFile={(id) => deleteFileMutation.mutate(id)}
           onRenameFile={(fileId, newName) => renameFileMutation.mutate({ fileId, newName })}
-          onPreviewPdf={(url, restricted) => { setPdfPreviewUrl(url); setPdfPreviewRestricted(restricted); }}
+          onPreviewPdf={(url) => { window.open(url, '_blank'); }}
           onUpdateFileVisibility={(fileId, priceType) => updateFileVisibilityMutation.mutate({ fileId, priceType })}
           onShowAddDeck={() => { setShowAddDeck(true); setAllowDownload(false); }}
           onPreviewDeck={setPreviewDeck}
