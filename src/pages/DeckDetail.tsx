@@ -522,7 +522,7 @@ const DeckDetailContent = () => {
               >
                 <span className="text-foreground">Algoritmo:</span>{' '}
                 <span className="font-medium text-info">
-                  {(deck as any)?.algorithm_mode === 'quick_review' ? 'Revisão Rápida' : 'FSRS-6'}
+                  {deck?.algorithm_mode === 'quick_review' ? 'Revisão Rápida' : 'FSRS-6'}
                 </span>
               </button>
             )}
