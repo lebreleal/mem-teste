@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchCardTagsBatch } from '@/services/dashboardService';
 import SuggestCorrectionModal from '@/components/SuggestCorrectionModal';
 import { shortDisplayId } from '@/lib/shortId';
 
