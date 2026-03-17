@@ -355,7 +355,7 @@ const ContentTab = () => {
       toast({ title: 'Defina um preço de assinatura primeiro', description: 'Vá em Configurações → Assinatura para definir o preço.', variant: 'destructive' });
       return;
     }
-    setter(newPriceType);
+    setter(newPriceType as 'free' | 'money' | 'credits');
   };
 
   // ── Count downloads (inscrições) per turma_deck ──
