@@ -33,6 +33,7 @@ import SalaList from '@/components/dashboard/SalaList';
 import SalaHero from '@/components/dashboard/SalaHero';
 import DashboardDialogs from '@/components/dashboard/DashboardDialogs';
 import DashboardModals from '@/components/dashboard/DashboardModals';
+import ShareSalaModal from '@/components/dashboard/ShareSalaModal';
 const PremiumModal = lazy(() => import('@/components/dashboard/PremiumModal'));
 
 const StudyWeightsSheet = lazy(() => import('@/components/dashboard/StudyWeightsSheet'));
@@ -393,14 +394,6 @@ const Dashboard = () => {
         salaImageOpen={salas.salaImageOpen} setSalaImageOpen={salas.setSalaImageOpen}
         salaImageFile={salas.salaImageFile} setSalaImageFile={salas.setSalaImageFile}
         handleSalaImageSave={salas.handleSalaImageSave}
-        shareModalOpen={salas.shareModalOpen} setShareModalOpen={salas.setShareModalOpen}
-        shareSlugEdit={salas.shareSlugEdit} setShareSlugEdit={salas.setShareSlugEdit}
-        savingSlug={salas.savingSlug} handleSaveSlug={salas.handleSaveSlug}
-        onCopyLink={async () => {
-          const link = `${window.location.origin}/c/${salas.shareSlugEdit}`;
-          await navigator.clipboard.writeText(link);
-          toast({ title: '🔗 Link copiado!' });
-        }}
         leaveSalaConfirm={salas.leaveSalaConfirm} setLeaveSalaConfirm={salas.setLeaveSalaConfirm}
         handleLeaveSala={salas.handleLeaveSala}
         salaAddMenuOpen={salaAddMenuOpen} setSalaAddMenuOpen={setSalaAddMenuOpen}
@@ -408,6 +401,22 @@ const Dashboard = () => {
         onCreateDeckAI={() => state.setAiDeckOpen(true)}
         onCreateMateria={() => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId('__materia__'); }}
         onImportCards={() => { state.setImportOpen(true); state.setImportDeckId(null); state.setImportDeckName(''); }}
+      />
+
+      <ShareSalaModal
+        open={salas.shareModalOpen}
+        onOpenChange={salas.setShareModalOpen}
+        turmaId={salas.userTurma?.id}
+        shareSlug={salas.shareSlugEdit}
+        isPublished={salas.userTurma ? !salas.userTurma.is_private : false}
+        onTogglePublish={salas.handleTogglePublish}
+        publishing={salas.publishing}
+        onCopyLink={async () => {
+          const link = `${window.location.origin}/c/${salas.shareSlugEdit}`;
+          await navigator.clipboard.writeText(link);
+          toast({ title: '🔗 Link copiado!' });
+        }}
+        ownerName={salas.userTurma?.owner_name}
       />
 
       <Suspense fallback={null}>
