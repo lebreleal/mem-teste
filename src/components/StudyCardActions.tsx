@@ -18,7 +18,9 @@ import {
 } from '@/components/ui/alert-dialog';
 import { CardEditorForm } from '@/components/card-editor/CardEditorForm';
 import ImageOcclusion from '@/components/ImageOcclusion';
-import { supabase } from '@/integrations/supabase/client';
+import { freezeCard as freezeCardService, burySingleCard, patchCard } from '@/services/card/cardMutations';
+import { fetchClozeSiblings } from '@/services/card/cardQueries';
+import { enhanceCard } from '@/services/card/cardAI';
 import { useEnergy } from '@/hooks/useEnergy';
 import { useAIModel } from '@/hooks/useAIModel';
 import { useToast } from '@/hooks/use-toast';
@@ -144,13 +146,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
 
   const handleFreeze = async () => {
     try {
-      const farFuture = new Date();
-      farFuture.setFullYear(farFuture.getFullYear() + 100);
-      const { error } = await supabase
-        .from('cards')
-        .update({ scheduled_date: farFuture.toISOString(), state: 2 })
-        .eq('id', card.id);
-      if (error) throw error;
+      await freezeCardService(card.id);
       toast({ title: '❄️ Card congelado', description: 'Este card não aparecerá mais nas revisões.' });
       setFreezeConfirmOpen(false);
       onCardFrozen();
@@ -161,14 +157,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
 
   const handleBury = async () => {
     try {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      tomorrow.setHours(0, 0, 0, 0);
-      const { error } = await supabase
-        .from('cards')
-        .update({ scheduled_date: tomorrow.toISOString() })
-        .eq('id', card.id);
-      if (error) throw error;
+      await burySingleCard(card.id);
       toast({ title: '⛏️ Card enterrado', description: 'Ele voltará amanhã.' });
       setBuryConfirmOpen(false);
       onCardBuried?.();
@@ -229,14 +218,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
         const uniqueNums = [...new Set(clozeNumMatches.map(m => parseInt(m[1])))].sort((a, b) => a - b);
 
         // Fetch all cloze siblings from DB (same front_content as original)
-        const { data: siblings } = await supabase
-          .from('cards')
-          .select('id, front_content, back_content, card_type')
-          .eq('deck_id', card.deck_id)
-          .eq('card_type', 'cloze')
-          .eq('front_content', originalFrontRef.current);
-
-        const allSiblingCards = siblings || [];
+        const allSiblingCards = await fetchClozeSiblings([card.deck_id], originalFrontRef.current);
 
         // Map existing cloze targets to card IDs
         const existingTargets = new Map<number, string>();
@@ -384,11 +366,10 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
         backToSend = JSON.stringify({ options: mcOptions.filter(o => o.trim()), correctIndex: mcCorrectIndex });
       }
 
-      const { data, error } = await supabase.functions.invoke('enhance-card', {
-        body: { front, back: backToSend, cardType: editorType || 'basic', aiModel: model, energyCost: 1 },
+      const data = await enhanceCard({
+        front, back: backToSend, cardType: editorType || 'basic', aiModel: model, energyCost: 1,
       });
 
-      if (error) throw error;
       if (data.error) {
         toast({ title: data.error, variant: 'destructive' });
         return;
@@ -429,11 +410,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
 
     // Auto-save to DB and update the study session immediately
     try {
-      const { error } = await supabase
-        .from('cards')
-        .update({ front_content: improvePreview.front, back_content: backContent })
-        .eq('id', card.id);
-      if (error) throw error;
+      await patchCard(card.id, { front_content: improvePreview.front, back_content: backContent });
       onCardUpdated({ front_content: improvePreview.front, back_content: backContent });
       queryClient.invalidateQueries({ queryKey: ['cards'] });
     } catch {

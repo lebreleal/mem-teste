@@ -7,7 +7,7 @@
 
 import { createContext, useContext, useState, useMemo, useCallback, useEffect, useRef, type ReactNode } from 'react';
 import type { CardMeta, DescendantCardCounts } from '@/services/cardService';
-import { supabase } from '@/integrations/supabase/client';
+import { countReviewDueCards, fetchStudyPlanDeckIds, unfreezeCard as unfreezeCardService } from '@/services/card/cardMutations';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCards } from '@/hooks/useCards';
 import { useDecks } from '@/hooks/useDecks';
@@ -264,7 +264,6 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     queryKey: ['review-due-count', deckId],
     queryFn: async () => {
       const nowISO = new Date().toISOString();
-      // Collect all descendant deck IDs
       const allIds: string[] = [deckId];
       let frontier = [deckId];
       const decksList = decks ?? [];
@@ -276,14 +275,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
         }
         frontier = nextFrontier;
       }
-      const { count, error } = await supabase
-        .from('cards')
-        .select('id', { count: 'exact', head: true })
-        .in('deck_id', allIds)
-        .eq('state', 2)
-        .lte('scheduled_date', nowISO);
-      if (error) throw error;
-      return count ?? 0;
+      return countReviewDueCards(allIds, nowISO);
     },
     enabled: !!user && !!deckId && decks.length > 0,
     staleTime: 30_000,
@@ -402,11 +394,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
 
   const studyPlansQuery = useQuery({
     queryKey: ['study-plans-for-deck-detail', user?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('study_plans').select('deck_ids').eq('user_id', user!.id);
-      if (error) throw error;
-      return (data ?? []) as Array<{ deck_ids: string[] | null }>;
-    },
+    queryFn: () => fetchStudyPlanDeckIds(user!.id),
     enabled: !!user,
     staleTime: 60_000,
   });
@@ -495,8 +483,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
 
   const unfreezeCard = useCallback(async (cardId: string) => {
     try {
-      const { error } = await supabase.from('cards').update({ scheduled_date: new Date().toISOString(), state: 0, stability: 0, difficulty: 0 }).eq('id', cardId);
-      if (error) throw error;
+      await unfreezeCardService(cardId);
       toast({ title: '🔥 Card descongelado', description: 'O card voltou para a fila de estudo.' });
       queryClient.invalidateQueries({ queryKey: ['cards'] });
     } catch { toast({ title: 'Erro ao descongelar card', variant: 'destructive' }); }

@@ -6,7 +6,7 @@
 
 import { useState, useMemo, lazy, Suspense } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { countTurmaDeckDownloads, countTurmaFilesByLesson, countTurmaExamsByLesson } from '@/services/turma/turmaContent';
 import { useTurmaDetail } from './TurmaDetailContext';
 import { useContentMutations } from './content/useContentMutations';
 import { useContentImport } from './content/useContentImport';
@@ -360,19 +360,7 @@ const ContentTab = () => {
   // ── Count downloads (inscrições) per turma_deck ──
   const { data: downloadCounts = {} } = useQuery({
     queryKey: ['turma-deck-downloads', turmaId],
-    queryFn: async () => {
-      const turmaDeckIds = turmaDecks.map((td: any) => td.id);
-      if (turmaDeckIds.length === 0) return {};
-      const { data } = await supabase
-        .from('decks')
-        .select('source_turma_deck_id')
-        .in('source_turma_deck_id', turmaDeckIds);
-      const counts: Record<string, number> = {};
-      (data ?? []).forEach((d: any) => {
-        counts[d.source_turma_deck_id] = (counts[d.source_turma_deck_id] || 0) + 1;
-      });
-      return counts;
-    },
+    queryFn: () => countTurmaDeckDownloads(turmaDecks.map((td: any) => td.id)),
     enabled: turmaDecks.length > 0,
     staleTime: 5 * 60_000,
   });
@@ -380,17 +368,7 @@ const ContentTab = () => {
   // ── Count files per lesson_id ──
   const { data: fileCountsByLesson = {} } = useQuery({
     queryKey: ['turma-file-counts', turmaId],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('turma_lesson_files' as any)
-        .select('lesson_id')
-        .eq('turma_id', turmaId);
-      const counts: Record<string, number> = {};
-      (data ?? []).forEach((f: any) => {
-        counts[f.lesson_id] = (counts[f.lesson_id] || 0) + 1;
-      });
-      return counts;
-    },
+    queryFn: () => countTurmaFilesByLesson(turmaId),
     enabled: !!turmaId,
     staleTime: 5 * 60_000,
   });
@@ -398,18 +376,7 @@ const ContentTab = () => {
   // ── Count exams per lesson_id ──
   const { data: examCountsByLesson = {} } = useQuery({
     queryKey: ['turma-exam-counts-by-lesson', turmaId],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('turma_exams' as any)
-        .select('lesson_id')
-        .eq('turma_id', turmaId)
-        .eq('is_published', true);
-      const counts: Record<string, number> = {};
-      (data ?? []).forEach((e: any) => {
-        if (e.lesson_id) counts[e.lesson_id] = (counts[e.lesson_id] || 0) + 1;
-      });
-      return counts;
-    },
+    queryFn: () => countTurmaExamsByLesson(turmaId),
     enabled: !!turmaId,
     staleTime: 5 * 60_000,
   });

@@ -6,6 +6,58 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { TurmaSemester, TurmaSubject, TurmaLesson, TurmaDeck } from '@/types/turma';
 
+// ── Aggregate counts for ContentTab ──
+
+/** Count how many user decks reference each turma_deck (downloads/inscrições). */
+export async function countTurmaDeckDownloads(turmaDeckIds: string[]): Promise<Record<string, number>> {
+  if (turmaDeckIds.length === 0) return {};
+  const { data } = await supabase
+    .from('decks')
+    .select('source_turma_deck_id')
+    .in('source_turma_deck_id', turmaDeckIds);
+  const counts: Record<string, number> = {};
+  (data ?? []).forEach((d: any) => {
+    counts[d.source_turma_deck_id] = (counts[d.source_turma_deck_id] || 0) + 1;
+  });
+  return counts;
+}
+
+/** Count files per lesson_id in a turma. */
+export async function countTurmaFilesByLesson(turmaId: string): Promise<Record<string, number>> {
+  const { data } = await supabase
+    .from('turma_lesson_files' as any)
+    .select('lesson_id')
+    .eq('turma_id', turmaId);
+  const counts: Record<string, number> = {};
+  (data ?? []).forEach((f: any) => {
+    counts[f.lesson_id] = (counts[f.lesson_id] || 0) + 1;
+  });
+  return counts;
+}
+
+/** Count published exams per lesson_id in a turma. */
+export async function countTurmaExamsByLesson(turmaId: string): Promise<Record<string, number>> {
+  const { data } = await supabase
+    .from('turma_exams' as any)
+    .select('lesson_id')
+    .eq('turma_id', turmaId)
+    .eq('is_published', true);
+  const counts: Record<string, number> = {};
+  (data ?? []).forEach((e: any) => {
+    if (e.lesson_id) counts[e.lesson_id] = (counts[e.lesson_id] || 0) + 1;
+  });
+  return counts;
+}
+
+/** Invoke detect-import-format edge function. */
+export async function invokeDetectImportFormat(sample: string) {
+  const { data, error } = await supabase.functions.invoke('detect-import-format', {
+    body: { sample },
+  });
+  if (error) throw error;
+  return data;
+}
+
 // ── Hierarchy Queries ──
 
 export async function fetchTurmaSemesters(turmaId: string): Promise<TurmaSemester[]> {
