@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAllTags, useTagAdminMutations } from '@/hooks/useTags';
+import type { Tag } from '@/types/tag';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
