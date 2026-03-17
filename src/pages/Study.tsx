@@ -393,22 +393,8 @@ const Study = () => {
 
     let cancelled = false;
     (async () => {
-      const { data, error } = await supabase
-        .from('review_logs')
-        .select('rating')
-        .eq('user_id', user.id)
-        .eq('card_id', currentCard.id)
-        .order('reviewed_at', { ascending: false })
-        .limit(LEECH_THRESHOLD - 1);
-
-      if (cancelled || error || !data?.length) return;
-
-      let streak = 0;
-      for (const row of data) {
-        if (row.rating === 1) streak += 1;
-        else break;
-      }
-
+      const streak = await fetchLeechStreak(user.id, currentCard.id, LEECH_THRESHOLD - 1);
+      if (cancelled) return;
       if (streak > 0) {
         failCountRef.current.set(leechKey, streak);
         persistLeechFailCounts();
