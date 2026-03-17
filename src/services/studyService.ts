@@ -32,7 +32,7 @@ export async function fetchStudyQueue(
     supabase.from('decks').select(DECK_SELECT_COLS).eq('user_id', userId),
     (folderId || isStudyAll)
       ? supabase.from('folders').select('id, parent_id').eq('user_id', userId)
-      : Promise.resolve({ data: [] as any[] }),
+      : Promise.resolve({ data: [] as { id: string; parent_id: string | null }[] }),
   ]);
 
   let activeDecks = (decksResult.data ?? []).filter(d => !d.is_archived);
@@ -84,10 +84,10 @@ export async function fetchStudyQueue(
         .eq('user_id', userId)
         .maybeSingle();
 
-      if ((folderMeta as any)?.source_turma_id) {
-        await supabase.rpc('bootstrap_follower_decks' as any, {
+      if (folderMeta?.source_turma_id) {
+        await supabase.rpc('bootstrap_follower_decks', {
           p_user_id: userId,
-          p_turma_id: (folderMeta as any).source_turma_id,
+          p_turma_id: folderMeta.source_turma_id,
           p_folder_id: folderId,
         });
 
@@ -213,7 +213,7 @@ export async function fetchStudyQueue(
       .order('created_at', { ascending: true }),
     fetchAllCardIds(),
     supabase
-      .from('study_plans' as any)
+      .from('study_plans')
       .select('deck_ids, priority')
       .eq('user_id', userId)
       .order('priority', { ascending: true }),
@@ -253,10 +253,10 @@ export async function fetchStudyQueue(
   // ─── Round 3: both limits RPCs in parallel ───
   const [hierarchyLimits, globalLimitsResult] = await Promise.all([
     limitCardIds.length > 0
-      ? supabase.rpc('get_study_queue_limits', { p_user_id: userId, p_card_ids: limitCardIds, p_tz_offset_minutes: tzOffsetMinutes } as any)
+      ? supabase.rpc('get_study_queue_limits', { p_user_id: userId, p_card_ids: limitCardIds, p_tz_offset_minutes: tzOffsetMinutes })
       : Promise.resolve({ data: null }),
     globalCardIds.length > 0
-      ? supabase.rpc('get_study_queue_limits', { p_user_id: userId, p_card_ids: globalCardIds, p_tz_offset_minutes: tzOffsetMinutes } as any)
+      ? supabase.rpc('get_study_queue_limits', { p_user_id: userId, p_card_ids: globalCardIds, p_tz_offset_minutes: tzOffsetMinutes })
       : Promise.resolve({ data: null }),
   ]);
 
@@ -400,7 +400,7 @@ export async function submitCardReview(
         difficulty: 0,
         scheduled_date: nowIso,
         elapsed_ms: cappedMs,
-      } as any),
+      }),
     ]);
 
     if (updateResult.error) throw updateResult.error;
@@ -468,7 +468,7 @@ export async function submitCardReview(
       user_id: userId, card_id: card.id, rating,
       stability: result.stability, difficulty: result.difficulty,
       scheduled_date: result.scheduled_date, state: card.state, elapsed_ms: cappedMs,
-    } as any),
+    }),
   ]);
   if (updateResult.error) throw updateResult.error;
   if (logResult.error) throw logResult.error;
@@ -484,7 +484,7 @@ export async function fetchStudyStats(userId: string, _cachedProfile?: Record<st
   const tzOffsetMinutes = TZ_OFFSET_SP;
   const { data, error } = await supabase.rpc('get_study_stats_summary', {
     p_user_id: userId, p_tz_offset_minutes: tzOffsetMinutes,
-  } as any);
+  });
   if (error) throw error;
   const result = data as unknown as StudyStatsSummaryRow | null;
   if (!result) {
@@ -520,38 +520,41 @@ export async function fetchActivityBreakdown(userId: string, days = 365, tzOffse
     p_user_id: userId,
     p_tz_offset_minutes: tzOffsetMinutes,
     p_days: days,
-  } as any);
+  });
   if (error) throw error;
   return (data as unknown as ActivityBreakdownResult) ?? null;
 }
 
 /** Fetch hourly review breakdown. */
 export async function fetchHourlyBreakdown(userId: string, days = 30, tzOffsetMinutes = -180): Promise<HourlyBreakdownRow[]> {
-  const { data, error } = await supabase.rpc('get_hourly_breakdown' as any, {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC not in generated types
+  const { data, error } = await (supabase.rpc as any)('get_hourly_breakdown', {
     p_user_id: userId,
     p_tz_offset_minutes: tzOffsetMinutes,
     p_days: days,
   });
   if (error) throw error;
-  return (data as HourlyBreakdownRow[]) ?? [];
+  return (data as unknown as HourlyBreakdownRow[]) ?? [];
 }
 
 /** Fetch retention over time (weekly buckets). */
 export async function fetchRetentionOverTime(userId: string, days = 180): Promise<RetentionRow[]> {
-  const { data, error } = await supabase.rpc('get_retention_over_time' as any, {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC not in generated types
+  const { data, error } = await (supabase.rpc as any)('get_retention_over_time', {
     p_user_id: userId,
     p_days: days,
   });
   if (error) throw error;
-  return (data as RetentionRow[]) ?? [];
+  return (data as unknown as RetentionRow[]) ?? [];
 }
 
 /** Fetch cards added per day. */
 export async function fetchCardsAddedPerDay(userId: string, days = 90): Promise<CardsAddedRow[]> {
-  const { data, error } = await supabase.rpc('get_cards_added_per_day' as any, {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC not in generated types
+  const { data, error } = await (supabase.rpc as any)('get_cards_added_per_day', {
     p_user_id: userId,
     p_days: days,
   });
   if (error) throw error;
-  return (data as CardsAddedRow[]) ?? [];
+  return (data as unknown as CardsAddedRow[]) ?? [];
 }

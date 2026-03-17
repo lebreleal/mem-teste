@@ -3,19 +3,20 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
+import type { Json } from '@/integrations/supabase/types';
 
 // ─── TurmaDetailContext ───
 
 export async function fetchTurmaPublic(turmaId: string) {
   const { data } = await supabase.from('turmas').select('id, name, description, cover_image_url, subscription_price, owner_id, is_private, invite_code, category, share_slug, subscription_price_yearly, avg_rating, rating_count, created_at, updated_at').eq('id', turmaId).single();
   if (!data) return null;
-  const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: [(data as any).owner_id] });
-  const ownerName = (profiles && profiles.length > 0) ? (profiles[0] as any).name || 'Anônimo' : 'Anônimo';
+  const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: [data.owner_id] });
+  const ownerName = (profiles && profiles.length > 0) ? ((profiles[0] as Record<string, unknown>).name as string) || 'Anônimo' : 'Anônimo';
   return { ...data, owner_name: ownerName };
 }
 
 export async function fetchTurmaLessonFiles(turmaId: string): Promise<{ id: string; lesson_id: string }[]> {
-  const { data } = await supabase.from('turma_lesson_files' as any).select('id, lesson_id').eq('turma_id', turmaId);
+  const { data } = await supabase.from('turma_lesson_files' as 'turma_members').select('id, lesson_id').eq('turma_id', turmaId);
   return (data ?? []) as unknown as { id: string; lesson_id: string }[];
 }
 
@@ -37,7 +38,13 @@ export async function processSubscription(turmaId: string) {
   if (error) throw error;
 }
 
-export async function importTurmaExam(userId: string, exam: any): Promise<string> {
+export interface TurmaExamInput {
+  id: string;
+  title: string;
+  time_limit_seconds: number | null;
+}
+
+export async function importTurmaExam(userId: string, exam: TurmaExamInput): Promise<string> {
   // Check if already imported
   const { data: existing } = await supabase.from('exams').select('id').eq('user_id', userId).eq('source_turma_exam_id', exam.id).limit(1);
   if (existing && existing.length > 0) {
@@ -47,17 +54,30 @@ export async function importTurmaExam(userId: string, exam: any): Promise<string
   const { data: questions, error } = await supabase.from('turma_exam_questions').select('id, exam_id, question_type, question_text, options, correct_answer, correct_indices, points, sort_order, question_id, created_at').eq('exam_id', exam.id).order('sort_order', { ascending: true });
   if (error) throw error;
 
-  const totalPoints = (questions ?? []).reduce((sum: number, q: any) => sum + (q.points || 1), 0);
-  const { data: newExam, error: examError } = await (supabase.from('exams' as any) as any)
+  interface TurmaExamQuestionRow {
+    id: string;
+    question_type: string;
+    question_text: string;
+    options: Json | null;
+    correct_answer: string;
+    correct_indices: number[] | null;
+    points: number;
+    sort_order: number;
+  }
+  const typedQuestions = (questions ?? []) as TurmaExamQuestionRow[];
+
+  const totalPoints = typedQuestions.reduce((sum, q) => sum + (q.points || 1), 0);
+  const { data: newExam, error: examError } = await supabase.from('exams')
     .insert({ user_id: userId, deck_id: null, title: exam.title, status: 'pending', total_points: totalPoints, time_limit_seconds: exam.time_limit_seconds || null, source_turma_exam_id: exam.id })
-    .select().single();
+    .select('id')
+    .single();
   if (examError) throw examError;
 
-  const questionsToInsert = (questions ?? []).map((q: any, idx: number) => ({
+  const questionsToInsert = typedQuestions.map((q, idx) => ({
     exam_id: newExam.id, question_type: q.question_type, question_text: q.question_text,
     options: q.options ?? null, correct_answer: q.correct_answer, correct_indices: q.correct_indices || null, points: q.points, sort_order: idx,
   }));
-  const { error: qError } = await (supabase.from('exam_questions' as any) as any).insert(questionsToInsert);
+  const { error: qError } = await supabase.from('exam_questions').insert(questionsToInsert);
   if (qError) throw qError;
 
   return newExam.id;
@@ -68,7 +88,7 @@ export async function importTurmaExam(userId: string, exam: any): Promise<string
 export async function fetchCreatorCommunityStats(turmaId: string) {
   const { data: members } = await supabase.from('turma_members').select('is_subscriber').eq('turma_id', turmaId);
   const { data: tDecks } = await supabase.from('turma_decks').select('deck_id').eq('turma_id', turmaId);
-  const deckIds = (tDecks ?? []).map((d: any) => d.deck_id);
+  const deckIds = (tDecks ?? []).map(d => d.deck_id);
   let totalCards = 0;
   let pendingSuggestions = 0;
   if (deckIds.length > 0) {
@@ -78,15 +98,15 @@ export async function fetchCreatorCommunityStats(turmaId: string) {
     pendingSuggestions = sugCount ?? 0;
   }
   const totalMembers = (members ?? []).length;
-  const subscribers = (members ?? []).filter((m: any) => m.is_subscriber).length;
+  const subscribers = (members ?? []).filter(m => m.is_subscriber).length;
   return { totalMembers, subscribers, totalCards, pendingSuggestions };
 }
 
 export interface PendingSuggestion {
   id: string;
   suggestion_type: string;
-  suggested_content: any;
-  suggested_tags: any;
+  suggested_content: Json;
+  suggested_tags: Json | null;
   rationale: string;
   created_at: string;
   suggester_name: string;
@@ -100,27 +120,27 @@ export interface PendingSuggestion {
 export async function fetchPendingSuggestions(turmaId: string, userId: string): Promise<PendingSuggestion[]> {
   if (!userId) return [];
   const { data: tDecks } = await supabase.from('turma_decks').select('deck_id').eq('turma_id', turmaId);
-  const deckIds = (tDecks ?? []).map((d: any) => d.deck_id);
+  const deckIds = (tDecks ?? []).map(d => d.deck_id);
   if (deckIds.length === 0) return [];
 
   const { data: suggestions } = await supabase.from('deck_suggestions').select('id, deck_id, card_id, suggester_user_id, suggestion_type, suggested_content, suggested_tags, rationale, status, content_status, tags_status, moderator_user_id, created_at, updated_at').in('deck_id', deckIds).eq('status', 'pending').order('created_at', { ascending: false });
   if (!suggestions || suggestions.length === 0) return [];
 
-  const suggesterIds = [...new Set(suggestions.map((s: any) => s.suggester_user_id))];
+  const suggesterIds = [...new Set(suggestions.map(s => s.suggester_user_id))];
   const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: suggesterIds });
-  const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
+  const profileMap = new Map((profiles ?? []).map((p: Record<string, unknown>) => [p.id as string, (p.name as string) || 'Anônimo']));
 
-  const cardIds = suggestions.map((s: any) => s.card_id).filter(Boolean);
+  const cardIds = suggestions.map(s => s.card_id).filter((id): id is string => !!id);
   let cardMap = new Map<string, { front_content: string; back_content: string }>();
   if (cardIds.length > 0) {
     const { data: cards } = await supabase.from('cards').select('id, front_content, back_content').in('id', cardIds);
-    (cards ?? []).forEach((c: any) => cardMap.set(c.id, { front_content: c.front_content, back_content: c.back_content }));
+    (cards ?? []).forEach(c => cardMap.set(c.id, { front_content: c.front_content, back_content: c.back_content }));
   }
 
   const { data: decks } = await supabase.from('decks').select('id, name').in('id', deckIds);
-  const deckMap = new Map((decks ?? []).map((d: any) => [d.id, d.name]));
+  const deckMap = new Map((decks ?? []).map(d => [d.id, d.name]));
 
-  return suggestions.map((s: any) => ({
+  return suggestions.map(s => ({
     id: s.id,
     suggestion_type: s.suggestion_type,
     suggested_content: s.suggested_content,
@@ -136,8 +156,8 @@ export async function fetchPendingSuggestions(turmaId: string, userId: string): 
   }));
 }
 
-export async function updateSuggestionStatus(id: string, status: string, moderatorId: string, content?: any) {
-  const updateData: any = { status, moderator_user_id: moderatorId };
+export async function updateSuggestionStatus(id: string, status: string, moderatorId: string, content?: Json) {
+  const updateData: { status: string; moderator_user_id: string; suggested_content?: Json } = { status, moderator_user_id: moderatorId };
   if (content) updateData.suggested_content = content;
   const { error } = await supabase.from('deck_suggestions').update(updateData).eq('id', id);
   if (error) throw error;
