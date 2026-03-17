@@ -197,13 +197,27 @@ function OpacityColorCircle({ color, opacity }: { color: string; opacity: number
 export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
   const [color, setColor] = useState('#3b82f6');
   const [thickness, setThickness] = useState(2);
   const [opacity, setOpacity] = useState(100);
   const [history, setHistory] = useState<ImageData[]>([]);
   const [historyIdx, setHistoryIdx] = useState(-1);
   const [showColorPicker, setShowColorPicker] = useState(false);
+
+  // Use refs for drawing state to avoid stale closures
+  const isDrawingRef = useRef(false);
+  const historyRef = useRef<ImageData[]>([]);
+  const historyIdxRef = useRef(-1);
+  const colorRef = useRef(color);
+  const thicknessRef = useRef(thickness);
+  const opacityRef = useRef(opacity);
+
+  // Keep refs in sync with state
+  historyRef.current = history;
+  historyIdxRef.current = historyIdx;
+  colorRef.current = color;
+  thicknessRef.current = thickness;
+  opacityRef.current = opacity;
 
   // Resize canvas to container — use ResizeObserver to wait for real dimensions
   const initializedRef = useRef(false);
@@ -218,7 +232,7 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
     if (!canvas || !container) return;
 
     const initCanvas = (rect: DOMRectReadOnly) => {
-      if (rect.width < 10 || rect.height < 10) return; // not ready yet
+      if (rect.width < 10 || rect.height < 10) return;
       if (initializedRef.current) return;
       initializedRef.current = true;
 
@@ -243,7 +257,6 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
     });
     ro.observe(container);
 
-    // Also try immediately in case already laid out
     const rect = container.getBoundingClientRect();
     if (rect.width > 10 && rect.height > 10) {
       initCanvas(rect as DOMRectReadOnly);
@@ -254,54 +267,85 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
 
   const getCtx = () => canvasRef.current?.getContext('2d') ?? null;
 
-  const getPos = (e: React.MouseEvent | React.TouchEvent): { x: number; y: number } => {
+  const getPos = useCallback((e: MouseEvent | TouchEvent): { x: number; y: number } => {
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
-    const clientX = 'touches' in e ? e.touches[0]?.clientX ?? e.changedTouches[0]?.clientX ?? 0 : e.clientX;
-    const clientY = 'touches' in e ? e.touches[0]?.clientY ?? e.changedTouches[0]?.clientY ?? 0 : e.clientY;
-    return { x: clientX - rect.left, y: clientY - rect.top };
-  };
+    const touch = 'touches' in e ? (e.touches[0] ?? e.changedTouches[0]) : null;
+    const clientX = touch ? touch.clientX : (e as MouseEvent).clientX;
+    const clientY = touch ? touch.clientY : (e as MouseEvent).clientY;
+    return {
+      x: clientX - rect.left,
+      y: clientY - rect.top,
+    };
+  }, []);
 
-  const startDraw = (e: React.MouseEvent | React.TouchEvent) => {
-    e.preventDefault();
-    const ctx = getCtx();
-    if (!ctx) return;
-    setIsDrawing(true);
-    const pos = getPos(e);
-    ctx.beginPath();
-    ctx.moveTo(pos.x, pos.y);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = thickness;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.globalAlpha = opacity / 100;
-  };
-
-  const draw = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!isDrawing) return;
-    e.preventDefault();
-    const ctx = getCtx();
-    if (!ctx) return;
-    const pos = getPos(e);
-    ctx.lineTo(pos.x, pos.y);
-    ctx.stroke();
-  };
-
-  const endDraw = () => {
-    if (!isDrawing) return;
-    setIsDrawing(false);
-    const ctx = getCtx();
+  // Use native event listeners for precise drawing (avoids React state batching)
+  useEffect(() => {
     const canvas = canvasRef.current;
-    if (!ctx || !canvas) return;
-    ctx.globalAlpha = 1;
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    setHistory(prev => {
-      const next = prev.slice(0, historyIdx + 1);
-      next.push(imageData);
-      return next;
-    });
-    setHistoryIdx(prev => prev + 1);
-  };
+    if (!canvas || !open) return;
+
+    const handleStart = (e: MouseEvent | TouchEvent) => {
+      e.preventDefault();
+      const ctx = getCtx();
+      if (!ctx) return;
+      isDrawingRef.current = true;
+      const pos = getPos(e);
+      ctx.beginPath();
+      ctx.moveTo(pos.x, pos.y);
+      ctx.strokeStyle = colorRef.current;
+      ctx.lineWidth = thicknessRef.current;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.globalAlpha = opacityRef.current / 100;
+    };
+
+    const handleMove = (e: MouseEvent | TouchEvent) => {
+      if (!isDrawingRef.current) return;
+      e.preventDefault();
+      const ctx = getCtx();
+      if (!ctx) return;
+      const pos = getPos(e);
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke();
+      // Continue the path without restarting to avoid overdraw
+      ctx.beginPath();
+      ctx.moveTo(pos.x, pos.y);
+    };
+
+    const handleEnd = () => {
+      if (!isDrawingRef.current) return;
+      isDrawingRef.current = false;
+      const ctx = getCtx();
+      if (!ctx || !canvas) return;
+      ctx.globalAlpha = 1;
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const idx = historyIdxRef.current;
+      setHistory(prev => {
+        const next = prev.slice(0, idx + 1);
+        next.push(imageData);
+        return next;
+      });
+      setHistoryIdx(idx + 1);
+    };
+
+    canvas.addEventListener('mousedown', handleStart);
+    canvas.addEventListener('mousemove', handleMove);
+    canvas.addEventListener('mouseup', handleEnd);
+    canvas.addEventListener('mouseleave', handleEnd);
+    canvas.addEventListener('touchstart', handleStart, { passive: false });
+    canvas.addEventListener('touchmove', handleMove, { passive: false });
+    canvas.addEventListener('touchend', handleEnd);
+
+    return () => {
+      canvas.removeEventListener('mousedown', handleStart);
+      canvas.removeEventListener('mousemove', handleMove);
+      canvas.removeEventListener('mouseup', handleEnd);
+      canvas.removeEventListener('mouseleave', handleEnd);
+      canvas.removeEventListener('touchstart', handleStart);
+      canvas.removeEventListener('touchmove', handleMove);
+      canvas.removeEventListener('touchend', handleEnd);
+    };
+  }, [open, getPos]);
 
   const undo = useCallback(() => {
     if (historyIdx <= 0) return;
