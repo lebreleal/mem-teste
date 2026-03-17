@@ -121,34 +121,16 @@ const ConceptMasterySection = ({
   useEffect(() => {
     if (!concepts || concepts.length === 0 || !questionId) return;
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      // Get concept IDs for this question from question_concepts
-      const { data: links } = await supabase
-        .from('question_concepts' as any)
-        .select('concept_id, context_description')
-        .eq('question_id', questionId);
-      if (!links || (links as any[]).length === 0) return;
+      const userId = await getCurrentUserId();
+      if (!userId) return;
+      const result = await fetchQuestionConceptDescriptions(questionId);
+      if (!result || !result.descMap) return;
 
-      const conceptIds = (links as any[]).filter(l => l.context_description).map(l => l.concept_id);
-      if (conceptIds.length === 0) return;
-
-      // Get concept names to map back
-      const { data: gcData } = await supabase
-        .from('global_concepts' as any)
-        .select('id, name, slug')
-        .in('id', conceptIds);
-
-      const descMap: Record<string, string> = {};
-      for (const link of links as any[]) {
-        if (!link.context_description) continue;
-        const gc = (gcData as any[] ?? []).find(g => g.id === link.concept_id);
-        if (gc) {
-          descMap[gc.name] = link.context_description;
-          // Also map by original concept name match
-          const matchedConcept = concepts.find(c => c.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR') === gc.slug);
-          if (matchedConcept) descMap[matchedConcept] = link.context_description;
-        }
+      const descMap: Record<string, string> = { ...result.descMap };
+      // Also map by original concept name match
+      for (const gc of result.gcData ?? []) {
+        const matchedConcept = concepts.find(c => c.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR') === gc.slug);
+        if (matchedConcept && result.descMap[gc.name]) descMap[matchedConcept] = result.descMap[gc.name];
       }
       setConceptDescriptions(descMap);
     })();
