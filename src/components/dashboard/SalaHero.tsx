@@ -15,20 +15,45 @@ import { ptBR } from 'date-fns/locale';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 import { calculateRealStudyTime } from '@/lib/studyUtils';
 import { IconTrash, IconImage, IconInfo, IconDeck, IconArchive, IconEdit } from '@/components/icons';
+import type { User } from '@supabase/supabase-js';
+import type { Folder } from '@/types/folder';
+import type { DeckWithStats } from '@/types/deck';
+import type { RealStudyMetrics } from '@/lib/studyUtils';
+
+interface DashboardState {
+  currentFolderId: string | null;
+  setCurrentFolderId: (id: string | null) => void;
+  isInsideSala: boolean;
+  currentDecks: DeckWithStats[];
+  deckMap: Map<string, DeckWithStats>;
+  childrenIndex: Map<string, DeckWithStats[]>;
+  folders: Folder[];
+  setRenameTarget: (t: { type: 'deck' | 'folder'; id: string; name: string } | null) => void;
+  setRenameName: (n: string) => void;
+  setDeleteTarget: (t: { type: 'deck' | 'folder'; id: string; name: string } | null) => void;
+  archiveFolder: { mutateAsync: (id: string) => Promise<unknown> };
+}
+
+interface CommunityTurmaInfo {
+  ownerName?: string;
+  lastUpdated?: string;
+  coverUrl?: string | null;
+}
+
 interface SalaHeroProps {
-  state: any;
-  user: any;
+  state: DashboardState;
+  user: User | null;
   isCommunityFolder: boolean;
   sourceTurmaId: string | null;
-  communityTurmaInfo: any;
-  userTurma: any;
+  communityTurmaInfo: CommunityTurmaInfo | null;
+  userTurma: { is_private?: boolean } | null;
   publishing: boolean;
   handleTogglePublish: () => void;
   openShareModal: () => void;
   setSalaImageOpen: (v: boolean) => void;
   setLeaveSalaConfirm: (v: { folderId: string; turmaId: string } | null) => void;
   setStudySettingsOpen: (v: boolean) => void;
-  realStudyMetrics: any;
+  realStudyMetrics: RealStudyMetrics;
   salaDifficultyStats: { novo: number; facil: number; bom: number; dificil: number; errei: number };
 }
 
