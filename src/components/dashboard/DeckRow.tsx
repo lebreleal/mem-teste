@@ -257,7 +257,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
            {organizeMode && (
              <GripVertical className="h-4 w-4 text-muted-foreground/50 shrink-0 cursor-grab active:cursor-grabbing" />
            )}
-           <IconFolder className="h-5 w-5 text-muted-foreground shrink-0" />
+           <IconFolder className="h-5 w-5 shrink-0" style={folderColor ? { color: folderColor } : undefined} />
           <div className="flex-1 min-w-0">
             <h3 className="text-[15px] font-semibold text-foreground truncate">{displayName}</h3>
             {isEmptyMateria && !readOnly && (
