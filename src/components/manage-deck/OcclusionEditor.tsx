@@ -105,6 +105,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
   const [isDetecting, setIsDetecting] = useState(false);
   const [previewOpaque, setPreviewOpaque] = useState(false);
   const [hideAllGuessOne, setHideAllGuessOne] = useState(false);
+  const [colorInfoOpen, setColorInfoOpen] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [imgSize, setImgSize] = useState({ w: 0, h: 0 });
