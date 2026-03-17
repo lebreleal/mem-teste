@@ -151,7 +151,7 @@ const QuestionList = React.memo(({
                         <Eye className="mr-2 h-4 w-4" /> Ver
                       </DropdownMenuItem>
                       {!isReadOnly && !isCommunity && (
-                        <DropdownMenuItem onClick={(e: any) => { e.stopPropagation(); onEdit(q); }}>
+                        <DropdownMenuItem onClick={(e: React.MouseEvent) => { e.stopPropagation(); onEdit(q); }}>
                           <PenLine className="mr-2 h-4 w-4" /> Editar
                         </DropdownMenuItem>
                       )}
