@@ -213,7 +213,6 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
   const [historyIdx, setHistoryIdx] = useState(-1);
   const [showColorPicker, setShowColorPicker] = useState(false);
 
-  // Use refs for drawing state to avoid stale closures
   const isDrawingRef = useRef(false);
   const activePointerIdRef = useRef<number | null>(null);
   const historyRef = useRef<ImageData[]>([]);
@@ -222,8 +221,10 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
   const thicknessRef = useRef(thickness);
   const opacityRef = useRef(opacity);
   const hasInteractionRef = useRef(false);
+  const lastPointRef = useRef<RelativePoint | null>(null);
+  const lastMidPointRef = useRef<RelativePoint | null>(null);
+  const bitmapMetricsRef = useRef<CanvasBitmapMetrics | null>(null);
 
-  // Keep refs in sync with state
   historyRef.current = history;
   historyIdxRef.current = historyIdx;
   colorRef.current = color;
@@ -235,6 +236,10 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
       hasInteractionRef.current = false;
       isDrawingRef.current = false;
       activePointerIdRef.current = null;
+      lastPointRef.current = null;
+      lastMidPointRef.current = null;
+      bitmapMetricsRef.current = null;
+      setShowColorPicker(false);
       return;
     }
 
@@ -242,56 +247,116 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
     const container = containerRef.current;
     if (!canvas || !container) return;
 
-    const initCanvas = (rect: DOMRectReadOnly) => {
-      if (!canInitializeCanvas(rect.width, rect.height) || hasInteractionRef.current) return;
+    const syncCanvasToContainer = (rect: DOMRectReadOnly) => {
+      if (!canInitializeCanvas(rect.width, rect.height)) return;
 
       const dpr = window.devicePixelRatio || 1;
-      const metrics = getCanvasBitmapMetrics(rect.width, rect.height, dpr);
-      if (canvas.width === metrics.pixelWidth && canvas.height === metrics.pixelHeight) return;
+      const nextMetrics = getCanvasBitmapMetrics(rect.width, rect.height, dpr);
+      const previousMetrics = bitmapMetricsRef.current;
 
-      canvas.width = metrics.pixelWidth;
-      canvas.height = metrics.pixelHeight;
-      canvas.style.width = `${metrics.cssWidth}px`;
-      canvas.style.height = `${metrics.cssHeight}px`;
+      if (
+        canvas.width === nextMetrics.pixelWidth
+        && canvas.height === nextMetrics.pixelHeight
+        && previousMetrics
+      ) {
+        bitmapMetricsRef.current = nextMetrics;
+        return;
+      }
+
+      const previousCanvas = document.createElement('canvas');
+      let hasPreviousBitmap = false;
+
+      if (previousMetrics && canvas.width > 0 && canvas.height > 0) {
+        previousCanvas.width = canvas.width;
+        previousCanvas.height = canvas.height;
+        const previousCtx = previousCanvas.getContext('2d');
+        if (previousCtx) {
+          previousCtx.drawImage(canvas, 0, 0);
+          hasPreviousBitmap = true;
+        }
+      }
+
+      canvas.width = nextMetrics.pixelWidth;
+      canvas.height = nextMetrics.pixelHeight;
+      bitmapMetricsRef.current = nextMetrics;
 
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      ctx.setTransform(metrics.dpr, 0, 0, metrics.dpr, 0, 0);
-      ctx.clearRect(0, 0, metrics.cssWidth, metrics.cssHeight);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.setTransform(nextMetrics.dpr, 0, 0, nextMetrics.dpr, 0, 0);
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, metrics.cssWidth, metrics.cssHeight);
+      ctx.fillRect(0, 0, nextMetrics.cssWidth, nextMetrics.cssHeight);
 
-      const initial = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      setHistory([initial]);
+      if (hasPreviousBitmap && previousMetrics) {
+        ctx.drawImage(
+          previousCanvas,
+          0,
+          0,
+          previousMetrics.cssWidth,
+          previousMetrics.cssHeight,
+          0,
+          0,
+          nextMetrics.cssWidth,
+          nextMetrics.cssHeight,
+        );
+      }
+
+      const snapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      setHistory([snapshot]);
       setHistoryIdx(0);
     };
 
+    const syncFromDom = () => {
+      syncCanvasToContainer(container.getBoundingClientRect());
+    };
+
+    let frameA = 0;
+    let frameB = 0;
+
+    frameA = requestAnimationFrame(() => {
+      syncFromDom();
+      frameB = requestAnimationFrame(syncFromDom);
+    });
+
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        initCanvas(entry.contentRect);
+        syncCanvasToContainer(entry.contentRect);
       }
     });
 
     ro.observe(container);
 
-    const rect = container.getBoundingClientRect();
-    initCanvas(rect as DOMRectReadOnly);
-
-    return () => ro.disconnect();
+    return () => {
+      cancelAnimationFrame(frameA);
+      cancelAnimationFrame(frameB);
+      ro.disconnect();
+    };
   }, [open]);
 
   const getCtx = () => canvasRef.current?.getContext('2d') ?? null;
 
-  const getPos = useCallback((clientX: number, clientY: number): { x: number; y: number } => {
-    const canvas = canvasRef.current!;
+  const getPos = useCallback((clientX: number, clientY: number): RelativePoint => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+
     const rect = canvas.getBoundingClientRect();
     const point = getRelativePoint(rect, clientX, clientY);
 
     return {
-      x: Math.max(0, Math.min(point.x, rect.width)),
-      y: Math.max(0, Math.min(point.y, rect.height)),
+      x: clamp(point.x, 0, rect.width),
+      y: clamp(point.y, 0, rect.height),
     };
+  }, []);
+
+  const applyBrushStyle = useCallback((ctx: CanvasRenderingContext2D) => {
+    ctx.strokeStyle = colorRef.current;
+    ctx.fillStyle = colorRef.current;
+    ctx.lineWidth = thicknessRef.current;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.globalAlpha = opacityRef.current / 100;
   }, []);
 
   // Use pointer events + pointer capture for full-area precise drawing
