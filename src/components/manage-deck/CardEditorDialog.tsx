@@ -94,13 +94,14 @@ export const CardEditorDialog = ({
         </DialogContent>
       </Dialog>
 
-      {/* Occlusion Editor — modal over modal with visible padding */}
+      {/* Occlusion Editor — modal over modal with padding to show parent behind */}
       {occlusionModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 lg:p-10">
-          {/* Backdrop — semi-transparent so parent modal is visible behind */}
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8 lg:p-12">
+          {/* Backdrop */}
           <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={() => setOcclusionModalOpen(false)} />
-          {/* Modal content — sized with padding to show parent behind */}
-          <div className="relative bg-background rounded-xl border shadow-2xl w-full max-w-3xl h-[calc(100dvh-24px)] sm:h-[calc(100dvh-48px)] lg:h-[calc(100dvh-80px)] max-h-[700px] flex flex-col overflow-hidden">
+          {/* Modal — NOT fullscreen, capped size with visible padding */}
+          <div className="relative bg-background rounded-2xl border shadow-2xl w-full max-w-4xl max-h-[calc(100dvh-32px)] sm:max-h-[calc(100dvh-64px)] lg:max-h-[calc(100dvh-96px)] flex flex-col overflow-hidden"
+               style={{ height: 'auto', minHeight: '50vh' }}>
             <OcclusionEditor
               initialFront={front}
               onSave={(frontContent) => {

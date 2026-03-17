@@ -1,8 +1,8 @@
 /**
- * Occlusion Editor — contained overlay, supports rect, polygon, freehand, eraser, select+resize.
+ * Occlusion Editor — contained overlay, supports rect, polygon, freehand, eraser, select+resize, hand/pan.
  * Colors group shapes: same color = same card, different color = different cards.
- * Dynamic colors: new colors appear as needed.
- * Layout: image centered, drawing tools above image, bottom bar below image.
+ * Dynamic colors: infinite colors, new colors appear as needed.
+ * Layout: image centered, drawing tools above, zoom on right, bottom bar with eye+AI+colors.
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -13,10 +13,10 @@ import { compressImage } from '@/lib/imageUtils';
 import { useToast } from '@/hooks/use-toast';
 import {
   IconRect, IconPolygon, IconFreehand, IconEraser, IconEyeOpen, IconEyeClosed,
-  IconSparkle, IconUpload, IconClose, IconCheck, IconInfo, IconTrash, IconCursor,
+  IconSparkle, IconUpload, IconClose, IconCheck, IconInfo, IconTrash, IconCursor, IconHand,
 } from '@/components/icons';
 
-type Tool = 'select' | 'rect' | 'polygon' | 'freehand' | 'eraser';
+type Tool = 'select' | 'rect' | 'polygon' | 'freehand' | 'eraser' | 'hand';
 
 interface OcclusionShape {
   id: string;
@@ -30,7 +30,6 @@ interface OcclusionEditorProps {
   initialFront: string;
   onSave: (front: string, back: string) => void;
   onCancel: () => void;
-  onRemoveImage?: () => void;
   isSaving: boolean;
 }
 
@@ -42,12 +41,16 @@ const COLORS = [
   { fill: 'rgba(168,85,247,0.55)', border: 'rgba(168,85,247,0.9)', label: 'Roxo' },
   { fill: 'rgba(249,115,22,0.55)', border: 'rgba(249,115,22,0.9)', label: 'Laranja' },
   { fill: 'rgba(20,184,166,0.55)', border: 'rgba(20,184,166,0.9)', label: 'Teal' },
+  { fill: 'rgba(236,72,153,0.55)', border: 'rgba(236,72,153,0.9)', label: 'Rosa' },
   { fill: 'rgba(0,0,0,0.6)', border: 'rgba(0,0,0,0.85)', label: 'Preto' },
+  { fill: 'rgba(107,114,128,0.55)', border: 'rgba(107,114,128,0.9)', label: 'Cinza' },
+  { fill: 'rgba(6,182,212,0.55)', border: 'rgba(6,182,212,0.9)', label: 'Ciano' },
+  { fill: 'rgba(132,204,22,0.55)', border: 'rgba(132,204,22,0.9)', label: 'Lima' },
 ];
 
 const getColorObj = (fill: string) => COLORS.find(c => c.fill === fill) || COLORS[0];
 
-const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSaving }: OcclusionEditorProps) => {
+const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: OcclusionEditorProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [imageUrl, setImageUrl] = useState('');
@@ -56,6 +59,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
   const [uploading, setUploading] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [tool, setTool] = useState<Tool>('rect');
+  const [prevDrawTool, setPrevDrawTool] = useState<Tool>('rect');
   const [imgLoaded, setImgLoaded] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [previewOpaque, setPreviewOpaque] = useState(true);
@@ -70,7 +74,9 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [shapeColor, setShapeColor] = useState(COLORS[0].fill);
   const [resizing, setResizing] = useState<{ corner: string; startX: number; startY: number; origShape: OcclusionShape } | null>(null);
-  const [panOffset] = useState({ x: 0, y: 0 });
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [panning, setPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
 
   const pushHistory = useCallback(() => {
     setHistory(prev => [...prev.slice(-20), shapes]);
@@ -115,7 +121,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
   const getDisplaySize = useCallback(() => {
     const container = containerRef.current;
     if (!container || imgSize.w === 0) return { w: 0, h: 0, scale: 1 };
-    const maxW = container.clientWidth;
+    const maxW = container.clientWidth - 48; // leave space for zoom controls on right
     const maxH = container.clientHeight;
     const scale = Math.min(maxW / imgSize.w, maxH / imgSize.h, 1) * zoom;
     return { w: imgSize.w * scale, h: imgSize.h * scale, scale };
@@ -133,6 +139,9 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
       y: (clientY - rect.top) / scale,
     };
   };
+
+  // Clamp coordinates within image bounds
+  const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, val));
 
   const hitTest = (pos: { x: number; y: number }) => {
     return [...shapes].reverse().find(s => {
@@ -167,6 +176,14 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
     e.stopPropagation();
     const pos = toImgCoords(e.clientX, e.clientY);
 
+    // Hand tool — start panning
+    if (tool === 'hand') {
+      setPanning(true);
+      setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
+      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+      return;
+    }
+
     if (tool === 'select') {
       const hit = hitTest(pos);
       setSelectedId(hit ? hit.id : null);
@@ -179,6 +196,15 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
         pushHistory();
         setShapes(prev => prev.filter(s => s.id !== hit.id));
       }
+      return;
+    }
+
+    // Drawing tools — auto-select if clicking on existing shape
+    const hitShape = hitTest(pos);
+    if (hitShape && (tool === 'rect' || tool === 'freehand')) {
+      setPrevDrawTool(tool);
+      setTool('select');
+      setSelectedId(hitShape.id);
       return;
     }
 
@@ -214,6 +240,12 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
   const handlePointerMove = (e: React.PointerEvent) => {
     e.preventDefault();
 
+    // Hand panning
+    if (panning && tool === 'hand') {
+      setPanOffset({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
+      return;
+    }
+
     if (resizing) {
       const pos = toImgCoords(e.clientX, e.clientY);
       const s = resizing.origShape;
@@ -225,6 +257,13 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
         if (resizing.corner.includes('w')) { newX = s.x! + dx; newW = Math.max(10, s.w! - dx); }
         if (resizing.corner.includes('s')) { newH = Math.max(10, s.h! + dy); }
         if (resizing.corner.includes('n')) { newY = s.y! + dy; newH = Math.max(10, s.h! - dy); }
+        // Constrain within image bounds
+        newX = clamp(newX, 0, imgSize.w - 10);
+        newY = clamp(newY, 0, imgSize.h - 10);
+        if (newX + newW > imgSize.w) newW = imgSize.w - newX;
+        if (newY + newH > imgSize.h) newH = imgSize.h - newY;
+        newW = Math.max(10, newW);
+        newH = Math.max(10, newH);
         setShapes(prev => prev.map(sh => sh.id === s.id ? { ...sh, x: newX, y: newY, w: newW, h: newH } : sh));
       }
       return;
@@ -232,17 +271,26 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
 
     if (!drawing) return;
     const pos = toImgCoords(e.clientX, e.clientY);
+    // Clamp drawing position within image
+    const cx = clamp(pos.x, 0, imgSize.w);
+    const cy = clamp(pos.y, 0, imgSize.h);
     if (tool === 'rect' && startPos) {
       setCurrentRect({
-        x: Math.min(startPos.x, pos.x), y: Math.min(startPos.y, pos.y),
-        w: Math.abs(pos.x - startPos.x), h: Math.abs(pos.y - startPos.y),
+        x: Math.min(startPos.x, cx), y: Math.min(startPos.y, cy),
+        w: Math.abs(cx - startPos.x), h: Math.abs(cy - startPos.y),
       });
     } else if (tool === 'freehand') {
-      setCurrentPoints(prev => [...prev, pos]);
+      setCurrentPoints(prev => [...prev, { x: cx, y: cy }]);
     }
   };
 
   const handlePointerUp = () => {
+    // Hand panning
+    if (panning) {
+      setPanning(false);
+      return;
+    }
+
     if (resizing) {
       setResizing(null);
       return;
@@ -250,7 +298,12 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
 
     if (tool === 'rect') {
       if (drawing && currentRect && currentRect.w > 5 && currentRect.h > 5) {
-        const newShape: OcclusionShape = { id: crypto.randomUUID(), type: 'rect', ...currentRect, color: shapeColor };
+        // Clamp final rect within image bounds
+        const finalX = clamp(currentRect.x, 0, imgSize.w - 10);
+        const finalY = clamp(currentRect.y, 0, imgSize.h - 10);
+        const finalW = Math.min(currentRect.w, imgSize.w - finalX);
+        const finalH = Math.min(currentRect.h, imgSize.h - finalY);
+        const newShape: OcclusionShape = { id: crypto.randomUUID(), type: 'rect', x: finalX, y: finalY, w: finalW, h: finalH, color: shapeColor };
         const newShapes = [...shapes, newShape];
         setShapes(newShapes);
         setSelectedId(newShape.id);
@@ -365,13 +418,14 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
     return () => window.removeEventListener('keydown', handler);
   }, [selectedId, deleteSelected, undo]);
 
-  // Dynamic visible colors
+  // Dynamic visible colors — show all used + next available
   const usedColorFills = new Set(shapes.map(s => s.color || COLORS[0].fill));
   const visibleColors = (() => {
     const visible: typeof COLORS = [];
     for (const c of COLORS) {
       if (usedColorFills.has(c.fill)) visible.push(c);
     }
+    // Always show the next unused color
     for (const c of COLORS) {
       if (!usedColorFills.has(c.fill)) {
         visible.push(c);
@@ -389,6 +443,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
   const cardCount = usedColorFills.size;
 
   const getCursorStyle = () => {
+    if (tool === 'hand') return panning ? 'grabbing' : 'grab';
     if (tool === 'select') return 'default';
     if (tool === 'eraser') return 'pointer';
     return 'crosshair';
@@ -450,11 +505,16 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
               border: `2px solid ${colorObj.border}`,
               borderRadius: 4,
               boxShadow: isSelected ? `0 0 0 2px ${colorObj.border}, 0 0 8px ${colorObj.fill}` : undefined,
-              cursor: tool === 'select' ? 'move' : tool === 'eraser' ? 'pointer' : 'crosshair',
+              cursor: tool === 'hand' ? (panning ? 'grabbing' : 'grab') : tool === 'select' ? 'move' : tool === 'eraser' ? 'pointer' : 'crosshair',
             }}
             onClick={(e) => {
               e.stopPropagation();
               if (tool === 'select' || tool === 'eraser') {
+                setSelectedId(s.id);
+              } else if (tool !== 'hand') {
+                // Auto-select when clicking on existing shape in draw mode
+                setPrevDrawTool(tool);
+                setTool('select');
                 setSelectedId(s.id);
               }
             }}
@@ -504,10 +564,15 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
               stroke={colorObj.border}
               strokeWidth={isSelected ? 3 : 2}
               className="pointer-events-auto"
-              style={{ cursor: tool === 'select' ? 'move' : tool === 'eraser' ? 'pointer' : 'crosshair' }}
+              style={{ cursor: tool === 'hand' ? 'grab' : tool === 'select' ? 'move' : tool === 'eraser' ? 'pointer' : 'crosshair' }}
               onClick={(e) => {
                 e.stopPropagation();
                 if (tool === 'select' || tool === 'eraser') setSelectedId(s.id);
+                else if (tool !== 'hand') {
+                  setPrevDrawTool(tool);
+                  setTool('select');
+                  setSelectedId(s.id);
+                }
               }}
             />
           ) : (
@@ -519,10 +584,15 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
               strokeLinecap="round"
               strokeLinejoin="round"
               className="pointer-events-auto"
-              style={{ cursor: tool === 'select' ? 'move' : tool === 'eraser' ? 'pointer' : 'crosshair' }}
+              style={{ cursor: tool === 'hand' ? 'grab' : tool === 'select' ? 'move' : tool === 'eraser' ? 'pointer' : 'crosshair' }}
               onClick={(e) => {
                 e.stopPropagation();
                 if (tool === 'select' || tool === 'eraser') setSelectedId(s.id);
+                else if (tool !== 'hand') {
+                  setPrevDrawTool(tool);
+                  setTool('select');
+                  setSelectedId(s.id);
+                }
               }}
             />
           )}
@@ -541,7 +611,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
   ];
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-[50vh]">
       {/* ─── Header ─── */}
       <header className="shrink-0 flex items-center gap-2 px-3 py-2.5 border-b border-border/40">
         <button
@@ -563,7 +633,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
       </header>
 
       {/* ─── Content: toolbar + image + bottom bar ─── */}
-      <div className="flex-1 min-h-0 flex flex-col items-center justify-center p-2 sm:p-4 overflow-hidden">
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center p-2 sm:p-3 overflow-hidden">
         
         {/* Drawing toolbar — above image */}
         <div className="shrink-0 flex items-center gap-1 bg-card/90 backdrop-blur-sm rounded-xl border border-border/60 p-1 shadow-sm mb-2">
@@ -592,102 +662,138 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
           </button>
         </div>
 
-        {/* Image canvas — centered, responsive */}
-        <div
-          ref={containerRef}
-          className="relative flex items-center justify-center overflow-auto bg-muted/20 rounded-xl border border-border/30 flex-1 min-h-0 w-full"
-          style={{ touchAction: 'none' }}
-        >
+        {/* Image canvas + zoom controls side by side */}
+        <div className="flex-1 min-h-0 w-full flex items-center justify-center gap-2">
+          {/* Image canvas — centered, responsive */}
           <div
-            className="occlusion-img-wrapper relative inline-block"
-            style={{
-              width: displaySize.w || '100%',
-              height: displaySize.h || 'auto',
-              cursor: getCursorStyle(),
-              userSelect: 'none',
-              WebkitUserSelect: 'none',
-              transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
-            }}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerLeave={() => {
-              if (resizing) { setResizing(null); return; }
-              if (drawing && tool !== 'polygon') {
-                setDrawing(false);
-                setStartPos(null);
-                setCurrentRect(null);
-                setCurrentPoints([]);
-              }
-            }}
+            ref={containerRef}
+            className="relative flex items-center justify-center overflow-auto bg-muted/20 rounded-xl border border-border/30 flex-1 min-h-0 h-full"
+            style={{ touchAction: 'none' }}
           >
-            <img
-              ref={imgRef}
-              src={imageUrl}
-              alt="Oclusão"
-              crossOrigin="anonymous"
-              onLoad={handleImgLoad}
-              className="block select-none pointer-events-none"
-              style={{ width: displaySize.w, height: displaySize.h, userSelect: 'none', WebkitUserDrag: 'none' } as any}
-              draggable={false}
-            />
-
-            {!imgLoaded && (
-              <div className="absolute inset-0 flex items-center justify-center bg-muted/50">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              </div>
-            )}
-
-            {shapes.map(renderShape)}
-
-            {/* Trash button below selected shape */}
-            {selectedId && selectedShape && tool === 'select' && (
-              <div
-                className="absolute z-30 pointer-events-auto"
-                style={{
-                  left: getShapeBottom(selectedShape).x - 14,
-                  top: getShapeBottom(selectedShape).y + 6,
-                }}
-              >
-                <button
-                  onClick={(e) => { e.stopPropagation(); deleteSelected(); }}
-                  className="h-7 w-7 flex items-center justify-center rounded-full bg-foreground/90 text-background shadow-lg hover:bg-destructive transition-colors"
-                  title="Excluir"
-                >
-                  <IconTrash className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            )}
-
-            {currentRect && tool === 'rect' && (
-              <div
-                className="absolute border-2 border-dashed border-primary/80 pointer-events-none"
-                style={{
-                  left: currentRect.x * scale,
-                  top: currentRect.y * scale,
-                  width: currentRect.w * scale,
-                  height: currentRect.h * scale,
-                  backgroundColor: shapeColor.replace(/[\d.]+\)$/, '0.15)'),
-                  borderRadius: 4,
-                }}
+            <div
+              className="occlusion-img-wrapper relative inline-block"
+              style={{
+                width: displaySize.w || '100%',
+                height: displaySize.h || 'auto',
+                cursor: getCursorStyle(),
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
+              }}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerLeave={() => {
+                if (panning) { setPanning(false); return; }
+                if (resizing) { setResizing(null); return; }
+                if (drawing && tool !== 'polygon') {
+                  setDrawing(false);
+                  setStartPos(null);
+                  setCurrentRect(null);
+                  setCurrentPoints([]);
+                }
+              }}
+            >
+              <img
+                ref={imgRef}
+                src={imageUrl}
+                alt="Oclusão"
+                crossOrigin="anonymous"
+                onLoad={handleImgLoad}
+                className="block select-none pointer-events-none"
+                style={{ width: displaySize.w, height: displaySize.h, userSelect: 'none', WebkitUserDrag: 'none' } as any}
+                draggable={false}
               />
-            )}
 
-            {currentPoints.length > 0 && (
-              <svg className="absolute inset-0 pointer-events-none" style={{ width: displaySize.w, height: displaySize.h }}>
-                <polyline
-                  points={currentPoints.map(p => `${p.x * scale},${p.y * scale}`).join(' ')}
-                  fill="none"
-                  stroke="rgba(59,130,246,0.8)"
-                  strokeWidth="2"
-                  strokeDasharray={tool === 'polygon' ? '5 5' : undefined}
-                  strokeLinecap="round"
+              {!imgLoaded && (
+                <div className="absolute inset-0 flex items-center justify-center bg-muted/50">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              )}
+
+              {shapes.map(renderShape)}
+
+              {/* Trash button below selected shape */}
+              {selectedId && selectedShape && tool === 'select' && (
+                <div
+                  className="absolute z-30 pointer-events-auto"
+                  style={{
+                    left: getShapeBottom(selectedShape).x - 14,
+                    top: getShapeBottom(selectedShape).y + 6,
+                  }}
+                >
+                  <button
+                    onClick={(e) => { e.stopPropagation(); deleteSelected(); }}
+                    className="h-7 w-7 flex items-center justify-center rounded-full bg-foreground/90 text-background shadow-lg hover:bg-destructive transition-colors"
+                    title="Excluir"
+                  >
+                    <IconTrash className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {currentRect && tool === 'rect' && (
+                <div
+                  className="absolute border-2 border-dashed border-primary/80 pointer-events-none"
+                  style={{
+                    left: currentRect.x * scale,
+                    top: currentRect.y * scale,
+                    width: currentRect.w * scale,
+                    height: currentRect.h * scale,
+                    backgroundColor: shapeColor.replace(/[\d.]+\)$/, '0.15)'),
+                    borderRadius: 4,
+                  }}
                 />
-                {tool === 'polygon' && currentPoints.map((p, i) => (
-                  <circle key={i} cx={p.x * scale} cy={p.y * scale} r="4" fill="#3b82f6" />
-                ))}
-              </svg>
-            )}
+              )}
+
+              {currentPoints.length > 0 && (
+                <svg className="absolute inset-0 pointer-events-none" style={{ width: displaySize.w, height: displaySize.h }}>
+                  <polyline
+                    points={currentPoints.map(p => `${p.x * scale},${p.y * scale}`).join(' ')}
+                    fill="none"
+                    stroke="rgba(59,130,246,0.8)"
+                    strokeWidth="2"
+                    strokeDasharray={tool === 'polygon' ? '5 5' : undefined}
+                    strokeLinecap="round"
+                  />
+                  {tool === 'polygon' && currentPoints.map((p, i) => (
+                    <circle key={i} cx={p.x * scale} cy={p.y * scale} r="4" fill="#3b82f6" />
+                  ))}
+                </svg>
+              )}
+            </div>
+          </div>
+
+          {/* Zoom controls — vertical right side */}
+          <div className="shrink-0 flex flex-col items-center gap-1 bg-card/90 backdrop-blur-sm rounded-xl border border-border/60 p-1 shadow-sm">
+            {/* Hand / pan tool */}
+            <button
+              className={`h-8 w-8 flex items-center justify-center rounded-lg transition-colors ${
+                tool === 'hand'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+              }`}
+              onClick={() => { setTool('hand'); setSelectedId(null); }}
+              title="Mover (pan)"
+            >
+              <IconHand className="h-5 w-5" />
+            </button>
+            <div className="w-6 h-px bg-border" />
+            <button
+              className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              onClick={() => setZoom(z => Math.min(3, z + 0.25))}
+              title="Zoom +"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5"><path d="M13 5a1 1 0 1 0-2 0v6H5a1 1 0 1 0 0 2h6v6a1 1 0 1 0 2 0v-6h6a1 1 0 1 0 0-2h-6z" /></svg>
+            </button>
+            <span className="text-[10px] text-muted-foreground tabular-nums select-none">{Math.round(zoom * 100)}%</span>
+            <button
+              className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              onClick={() => setZoom(z => Math.max(0.3, z - 0.25))}
+              title="Zoom -"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5"><path d="M20 12a1 1 0 0 1-1 1H5a1 1 0 1 1 0-2h14a1 1 0 0 1 1 1" /></svg>
+            </button>
           </div>
         </div>
 
@@ -698,7 +804,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
           </p>
         )}
 
-        {/* Bottom bar — below image */}
+        {/* Bottom bar — eye + colors + AI detect */}
         <div className="shrink-0 flex items-center justify-center gap-2 mt-2 flex-wrap">
           {/* Eye toggle */}
           <button
@@ -741,7 +847,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
               <div className="absolute left-0 bottom-full mb-2 z-50 w-72 rounded-xl bg-card border border-border shadow-lg p-3 space-y-2.5">
                 <div className="flex items-start justify-between">
                   <p className="text-xs text-muted-foreground leading-relaxed pr-2">
-                    Formas da mesma cor são agrupadas no mesmo cartão. Cores diferentes geram cartões diferentes.
+                    Formas da mesma cor são agrupadas no mesmo cartão. Cores diferentes geram cartões diferentes. Você pode usar quantas cores quiser.
                   </p>
                   <button onClick={() => setColorInfoOpen(false)} className="shrink-0 h-5 w-5 flex items-center justify-center text-muted-foreground hover:text-foreground">
                     <IconClose className="h-3.5 w-3.5" />
@@ -767,23 +873,6 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
             )}
           </div>
 
-          {/* Zoom */}
-          <div className="flex items-center gap-0.5">
-            <button
-              className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-              onClick={() => setZoom(z => Math.max(0.3, z - 0.25))}
-            >
-              <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5"><path d="M20 12a1 1 0 0 1-1 1H5a1 1 0 1 1 0-2h14a1 1 0 0 1 1 1" /></svg>
-            </button>
-            <span className="text-[10px] text-muted-foreground tabular-nums select-none w-8 text-center">{Math.round(zoom * 100)}%</span>
-            <button
-              className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-              onClick={() => setZoom(z => Math.min(3, z + 0.25))}
-            >
-              <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5"><path d="M13 5a1 1 0 1 0-2 0v6H5a1 1 0 1 0 0 2h6v6a1 1 0 1 0 2 0v-6h6a1 1 0 1 0 0-2h-6z" /></svg>
-            </button>
-          </div>
-
           {/* Detect AI — animated gradient border */}
           <button
             onClick={handleDetectAI}
@@ -791,7 +880,6 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
             className="relative inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all disabled:opacity-50 shrink-0 overflow-hidden"
             style={{ background: 'hsl(var(--card))' }}
           >
-            {/* Animated gradient border */}
             <span className="absolute inset-0 rounded-full p-[1.5px] overflow-hidden" style={{ background: 'linear-gradient(90deg, #00B2FF, #3347FF, #FF306B, #FF9B23, #00B2FF)', backgroundSize: '200% 100%', animation: 'gradient-shift 3s linear infinite' }} >
               <span className="block w-full h-full rounded-full bg-card" />
             </span>
@@ -808,14 +896,6 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
         <div className="shrink-0 border-t border-border/40 px-3 py-1.5">
           <p className="text-[11px] text-muted-foreground text-center">
             {shapes.length} área{shapes.length !== 1 ? 's' : ''} · {cardCount} cartão{cardCount !== 1 ? 'ões' : ''}
-            {onRemoveImage && (
-              <>
-                {' · '}
-                <button className="text-destructive hover:text-destructive/80 font-medium" onClick={onRemoveImage}>
-                  Remover imagem
-                </button>
-              </>
-            )}
           </p>
         </div>
       )}
