@@ -410,7 +410,7 @@ const LessonContent = ({
             const subscriberOnly = !isDeckFree(td);
             const canImport = canAccessDeck(td);
             const inCollection = alreadyOwns || alreadyLinked;
-            const linkedDeck = alreadyLinked ? userDecks.find(d => (d as any).source_turma_deck_id === td.id) : null;
+            const linkedDeck = alreadyLinked ? userDecks.find(d => d.source_turma_deck_id === td.id) : null;
             return (
               <div key={td.id} className="group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50">
                 <div className="flex-1 min-w-0">
