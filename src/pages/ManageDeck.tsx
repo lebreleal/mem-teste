@@ -12,6 +12,7 @@ import LazyRichEditor from '@/components/LazyRichEditor';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useQueryClient } from '@tanstack/react-query';
 import OcclusionEditor from '@/components/manage-deck/OcclusionEditor';
+import AttachmentPreviewModal from '@/components/manage-deck/AttachmentPreviewModal';
 import { supabase } from '@/integrations/supabase/client';
 import { markdownToHtml } from '@/lib/markdownToHtml';
 import type { ImageAttachment } from '@/components/RichEditor';
@@ -37,8 +38,10 @@ const ManageDeck = () => {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
 
-  // Image attachments (normal images stored separately from text)
-  const [attachedImages, setAttachedImages] = useState<string[]>([]);
+  // Image attachments stored separately from text
+  const [frontAttachedImages, setFrontAttachedImages] = useState<string[]>([]);
+  const [backAttachedImages, setBackAttachedImages] = useState<string[]>([]);
+  const [previewAttachment, setPreviewAttachment] = useState<{ attachment: ImageAttachment; allowOcclusion: boolean } | null>(null);
 
   // Image occlusion state
   const [occlusionImageUrl, setOcclusionImageUrl] = useState('');
