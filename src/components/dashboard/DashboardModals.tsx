@@ -155,25 +155,26 @@ const DashboardModals = (props: DashboardModalsProps) => {
         </DialogContent>
       </Dialog>
 
-      {/* Share link modal */}
-      <Dialog open={props.shareModalOpen} onOpenChange={props.setShareModalOpen}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Compartilhar sala</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 pt-2">
+      {/* Share link — Sheet on mobile for better UX */}
+      <Sheet open={props.shareModalOpen} onOpenChange={props.setShareModalOpen}>
+        <SheetContent side="bottom" className="rounded-t-2xl px-5 pb-8 pt-5">
+          <SheetHeader className="mb-4">
+            <SheetTitle className="text-base font-bold">Compartilhar sala</SheetTitle>
+          </SheetHeader>
+          <div className="space-y-4">
             <div className="space-y-2">
-              <label className="text-xs font-medium text-muted-foreground">Slug do link</label>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground shrink-0">{window.location.origin}/c/</span>
+              <label className="text-xs font-medium text-muted-foreground">Link da sala</label>
+              <div className="flex items-center gap-1.5 rounded-lg border border-input bg-muted/30 px-3 py-2">
+                <span className="text-xs text-muted-foreground shrink-0 truncate max-w-[140px]">/c/</span>
                 <input
                   type="text"
                   value={props.shareSlugEdit}
                   onChange={(e) => props.setShareSlugEdit(e.target.value.replace(/[^a-zA-Z0-9-_]/g, '').toLowerCase())}
-                  className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
+                  className="flex-1 h-7 bg-transparent text-sm font-medium text-foreground outline-none min-w-0"
                   placeholder="meu-link"
                 />
               </div>
+              <p className="text-[11px] text-muted-foreground">Esse é o link público da sua sala. Você pode personalizar se quiser.</p>
             </div>
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1" onClick={props.onCopyLink}>
@@ -188,8 +189,8 @@ const DashboardModals = (props: DashboardModalsProps) => {
               </Button>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
 
       {/* Leave Sala Confirmation */}
       <AlertDialog open={!!props.leaveSalaConfirm} onOpenChange={(open) => { if (!open) props.setLeaveSalaConfirm(null); }}>

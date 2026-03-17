@@ -331,11 +331,23 @@ export async function removeTurmaMember(turmaId: string, userId: string) {
   if (error) throw error;
 }
 
-/** Ensure a turma has a share_slug; generates one if missing. Returns the slug. */
+/** Ensure a turma has a share_slug; generates a short unique code if missing. */
 export async function ensureShareSlug(turmaId: string): Promise<string> {
   const { data } = await supabase.from('turmas').select('share_slug').eq('id', turmaId).single();
-  if ((data as any)?.share_slug) return (data as any).share_slug;
-  const generated = turmaId.substring(0, 8);
-  await supabase.from('turmas').update({ share_slug: generated } as any).eq('id', turmaId);
+  const existing = (data as { share_slug: string | null } | null)?.share_slug;
+  if (existing) return existing;
+
+  // Generate a short unique code (6 chars alphanumeric)
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let generated = '';
+  for (let attempt = 0; attempt < 10; attempt++) {
+    generated = '';
+    for (let i = 0; i < 6; i++) generated += chars[Math.floor(Math.random() * chars.length)];
+    // Check uniqueness
+    const { data: clash } = await supabase.from('turmas').select('id').eq('share_slug', generated).limit(1);
+    if (!clash || clash.length === 0) break;
+  }
+
+  await supabase.from('turmas').update({ share_slug: generated } as never).eq('id', turmaId);
   return generated;
 }
