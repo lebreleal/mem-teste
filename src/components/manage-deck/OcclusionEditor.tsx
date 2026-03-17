@@ -128,7 +128,8 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
     if (!container || imgSize.w === 0) return { w: 0, h: 0, scale: 1 };
     const maxW = container.clientWidth - 48; // leave space for zoom controls on right
     const maxH = container.clientHeight;
-    const scale = Math.min(maxW / imgSize.w, maxH / imgSize.h, 1) * zoom;
+    // Allow scaling up to fill the container when image is small
+    const scale = Math.min(maxW / imgSize.w, maxH / imgSize.h) * zoom;
     return { w: imgSize.w * scale, h: imgSize.h * scale, scale };
   }, [imgSize, zoom]);
 
@@ -664,7 +665,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
   ];
 
   return (
-    <div className="flex flex-col h-full min-h-[50vh]">
+    <div className="flex flex-col h-full min-h-0">
       {/* ─── Header ─── */}
       <header className="shrink-0 flex items-center gap-2 px-3 py-2.5 border-b border-border/40">
         <button
@@ -686,9 +687,9 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
       </header>
 
       {/* ─── Content: toolbar + image + floating controls ─── */}
-      <div className="flex-1 min-h-0 flex flex-col items-center justify-center p-2 sm:p-3 overflow-hidden">
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-1.5 pt-1 pb-1 overflow-hidden">
         {/* Drawing toolbar — above image */}
-        <div className="shrink-0 flex items-center gap-1 bg-card/90 backdrop-blur-sm rounded-xl border border-border/60 p-1 shadow-sm mb-2">
+        <div className="shrink-0 flex items-center gap-1 bg-card/90 backdrop-blur-sm rounded-xl border border-border/60 p-1 shadow-sm mb-1">
           {drawTools.map(t => (
             <button
               key={t.id}
@@ -870,7 +871,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
         )}
 
         {/* Bottom bar — eye + IA */}
-        <div className="shrink-0 flex items-center justify-center gap-2 mt-2 flex-wrap">
+        <div className="shrink-0 flex items-center justify-center gap-2 mt-1 flex-wrap">
           <button
             onClick={() => setPreviewOpaque(v => !v)}
             className={`h-8 w-8 shrink-0 flex items-center justify-center rounded-lg transition-colors ${

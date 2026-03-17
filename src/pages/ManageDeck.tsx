@@ -399,9 +399,10 @@ const ManageDeck = () => {
       {/* Preview Modal */}
       <ManageDeckPreview cards={sortedCards} initialIndex={selectedIndex} open={previewOpen} onClose={() => setPreviewOpen(false)} />
 
-      {/* Occlusion Editor — full-screen overlay */}
+      {/* Occlusion Editor — centered modal overlay */}
       {occlusionModalOpen && (
-        <div className="fixed inset-0 z-50 bg-background flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-3 sm:p-5">
+          <div className="relative w-full max-w-lg sm:max-w-xl md:max-w-2xl max-h-[85dvh] rounded-2xl border border-border bg-background shadow-2xl overflow-hidden flex flex-col">
           <OcclusionEditor
             initialFront={occlusionImageUrl ? JSON.stringify({
               imageUrl: occlusionImageUrl, rects: occlusionRects, allRects: occlusionRects,
@@ -421,6 +422,7 @@ const ManageDeck = () => {
             onCancel={() => setOcclusionModalOpen(false)}
             isSaving={false}
           />
+          </div>
         </div>
       )}
 

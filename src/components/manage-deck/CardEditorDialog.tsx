@@ -107,8 +107,8 @@ export const CardEditorDialog = ({
           </div>
 
           {occlusionModalOpen && (
-            <div className="absolute inset-0 z-30 flex items-center justify-center bg-background/40 backdrop-blur-[2px] p-3 sm:p-5 lg:p-6">
-              <div className="relative flex w-full max-w-4xl flex-col overflow-hidden rounded-[1.5rem] border border-border bg-background shadow-2xl max-h-[78dvh] min-h-[60vh]">
+            <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/50 backdrop-blur-sm p-3 sm:p-5">
+              <div className="relative flex w-full max-w-lg sm:max-w-xl flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl max-h-[80dvh]">
                 <OcclusionEditor
                   initialFront={front}
                   onSave={(frontContent) => {
