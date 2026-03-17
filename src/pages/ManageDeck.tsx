@@ -65,6 +65,16 @@ const ManageDeck = () => {
     }
   }, [initialCardId, pendingNewCardId, sortedCards]);
 
+  // Helper: extract <img> URLs from HTML and return clean text
+  const extractImages = (html: string): { text: string; images: string[] } => {
+    const images: string[] = [];
+    const regex = /<img[^>]+src="([^"]+)"[^>]*\/?>/g;
+    let m;
+    while ((m = regex.exec(html)) !== null) images.push(m[1]);
+    const text = html.replace(/<img[^>]+\/?>/g, '').replace(/<p>\s*<\/p>$/g, '');
+    return { text, images };
+  };
+
   // Load card content when selection changes
   useEffect(() => {
     if (!currentCard) return;
@@ -83,8 +93,10 @@ const ManageDeck = () => {
         setOcclusionImageUrl(data.imageUrl || '');
         setOcclusionRects(data.allRects || data.rects || []);
         setOcclusionCanvasSize(data.canvasWidth ? { w: data.canvasWidth, h: data.canvasHeight } : null);
-        setFront(data.frontText || '');
-      } catch { setFront(''); setOcclusionImageUrl(''); setOcclusionRects([]); }
+        const { text, images } = extractImages(data.frontText || '');
+        setFront(text);
+        setAttachedImages(images);
+      } catch { setFront(''); setOcclusionImageUrl(''); setOcclusionRects([]); setAttachedImages([]); }
       let backRaw = currentCard.back_content || '';
       try { const p = JSON.parse(backRaw); if (p && typeof p.clozeTarget === 'number') backRaw = p.extra || ''; } catch {}
       setBack(backRaw);
@@ -98,11 +110,18 @@ const ManageDeck = () => {
       const frontHasCloze = /\{\{c\d+::/.test(frontPlain);
       const backHasCloze = /\{\{c\d+::/.test(backPlain);
       if (backHasCloze && !frontHasCloze) {
-        setFront(backRaw); setBack(frontVal && frontVal !== '<p></p>' ? frontVal : ''); needsAutoSave = true;
+        const { text, images } = extractImages(backRaw);
+        setFront(text); setBack(frontVal && frontVal !== '<p></p>' ? frontVal : '');
+        setAttachedImages(images);
+        needsAutoSave = true;
       } else if (frontHasCloze) {
-        setFront(frontVal); setBack(clozeExtra || (backRaw !== currentCard.back_content ? '' : backRaw));
+        const { text, images } = extractImages(frontVal);
+        setFront(text); setBack(clozeExtra || (backRaw !== currentCard.back_content ? '' : backRaw));
+        setAttachedImages(images);
       } else {
-        setFront(frontVal); setBack(backRaw);
+        const { text, images } = extractImages(frontVal);
+        setFront(text); setBack(backRaw);
+        setAttachedImages(images);
       }
       setOcclusionImageUrl(''); setOcclusionRects([]); setOcclusionCanvasSize(null);
     }
