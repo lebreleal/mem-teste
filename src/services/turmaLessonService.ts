@@ -95,7 +95,7 @@ export async function fetchLessonContentFolders(lessonId: string): Promise<Lesso
     .eq('lesson_id', lessonId)
     .order('sort_order');
   if (error) throw error;
-  return (data ?? []) as LessonContentFolder[];
+  return (data ?? []) as unknown as LessonContentFolder[];
 }
 
 export async function createLessonContentFolder(params: {
