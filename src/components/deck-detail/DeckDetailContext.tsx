@@ -157,9 +157,9 @@ interface DeckDetailContextValue {
   model: string;
   setModel: (v: string) => void;
   getCost: ReturnType<typeof useAIModel>['getCost'];
-  createExam: ReturnType<typeof useExams>['createExam'];
-  addNotification: ReturnType<typeof useExamNotifications>['addNotification'];
-  updateNotification: ReturnType<typeof useExamNotifications>['updateNotification'];
+  createExam: { mutateAsync: (..._args: unknown[]) => Promise<{ id: string }> };
+  addNotification: (n: { id: string; title: string; examId: string; status: string; message: string }) => void;
+  updateNotification: (id: string, update: Record<string, unknown>) => void;
 
   // Handlers
   resetForm: () => void;
