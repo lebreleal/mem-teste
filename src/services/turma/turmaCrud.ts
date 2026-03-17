@@ -12,7 +12,7 @@ export async function fetchUserTurmas(userId: string): Promise<Turma[]> {
 
   let turmas: any[];
   if (!memberships || memberships.length === 0) {
-    const { data: owned } = await supabase.from('turmas').select('id, name, description, owner_id, is_private, cover_image_url, created_at, updated_at, subscription_price, share_slug, avg_rating, rating_count').eq('owner_id', userId);
+    const { data: owned } = await supabase.from('turmas').select('id, name, description, owner_id, is_private, cover_image_url, created_at, updated_at, subscription_price, share_slug, avg_rating, rating_count, invite_code').eq('owner_id', userId);
     turmas = owned ?? [];
   } else {
     const turmaIds = memberships.map(m => (m as any).turma_id);
