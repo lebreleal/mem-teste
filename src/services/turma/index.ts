@@ -1,7 +1,6 @@
 /**
  * Turma Service — Barrel export (Façade Pattern).
  * Re-exports all turma sub-modules for backward compatibility.
- * Consumers can import from '@/services/turmaService' as before.
  */
 
 // CRUD & Discover
@@ -60,24 +59,3 @@ export {
   submitTurmaRating,
   fetchAllTurmaRatings,
 } from './turmaContent';
-
-// Exams
-export {
-  fetchTurmaExams,
-  fetchTurmaExamQuestions,
-  createTurmaExam,
-  addQuestionToExam,
-  addQuestionsFromBank,
-  addQuestionsFromDeck,
-  publishTurmaExam,
-  toggleExamSubscribersOnly,
-  deleteTurmaExam,
-  startTurmaExamAttempt,
-  submitTurmaExamAnswers,
-  submitTurmaExamAnswer,
-  completeTurmaExamAttempt,
-  fetchTurmaExamAttempts,
-  fetchMyAttempts,
-  fetchAttemptAnswers,
-  restartTurmaExam,
-} from './turmaExams';

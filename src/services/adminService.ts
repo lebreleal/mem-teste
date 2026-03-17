@@ -3,7 +3,6 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
-import type { Tables } from '@/integrations/supabase/types';
 
 // ── Error Logs ──
 
@@ -85,62 +84,6 @@ export async function deleteTokenUsageEntry(entryId: string): Promise<void> {
   if (error) throw error;
 }
 
-// ── Turma Exam lookup ──
-
-export async function fetchTurmaExamTurmaId(turmaExamId: string): Promise<string | null> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- turma_exams not in generated types
-  const { data } = await (supabase.from('turma_exams' as 'turmas') as ReturnType<typeof supabase.from>)
-    .select('turma_id')
-    .eq('id', turmaExamId)
-    .single();
-  return (data as { turma_id: string } | null)?.turma_id ?? null;
-}
-
-// ── AI Chat Conversations ──
-
-export async function createAIConversation(userId: string, title: string) {
-  const { data, error } = await supabase
-    .from('ai_conversations')
-    .insert({ user_id: userId, title })
-    .select()
-    .single();
-  if (error || !data) throw new Error('Failed to create conversation');
-  return data;
-}
-
-export async function saveAIChatMessage(convId: string, userId: string, role: string, content: string) {
-  await supabase.from('ai_chat_messages').insert({
-    conversation_id: convId,
-    user_id: userId,
-    role,
-    content,
-  });
-  await supabase.from('ai_conversations').update({ updated_at: new Date().toISOString() }).eq('id', convId);
-}
-
-export async function deleteAIConversation(convId: string) {
-  await supabase.from('ai_chat_messages').delete().eq('conversation_id', convId);
-  await supabase.from('ai_conversations').delete().eq('id', convId);
-}
-
-export async function fetchAIConversations(userId: string) {
-  const { data } = await supabase
-    .from('ai_conversations')
-    .select('id, title, updated_at, created_at, user_id')
-    .eq('user_id', userId)
-    .order('updated_at', { ascending: false });
-  return data ?? [];
-}
-
-export async function fetchAIChatMessages(convId: string) {
-  const { data } = await supabase
-    .from('ai_chat_messages')
-    .select('id, role, content, created_at')
-    .eq('conversation_id', convId)
-    .order('created_at', { ascending: true });
-  return data ?? [];
-}
-
 export async function getAuthToken(): Promise<string> {
   const { data: { session } } = await supabase.auth.getSession();
   return session?.access_token || '';
@@ -166,101 +109,7 @@ export async function fetchProfilePremiumExpiry(userId: string): Promise<string 
   return data?.premium_expires_at ?? null;
 }
 
-// ── Deck Suggestions (Creator Panel) ──
-
-interface SuggestionUpdateData {
-  status: 'accepted' | 'rejected';
-  moderator_user_id: string;
-  suggested_content?: { front_content: string; back_content: string };
-}
-
-export async function reviewSuggestion(id: string, status: 'accepted' | 'rejected', moderatorId: string, content?: { front_content: string; back_content: string }) {
-  const updatePayload: Record<string, unknown> = { status, moderator_user_id: moderatorId };
-  if (content) updatePayload.suggested_content = content;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- partial update
-  const { error } = await supabase.from('deck_suggestions').update(updatePayload as any).eq('id', id);
-  if (error) throw error;
-}
-
-// ── Turma Exam queries (for TurmaExamResults/TurmaExamTake) ──
-
-export async function fetchTurmaExamDetail(examId: string) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- turma_exams not in generated types
-  const { data, error } = await (supabase.from('turma_exams' as 'turmas') as ReturnType<typeof supabase.from>).select('id, turma_id, title, description, time_limit_seconds, is_published, total_questions, created_at, created_by, subject_id, lesson_id, subscribers_only').eq('id', examId).single();
-  if (error) throw error;
-  return data;
-}
-
-interface TurmaExamAttemptRow {
-  id: string;
-  exam_id: string;
-  user_id: string;
-  status: string;
-  scored_points: number;
-  total_points: number;
-  started_at: string;
-  completed_at: string | null;
-}
-
-export async function fetchTurmaExamAttemptForResults(examId: string, userId: string, attemptId: string | null) {
-  if (!attemptId) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- turma_exam_attempts not in generated types
-    const { data } = await (supabase.from('turma_exam_attempts' as 'turmas') as ReturnType<typeof supabase.from>)
-      .select('id, exam_id, user_id, status, scored_points, total_points, started_at, completed_at')
-      .eq('exam_id', examId).eq('user_id', userId)
-      .eq('status', 'completed').order('completed_at', { ascending: false }).limit(1);
-    return ((data as unknown as TurmaExamAttemptRow[]) ?? [])[0] || null;
-  }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- turma_exam_attempts not in generated types
-  const { data, error } = await (supabase.from('turma_exam_attempts' as 'turmas') as ReturnType<typeof supabase.from>)
-    .select('id, exam_id, user_id, status, scored_points, total_points, started_at, completed_at')
-    .eq('id', attemptId).single();
-  if (error) throw error;
-  return data as unknown as TurmaExamAttemptRow;
-}
-
-interface TurmaExamAnswerRow {
-  id: string;
-  attempt_id: string;
-  question_id: string;
-  user_answer: string | null;
-  selected_indices: number[] | null;
-  scored_points: number;
-  is_graded: boolean;
-  ai_feedback: string | null;
-}
-
-export async function fetchTurmaExamAnswers(attemptId: string) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- turma_exam_answers not in generated types
-  const { data, error } = await (supabase.from('turma_exam_answers' as 'turmas') as ReturnType<typeof supabase.from>)
-    .select('id, attempt_id, question_id, user_answer, selected_indices, scored_points, is_graded, ai_feedback')
-    .eq('attempt_id', attemptId);
-  if (error) throw error;
-  return (data as unknown as TurmaExamAnswerRow[]) ?? [];
-}
-
-export async function gradeExamQuestion(questionId: string, userAnswer: string, correctAnswer: string, questionText: string) {
-  const { data, error } = await supabase.functions.invoke('grade-exam', {
-    body: { questionId, userAnswer, correctAnswer, questionText, aiModel: 'flash' },
-  });
-  if (error) throw error;
-  if (data.error) throw new Error(data.error);
-  return data as { score: number; feedback: string; freeGradingsRemaining?: number };
-}
-
-export async function updateTurmaExamAnswer(answerId: string, scoredPoints: number, feedback: string) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- turma_exam_answers not in generated types
-  await (supabase.from('turma_exam_answers' as 'turmas') as ReturnType<typeof supabase.from>)
-    .update({ scored_points: scoredPoints, is_graded: true, ai_feedback: feedback } as Record<string, unknown>)
-    .eq('id', answerId);
-}
-
-export async function updateTurmaExamAttemptScore(attemptId: string, scoredPoints: number) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- turma_exam_attempts not in generated types
-  await (supabase.from('turma_exam_attempts' as 'turmas') as ReturnType<typeof supabase.from>)
-    .update({ scored_points: scoredPoints } as Record<string, unknown>)
-    .eq('id', attemptId);
-}
+// ── Active Subscription ──
 
 export async function fetchActiveSubscription(turmaId: string, userId: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- turma_subscriptions not in generated types
@@ -324,15 +173,6 @@ export async function fetchPublicCommunityDecks(turmaId: string): Promise<Public
 }
 
 // ── TurmaDetail helpers ──
-
-export async function fetchDeckQuestionCounts(deckIds: string[]): Promise<Map<string, number>> {
-  const { data } = await supabase.from('deck_questions').select('deck_id').in('deck_id', deckIds);
-  const counts = new Map<string, number>();
-  for (const row of data ?? []) {
-    counts.set(row.deck_id, (counts.get(row.deck_id) ?? 0) + 1);
-  }
-  return counts;
-}
 
 export async function joinTurmaAndCreateFolder(userId: string, turmaId: string, turmaName: string): Promise<string | undefined> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- turma_members insert typing
@@ -420,16 +260,6 @@ export async function fetchSalaDecksData(turmaId: string) {
   return { turmaDecks, decks: decks ?? [], rootDeckIds, allDeckIds, cardCountMap };
 }
 
-export async function fetchSalaQuestionCounts(deckIds: string[]): Promise<Map<string, number>> {
-  if (deckIds.length === 0) return new Map();
-  const { data } = await supabase.from('deck_questions').select('deck_id').in('deck_id', deckIds);
-  const counts = new Map<string, number>();
-  for (const row of data ?? []) {
-    counts.set(row.deck_id, (counts.get(row.deck_id) ?? 0) + 1);
-  }
-  return counts;
-}
-
 export async function insertTurmaMember(turmaId: string, userId: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- turma_members insert
   const { error } = await supabase.from('turma_members').insert({ turma_id: turmaId, user_id: userId } as any);
@@ -437,9 +267,10 @@ export async function insertTurmaMember(turmaId: string, userId: string) {
 }
 
 export async function getOrCreateTurmaFolder(userId: string, turmaId: string, turmaName: string): Promise<string | undefined> {
-  const { data: existingFolders } = await supabase.from('folders')
-    .select('id').eq('user_id', userId).eq('source_turma_id', turmaId);
-  if (existingFolders && existingFolders.length > 0) return existingFolders[0].id;
+  const { data: existing } = await supabase.from('folders')
+    .select('id').eq('user_id', userId).eq('source_turma_id', turmaId).limit(1);
+  if (existing && existing.length > 0) return existing[0].id;
+
   const { data: newFolder } = await supabase.from('folders')
     .insert({ user_id: userId, name: turmaName, section: 'community', source_turma_id: turmaId })
     .select('id').single();
