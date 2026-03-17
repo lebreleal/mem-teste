@@ -232,8 +232,8 @@ const AIAgent = () => {
 
       // Refresh energy after server-side deduction
       queryClient.invalidateQueries({ queryKey: ['profile'] });
-    } catch (err: any) {
-      toast({ title: 'Erro', description: err.message || 'Erro ao consultar IA', variant: 'destructive' });
+    } catch (err: unknown) {
+      toast({ title: 'Erro', description: err instanceof Error ? err.message : 'Erro ao consultar IA', variant: 'destructive' });
       setMessages(prev => {
         if (prev.length > 0 && prev[prev.length - 1].role === 'assistant' && !prev[prev.length - 1].content) {
           return prev.slice(0, -1);

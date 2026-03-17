@@ -103,7 +103,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
       const data = JSON.parse(initialFront);
       if (data.imageUrl) setImageUrl(data.imageUrl);
       if (data.allRects) {
-        const converted: OcclusionShape[] = data.allRects.map((r: any) => ({
+        const converted: OcclusionShape[] = data.allRects.map((r: Record<string, unknown>) => ({
           id: r.id || crypto.randomUUID(),
           type: r.type || 'rect',
           color: r.color || COLORS[0].fill,
@@ -397,7 +397,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
       setImageUrl(publicUrl);
       setShapes([]);
       setImgLoaded(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Upload error:', err);
       toast({ title: 'Erro ao enviar imagem', variant: 'destructive' });
     } finally {
@@ -429,7 +429,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
       const data = await invokeDetectOcclusion(imageUrl);
       if (data?.regions && Array.isArray(data.regions) && data.regions.length > 0) {
         pushHistory();
-        const newShapes: OcclusionShape[] = data.regions.map((r: any) => ({
+        const newShapes: OcclusionShape[] = data.regions.map((r: Record<string, number>) => ({
           id: crypto.randomUUID(),
           type: 'rect' as const,
           x: r.x * imgSize.w,
@@ -443,9 +443,9 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
       } else {
         toast({ title: 'Nenhum texto detectado na imagem' });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('AI detect error:', err);
-      toast({ title: 'Erro ao detectar', description: err.message, variant: 'destructive' });
+      toast({ title: 'Erro ao detectar', description: err instanceof Error ? err.message : 'Erro desconhecido', variant: 'destructive' });
     } finally {
       setIsDetecting(false);
     }

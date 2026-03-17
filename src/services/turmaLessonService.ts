@@ -4,6 +4,15 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
+import type { Json } from '@/integrations/supabase/types';
+
+// ── Typed table helpers (tables not in generated types) ──
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- turma_lesson_files not in generated types
+const lessonFilesTable = () => (supabase.from as (t: string) => ReturnType<typeof supabase.from>)('turma_lesson_files');
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- turma_exams not in generated types
+const turmaExamsTable = () => (supabase.from as (t: string) => ReturnType<typeof supabase.from>)('turma_exams');
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- turma_exam_questions not in generated types
+const turmaExamQuestionsTable = () => (supabase.from as (t: string) => ReturnType<typeof supabase.from>)('turma_exam_questions');
 
 // ── Lesson Files ──
 
@@ -25,8 +34,7 @@ export interface LessonFile {
 }
 
 export async function fetchLessonFiles(lessonId: string): Promise<LessonFile[]> {
-  const { data, error } = await supabase
-    .from('turma_lesson_files' as any)
+  const { data, error } = await lessonFilesTable()
     .select(LESSON_FILE_COLS)
     .eq('lesson_id', lessonId)
     .order('created_at', { ascending: false });
@@ -47,7 +55,7 @@ export async function uploadLessonFile(params: {
 
   const { data: urlData } = supabase.storage.from('lesson-files').getPublicUrl(filePath);
 
-  const { data, error } = await supabase.from('turma_lesson_files' as any).insert({
+  const { data, error } = await lessonFilesTable().insert({
     lesson_id: lessonId,
     turma_id: turmaId,
     file_name: file.name,
@@ -55,23 +63,23 @@ export async function uploadLessonFile(params: {
     file_size: file.size,
     file_type: file.type,
     uploaded_by: userId,
-  } as any).select(LESSON_FILE_COLS).single();
+  }).select(LESSON_FILE_COLS).single();
   if (error) throw error;
   return data as unknown as LessonFile;
 }
 
 export async function deleteLessonFile(fileId: string): Promise<void> {
-  const { error } = await supabase.from('turma_lesson_files' as any).delete().eq('id', fileId);
+  const { error } = await lessonFilesTable().delete().eq('id', fileId);
   if (error) throw error;
 }
 
 export async function renameLessonFile(fileId: string, newName: string): Promise<void> {
-  const { error } = await supabase.from('turma_lesson_files' as any).update({ file_name: newName } as any).eq('id', fileId);
+  const { error } = await lessonFilesTable().update({ file_name: newName }).eq('id', fileId);
   if (error) throw error;
 }
 
 export async function updateLessonFileVisibility(fileId: string, priceType: string): Promise<void> {
-  const { error } = await supabase.from('turma_lesson_files' as any).update({ price_type: priceType } as any).eq('id', fileId);
+  const { error } = await lessonFilesTable().update({ price_type: priceType }).eq('id', fileId);
   if (error) throw error;
 }
 
@@ -90,7 +98,7 @@ export interface LessonContentFolder {
 
 export async function fetchLessonContentFolders(lessonId: string): Promise<LessonContentFolder[]> {
   const { data, error } = await supabase
-    .from('lesson_content_folders' as any)
+    .from('lesson_content_folders')
     .select('id, lesson_id, turma_id, name, parent_id, sort_order, created_at, created_by')
     .eq('lesson_id', lessonId)
     .order('sort_order');
@@ -105,23 +113,23 @@ export async function createLessonContentFolder(params: {
   parentId: string | null;
   createdBy: string;
 }): Promise<void> {
-  const { error } = await supabase.from('lesson_content_folders' as any).insert({
+  const { error } = await supabase.from('lesson_content_folders').insert({
     lesson_id: params.lessonId,
     turma_id: params.turmaId,
     name: params.name,
     parent_id: params.parentId,
     created_by: params.createdBy,
-  } as any);
+  });
   if (error) throw error;
 }
 
 export async function renameLessonContentFolder(folderId: string, newName: string): Promise<void> {
-  const { error } = await supabase.from('lesson_content_folders' as any).update({ name: newName } as any).eq('id', folderId);
+  const { error } = await supabase.from('lesson_content_folders').update({ name: newName }).eq('id', folderId);
   if (error) throw error;
 }
 
 export async function deleteLessonContentFolder(folderId: string): Promise<void> {
-  const { error } = await supabase.from('lesson_content_folders' as any).delete().eq('id', folderId);
+  const { error } = await supabase.from('lesson_content_folders').delete().eq('id', folderId);
   if (error) throw error;
 }
 
@@ -132,9 +140,15 @@ export async function moveLessonItem(params: {
   itemId: string;
   targetFolderId: string | null;
 }): Promise<void> {
-  const table = params.itemType === 'file' ? 'turma_lesson_files' : 'turma_decks';
-  const { error } = await supabase.from(table as any).update({ content_folder_id: params.targetFolderId } as any).eq('id', params.itemId);
-  if (error) throw error;
+  if (params.itemType === 'file') {
+    const { error } = await lessonFilesTable().update({ content_folder_id: params.targetFolderId }).eq('id', params.itemId);
+    if (error) throw error;
+  } else {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- turma_decks not in generated types
+    const { error } = await (supabase.from as (t: string) => ReturnType<typeof supabase.from>)('turma_decks')
+      .update({ content_folder_id: params.targetFolderId }).eq('id', params.itemId);
+    if (error) throw error;
+  }
 }
 
 // ── Public Profiles (used for sharer names) ──
@@ -185,11 +199,11 @@ export async function createDeckWithSource(params: {
     user_id: params.userId,
     folder_id: params.folderId,
     parent_deck_id: params.parentDeckId,
-    algorithm_mode: params.algorithmMode,
-    daily_new_limit: params.dailyNewLimit,
-    daily_review_limit: params.dailyReviewLimit,
+    algorithm_mode: params.algorithmMode ?? 'fsrs',
+    daily_new_limit: params.dailyNewLimit ?? 20,
+    daily_review_limit: params.dailyReviewLimit ?? 9999,
     source_turma_deck_id: params.sourceTurmaDeckId ?? null,
-  } as any).select('id, name').single();
+  }).select('id, name').single();
   if (error) throw error;
   return data as { id: string; name: string };
 }
@@ -205,28 +219,37 @@ export async function fetchCardsForCopy(deckId: string) {
 
 export async function insertCardCopies(deckId: string, cards: Array<{ front_content: string; back_content: string; card_type: string }>) {
   if (cards.length === 0) return;
-  const { error } = await supabase.from('cards').insert(
-    cards.map(c => ({ deck_id: deckId, front_content: c.front_content, back_content: c.back_content, card_type: c.card_type })) as any
-  );
+  const rows = cards.map(c => ({ deck_id: deckId, front_content: c.front_content, back_content: c.back_content, card_type: c.card_type }));
+  const { error } = await supabase.from('cards').insert(rows);
   if (error) throw error;
 }
 
 export async function unarchiveDeck(deckId: string): Promise<void> {
-  const { error } = await supabase.from('decks').update({ is_archived: false } as any).eq('id', deckId);
+  const { error } = await supabase.from('decks').update({ is_archived: false }).eq('id', deckId);
   if (error) throw error;
 }
 
 export async function linkDeckToTurmaSource(deckId: string, sourceTurmaDeckId: string): Promise<void> {
-  const { error } = await supabase.from('decks').update({ source_turma_deck_id: sourceTurmaDeckId } as any).eq('id', deckId);
+  const { error } = await supabase.from('decks').update({ source_turma_deck_id: sourceTurmaDeckId }).eq('id', deckId);
   if (error) throw error;
 }
 
 export async function unarchiveFolder(folderId: string): Promise<void> {
-  const { error } = await supabase.from('folders').update({ is_archived: false } as any).eq('id', folderId);
+  const { error } = await supabase.from('folders').update({ is_archived: false }).eq('id', folderId);
   if (error) throw error;
 }
 
 // ── Import Exam from Personal → Turma ──
+
+interface ExamQuestionRow {
+  question_type: string;
+  question_text: string;
+  options: Json | null;
+  correct_answer: string;
+  correct_indices: number[] | null;
+  points: number;
+  sort_order: number;
+}
 
 export async function importExamToTurma(params: {
   examId: string;
@@ -246,26 +269,29 @@ export async function importExamToTurma(params: {
   if (error) throw error;
   if (!questions?.length) throw new Error('Prova sem questões');
 
+  const typedQuestions = questions as unknown as ExamQuestionRow[];
+
   // Create turma exam
-  const { data: turmaExam, error: examError } = await supabase
-    .from('turma_exams')
+  const { data: turmaExam, error: examError } = await turmaExamsTable()
     .insert({
       turma_id: params.turmaId,
       created_by: params.userId,
       title: params.title,
       time_limit_seconds: params.timeLimitSeconds,
       is_published: true,
-      total_questions: questions.length,
+      total_questions: typedQuestions.length,
       lesson_id: params.lessonId,
       subject_id: params.subjectId,
-    } as any)
+    })
     .select('id')
     .single();
   if (examError) throw examError;
 
+  const examId = (turmaExam as unknown as { id: string }).id;
+
   // Insert questions
-  const questionsToInsert = questions.map((q: any, idx: number) => ({
-    exam_id: (turmaExam as any).id,
+  const questionsToInsert = typedQuestions.map((q, idx) => ({
+    exam_id: examId,
     question_type: q.question_type,
     question_text: q.question_text,
     options: q.options ?? null,
@@ -274,7 +300,7 @@ export async function importExamToTurma(params: {
     points: q.points,
     sort_order: idx,
   }));
-  const { error: qError } = await supabase.from('turma_exam_questions').insert(questionsToInsert as any);
+  const { error: qError } = await turmaExamQuestionsTable().insert(questionsToInsert);
   if (qError) throw qError;
 }
 
@@ -287,17 +313,17 @@ export async function importTurmaExamToPersonal(params: {
   timeLimitSeconds: number | null;
 }): Promise<string> {
   // Fetch turma exam questions
-  const { data: questions, error } = await supabase
-    .from('turma_exam_questions')
+  const { data: questions, error } = await turmaExamQuestionsTable()
     .select('question_type, question_text, options, correct_answer, correct_indices, points, sort_order')
     .eq('exam_id', params.examId)
     .order('sort_order', { ascending: true });
   if (error) throw error;
 
-  const totalPoints = (questions ?? []).reduce((sum: number, q: any) => sum + (q.points || 1), 0);
+  const typedQuestions = (questions ?? []) as unknown as ExamQuestionRow[];
+  const totalPoints = typedQuestions.reduce((sum, q) => sum + (q.points || 1), 0);
 
   // Create personal exam
-  const { data: newExam, error: examError } = await (supabase.from('exams' as any) as any)
+  const { data: newExam, error: examError } = await supabase.from('exams')
     .insert({
       user_id: params.userId,
       deck_id: null,
@@ -311,9 +337,11 @@ export async function importTurmaExamToPersonal(params: {
     .single();
   if (examError) throw examError;
 
+  const newExamId = (newExam as { id: string }).id;
+
   // Insert questions
-  const questionsToInsert = (questions ?? []).map((q: any, idx: number) => ({
-    exam_id: newExam.id,
+  const questionsToInsert = typedQuestions.map((q, idx) => ({
+    exam_id: newExamId,
     question_type: q.question_type,
     question_text: q.question_text,
     options: q.options ?? null,
@@ -322,7 +350,7 @@ export async function importTurmaExamToPersonal(params: {
     points: q.points,
     sort_order: idx,
   }));
-  await (supabase.from('exam_questions' as any) as any).insert(questionsToInsert);
+  await supabase.from('exam_questions').insert(questionsToInsert);
 
-  return newExam.id as string;
+  return newExamId;
 }
