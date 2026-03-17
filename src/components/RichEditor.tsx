@@ -152,6 +152,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       Underline,
       TextStyle,
       Color,
+      Highlight.configure({ multicolor: true }),
       ClozeMark,
       Placeholder.configure({ placeholder: placeholder || '' }),
       Link.configure({ openOnClick: false, HTMLAttributes: { class: 'text-primary underline' } }),
