@@ -198,7 +198,8 @@ async function copySingleDeck(params: {
   if (sourceTurmaDeckId) insertData.source_turma_deck_id = sourceTurmaDeckId;
   if (communityId) insertData.community_id = communityId;
 
-  const { data: newDeck, error } = await supabase.from('decks').insert(insertData).select('id').single();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: newDeck, error } = await supabase.from('decks').insert(insertData as any).select('id').single();
   if (error) throw error;
 
   if (newDeck) {
