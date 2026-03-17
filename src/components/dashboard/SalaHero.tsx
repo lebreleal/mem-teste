@@ -304,31 +304,35 @@ const SalaHero = ({
 
           {/* Summary line: icon card + count + icon clock + time + ? */}
           {salaStudyStats.totalDue > 0 && (
-            <Popover open={infoOpen} onOpenChange={setInfoOpen}>
-              <PopoverTrigger asChild>
-                <button
-                  className="flex items-center justify-center gap-1.5 w-full text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
+            <div className="flex items-center justify-center gap-1.5 w-full py-1 text-xs text-muted-foreground">
+              <IconDeck className="h-3 w-3" />
+              <span>{salaStudyStats.totalDue}</span>
+              <Clock className="h-3 w-3" />
+              <span>{salaStudyStats.timeLabel}</span>
+
+              <Popover open={infoOpen} onOpenChange={setInfoOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="ml-0.5 inline-flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label="Explicar tempo e cartões de hoje"
+                  >
+                    <IconInfo className="h-3 w-3" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  side="bottom"
+                  align="center"
+                  sideOffset={8}
+                  className="w-auto max-w-[18rem] rounded-2xl border border-border bg-background px-3 py-2 text-xs text-foreground shadow-md"
                 >
-                  <IconDeck className="h-3 w-3" />
-                  <span>{salaStudyStats.totalDue}</span>
-                  <Clock className="h-3 w-3" />
-                  <span>{salaStudyStats.timeLabel}</span>
-                  <IconInfo className="h-3 w-3 ml-0.5" />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent
-                side="bottom"
-                align="center"
-                sideOffset={8}
-                className="w-auto max-w-[18rem] rounded-2xl border border-border bg-background px-3 py-2 text-xs text-foreground shadow-md"
-              >
-                <p className="leading-relaxed">
-                  Hoje você tem <span className="font-semibold">{salaStudyStats.totalDue} cartões</span> para estudar, com tempo estimado de <span className="font-semibold">{salaStudyStats.timeLabel}</span>, calculado pela sua velocidade média por cartão.
-                </p>
-              </PopoverContent>
-            </Popover>
+                  <p className="leading-relaxed">
+                    Hoje você tem <span className="font-semibold">{salaStudyStats.totalDue} cartões</span> para estudar, com tempo estimado de <span className="font-semibold">{salaStudyStats.timeLabel}</span>, calculado pela sua velocidade média por cartão.
+                  </p>
+                </PopoverContent>
+              </Popover>
+            </div>
           )}
-        </div>
         </div>
       )}
     </>
