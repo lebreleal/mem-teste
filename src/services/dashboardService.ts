@@ -316,7 +316,7 @@ export async function resolveDeckSource(deckId: string): Promise<string> {
 }
 
 export async function insertDeckSuggestion(payload: Record<string, unknown>) {
-  const { error } = await supabase.from('deck_suggestions').insert(payload as Record<string, unknown>);
+  const { error } = await supabase.from('deck_suggestions').insert(payload as never);
   if (error) throw error;
 }
 
