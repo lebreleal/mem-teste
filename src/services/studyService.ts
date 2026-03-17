@@ -502,3 +502,45 @@ export async function fetchStudyPlanDeckIds(userId: string): Promise<Array<{ dec
   if (error) throw error;
   return (data ?? []) as Array<{ deck_ids: string[] | null }>;
 }
+
+/** Fetch daily activity breakdown (heatmap + streak). */
+export async function fetchActivityBreakdown(userId: string, days = 365, tzOffsetMinutes = -180) {
+  const { data, error } = await supabase.rpc('get_activity_daily_breakdown', {
+    p_user_id: userId,
+    p_tz_offset_minutes: tzOffsetMinutes,
+    p_days: days,
+  } as any);
+  if (error) throw error;
+  return data as any;
+}
+
+/** Fetch hourly review breakdown. */
+export async function fetchHourlyBreakdown(userId: string, days = 30, tzOffsetMinutes = -180) {
+  const { data, error } = await supabase.rpc('get_hourly_breakdown' as any, {
+    p_user_id: userId,
+    p_tz_offset_minutes: tzOffsetMinutes,
+    p_days: days,
+  });
+  if (error) throw error;
+  return (data as any[]) ?? [];
+}
+
+/** Fetch retention over time (weekly buckets). */
+export async function fetchRetentionOverTime(userId: string, days = 180) {
+  const { data, error } = await supabase.rpc('get_retention_over_time' as any, {
+    p_user_id: userId,
+    p_days: days,
+  });
+  if (error) throw error;
+  return (data as any[]) ?? [];
+}
+
+/** Fetch cards added per day. */
+export async function fetchCardsAddedPerDay(userId: string, days = 90) {
+  const { data, error } = await supabase.rpc('get_cards_added_per_day' as any, {
+    p_user_id: userId,
+    p_days: days,
+  });
+  if (error) throw error;
+  return (data as any[]) ?? [];
+}
