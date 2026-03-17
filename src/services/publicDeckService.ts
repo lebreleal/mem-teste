@@ -220,10 +220,11 @@ async function copyCardsInBatches(sourceDeckId: string, targetDeckId: string) {
       .range(offset, offset + BATCH - 1)
       .order('created_at', { ascending: true });
     if (!cards || cards.length === 0) break;
-    await supabase.from('cards').insert(cards.map((c: any) => ({
+    interface CardCopyRow { front_content: string; back_content: string; card_type: string }
+    await supabase.from('cards').insert((cards as CardCopyRow[]).map(c => ({
       deck_id: targetDeckId, front_content: c.front_content,
       back_content: c.back_content, card_type: c.card_type ?? 'basic',
-    })) as any);
+    })));
     if (cards.length < BATCH) hasMore = false;
     else offset += BATCH;
   }
