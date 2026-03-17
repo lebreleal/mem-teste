@@ -3,7 +3,7 @@ import { Brain, Send, Loader2, Plus, Trash2, MessageSquare, PanelLeftClose, Pane
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { supabase } from '@/integrations/supabase/client';
+import { createAIConversation, saveAIChatMessage, deleteAIConversation, getAuthToken } from '@/services/adminService';
 import { useToast } from '@/hooks/use-toast';
 import { useEnergy } from '@/hooks/useEnergy';
 import { useAIModel } from '@/hooks/useAIModel';
