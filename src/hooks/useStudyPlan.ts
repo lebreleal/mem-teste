@@ -177,7 +177,8 @@ export function useStudyPlan(options?: { full?: boolean }) {
   const realMetricsQuery = useQuery({
     queryKey: ['real-study-metrics', userId],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_user_real_study_metrics' as any, { p_user_id: userId });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC not in generated types
+      const { data, error } = await (supabase.rpc as any)('get_user_real_study_metrics', { p_user_id: userId });
       if (error) throw error;
       const row = Array.isArray(data) ? data[0] : data;
       if (!row) return DEFAULT_STUDY_METRICS;
