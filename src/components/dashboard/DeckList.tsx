@@ -10,11 +10,9 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Progress } from '@/components/ui/progress';
-import { Progress } from '@/components/ui/progress';
 import DeckRow from './DeckRow';
 import { usePendingDecks, type PendingDeck } from '@/stores/usePendingDecks';
 import { useDragReorder } from '@/hooks/useDragReorder';
-import { fetchDeckQuestionCounts } from '@/services/dashboardService';
 import type { DeckWithStats } from '@/hooks/useDecks';
 
 const ERROR_DECK_NAME = '📕 Baralho de Erros';
