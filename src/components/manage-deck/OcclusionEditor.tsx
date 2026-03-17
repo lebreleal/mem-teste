@@ -665,7 +665,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
   ];
 
   return (
-    <div className="flex flex-col h-full min-h-[50vh]">
+    <div className="flex flex-col h-full min-h-0">
       {/* ─── Header ─── */}
       <header className="shrink-0 flex items-center gap-2 px-3 py-2.5 border-b border-border/40">
         <button
