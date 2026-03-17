@@ -72,18 +72,25 @@ const PublicDeckPreview = lazyRetry(() => import("./pages/PublicDeckPreview"));
 const PublicCommunity = lazyRetry(() => import("./pages/PublicCommunity"));
 const NotFound = lazyRetry(() => import("./pages/NotFound"));
 
+const TWENTY_FOUR_HOURS = 1000 * 60 * 60 * 24;
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 30_000,
-      gcTime: 5 * 60_000,
+      gcTime: TWENTY_FOUR_HOURS,
       refetchOnWindowFocus: false,
     },
   },
 });
 
+const persister = createSyncStoragePersister({
+  storage: window.localStorage,
+  key: 'memo-query-cache',
+});
+
 const App = () => (
-  <QueryClientProvider client={queryClient}>
+  <PersistQueryClientProvider client={queryClient} persistOptions={{ persister, maxAge: TWENTY_FOUR_HOURS }}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
