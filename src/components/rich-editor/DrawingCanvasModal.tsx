@@ -275,60 +275,35 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
 
   const getCtx = () => canvasRef.current?.getContext('2d') ?? null;
 
-  const getPos = useCallback((e: MouseEvent | TouchEvent): { x: number; y: number } => {
+  const getPos = useCallback((clientX: number, clientY: number): { x: number; y: number } => {
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
-    const touch = 'touches' in e ? (e.touches[0] ?? e.changedTouches[0]) : null;
-    const clientX = touch ? touch.clientX : (e as MouseEvent).clientX;
-    const clientY = touch ? touch.clientY : (e as MouseEvent).clientY;
+    const point = getRelativePoint(rect, clientX, clientY);
+
     return {
-      x: clientX - rect.left,
-      y: clientY - rect.top,
+      x: Math.max(0, Math.min(point.x, rect.width)),
+      y: Math.max(0, Math.min(point.y, rect.height)),
     };
   }, []);
 
-  // Use native event listeners for precise drawing (avoids React state batching)
+  // Use pointer events + pointer capture for full-area precise drawing
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !open) return;
 
-    const handleStart = (e: MouseEvent | TouchEvent) => {
-      e.preventDefault();
-      const ctx = getCtx();
-      if (!ctx) return;
-      isDrawingRef.current = true;
-      const pos = getPos(e);
-      ctx.beginPath();
-      ctx.moveTo(pos.x, pos.y);
-      ctx.strokeStyle = colorRef.current;
-      ctx.lineWidth = thicknessRef.current;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.globalAlpha = opacityRef.current / 100;
-    };
-
-    const handleMove = (e: MouseEvent | TouchEvent) => {
-      if (!isDrawingRef.current) return;
-      e.preventDefault();
-      const ctx = getCtx();
-      if (!ctx) return;
-      const pos = getPos(e);
-      ctx.lineTo(pos.x, pos.y);
-      ctx.stroke();
-      // Continue the path without restarting to avoid overdraw
-      ctx.beginPath();
-      ctx.moveTo(pos.x, pos.y);
-    };
-
-    const handleEnd = () => {
+    const finishStroke = () => {
       if (!isDrawingRef.current) return;
       isDrawingRef.current = false;
+
       const ctx = getCtx();
       if (!ctx || !canvas) return;
+
       ctx.globalAlpha = 1;
+      ctx.beginPath();
+
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const idx = historyIdxRef.current;
-      setHistory(prev => {
+      setHistory((prev) => {
         const next = prev.slice(0, idx + 1);
         next.push(imageData);
         return next;
@@ -336,22 +311,71 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
       setHistoryIdx(idx + 1);
     };
 
-    canvas.addEventListener('mousedown', handleStart);
-    canvas.addEventListener('mousemove', handleMove);
-    canvas.addEventListener('mouseup', handleEnd);
-    canvas.addEventListener('mouseleave', handleEnd);
-    canvas.addEventListener('touchstart', handleStart, { passive: false });
-    canvas.addEventListener('touchmove', handleMove, { passive: false });
-    canvas.addEventListener('touchend', handleEnd);
+    const handlePointerDown = (e: PointerEvent) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+
+      e.preventDefault();
+      const ctx = getCtx();
+      if (!ctx) return;
+
+      activePointerIdRef.current = e.pointerId;
+      isDrawingRef.current = true;
+      hasInteractionRef.current = true;
+      canvas.setPointerCapture?.(e.pointerId);
+
+      const pos = getPos(e.clientX, e.clientY);
+      ctx.beginPath();
+      ctx.moveTo(pos.x, pos.y);
+      ctx.strokeStyle = colorRef.current;
+      ctx.lineWidth = thicknessRef.current;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.globalAlpha = opacityRef.current / 100;
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(pos.x, pos.y);
+    };
+
+    const handlePointerMove = (e: PointerEvent) => {
+      if (!isDrawingRef.current || activePointerIdRef.current !== e.pointerId) return;
+
+      e.preventDefault();
+      const ctx = getCtx();
+      if (!ctx) return;
+
+      const pos = getPos(e.clientX, e.clientY);
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(pos.x, pos.y);
+    };
+
+    const handlePointerUp = (e: PointerEvent) => {
+      if (activePointerIdRef.current !== e.pointerId) return;
+      e.preventDefault();
+      canvas.releasePointerCapture?.(e.pointerId);
+      activePointerIdRef.current = null;
+      finishStroke();
+    };
+
+    const handlePointerCancel = (e: PointerEvent) => {
+      if (activePointerIdRef.current !== e.pointerId) return;
+      canvas.releasePointerCapture?.(e.pointerId);
+      activePointerIdRef.current = null;
+      finishStroke();
+    };
+
+    canvas.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('pointermove', handlePointerMove, { passive: false });
+    window.addEventListener('pointerup', handlePointerUp, { passive: false });
+    window.addEventListener('pointercancel', handlePointerCancel);
 
     return () => {
-      canvas.removeEventListener('mousedown', handleStart);
-      canvas.removeEventListener('mousemove', handleMove);
-      canvas.removeEventListener('mouseup', handleEnd);
-      canvas.removeEventListener('mouseleave', handleEnd);
-      canvas.removeEventListener('touchstart', handleStart);
-      canvas.removeEventListener('touchmove', handleMove);
-      canvas.removeEventListener('touchend', handleEnd);
+      canvas.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerCancel);
     };
   }, [open, getPos]);
 
