@@ -6,13 +6,16 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { Exam, ExamQuestion } from '@/types/exam';
 
+const EXAM_COLS = 'id, user_id, deck_id, folder_id, title, status, total_points, scored_points, time_limit_seconds, started_at, completed_at, created_at, source_turma_exam_id, synced_at' as const;
+const EXAM_QUESTION_COLS = 'id, exam_id, card_id, question_type, question_text, options, correct_answer, correct_indices, points, user_answer, selected_indices, scored_points, is_graded, ai_feedback, sort_order' as const;
+
 // Helper to get a typed query builder for tables with partial type coverage
 const examsTable = () => supabase.from('exams' as 'exams');
 const examQuestionsTable = () => supabase.from('exam_questions' as 'exam_questions');
 
 /** Fetch all exams for a user, optionally filtered by deck. */
 export async function fetchExams(userId: string, deckId?: string): Promise<Exam[]> {
-  let q = examsTable().select('*').eq('user_id', userId).order('created_at', { ascending: false });
+  let q = examsTable().select(EXAM_COLS).eq('user_id', userId).order('created_at', { ascending: false });
   if (deckId) q = q.eq('deck_id', deckId);
   const { data, error } = await q;
   if (error) throw error;
@@ -21,7 +24,7 @@ export async function fetchExams(userId: string, deckId?: string): Promise<Exam[
 
 /** Fetch a single exam by ID. */
 export async function fetchExam(examId: string): Promise<Exam> {
-  const { data, error } = await examsTable().select('*').eq('id', examId).single();
+  const { data, error } = await examsTable().select(EXAM_COLS).eq('id', examId).single();
   if (error) throw error;
   return data as unknown as Exam;
 }
@@ -29,7 +32,7 @@ export async function fetchExam(examId: string): Promise<Exam> {
 /** Fetch questions for an exam, ordered by sort_order. */
 export async function fetchExamQuestions(examId: string): Promise<ExamQuestion[]> {
   const { data, error } = await examQuestionsTable()
-    .select('*')
+    .select(EXAM_QUESTION_COLS)
     .eq('exam_id', examId)
     .order('sort_order', { ascending: true });
   if (error) throw error;
@@ -134,7 +137,7 @@ export async function updateExamSyncedAt(examId: string) {
 /** Fetch local exam linked to a turma exam. */
 export async function fetchLinkedExam(userId: string, sourceTurmaExamId: string): Promise<Exam | null> {
   const { data, error } = await examsTable()
-    .select('*')
+    .select(EXAM_COLS)
     .eq('user_id', userId)
     .eq('source_turma_exam_id', sourceTurmaExamId)
     .limit(1);

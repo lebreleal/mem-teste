@@ -5,6 +5,8 @@
  */
 import { supabase } from '@/integrations/supabase/client';
 
+const GLOBAL_CONCEPT_COLS = 'id, user_id, name, slug, description, category, subcategory, parent_concept_id, concept_tag_id, state, stability, difficulty, scheduled_date, learning_step, last_reviewed_at, correct_count, wrong_count, created_at, updated_at' as const;
+
 export interface GlobalConcept {
   id: string;
   user_id: string;
@@ -326,7 +328,7 @@ export async function linkQuestionsToConcepts(
 export async function fetchGlobalConcepts(userId: string): Promise<GlobalConcept[]> {
   const { data, error } = await supabase
     .from('global_concepts' as any)
-    .select('*')
+    .select(GLOBAL_CONCEPT_COLS)
     .eq('user_id', userId)
     .order('scheduled_date', { ascending: true });
 
@@ -339,7 +341,7 @@ export async function fetchDueConcepts(userId: string): Promise<GlobalConcept[]>
   const now = new Date().toISOString();
   const { data, error } = await supabase
     .from('global_concepts' as any)
-    .select('*')
+    .select(GLOBAL_CONCEPT_COLS)
     .eq('user_id', userId)
     .lte('scheduled_date', now)
     .order('scheduled_date', { ascending: true });
@@ -557,7 +559,7 @@ export async function fetchReadyToLearnConcepts(userId: string): Promise<GlobalC
   // Get all user concepts
   const { data: all } = await supabase
     .from('global_concepts' as any)
-    .select('*')
+    .select(GLOBAL_CONCEPT_COLS)
     .eq('user_id', userId);
 
   if (!all || all.length === 0) return [];
@@ -850,7 +852,7 @@ export async function getCardConcepts(
   // 4. Fetch the user's global concepts
   const { data: concepts } = await supabase
     .from('global_concepts' as any)
-    .select('*')
+    .select(GLOBAL_CONCEPT_COLS)
     .eq('user_id', userId)
     .in('id', conceptIds)
     .order('stability', { ascending: true });
@@ -1320,7 +1322,7 @@ export async function mapPrerequisitesViaAI(userId: string): Promise<number> {
 export async function fetchDiagnosticConcepts(userId: string): Promise<GlobalConcept[]> {
   const { data: all } = await supabase
     .from('global_concepts' as any)
-    .select('*')
+    .select(GLOBAL_CONCEPT_COLS)
     .eq('user_id', userId);
 
   if (!all || all.length === 0) return [];

@@ -6,6 +6,8 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { CardRow } from '@/types/deck';
 
+const CARD_COLS = 'id, deck_id, front_content, back_content, card_type, state, stability, difficulty, scheduled_date, learning_step, last_reviewed_at, origin_deck_id, created_at, updated_at' as const;
+
 const PAGE_SIZE = 1000;
 const IN_BATCH = 300;
 
@@ -53,7 +55,7 @@ export async function fetchCards(deckId: string) {
   return paginatedFetch((from) =>
     supabase
       .from('cards')
-      .select('*')
+      .select(CARD_COLS)
       .eq('deck_id', deckId)
       .order('created_at', { ascending: false })
       .range(from, from + PAGE_SIZE - 1)
@@ -86,7 +88,7 @@ export async function fetchAggregatedCardsPage(deckIds: string[], limit: number,
   if (deckIds.length === 0) return [];
   if (deckIds.length === 1) {
     const { data, error } = await withRetry(async () => {
-      const res = await supabase.from('cards').select('*').eq('deck_id', deckIds[0]).order('created_at', { ascending: false }).range(offset, offset + limit - 1);
+      const res = await supabase.from('cards').select(CARD_COLS).eq('deck_id', deckIds[0]).order('created_at', { ascending: false }).range(offset, offset + limit - 1);
       return res as { data: CardRow[] | null; error: any };
     });
     if (error) throw error;
@@ -97,7 +99,7 @@ export async function fetchAggregatedCardsPage(deckIds: string[], limit: number,
     const batch = deckIds.slice(i, i + IN_BATCH);
     const needed = offset + limit;
     const { data, error } = await withRetry(async () => {
-      const res = await supabase.from('cards').select('*').in('deck_id', batch).order('created_at', { ascending: false }).range(0, needed - 1);
+      const res = await supabase.from('cards').select(CARD_COLS).in('deck_id', batch).order('created_at', { ascending: false }).range(0, needed - 1);
       return res as { data: CardRow[] | null; error: any };
     });
     if (error) throw error;
@@ -112,14 +114,14 @@ export async function fetchAggregatedCards(deckIds: string[]) {
   if (deckIds.length === 0) return [];
   if (deckIds.length === 1) {
     return paginatedFetch((from) =>
-      supabase.from('cards').select('*').eq('deck_id', deckIds[0]).order('created_at', { ascending: false }).range(from, from + PAGE_SIZE - 1)
+      supabase.from('cards').select(CARD_COLS).eq('deck_id', deckIds[0]).order('created_at', { ascending: false }).range(from, from + PAGE_SIZE - 1)
     );
   }
   const results: any[] = [];
   for (let i = 0; i < deckIds.length; i += IN_BATCH) {
     const batch = deckIds.slice(i, i + IN_BATCH);
     const rows = await paginatedFetch((from) =>
-      supabase.from('cards').select('*').in('deck_id', batch).order('created_at', { ascending: false }).range(from, from + PAGE_SIZE - 1)
+      supabase.from('cards').select(CARD_COLS).in('deck_id', batch).order('created_at', { ascending: false }).range(from, from + PAGE_SIZE - 1)
     );
     results.push(...rows);
   }
@@ -131,14 +133,14 @@ export async function fetchAggregatedCards(deckIds: string[]) {
 export async function fetchClozeSiblings(deckIds: string[], frontContent: string): Promise<CardRow[]> {
   if (deckIds.length === 0) return [];
   if (deckIds.length === 1) {
-    const { data, error } = await supabase.from('cards').select('*').eq('deck_id', deckIds[0]).eq('card_type', 'cloze').eq('front_content', frontContent);
+    const { data, error } = await supabase.from('cards').select(CARD_COLS).eq('deck_id', deckIds[0]).eq('card_type', 'cloze').eq('front_content', frontContent);
     if (error) throw error;
     return (data ?? []) as CardRow[];
   }
   const results: CardRow[] = [];
   for (let i = 0; i < deckIds.length; i += IN_BATCH) {
     const batch = deckIds.slice(i, i + IN_BATCH);
-    const { data, error } = await supabase.from('cards').select('*').in('deck_id', batch).eq('card_type', 'cloze').eq('front_content', frontContent);
+    const { data, error } = await supabase.from('cards').select(CARD_COLS).in('deck_id', batch).eq('card_type', 'cloze').eq('front_content', frontContent);
     if (error) throw error;
     if (data) results.push(...(data as CardRow[]));
   }

@@ -9,7 +9,7 @@ import type { FeatureRequest, FeatureComment } from '@/types/feedback';
 export async function fetchFeatureRequests(userId: string, category?: string): Promise<FeatureRequest[]> {
   let query = supabase
     .from('feature_requests')
-    .select('*')
+    .select('id, user_id, title, description, category, status, vote_count, created_at, updated_at')
     .order('vote_count', { ascending: false })
     .order('created_at', { ascending: false });
 
@@ -83,7 +83,7 @@ export async function deleteFeatureRequest(featureId: string) {
 export async function fetchFeatureComments(featureId: string): Promise<FeatureComment[]> {
   const { data, error } = await supabase
     .from('feature_comments')
-    .select('*')
+    .select('id, feature_id, user_id, content, created_at')
     .eq('feature_id', featureId)
     .order('created_at', { ascending: true });
   if (error) throw error;

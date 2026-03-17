@@ -12,12 +12,12 @@ export async function fetchUserTurmas(userId: string): Promise<Turma[]> {
 
   let turmas: any[];
   if (!memberships || memberships.length === 0) {
-    const { data: owned } = await supabase.from('turmas').select('*').eq('owner_id', userId);
+    const { data: owned } = await supabase.from('turmas').select('id, name, description, owner_id, is_private, cover_image_url, created_at, updated_at, subscription_price, share_slug, avg_rating, rating_count, invite_code').eq('owner_id', userId);
     turmas = owned ?? [];
   } else {
     const turmaIds = memberships.map(m => (m as any).turma_id);
     const { data } = await supabase
-      .from('turmas').select('*').or(`id.in.(${turmaIds.join(',')}),owner_id.eq.${userId}`);
+      .from('turmas').select('id, name, description, owner_id, is_private, cover_image_url, created_at, updated_at, subscription_price, share_slug, avg_rating, rating_count, invite_code').or(`id.in.(${turmaIds.join(',')}),owner_id.eq.${userId}`);
     turmas = data ?? [];
   }
 
@@ -54,7 +54,7 @@ export async function fetchUserTurmas(userId: string): Promise<Turma[]> {
 }
 
 export async function fetchTurma(turmaId: string): Promise<Turma | null> {
-  const { data } = await supabase.from('turmas').select('*').eq('id', turmaId).single();
+  const { data } = await supabase.from('turmas').select('id, name, description, owner_id, is_private, cover_image_url, created_at, updated_at, subscription_price, share_slug, avg_rating, rating_count, invite_code').eq('id', turmaId).single();
   return data as Turma | null;
 }
 
@@ -77,7 +77,7 @@ export async function updateTurma(turmaId: string, updates: { name?: string; des
 }
 
 export async function fetchTurmaBySlug(slug: string): Promise<Turma | null> {
-  const { data } = await supabase.from('turmas').select('*').eq('share_slug', slug).single();
+  const { data } = await supabase.from('turmas').select('id, name, description, owner_id, is_private, cover_image_url, created_at, updated_at, subscription_price, share_slug, avg_rating, rating_count, invite_code').eq('share_slug', slug).single();
   return data as Turma | null;
 }
 
@@ -87,7 +87,7 @@ export async function fetchDiscoverTurmas(_userId: string, searchQuery: string):
   // Only published/public Salas
   const { data: publicTurmas } = await supabase
     .from('turmas')
-    .select('*')
+    .select('id, name, description, owner_id, is_private, cover_image_url, created_at, updated_at, subscription_price, share_slug, avg_rating, rating_count, invite_code')
     .or('is_private.eq.false,share_slug.not.is.null')
     .order('created_at', { ascending: false })
     .limit(200);

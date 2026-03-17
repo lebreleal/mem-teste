@@ -24,12 +24,12 @@ export async function fetchMissions(userId: string, stats: MissionStats): Promis
   const [{ data: definitions }, { data: userMissions }] = await Promise.all([
     supabase
       .from('mission_definitions')
-      .select('*')
+      .select('id, key, title, description, icon, category, target_value, target_type, reward_credits, sort_order, is_active')
       .eq('is_active', true)
       .order('sort_order'),
     supabase
       .from('user_missions')
-      .select('*')
+      .select('id, user_id, mission_id, progress, is_completed, is_claimed, period_start, completed_at, claimed_at')
       .eq('user_id', userId),
   ]);
 

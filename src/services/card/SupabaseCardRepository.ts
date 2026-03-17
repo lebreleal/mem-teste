@@ -8,11 +8,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { mapCardRow, type Card, type CardState } from '@/types/domain';
 import type { ICardRepository, CardFilter, CardPage } from '@/types/repositories';
 
+const CARD_COLS = 'id, deck_id, front_content, back_content, card_type, state, stability, difficulty, scheduled_date, learning_step, last_reviewed_at, origin_deck_id, created_at, updated_at' as const;
+
 export class SupabaseCardRepository implements ICardRepository {
   async findById(id: string): Promise<Card | null> {
     const { data, error } = await supabase
       .from('cards')
-      .select('*')
+      .select(CARD_COLS)
       .eq('id', id)
       .maybeSingle();
     if (error) throw error;
@@ -20,7 +22,7 @@ export class SupabaseCardRepository implements ICardRepository {
   }
 
   async findMany(filter: CardFilter, limit = 200, offset = 0): Promise<CardPage> {
-    let query = supabase.from('cards').select('*', { count: 'exact' });
+    let query = supabase.from('cards').select(CARD_COLS, { count: 'exact' });
 
     if (filter.deckId) query = query.eq('deck_id', filter.deckId);
     if (filter.deckIds?.length) query = query.in('deck_id', filter.deckIds);

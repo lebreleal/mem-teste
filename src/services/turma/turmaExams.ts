@@ -7,7 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { TurmaExam, TurmaExamQuestion, TurmaExamAttempt } from '@/types/turma';
 
 export async function fetchTurmaExams(turmaId: string): Promise<TurmaExam[]> {
-  const { data, error } = await supabase.from('turma_exams').select('*').eq('turma_id', turmaId).order('created_at', { ascending: false });
+  const { data, error } = await supabase.from('turma_exams').select('id, turma_id, title, description, subject_id, lesson_id, created_by, is_published, is_marketplace, subscribers_only, price, time_limit_seconds, total_questions, sort_order, created_at, updated_at').eq('turma_id', turmaId).order('created_at', { ascending: false });
   if (error) throw error;
   const creatorIds = [...new Set((data ?? []).map((e: any) => e.created_by))];
   const { data: profiles } = await supabase.from('profiles').select('id, name').in('id', creatorIds);
@@ -16,7 +16,7 @@ export async function fetchTurmaExams(turmaId: string): Promise<TurmaExam[]> {
 }
 
 export async function fetchTurmaExamQuestions(examId: string): Promise<TurmaExamQuestion[]> {
-  const { data, error } = await supabase.from('turma_exam_questions').select('*').eq('exam_id', examId).order('sort_order', { ascending: true });
+  const { data, error } = await supabase.from('turma_exam_questions').select('id, exam_id, question_id, question_text, question_type, options, correct_answer, correct_indices, points, sort_order, created_at').eq('exam_id', examId).order('sort_order', { ascending: true });
   if (error) throw error;
   return (data ?? []) as TurmaExamQuestion[];
 }
@@ -39,7 +39,7 @@ export async function addQuestionToExam(params: { examId: string; questionText: 
 }
 
 export async function addQuestionsFromBank(examId: string, questionIds: string[]) {
-  const { data: questions, error } = await supabase.from('turma_questions').select('*').in('id', questionIds);
+  const { data: questions, error } = await supabase.from('turma_questions').select('id, question_text, question_type, options, correct_answer, correct_indices, points').in('id', questionIds);
   if (error) throw error;
   const inserts = (questions ?? []).map((q: any, i: number) => ({
     exam_id: examId, question_id: q.id, question_text: q.question_text, question_type: q.question_type,
@@ -111,7 +111,7 @@ export async function completeTurmaExamAttempt(attemptId: string, scoredPoints: 
 }
 
 export async function fetchTurmaExamAttempts(examId: string, userId: string): Promise<TurmaExamAttempt[]> {
-  const { data, error } = await supabase.from('turma_exam_attempts').select('*').eq('exam_id', examId).eq('user_id', userId).order('created_at', { ascending: false });
+  const { data, error } = await supabase.from('turma_exam_attempts').select('id, exam_id, user_id, status, total_points, scored_points, started_at, completed_at, created_at').eq('exam_id', examId).eq('user_id', userId).order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []) as TurmaExamAttempt[];
 }
@@ -121,7 +121,7 @@ export async function fetchMyAttempts(examId: string, userId: string): Promise<T
 }
 
 export async function fetchAttemptAnswers(attemptId: string) {
-  const { data, error } = await supabase.from('turma_exam_answers').select('*').eq('attempt_id', attemptId);
+  const { data, error } = await supabase.from('turma_exam_answers').select('id, attempt_id, question_id, user_answer, selected_indices, scored_points, is_graded, ai_feedback, created_at').eq('attempt_id', attemptId);
   if (error) throw error;
   return data ?? [];
 }

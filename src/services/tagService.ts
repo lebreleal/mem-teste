@@ -6,6 +6,8 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { Tag } from '@/types/tag';
 
+const TAG_COLS = 'id, name, slug, description, parent_id, is_official, usage_count, created_by, created_at, merged_into_id, synonyms' as const;
+
 // ---- Hierarchy helpers ----
 
 export interface TagTreeNode extends Tag {
@@ -43,7 +45,7 @@ function flattenTree(nodes: TagTreeNode[]): TagTreeNode[] {
 export async function getTagTree(): Promise<TagTreeNode[]> {
   const { data, error } = await supabase
     .from('tags')
-    .select('*')
+    .select(TAG_COLS)
     .is('merged_into_id', null)
     .order('usage_count', { ascending: false });
   if (error) throw error;
@@ -60,7 +62,7 @@ export async function getTagsFlat(): Promise<TagTreeNode[]> {
 export async function getTagChildren(parentId: string): Promise<Tag[]> {
   const { data, error } = await supabase
     .from('tags')
-    .select('*')
+    .select(TAG_COLS)
     .eq('parent_id', parentId)
     .is('merged_into_id', null)
     .order('usage_count', { ascending: false });
@@ -97,7 +99,7 @@ export async function searchTags(query: string, limit = 20): Promise<TagTreeNode
   // Fetch all non-merged tags to support hierarchy + synonym search
   const { data, error } = await supabase
     .from('tags')
-    .select('*')
+    .select(TAG_COLS)
     .is('merged_into_id', null)
     .order('usage_count', { ascending: false })
     .limit(200);
@@ -153,7 +155,7 @@ export async function createTag(name: string, userId: string, parentId?: string)
   
   const { data: existing } = await supabase
     .from('tags')
-    .select('*')
+    .select(TAG_COLS)
     .eq('slug', slug)
     .maybeSingle();
   
@@ -231,7 +233,7 @@ export async function removeCardTag(cardId: string, tagId: string): Promise<void
 export async function getAllTags(limit = 100): Promise<Tag[]> {
   const { data, error } = await supabase
     .from('tags')
-    .select('*')
+    .select(TAG_COLS)
     .is('merged_into_id', null)
     .order('usage_count', { ascending: false })
     .limit(limit);

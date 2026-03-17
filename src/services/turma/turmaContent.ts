@@ -9,22 +9,22 @@ import type { TurmaSemester, TurmaSubject, TurmaLesson, TurmaDeck } from '@/type
 // ── Hierarchy Queries ──
 
 export async function fetchTurmaSemesters(turmaId: string): Promise<TurmaSemester[]> {
-  const { data } = await supabase.from('turma_semesters').select('*').eq('turma_id', turmaId).order('sort_order', { ascending: true });
+  const { data } = await supabase.from('turma_semesters').select('id, turma_id, name, description, sort_order, created_at, created_by').eq('turma_id', turmaId).order('sort_order', { ascending: true });
   return (data ?? []) as TurmaSemester[];
 }
 
 export async function fetchTurmaSubjects(turmaId: string): Promise<TurmaSubject[]> {
-  const { data } = await supabase.from('turma_subjects').select('*').eq('turma_id', turmaId).order('sort_order', { ascending: true });
+  const { data } = await supabase.from('turma_subjects').select('id, turma_id, semester_id, parent_id, name, description, sort_order, created_at, created_by').eq('turma_id', turmaId).order('sort_order', { ascending: true });
   return (data ?? []) as TurmaSubject[];
 }
 
 export async function fetchTurmaLessons(turmaId: string): Promise<TurmaLesson[]> {
-  const { data } = await supabase.from('turma_lessons').select('*').eq('turma_id', turmaId).order('sort_order', { ascending: true });
+  const { data } = await supabase.from('turma_lessons').select('id, turma_id, subject_id, name, description, lesson_date, is_published, sort_order, created_at, created_by, summary, materials').eq('turma_id', turmaId).order('sort_order', { ascending: true });
   return (data ?? []) as TurmaLesson[];
 }
 
 export async function fetchTurmaDecks(turmaId: string): Promise<TurmaDeck[]> {
-  const { data } = await supabase.from('turma_decks').select('*').eq('turma_id', turmaId);
+  const { data } = await supabase.from('turma_decks').select('id, turma_id, deck_id, subject_id, lesson_id, shared_by, sort_order, is_published, price, price_type, allow_download, created_at').eq('turma_id', turmaId);
   if (!data || data.length === 0) return [];
 
   const deckIds = data.map((d: any) => d.deck_id);
@@ -174,7 +174,7 @@ export async function reorderTurmaExams(orderedIds: string[]) {
 // ── Turma Ratings ──
 
 export async function fetchMyTurmaRating(turmaId: string, userId: string) {
-  const { data } = await supabase.from('turma_ratings').select('*').eq('turma_id', turmaId).eq('user_id', userId).maybeSingle();
+  const { data } = await supabase.from('turma_ratings').select('id, turma_id, user_id, rating, comment, created_at').eq('turma_id', turmaId).eq('user_id', userId).maybeSingle();
   return data as any;
 }
 
@@ -191,7 +191,7 @@ export async function submitTurmaRating(turmaId: string, userId: string, rating:
 export async function fetchAllTurmaRatings(turmaId: string) {
   const { data: ratings } = await supabase
     .from('turma_ratings')
-    .select('*')
+    .select('id, turma_id, user_id, rating, comment, created_at')
     .eq('turma_id', turmaId)
     .order('created_at', { ascending: false });
   if (!ratings || ratings.length === 0) return [];
