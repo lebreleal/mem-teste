@@ -8,7 +8,7 @@ import { useState, useMemo } from 'react';
 import {
   GraduationCap, ChevronRight, Loader2, Search, CheckCircle2, XCircle,
 } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { useAuth } from '@/hooks/useAuth';
 import { useAuth } from '@/hooks/useAuth';
 import { Progress } from '@/components/ui/progress';
 import DeckRow from './DeckRow';
