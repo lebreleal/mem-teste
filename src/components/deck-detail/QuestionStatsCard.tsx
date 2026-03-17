@@ -4,7 +4,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchDeckHierarchyIds, fetchDeckQuestionStats } from '@/services/uiQueryService';
 import { Button } from '@/components/ui/button';
 import { PlayCircle, Sparkles } from 'lucide-react';
 
