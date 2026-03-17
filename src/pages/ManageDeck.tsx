@@ -117,15 +117,21 @@ const ManageDeck = () => {
         const { text, images } = extractImages(backRaw);
         setFront(text); setBack(frontVal && frontVal !== '<p></p>' ? frontVal : '');
         setFrontAttachedImages(images);
+        setBackAttachedImages([]);
         needsAutoSave = true;
       } else if (frontHasCloze) {
         const { text, images } = extractImages(frontVal);
-        setFront(text); setBack(clozeExtra || (backRaw !== currentCard.back_content ? '' : backRaw));
+        const resolvedBack = clozeExtra || (backRaw !== currentCard.back_content ? '' : backRaw);
+        const { text: bText, images: bImgs } = extractImages(resolvedBack);
+        setFront(text); setBack(bText);
         setFrontAttachedImages(images);
+        setBackAttachedImages(bImgs);
       } else {
         const { text, images } = extractImages(frontVal);
-        setFront(text); setBack(backRaw);
+        const { text: bText, images: bImgs } = extractImages(backRaw);
+        setFront(text); setBack(bText);
         setFrontAttachedImages(images);
+        setBackAttachedImages(bImgs);
       }
       setOcclusionImageUrl(''); setOcclusionRects([]); setOcclusionCanvasSize(null);
     }
