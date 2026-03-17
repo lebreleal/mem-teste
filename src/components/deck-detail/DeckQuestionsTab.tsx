@@ -490,9 +490,7 @@ const QuestionPractice = ({
     setStats(prev => ({ correct: prev.correct + (isCorrect ? 1 : 0), total: prev.total + 1 }));
 
     // Save attempt
-    await supabase.from('deck_question_attempts' as any).insert({
-      question_id: q.id, user_id: user.id, selected_indices: [selected], is_correct: isCorrect,
-    });
+    await saveQuestionAttempt(q.id, user.id, [selected], isCorrect);
 
     // Update concept mastery (both legacy deck_concept_mastery and global_concepts)
     if (q.concepts && q.concepts.length > 0) {
