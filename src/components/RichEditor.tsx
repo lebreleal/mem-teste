@@ -272,8 +272,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       toast({ title: 'Máximo 5MB', variant: 'destructive' }); return null;
     }
     const compressed = await compressImage(file);
-    const ext = compressed.name.split('.').pop() || 'webp';
-    const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
+    try {
     try {
       const publicUrl = await uploadToStorage(user.id, compressed);
       return publicUrl;
