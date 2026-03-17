@@ -402,10 +402,10 @@ const ContentTab = () => {
   // ── Count cards recursively in a folder ──
   const getFolderCardCount = (folderId: string): number => {
     const directCards = turmaDecks
-      .filter((d: any) => d.subject_id === folderId && (isAdmin || d.is_published !== false))
-      .reduce((sum: number, d: any) => sum + (d.card_count || 0), 0);
-    const childFolders = subjects.filter((s: any) => s.parent_id === folderId);
-    return directCards + childFolders.reduce((sum: number, cf: any) => sum + getFolderCardCount(cf.id), 0);
+      .filter(d => d.subject_id === folderId && (isAdmin || d.is_published !== false))
+      .reduce((sum, d) => sum + (d.card_count || 0), 0);
+    const childFolders = subjects.filter(s => s.parent_id === folderId);
+    return directCards + childFolders.reduce((sum, cf) => sum + getFolderCardCount(cf.id), 0);
   };
 
   // ── Count attachments (files + exams) recursively in a folder ──
