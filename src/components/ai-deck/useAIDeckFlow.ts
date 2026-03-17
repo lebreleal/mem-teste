@@ -173,9 +173,9 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
           toast({ title: 'Conteúdo limitado', description: 'Para melhores resultados, copie e cole o texto.', variant: 'destructive' });
           setStep('upload'); setInputMode('text'); setFileName('');
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Document extraction error:', err);
-        toast({ title: 'Erro ao processar arquivo', description: err?.message || 'Tente colar o texto diretamente.', variant: 'destructive' });
+        toast({ title: 'Erro ao processar arquivo', description: err instanceof Error ? err.message : 'Tente colar o texto diretamente.', variant: 'destructive' });
         setStep('upload'); setInputMode(null); setFileName('');
       }
     }
