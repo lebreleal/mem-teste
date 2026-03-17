@@ -8,8 +8,14 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import BottomNav from '@/components/BottomNav';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-// TODO: migrate remaining inline supabase calls to publicDeckService
+import {
+  fetchPublicDeckInfo, fetchDeckSubtreeCards, fetchDeckSuggestionCount,
+  fetchTurmaDeckLink, fetchTurmaDeckFiles, fetchTurmaDeckExams,
+  checkTurmaMembership, checkDeckFollowing, joinTurma,
+  followDeckWithHierarchy, getOrCreateLessonForDeck, uploadLessonFile,
+  deleteLessonFile, fetchDeckSuggestions, voteSuggestion,
+  fetchSuggestionComments, insertSuggestionComment,
+} from '@/services/publicDeckService';
 import { useAuth } from '@/hooks/useAuth';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -406,19 +412,7 @@ const SuggestionComments = ({ suggestionId, commentCount }: { suggestionId: stri
 
   const { data: comments = [] } = useQuery({
     queryKey: ['suggestion-comments', suggestionId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('suggestion_comments')
-        .select('id, content, created_at, user_id')
-        .eq('suggestion_id', suggestionId)
-        .order('created_at', { ascending: true });
-      if (error) throw error;
-      if (!data || data.length === 0) return [];
-      const userIds = [...new Set(data.map(c => c.user_id))];
-      const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: userIds });
-      const nameMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
-      return data.map(c => ({ ...c, user_name: nameMap.get(c.user_id) ?? 'Usuário' }));
-    },
+    queryFn: () => fetchSuggestionComments(suggestionId),
     enabled: expanded,
   });
 
@@ -426,12 +420,7 @@ const SuggestionComments = ({ suggestionId, commentCount }: { suggestionId: stri
     if (!newComment.trim() || !user) return;
     setSubmitting(true);
     try {
-      const { error } = await supabase.from('suggestion_comments').insert({
-        suggestion_id: suggestionId,
-        user_id: user.id,
-        content: newComment.trim(),
-      } as any);
-      if (error) throw error;
+      await insertSuggestionComment(suggestionId, user.id, newComment.trim());
       setNewComment('');
       queryClient.invalidateQueries({ queryKey: ['suggestion-comments', suggestionId] });
     } catch {
@@ -653,76 +642,14 @@ const CommunitySuggestions = ({ deckId }: { deckId: string }) => {
 
   const { data: suggestions = [], isLoading } = useQuery({
     queryKey: ['deck-suggestions-public', deckId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('deck_suggestions')
-        .select('id, status, rationale, created_at, suggester_user_id, card_id, suggested_content, suggestion_type, suggested_tags, content_status, tags_status')
-        .eq('deck_id', deckId)
-        .order('created_at', { ascending: false })
-        .limit(50);
-      if (error) throw error;
-      if (!data || data.length === 0) return [];
-
-      const userIds = [...new Set(data.map(s => s.suggester_user_id))];
-      const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: userIds });
-      const nameMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
-
-      const cardIds = data.map(s => s.card_id).filter(Boolean) as string[];
-      const { data: cards } = cardIds.length > 0
-        ? await supabase.from('cards').select('id, front_content, back_content').in('id', cardIds)
-        : { data: [] };
-      const cardMap = new Map((cards ?? []).map(c => [c.id, c]));
-
-      // Fetch votes
-      const suggestionIds = data.map(s => s.id);
-      const { data: votes } = await supabase
-        .from('suggestion_votes')
-        .select('suggestion_id, vote, user_id')
-        .in('suggestion_id', suggestionIds);
-      
-      const voteMap = new Map<string, { score: number; userVote: number }>();
-      (votes ?? []).forEach((v: any) => {
-        const existing = voteMap.get(v.suggestion_id) ?? { score: 0, userVote: 0 };
-        existing.score += v.vote;
-        if (v.user_id === user?.id) existing.userVote = v.vote;
-        voteMap.set(v.suggestion_id, existing);
-      });
-
-      // Fetch comment counts
-      const { data: commentCounts } = await supabase
-        .from('suggestion_comments')
-        .select('suggestion_id')
-        .in('suggestion_id', suggestionIds);
-      const commentCountMap = new Map<string, number>();
-      (commentCounts ?? []).forEach((c: any) => {
-        commentCountMap.set(c.suggestion_id, (commentCountMap.get(c.suggestion_id) ?? 0) + 1);
-      });
-
-      return data.map(s => ({
-        ...s,
-        suggester_name: nameMap.get(s.suggester_user_id) ?? 'Usuário',
-        original_front: s.card_id ? cardMap.get(s.card_id)?.front_content ?? null : null,
-        original_back: s.card_id ? cardMap.get(s.card_id)?.back_content ?? null : null,
-        vote_score: voteMap.get(s.id)?.score ?? 0,
-        user_vote: voteMap.get(s.id)?.userVote ?? 0,
-        comment_count: commentCountMap.get(s.id) ?? 0,
-      })) as Suggestion[];
-    },
+    queryFn: () => fetchDeckSuggestions(deckId, user?.id) as Promise<Suggestion[]>,
     enabled: !!deckId,
   });
 
   const handleVote = async (suggestionId: string, vote: number) => {
     if (!user) return;
     try {
-      if (vote === 0) {
-        await supabase.from('suggestion_votes').delete().eq('suggestion_id', suggestionId).eq('user_id', user.id);
-      } else {
-        await supabase.from('suggestion_votes').upsert({
-          suggestion_id: suggestionId,
-          user_id: user.id,
-          vote,
-        } as any, { onConflict: 'suggestion_id,user_id' });
-      }
+      await voteSuggestion(suggestionId, user.id, vote);
       queryClient.invalidateQueries({ queryKey: ['deck-suggestions-public', deckId] });
     } catch {}
   };
@@ -907,132 +834,49 @@ const PublicDeckPreview = () => {
   // Fetch deck info
   const { data: deck, isLoading: deckLoading } = useQuery({
     queryKey: ['public-deck-info', deckId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('decks')
-        .select('id, name, is_public, updated_at, user_id')
-        .eq('id', deckId!)
-        .single();
-      if (error) throw error;
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('name')
-        .eq('id', data.user_id)
-        .single();
-
-      return { ...data, owner_name: profile?.name ?? 'Criador' };
-    },
+    queryFn: () => fetchPublicDeckInfo(deckId!),
     enabled: !!deckId,
   });
 
   // Fetch cards from published subtree (aggregated hierarchy)
   const { data: allCards = [], isLoading: cardsLoading } = useQuery({
     queryKey: ['public-deck-cards', deckId],
-    queryFn: async () => {
-      // 1. Discover full subtree of children (regardless of turma)
-      const allSubtreeIds = new Set<string>([deckId!]);
-      let parentIds = [deckId!];
-      while (parentIds.length > 0) {
-        const { data: children } = await supabase
-          .from('decks')
-          .select('id, parent_deck_id')
-          .in('parent_deck_id', parentIds);
-        const newChildren = (children ?? []).filter((c: any) => !allSubtreeIds.has(c.id));
-        if (newChildren.length === 0) break;
-        newChildren.forEach((c: any) => allSubtreeIds.add(c.id));
-        parentIds = newChildren.map((c: any) => c.id);
-      }
-
-      const subtreeIds = [...allSubtreeIds];
-
-      // 2. Fetch cards from all subtree decks
-      const { data, error } = await supabase
-        .from('cards')
-        .select('*')
-        .in('deck_id', subtreeIds)
-        .order('created_at', { ascending: true })
-        .limit(2000);
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => fetchDeckSubtreeCards(deckId!),
     enabled: !!deckId,
   });
 
   // Suggestion count for tab badge
   const { data: suggestionCount = 0 } = useQuery({
     queryKey: ['deck-suggestion-count', deckId],
-    queryFn: async () => {
-      const { count } = await supabase
-        .from('deck_suggestions')
-        .select('id', { count: 'exact', head: true })
-        .eq('deck_id', deckId!);
-      return count ?? 0;
-    },
+    queryFn: () => fetchDeckSuggestionCount(deckId!),
     enabled: !!deckId,
   });
 
   // Find turma_deck entry to get turma context
   const { data: turmaDeck } = useQuery({
     queryKey: ['turma-deck-link', deckId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('turma_decks')
-        .select('id, turma_id, subject_id, lesson_id, content_folder_id')
-        .eq('deck_id', deckId!)
-        .limit(1)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => fetchTurmaDeckLink(deckId!),
     enabled: !!deckId,
   });
 
   // Fetch files linked to same lesson as this deck
   const { data: deckFiles = [] } = useQuery({
     queryKey: ['turma-deck-files', turmaDeck?.lesson_id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('turma_lesson_files')
-        .select('id, file_name, file_url, file_size, file_type, created_at')
-        .eq('lesson_id', turmaDeck!.lesson_id!)
-        .order('sort_order', { ascending: true });
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => fetchTurmaDeckFiles(turmaDeck!.lesson_id!),
     enabled: !!turmaDeck?.lesson_id,
   });
 
   // Fetch exams linked to same lesson as this deck
   const { data: deckExams = [] } = useQuery({
     queryKey: ['turma-deck-exams', turmaDeck?.turma_id, turmaDeck?.lesson_id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('turma_exams')
-        .select('id, title, description, total_questions, time_limit_seconds, created_at, is_published')
-        .eq('turma_id', turmaDeck!.turma_id)
-        .eq('lesson_id', turmaDeck!.lesson_id!)
-        .eq('is_published', true)
-        .order('sort_order', { ascending: true });
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => fetchTurmaDeckExams(turmaDeck!.turma_id, turmaDeck!.lesson_id!),
     enabled: !!turmaDeck?.turma_id && !!turmaDeck?.lesson_id,
   });
 
   // Check if user is already a member of the turma
   const { data: isTurmaMember = false } = useQuery({
     queryKey: ['turma-membership-check', turmaDeck?.turma_id, user?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('turma_members')
-        .select('id')
-        .eq('turma_id', turmaDeck!.turma_id)
-        .eq('user_id', user!.id)
-        .maybeSingle();
-      if (error) throw error;
-      return !!data;
-    },
+    queryFn: () => checkTurmaMembership(turmaDeck!.turma_id, user!.id),
     enabled: !!turmaDeck?.turma_id && !!user,
   });
 
@@ -1040,12 +884,7 @@ const PublicDeckPreview = () => {
     if (!turmaDeck?.turma_id || !user || joining) return;
     setJoining(true);
     try {
-      const { error } = await supabase.from('turma_members').insert({
-        turma_id: turmaDeck.turma_id,
-        user_id: user.id,
-        role: 'member',
-      } as any);
-      if (error) throw error;
+      await joinTurma(turmaDeck.turma_id, user.id);
       queryClient.invalidateQueries({ queryKey: ['turma-membership-check'] });
       queryClient.invalidateQueries({ queryKey: ['turmas'] });
       toast({ title: '✅ Inscrito na comunidade!' });
@@ -1061,45 +900,12 @@ const PublicDeckPreview = () => {
   // Check if user already follows this deck (has a linked copy)
   const { data: isFollowing = false } = useQuery({
     queryKey: ['deck-following', deckId, user?.id],
-    queryFn: async () => {
-      if (turmaDeck?.id) {
-        const { data } = await supabase
-          .from('decks')
-          .select('id')
-          .eq('user_id', user!.id)
-          .eq('source_turma_deck_id', turmaDeck.id)
-          .limit(1)
-          .maybeSingle();
-        return !!data;
-      }
-      // For non-turma public decks, check via marketplace listing or is_live_deck + name
-      const { data: listing } = await supabase
-        .from('marketplace_listings')
-        .select('id')
-        .eq('deck_id', deckId!)
-        .eq('is_published', true)
-        .maybeSingle();
-      if (listing) {
-        const { data } = await supabase
-          .from('decks')
-          .select('id')
-          .eq('user_id', user!.id)
-          .eq('source_listing_id', listing.id)
-          .limit(1)
-          .maybeSingle();
-        return !!data;
-      }
-      // Fallback: check by name match + is_live_deck
-      const { data } = await supabase
-        .from('decks')
-        .select('id')
-        .eq('user_id', user!.id)
-        .eq('is_live_deck', true)
-        .eq('name', deck?.name ?? '')
-        .limit(1)
-        .maybeSingle();
-      return !!data;
-    },
+    queryFn: () => checkDeckFollowing({
+      deckId: deckId!,
+      userId: user!.id,
+      turmaDeckId: turmaDeck?.id ?? null,
+      deckName: deck?.name ?? '',
+    }),
     enabled: !!user && !!deckId && !isOwner,
   });
 
@@ -1109,129 +915,17 @@ const PublicDeckPreview = () => {
     try {
       // Join turma if not already a member
       if (turmaDeck && !isTurmaMember && turmaDeck.turma_id) {
-        await supabase.from('turma_members').insert({
-          turma_id: turmaDeck.turma_id,
-          user_id: user.id,
-          role: 'member',
-        } as any).throwOnError();
+        await joinTurma(turmaDeck.turma_id, user.id);
         queryClient.invalidateQueries({ queryKey: ['turma-membership-check'] });
         queryClient.invalidateQueries({ queryKey: ['turmas'] });
       }
 
-      // ── No folder creation — decks go directly to root ──
-      let targetFolderId: string | null = null;
-
-      // ── Helper to copy a single deck with its cards ──
-      const copyDeck = async (sourceDeckId: string, deckName: string, parentDeckId: string | null, sourceTurmaDeckId: string | null, folderId: string | null) => {
-        const { data: srcDeck } = await supabase.from('decks').select('algorithm_mode, daily_new_limit, daily_review_limit').eq('id', sourceDeckId).single();
-        const sd = srcDeck as any;
-        const insertData: any = {
-          name: deckName, user_id: user!.id, is_public: false, is_live_deck: true,
-          folder_id: folderId, parent_deck_id: parentDeckId,
-          algorithm_mode: sd?.algorithm_mode ?? 'fsrs',
-          daily_new_limit: sd?.daily_new_limit ?? 20,
-          daily_review_limit: sd?.daily_review_limit ?? 9999,
-        };
-        if (sourceTurmaDeckId) insertData.source_turma_deck_id = sourceTurmaDeckId;
-        if (turmaDeck?.turma_id) insertData.community_id = turmaDeck.turma_id;
-
-        const { data: newDeck, error } = await supabase.from('decks').insert(insertData).select('id').single();
-        if (error) throw error;
-
-        // Copy cards in batches
-        if (newDeck) {
-          const BATCH = 500;
-          let offset = 0;
-          let hasMore = true;
-          while (hasMore) {
-            const { data: cards } = await supabase
-              .from('cards')
-              .select('front_content, back_content, card_type')
-              .eq('deck_id', sourceDeckId)
-              .range(offset, offset + BATCH - 1)
-              .order('created_at', { ascending: true });
-            if (!cards || cards.length === 0) break;
-            await supabase.from('cards').insert(cards.map((c: any) => ({
-              deck_id: newDeck.id, front_content: c.front_content,
-              back_content: c.back_content, card_type: c.card_type ?? 'basic',
-            })) as any);
-            if (cards.length < BATCH) hasMore = false;
-            else offset += BATCH;
-          }
-        }
-        return newDeck;
-      };
-
-      // ── For non-turma public decks (marketplace), simpler flow ──
-      if (!turmaDeck) {
-        const insertData: any = {
-          name: deck.name, user_id: user.id, is_public: false, is_live_deck: true,
-        };
-        const { data: listing } = await supabase
-          .from('marketplace_listings').select('id')
-          .eq('deck_id', deckId!).eq('is_published', true).maybeSingle();
-        if (listing) insertData.source_listing_id = listing.id;
-
-        // Try to resolve community_id from the source deck owner's turma membership
-        if (!listing) {
-          const { data: srcDeck } = await supabase.from('decks').select('user_id').eq('id', deckId!).single();
-          if (srcDeck) {
-            const { data: ownerMembership } = await supabase
-              .from('turma_members')
-              .select('turma_id')
-              .eq('user_id', (srcDeck as any).user_id)
-              .limit(1)
-              .maybeSingle();
-            if (ownerMembership) insertData.community_id = (ownerMembership as any).turma_id;
-          }
-        }
-
-        const { data: newDeck, error } = await supabase.from('decks').insert(insertData).select('id').single();
-        if (error) throw error;
-        if (newDeck) {
-          const BATCH = 500;
-          let offset = 0;
-          let hasMore = true;
-          while (hasMore) {
-            const { data: cards } = await supabase
-              .from('cards').select('front_content, back_content, card_type')
-              .eq('deck_id', deckId!).range(offset, offset + BATCH - 1)
-              .order('created_at', { ascending: true });
-            if (!cards || cards.length === 0) break;
-            await supabase.from('cards').insert(cards.map((c: any) => ({
-              deck_id: newDeck.id, front_content: c.front_content,
-              back_content: c.back_content, card_type: c.card_type ?? 'basic',
-            })) as any);
-            if (cards.length < BATCH) hasMore = false;
-            else offset += BATCH;
-          }
-        }
-      } else {
-        // ── Turma deck: copy with hierarchy (parent + sub-decks) ──
-        const mainDeck = await copyDeck(deckId!, deck.name, null, turmaDeck.id, targetFolderId);
-
-        // Copy sub-decks (children in turma)
-        if (mainDeck) {
-          const { data: childTurmaDeckRows } = await supabase
-            .from('turma_decks')
-            .select('id, deck_id')
-            .eq('turma_id', turmaDeck.turma_id);
-
-          // Find children of the source deck in the decks table
-          const { data: childDecks } = await supabase
-            .from('decks')
-            .select('id, name, parent_deck_id')
-            .eq('parent_deck_id', deckId!);
-
-          if (childDecks?.length) {
-            for (const child of childDecks) {
-              // Find turma_deck entry for this child
-              const childTd = (childTurmaDeckRows ?? []).find((r: any) => r.deck_id === child.id);
-              await copyDeck(child.id, child.name, mainDeck.id, childTd?.id ?? null, targetFolderId);
-            }
-          }
-        }
-      }
+      await followDeckWithHierarchy({
+        deckId: deckId!,
+        deckName: deck.name,
+        userId: user.id,
+        turmaDeck: turmaDeck ? { id: turmaDeck.id, turma_id: turmaDeck.turma_id, subject_id: turmaDeck.subject_id } : null,
+      });
 
       queryClient.invalidateQueries({ queryKey: ['deck-following', deckId] });
       queryClient.invalidateQueries({ queryKey: ['decks'] });
@@ -1246,17 +940,14 @@ const PublicDeckPreview = () => {
 
   // ── File upload for owner ──
   const getOrCreateLesson = async (): Promise<string> => {
-    if (turmaDeck?.lesson_id) return turmaDeck.lesson_id;
-    const { data, error } = await supabase.from('turma_lessons' as any).insert({
-      turma_id: turmaDeck!.turma_id, subject_id: turmaDeck?.subject_id ?? null,
-      name: deck?.name || 'Conteúdo', created_by: user!.id, is_published: true,
-    } as any).select().single();
-    if (error) throw error;
-    // Update turma_deck to reference the new lesson
-    await supabase.from('turma_decks').update({ lesson_id: (data as any).id }).eq('id', turmaDeck!.id);
+    const lessonId = await getOrCreateLessonForDeck({
+      turmaDeck: { id: turmaDeck!.id, turma_id: turmaDeck!.turma_id, lesson_id: turmaDeck?.lesson_id ?? null, subject_id: turmaDeck?.subject_id ?? null },
+      deckName: deck?.name || 'Conteúdo',
+      userId: user!.id,
+    });
     queryClient.invalidateQueries({ queryKey: ['turma-deck-link', deckId] });
     queryClient.invalidateQueries({ queryKey: ['turma-lessons'] });
-    return (data as any).id;
+    return lessonId;
   };
 
   const ALLOWED_FILE_TYPES = [
@@ -1284,15 +975,7 @@ const PublicDeckPreview = () => {
           toast({ title: 'Arquivo muito grande', description: 'Máximo 20MB.', variant: 'destructive' });
           continue;
         }
-        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-        const filePath = `${user.id}/${turmaDeck.turma_id}/${lessonId}/${Date.now()}_${safeName}`;
-        const { error: uploadError } = await supabase.storage.from('lesson-files').upload(filePath, file);
-        if (uploadError) throw uploadError;
-        const { data: urlData } = supabase.storage.from('lesson-files').getPublicUrl(filePath);
-        await supabase.from('turma_lesson_files' as any).insert({
-          lesson_id: lessonId, turma_id: turmaDeck.turma_id, file_name: file.name,
-          file_url: urlData.publicUrl, file_size: file.size, file_type: file.type, uploaded_by: user.id,
-        } as any);
+        await uploadLessonFile({ file, userId: user.id, turmaId: turmaDeck.turma_id, lessonId });
       }
       queryClient.invalidateQueries({ queryKey: ['turma-deck-files'] });
       toast({ title: 'Arquivo(s) enviado(s)!' });
@@ -1308,8 +991,7 @@ const PublicDeckPreview = () => {
   const handleDeleteFile = async (fileId: string) => {
     try {
       setDeletingFileId(fileId);
-      const { error } = await supabase.from('turma_lesson_files' as any).delete().eq('id', fileId);
-      if (error) throw error;
+      await deleteLessonFile(fileId);
       queryClient.invalidateQueries({ queryKey: ['turma-deck-files'] });
       queryClient.invalidateQueries({ queryKey: ['turma-content-files'] });
       toast({ title: 'Arquivo removido' });
