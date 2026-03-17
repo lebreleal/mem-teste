@@ -90,8 +90,8 @@ const Study = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Leech detection
-  const leech = useLeechDetection(deckId, folderId);
+  // Leech bypass refs (kept as stubs for StudyDialogs compatibility)
+  const leechBypassOnceRef = useRef(new Set<string>());
 
   useEffect(() => { mainScrollRef.current && (mainScrollRef.current.scrollTop = 0); }, [cardKey]);
 
