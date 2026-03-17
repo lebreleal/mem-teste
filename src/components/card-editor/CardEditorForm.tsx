@@ -6,11 +6,14 @@
  * Wrap it in a Dialog, Sheet, or inline layout as needed.
  */
 import React, { useState } from 'react';
-import { Image, Trash2, Sparkles, Loader2, Upload, Plus, ChevronDown, ChevronUp } from 'lucide-react';
+import { Trash2, Sparkles, Loader2, Plus, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import LazyRichEditor from '@/components/LazyRichEditor';
+import { IconImage, IconSwap, IconInfo } from '@/components/icons';
+import cartaoInvertidoResposta from '@/assets/cartao-invertido-resposta.png';
+import cartaoInvertidoPergunta from '@/assets/cartao-invertido-pergunta.png';
 
 export type CardEditorType = 'basic' | 'cloze' | 'multiple_choice' | 'image_occlusion';
 
