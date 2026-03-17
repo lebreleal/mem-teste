@@ -38,28 +38,9 @@ const DashboardDueThemes = () => {
   const handleStudyConcept = useCallback(async (concept: GlobalConcept) => {
     if (!user) return;
     try {
-      // Find questions linked to this concept
-      const { data: links } = await supabase
-        .from('question_concepts' as any)
-        .select('question_id')
-        .eq('concept_id', concept.id)
-        .limit(1);
-
-      if (!links || links.length === 0) {
-        // No linked questions — go to concepts page
-        navigate('/conceitos');
-        return;
-      }
-
-      // Get deck from first linked question
-      const { data: question } = await supabase
-        .from('deck_questions' as any)
-        .select('deck_id')
-        .eq('id', (links as any[])[0].question_id)
-        .maybeSingle();
-
-      if (question && (question as any).deck_id) {
-        navigate(`/study/${(question as any).deck_id}`);
+      const deckId = await findConceptLinkedDeck(concept.id);
+      if (deckId) {
+        navigate(`/study/${deckId}`);
       } else {
         navigate('/conceitos');
       }
