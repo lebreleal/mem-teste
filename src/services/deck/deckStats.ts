@@ -53,7 +53,7 @@ interface OriginalDeckRow { name: string; user_id: string; updated_at: string }
 export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats[]> {
   const fetchAllDecks = async () => {
     const PAGE = 1000;
-    let allDecks: any[] = [];
+    let allDecks: DeckRow[] = [];
     let offset = 0;
     let hasMore = true;
     while (hasMore) {
