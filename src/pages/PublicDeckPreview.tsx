@@ -884,12 +884,7 @@ const PublicDeckPreview = () => {
     if (!turmaDeck?.turma_id || !user || joining) return;
     setJoining(true);
     try {
-      const { error } = await supabase.from('turma_members').insert({
-        turma_id: turmaDeck.turma_id,
-        user_id: user.id,
-        role: 'member',
-      } as any);
-      if (error) throw error;
+      await joinTurma(turmaDeck.turma_id, user.id);
       queryClient.invalidateQueries({ queryKey: ['turma-membership-check'] });
       queryClient.invalidateQueries({ queryKey: ['turmas'] });
       toast({ title: '✅ Inscrito na comunidade!' });
