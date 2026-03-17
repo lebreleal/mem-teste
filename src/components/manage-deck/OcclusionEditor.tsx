@@ -2,7 +2,7 @@
  * Occlusion Editor — contained overlay, supports rect, polygon, freehand, eraser, select+resize.
  * Colors group shapes: same color = same card, different color = different cards.
  * Dynamic colors: new colors appear as needed.
- * Layout: drawing tools top-center, zoom+actions bottom-center.
+ * Layout: image centered, drawing tools above image, bottom bar below image.
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -69,10 +69,8 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
   const [currentPoints, setCurrentPoints] = useState<{ x: number; y: number }[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [shapeColor, setShapeColor] = useState(COLORS[0].fill);
-  // Resize state
   const [resizing, setResizing] = useState<{ corner: string; startX: number; startY: number; origShape: OcclusionShape } | null>(null);
-  // Pan via scroll, no pan tool needed
-  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [panOffset] = useState({ x: 0, y: 0 });
 
   const pushHistory = useCallback(() => {
     setHistory(prev => [...prev.slice(-20), shapes]);
@@ -148,14 +146,11 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
     });
   };
 
-  // Auto-switch color after drawing a shape
   const autoSwitchColor = useCallback((currentShapes: OcclusionShape[]) => {
     const usedColors = new Set(currentShapes.map(s => s.color || COLORS[0].fill));
-    // If current color is used, switch to next unused or next in list
     if (usedColors.has(shapeColor)) {
       const currentIdx = COLORS.findIndex(c => c.fill === shapeColor);
       const nextIdx = (currentIdx + 1) % COLORS.length;
-      // Find next color not yet used, or just go to the next one
       for (let i = 0; i < COLORS.length; i++) {
         const candidate = COLORS[(nextIdx + i) % COLORS.length];
         if (!usedColors.has(candidate.fill)) {
@@ -163,7 +158,6 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
           return;
         }
       }
-      // All used, go to next
       setShapeColor(COLORS[nextIdx].fill);
     }
   }, [shapeColor]);
@@ -171,16 +165,11 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
   const handlePointerDown = (e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
-
     const pos = toImgCoords(e.clientX, e.clientY);
 
     if (tool === 'select') {
       const hit = hitTest(pos);
-      if (hit) {
-        setSelectedId(hit.id);
-      } else {
-        setSelectedId(null);
-      }
+      setSelectedId(hit ? hit.id : null);
       return;
     }
 
@@ -225,7 +214,6 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
   const handlePointerMove = (e: React.PointerEvent) => {
     e.preventDefault();
 
-    // Handle resize
     if (resizing) {
       const pos = toImgCoords(e.clientX, e.clientY);
       const s = resizing.origShape;
@@ -323,7 +311,6 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
     onSave(frontContent, '');
   };
 
-  // AI text detection
   const handleDetectAI = async () => {
     if (!imageUrl) return;
     setIsDetecting(true);
@@ -363,7 +350,6 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
     setSelectedId(null);
   }, [selectedId, pushHistory]);
 
-  // Keyboard: delete, undo
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
@@ -379,22 +365,19 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
     return () => window.removeEventListener('keydown', handler);
   }, [selectedId, deleteSelected, undo]);
 
-  // Dynamic visible colors: show used colors + 1 more
+  // Dynamic visible colors
   const usedColorFills = new Set(shapes.map(s => s.color || COLORS[0].fill));
   const visibleColors = (() => {
     const visible: typeof COLORS = [];
     for (const c of COLORS) {
       if (usedColorFills.has(c.fill)) visible.push(c);
-      if (visible.length >= COLORS.length) break;
     }
-    // Always show at least next unused color
     for (const c of COLORS) {
       if (!usedColorFills.has(c.fill)) {
         visible.push(c);
         break;
       }
     }
-    // If nothing used yet, show first 2
     if (visible.length < 2) {
       for (const c of COLORS) {
         if (!visible.includes(c)) { visible.push(c); break; }
@@ -407,7 +390,22 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
 
   const getCursorStyle = () => {
     if (tool === 'select') return 'default';
+    if (tool === 'eraser') return 'pointer';
     return 'crosshair';
+  };
+
+  // Get selected shape for positioning trash button
+  const selectedShape = selectedId ? shapes.find(s => s.id === selectedId) : null;
+  const getShapeBottom = (s: OcclusionShape): { x: number; y: number } => {
+    if (s.type === 'rect') {
+      return { x: (s.x! + s.w! / 2) * scale, y: (s.y! + s.h!) * scale };
+    }
+    if (s.points && s.points.length > 0) {
+      const xs = s.points.map(p => p.x);
+      const ys = s.points.map(p => p.y);
+      return { x: ((Math.min(...xs) + Math.max(...xs)) / 2) * scale, y: Math.max(...ys) * scale };
+    }
+    return { x: 0, y: 0 };
   };
 
   /* ─── Upload Screen ─── */
@@ -434,7 +432,6 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
   const renderShape = (s: OcclusionShape) => {
     const isSelected = selectedId === s.id;
     const colorObj = getColorObj(s.color || COLORS[0].fill);
-    // Eye logic: open = transparent (see-through), closed = opaque (hidden)
     const fillColor = previewOpaque
       ? colorObj.fill.replace(/[\d.]+\)$/, '1)')
       : colorObj.fill;
@@ -443,7 +440,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
       return (
         <div key={s.id}>
           <div
-            className={`absolute transition-shadow ${tool === 'eraser' ? 'cursor-pointer hover:opacity-50' : tool === 'select' ? 'cursor-move' : 'cursor-default'}`}
+            className="absolute pointer-events-auto"
             style={{
               left: s.x! * scale,
               top: s.y! * scale,
@@ -453,8 +450,14 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
               border: `2px solid ${colorObj.border}`,
               borderRadius: 4,
               boxShadow: isSelected ? `0 0 0 2px ${colorObj.border}, 0 0 8px ${colorObj.fill}` : undefined,
+              cursor: tool === 'select' ? 'move' : tool === 'eraser' ? 'pointer' : 'crosshair',
             }}
-            onClick={(e) => { e.stopPropagation(); setSelectedId(s.id); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (tool === 'select' || tool === 'eraser') {
+                setSelectedId(s.id);
+              }
+            }}
           />
           {/* Resize handles when selected */}
           {isSelected && tool === 'select' && (
@@ -466,7 +469,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
                 return (
                   <div
                     key={corner}
-                    className="absolute z-20"
+                    className="absolute z-20 pointer-events-auto"
                     style={{
                       left, top, width: 8, height: 8,
                       backgroundColor: '#fff',
@@ -500,8 +503,12 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
               fill={fillColor}
               stroke={colorObj.border}
               strokeWidth={isSelected ? 3 : 2}
-              className={`pointer-events-auto ${tool === 'eraser' ? 'cursor-pointer' : 'cursor-default'}`}
-              onClick={(e) => { e.stopPropagation(); setSelectedId(s.id); }}
+              className="pointer-events-auto"
+              style={{ cursor: tool === 'select' ? 'move' : tool === 'eraser' ? 'pointer' : 'crosshair' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (tool === 'select' || tool === 'eraser') setSelectedId(s.id);
+              }}
             />
           ) : (
             <polyline
@@ -511,8 +518,12 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
               strokeWidth={isSelected ? 4 : 3}
               strokeLinecap="round"
               strokeLinejoin="round"
-              className={`pointer-events-auto ${tool === 'eraser' ? 'cursor-pointer' : 'cursor-default'}`}
-              onClick={(e) => { e.stopPropagation(); setSelectedId(s.id); }}
+              className="pointer-events-auto"
+              style={{ cursor: tool === 'select' ? 'move' : tool === 'eraser' ? 'pointer' : 'crosshair' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (tool === 'select' || tool === 'eraser') setSelectedId(s.id);
+              }}
             />
           )}
         </svg>
@@ -522,7 +533,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
   };
 
   const drawTools: { id: Tool; label: string; icon: React.ReactNode }[] = [
-    { id: 'select', icon: <IconCursor className={`h-5 w-5 ${tool === 'select' ? '' : ''}`} />, label: 'Selecionar' },
+    { id: 'select', icon: <IconCursor className="h-5 w-5" />, label: 'Selecionar' },
     { id: 'rect', icon: <IconRect active={tool === 'rect'} />, label: 'Retângulo' },
     { id: 'polygon', icon: <IconPolygon active={tool === 'polygon'} />, label: 'Polígono' },
     { id: 'freehand', icon: <IconFreehand active={tool === 'freehand'} />, label: 'Livre' },
@@ -551,11 +562,11 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
         </button>
       </header>
 
-      {/* ─── Main area ─── */}
-      <div className="flex-1 min-h-0 flex relative">
-
-        {/* Top center floating tools — drawing tools + undo */}
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 bg-card/90 backdrop-blur-sm rounded-xl border border-border/60 p-1 shadow-sm">
+      {/* ─── Content: toolbar + image + bottom bar ─── */}
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center p-2 sm:p-4 overflow-hidden">
+        
+        {/* Drawing toolbar — above image */}
+        <div className="shrink-0 flex items-center gap-1 bg-card/90 backdrop-blur-sm rounded-xl border border-border/60 p-1 shadow-sm mb-2">
           {drawTools.map(t => (
             <button
               key={t.id}
@@ -579,128 +590,12 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
           >
             <Undo2 className="h-5 w-5" />
           </button>
-          {/* Delete selected */}
-          {selectedId && (
-            <button
-              className="h-9 w-9 flex items-center justify-center rounded-lg text-destructive hover:bg-destructive/10 transition-colors"
-              onClick={deleteSelected}
-              title="Excluir selecionado"
-            >
-              <IconTrash className="h-4 w-4" />
-            </button>
-          )}
         </div>
 
-        {/* Bottom center floating controls — zoom + eye + colors + AI */}
-        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 bg-card/90 backdrop-blur-sm rounded-xl border border-border/60 p-1.5 shadow-sm">
-          {/* Eye toggle: open = transparent, closed = opaque */}
-          <button
-            onClick={() => setPreviewOpaque(v => !v)}
-            className={`h-8 w-8 shrink-0 flex items-center justify-center rounded-lg transition-colors ${
-              !previewOpaque ? 'text-foreground bg-accent' : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-            }`}
-            title={previewOpaque ? 'Olho fechado — opaco' : 'Olho aberto — transparente'}
-          >
-            {previewOpaque ? <IconEyeClosed className="h-4 w-4" /> : <IconEyeOpen className="h-4 w-4" />}
-          </button>
-
-          <div className="w-px h-6 bg-border" />
-
-          {/* Dynamic color dots */}
-          <div className="relative flex items-center gap-1">
-            {visibleColors.map(c => {
-              const isActive = shapeColor === c.fill;
-              return (
-                <button
-                  key={c.label}
-                  className={`rounded-full transition-all shrink-0 ${isActive ? 'ring-2 ring-offset-1 ring-foreground/40 scale-110' : 'hover:scale-110'}`}
-                  style={{
-                    backgroundColor: c.fill.replace(/[\d.]+\)$/, '1)'),
-                    width: 18,
-                    height: 18,
-                  }}
-                  onClick={() => setShapeColor(c.fill)}
-                  title={c.label}
-                />
-              );
-            })}
-            {/* Info icon */}
-            <button
-              onClick={() => setColorInfoOpen(v => !v)}
-              className="h-5 w-5 shrink-0 flex items-center justify-center text-primary/70 hover:text-primary transition-colors"
-              title="Como funcionam as cores"
-            >
-              <IconInfo className="h-3.5 w-3.5" />
-            </button>
-
-            {/* Info popover */}
-            {colorInfoOpen && (
-              <div className="absolute left-0 bottom-full mb-2 z-50 w-72 rounded-xl bg-card border border-border shadow-lg p-3 space-y-2.5">
-                <div className="flex items-start justify-between">
-                  <p className="text-xs text-muted-foreground leading-relaxed pr-2">
-                    Formas da mesma cor são agrupadas no mesmo cartão. Cores diferentes geram cartões diferentes.
-                  </p>
-                  <button onClick={() => setColorInfoOpen(false)} className="shrink-0 h-5 w-5 flex items-center justify-center text-muted-foreground hover:text-foreground">
-                    <IconClose className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="rounded-lg border border-border bg-muted/30 p-2 text-center space-y-1.5">
-                    <p className="text-[10px] font-semibold text-foreground">Mesma cor = agrupadas</p>
-                    <div className="mx-auto w-14 h-8 rounded bg-muted relative flex items-center justify-center gap-0.5">
-                      <div className="w-4 h-2.5 rounded-sm" style={{ backgroundColor: COLORS[0].fill.replace(/[\d.]+\)$/, '1)') }} />
-                      <div className="w-4 h-2.5 rounded-sm" style={{ backgroundColor: COLORS[0].fill.replace(/[\d.]+\)$/, '1)') }} />
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-border bg-muted/30 p-2 text-center space-y-1.5">
-                    <p className="text-[10px] font-semibold text-foreground">Cores diferentes = cards</p>
-                    <div className="mx-auto w-14 h-8 rounded bg-muted relative flex items-center justify-center gap-0.5">
-                      <div className="w-4 h-2.5 rounded-sm" style={{ backgroundColor: COLORS[0].fill.replace(/[\d.]+\)$/, '1)') }} />
-                      <div className="w-4 h-2.5 rounded-sm" style={{ backgroundColor: COLORS[1].fill.replace(/[\d.]+\)$/, '1)') }} />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="w-px h-6 bg-border" />
-
-          {/* Zoom */}
-          <button
-            className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-            onClick={() => setZoom(z => Math.max(0.3, z - 0.25))}
-          >
-            <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5"><path d="M20 12a1 1 0 0 1-1 1H5a1 1 0 1 1 0-2h14a1 1 0 0 1 1 1" /></svg>
-          </button>
-          <span className="text-[10px] text-muted-foreground tabular-nums select-none w-7 text-center">{Math.round(zoom * 100)}%</span>
-          <button
-            className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-            onClick={() => setZoom(z => Math.min(3, z + 0.25))}
-          >
-            <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5"><path d="M13 5a1 1 0 1 0-2 0v6H5a1 1 0 1 0 0 2h6v6a1 1 0 1 0 2 0v-6h6a1 1 0 1 0 0-2h-6z" /></svg>
-          </button>
-
-          <div className="w-px h-6 bg-border" />
-
-          {/* Detect AI — gradient style */}
-          <button
-            onClick={handleDetectAI}
-            disabled={isDetecting || !imgLoaded}
-            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 shrink-0 hover:bg-accent"
-          >
-            <div className="relative h-5 w-5 flex items-center justify-center">
-              <div className="absolute inset-0 rounded-md bg-gradient-to-r from-[#00B3FF] via-[#3347FF] via-[#FF306B] to-[#FF9B23] opacity-20" />
-              {isDetecting ? <Loader2 className="h-4 w-4 animate-spin text-foreground" /> : <IconSparkle className="h-4 w-4 text-foreground" />}
-            </div>
-            <span className="text-foreground font-semibold">Detectar com IA</span>
-          </button>
-        </div>
-
-        {/* Canvas area */}
+        {/* Image canvas — centered, responsive */}
         <div
           ref={containerRef}
-          className="flex-1 min-h-0 relative overflow-auto bg-muted/10"
+          className="relative flex items-center justify-center overflow-auto bg-muted/20 rounded-xl border border-border/30 flex-1 min-h-0 w-full"
           style={{ touchAction: 'none' }}
         >
           <div
@@ -745,6 +640,25 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
 
             {shapes.map(renderShape)}
 
+            {/* Trash button below selected shape */}
+            {selectedId && selectedShape && tool === 'select' && (
+              <div
+                className="absolute z-30 pointer-events-auto"
+                style={{
+                  left: getShapeBottom(selectedShape).x - 14,
+                  top: getShapeBottom(selectedShape).y + 6,
+                }}
+              >
+                <button
+                  onClick={(e) => { e.stopPropagation(); deleteSelected(); }}
+                  className="h-7 w-7 flex items-center justify-center rounded-full bg-foreground/90 text-background shadow-lg hover:bg-destructive transition-colors"
+                  title="Excluir"
+                >
+                  <IconTrash className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
+
             {currentRect && tool === 'rect' && (
               <div
                 className="absolute border-2 border-dashed border-primary/80 pointer-events-none"
@@ -779,17 +693,119 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
 
         {/* Polygon hint */}
         {tool === 'polygon' && currentPoints.length > 0 && (
-          <div className="absolute bottom-14 left-1/2 -translate-x-1/2 z-10">
-            <p className="text-[11px] text-muted-foreground bg-card/90 backdrop-blur-sm rounded-lg px-3 py-1.5 border border-border/40 shadow-sm">
-              Clique para vértices. Feche no primeiro ponto. ({currentPoints.length} pt{currentPoints.length !== 1 ? 's' : ''})
-            </p>
-          </div>
+          <p className="text-[11px] text-muted-foreground mt-1">
+            Clique para vértices. Feche no primeiro ponto. ({currentPoints.length} pt{currentPoints.length !== 1 ? 's' : ''})
+          </p>
         )}
+
+        {/* Bottom bar — below image */}
+        <div className="shrink-0 flex items-center justify-center gap-2 mt-2 flex-wrap">
+          {/* Eye toggle */}
+          <button
+            onClick={() => setPreviewOpaque(v => !v)}
+            className={`h-8 w-8 shrink-0 flex items-center justify-center rounded-lg transition-colors ${
+              !previewOpaque ? 'text-foreground bg-accent' : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+            }`}
+            title={previewOpaque ? 'Opaco (escondido)' : 'Transparente (visível)'}
+          >
+            {previewOpaque ? <IconEyeClosed className="h-4 w-4" /> : <IconEyeOpen className="h-4 w-4" />}
+          </button>
+
+          {/* Color dots */}
+          <div className="relative flex items-center gap-1">
+            {visibleColors.map(c => {
+              const isActive = shapeColor === c.fill;
+              return (
+                <button
+                  key={c.label}
+                  className={`rounded-full transition-all shrink-0 ${isActive ? 'ring-2 ring-offset-1 ring-foreground/40 scale-110' : 'hover:scale-110'}`}
+                  style={{
+                    backgroundColor: c.fill.replace(/[\d.]+\)$/, '1)'),
+                    width: 20,
+                    height: 20,
+                  }}
+                  onClick={() => setShapeColor(c.fill)}
+                  title={c.label}
+                />
+              );
+            })}
+            <button
+              onClick={() => setColorInfoOpen(v => !v)}
+              className="h-5 w-5 shrink-0 flex items-center justify-center text-primary/70 hover:text-primary transition-colors"
+              title="Como funcionam as cores"
+            >
+              <IconInfo className="h-3.5 w-3.5" />
+            </button>
+
+            {colorInfoOpen && (
+              <div className="absolute left-0 bottom-full mb-2 z-50 w-72 rounded-xl bg-card border border-border shadow-lg p-3 space-y-2.5">
+                <div className="flex items-start justify-between">
+                  <p className="text-xs text-muted-foreground leading-relaxed pr-2">
+                    Formas da mesma cor são agrupadas no mesmo cartão. Cores diferentes geram cartões diferentes.
+                  </p>
+                  <button onClick={() => setColorInfoOpen(false)} className="shrink-0 h-5 w-5 flex items-center justify-center text-muted-foreground hover:text-foreground">
+                    <IconClose className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-lg border border-border bg-muted/30 p-2 text-center space-y-1.5">
+                    <p className="text-[10px] font-semibold text-foreground">Mesma cor = agrupadas</p>
+                    <div className="mx-auto w-14 h-8 rounded bg-muted relative flex items-center justify-center gap-0.5">
+                      <div className="w-4 h-2.5 rounded-sm" style={{ backgroundColor: COLORS[0].fill.replace(/[\d.]+\)$/, '1)') }} />
+                      <div className="w-4 h-2.5 rounded-sm" style={{ backgroundColor: COLORS[0].fill.replace(/[\d.]+\)$/, '1)') }} />
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-border bg-muted/30 p-2 text-center space-y-1.5">
+                    <p className="text-[10px] font-semibold text-foreground">Cores diferentes = cards</p>
+                    <div className="mx-auto w-14 h-8 rounded bg-muted relative flex items-center justify-center gap-0.5">
+                      <div className="w-4 h-2.5 rounded-sm" style={{ backgroundColor: COLORS[0].fill.replace(/[\d.]+\)$/, '1)') }} />
+                      <div className="w-4 h-2.5 rounded-sm" style={{ backgroundColor: COLORS[1].fill.replace(/[\d.]+\)$/, '1)') }} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Zoom */}
+          <div className="flex items-center gap-0.5">
+            <button
+              className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              onClick={() => setZoom(z => Math.max(0.3, z - 0.25))}
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5"><path d="M20 12a1 1 0 0 1-1 1H5a1 1 0 1 1 0-2h14a1 1 0 0 1 1 1" /></svg>
+            </button>
+            <span className="text-[10px] text-muted-foreground tabular-nums select-none w-8 text-center">{Math.round(zoom * 100)}%</span>
+            <button
+              className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              onClick={() => setZoom(z => Math.min(3, z + 0.25))}
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5"><path d="M13 5a1 1 0 1 0-2 0v6H5a1 1 0 1 0 0 2h6v6a1 1 0 1 0 2 0v-6h6a1 1 0 1 0 0-2h-6z" /></svg>
+            </button>
+          </div>
+
+          {/* Detect AI — animated gradient border */}
+          <button
+            onClick={handleDetectAI}
+            disabled={isDetecting || !imgLoaded}
+            className="relative inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all disabled:opacity-50 shrink-0 overflow-hidden"
+            style={{ background: 'hsl(var(--card))' }}
+          >
+            {/* Animated gradient border */}
+            <span className="absolute inset-0 rounded-full p-[1.5px] overflow-hidden" style={{ background: 'linear-gradient(90deg, #00B2FF, #3347FF, #FF306B, #FF9B23, #00B2FF)', backgroundSize: '200% 100%', animation: 'gradient-shift 3s linear infinite' }} >
+              <span className="block w-full h-full rounded-full bg-card" />
+            </span>
+            <span className="relative flex items-center gap-1.5">
+              {isDetecting ? <Loader2 className="h-4 w-4 animate-spin text-foreground" /> : <IconSparkle className="h-4 w-4 text-foreground" />}
+              <span className="text-foreground font-semibold">Detectar com IA</span>
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* Info strip */}
       {shapes.length > 0 && (
-        <div className="shrink-0 border-t border-border/40 px-3 py-2">
+        <div className="shrink-0 border-t border-border/40 px-3 py-1.5">
           <p className="text-[11px] text-muted-foreground text-center">
             {shapes.length} área{shapes.length !== 1 ? 's' : ''} · {cardCount} cartão{cardCount !== 1 ? 'ões' : ''}
             {onRemoveImage && (
@@ -803,6 +819,14 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
           </p>
         </div>
       )}
+
+      {/* Gradient animation keyframes */}
+      <style>{`
+        @keyframes gradient-shift {
+          0% { background-position: 0% 50%; }
+          100% { background-position: 200% 50%; }
+        }
+      `}</style>
     </div>
   );
 };
