@@ -4,11 +4,10 @@
  */
 
 import { useState, useMemo, useCallback } from 'react';
-import { ArrowLeft, ChevronDown, Info, Minus, Plus, RotateCcw } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Minus, Plus } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
@@ -169,85 +168,51 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
     setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
   }, []);
 
-  const renderNewLimitControl = (item: DeckSetting) => (
-    <div className="flex items-center justify-between bg-muted/50 rounded-lg px-3 py-2">
-      <div className="flex items-center gap-1">
-        <span className="text-xs text-muted-foreground">Novos por dia</span>
-        <Popover>
-          <PopoverTrigger asChild>
-            <button className="text-muted-foreground hover:text-foreground transition-colors">
-              <Info className="h-3.5 w-3.5" />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent side="top" className="w-64 text-xs">
-            <p className="font-semibold text-foreground mb-1">Limite de novos cards por dia</p>
-            <p className="text-muted-foreground">
-              Define quantos cards novos (nunca estudados) serão introduzidos por dia neste deck. 
-              Cards de revisão (já estudados anteriormente) não são afetados por este limite e continuarão aparecendo normalmente.
-            </p>
-          </PopoverContent>
-        </Popover>
-      </div>
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => updateLimit(item.id, -5)}
-          className="flex h-7 w-7 items-center justify-center rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-        >
-          <Minus className="h-3.5 w-3.5" />
-        </button>
-        <span className="text-sm font-bold text-foreground tabular-nums w-10 text-center">
-          {item.dailyNewLimit}
-        </span>
-        <button
-          onClick={() => updateLimit(item.id, 5)}
-          className="flex h-7 w-7 items-center justify-center rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-        >
-          <Plus className="h-3.5 w-3.5" />
-        </button>
-      </div>
+  const renderStepper = (item: DeckSetting) => (
+    <div className="flex items-center gap-1.5">
+      <button
+        onClick={() => updateLimit(item.id, -5)}
+        className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors active:scale-95"
+      >
+        <Minus className="h-4 w-4" />
+      </button>
+      <span className="text-base font-bold text-foreground tabular-nums w-10 text-center">
+        {item.dailyNewLimit}
+      </span>
+      <button
+        onClick={() => updateLimit(item.id, 5)}
+        className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors active:scale-95"
+      >
+        <Plus className="h-4 w-4" />
+      </button>
     </div>
   );
 
-  const renderSubtitle = (item: DeckSetting) => {
-    if (item.isMateria) return `${item.subCount} decks`;
-    return `${item.totalCards} cards`;
-  };
-
-  const renderDeckRow = (item: DeckSetting, indented = false) => (
+  const renderDeckCard = (item: DeckSetting, indented = false) => (
     <div
       key={item.id}
-      className={`px-4 py-3 transition-opacity ${item.isEnabled ? '' : 'opacity-40'} ${indented ? 'pl-8 bg-muted/20' : ''}`}
+      className={`rounded-xl border border-border/60 bg-card p-3 transition-opacity ${item.isEnabled ? '' : 'opacity-40'} ${indented ? 'ml-4' : ''}`}
     >
-      <div className="flex items-center gap-3 mb-2">
+      {/* Row 1: name + toggle */}
+      <div className="flex items-center justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <h3 className={`font-display font-semibold text-foreground truncate ${indented ? 'text-xs' : 'text-sm'}`}>
-              {item.name}
-            </h3>
-            {item.isErrorNotebook && (
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button className="text-muted-foreground hover:text-foreground transition-colors shrink-0">
-                    <Info className="h-3.5 w-3.5" />
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent side="top" className="w-64 text-xs">
-                  <p className="font-semibold text-foreground mb-1">Baralho de Erros</p>
-                  <p className="text-muted-foreground">
-                    Cards que você errou são movidos automaticamente para cá. 
-                    Quando você dominar o card novamente (estado "Dominado"), ele volta automaticamente para o deck original. 
-                    Isso garante que seus pontos fracos recebam atenção extra.
-                  </p>
-                </PopoverContent>
-              </Popover>
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground">{renderSubtitle(item)}</p>
+          <p className={`font-semibold text-foreground truncate ${indented ? 'text-xs' : 'text-sm'}`}>
+            {item.name}
+          </p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            {item.isMateria ? `${item.subCount} decks` : `${item.totalCards} cards`}
+          </p>
         </div>
         <Switch checked={item.isEnabled} onCheckedChange={() => toggleEnabled(item.id)} />
       </div>
 
-      {item.isEnabled && !item.isSubDeck && renderNewLimitControl(item)}
+      {/* Row 2: stepper (only when enabled) */}
+      {item.isEnabled && (
+        <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/40">
+          <span className="text-xs text-muted-foreground">Novos por dia</span>
+          {renderStepper(item)}
+        </div>
+      )}
     </div>
   );
 
@@ -261,69 +226,52 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
             </button>
             <div className="flex-1 text-center">
               <SheetTitle className="font-display text-base font-bold">Configurar Estudo</SheetTitle>
-              <p className="text-xs text-muted-foreground mt-0.5">Limite de cards novos por dia</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Quantos cards novos ver por dia em cada deck</p>
             </div>
             <div className="w-5" />
           </div>
         </SheetHeader>
 
-        <div className="flex-1 overflow-y-auto divide-y divide-border/50">
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
           {rootItems.map(item => {
             const subs = subDecksByParent[item.id];
             const isExpanded = expanded[item.id] ?? false;
 
             if (item.isMateria && subs?.length) {
               return (
-                <div key={item.id}>
-                  <div className={`px-4 py-3 transition-opacity ${item.isEnabled ? '' : 'opacity-40'}`}>
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="min-w-0 flex-1">
-                        <h3 className="font-display font-semibold text-sm text-foreground truncate">{item.name}</h3>
-                        <p className="text-xs text-muted-foreground">{item.subCount} decks</p>
-                      </div>
-                      <Switch checked={item.isEnabled} onCheckedChange={() => toggleEnabled(item.id)} />
-                    </div>
+                <div key={item.id} className="space-y-2">
+                  {renderDeckCard(item)}
 
-                    {item.isEnabled && renderNewLimitControl(item)}
-
+                  {item.isEnabled && (
                     <button
                       onClick={() => toggleExpand(item.id)}
-                      className="flex items-center gap-1 mt-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      className="flex items-center gap-1 ml-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
                     >
                       <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                       {isExpanded ? 'Ocultar decks' : `Ver ${subs.length} decks`}
                     </button>
-                  </div>
+                  )}
 
-                  {isExpanded && subs.map(sub => renderDeckRow(sub, true))}
+                  {isExpanded && subs.map(sub => renderDeckCard(sub, true))}
                 </div>
               );
             }
 
-            return renderDeckRow(item);
+            return renderDeckCard(item);
           })}
 
           {rootItems.length === 0 && (
-            <div className="px-4 py-12 text-center text-sm text-muted-foreground">
+            <div className="py-12 text-center text-sm text-muted-foreground">
               Nenhum deck nesta sala
             </div>
           )}
         </div>
 
-        <div className="p-4 border-t border-border/50 flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setSettings(initialSettings.map)}
-            disabled={!hasChanges}
-            className="gap-1.5"
-          >
-            <RotateCcw className="h-4 w-4" />
-            Resetar
-          </Button>
+        <div className="p-4 border-t border-border/50">
           <Button
             onClick={handleSave}
             disabled={!hasChanges || saving}
-            className="flex-1 h-11 rounded-full text-base font-bold"
+            className="w-full h-11 rounded-full text-base font-bold"
             size="lg"
           >
             {saving ? 'Salvando...' : 'Salvar'}
