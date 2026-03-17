@@ -75,12 +75,19 @@ const ManageDeck = () => {
     let needsAutoSave = false;
 
     // Detect image_occlusion by card_type OR by JSON content shape (fallback for mistyped cards)
-    const looksLikeOcclusionJson = /^\s*\{.*"imageUrl"\s*:/.test(currentCard.front_content);
+    const strippedFront = currentCard.front_content.replace(/<[^>]*>/g, '').trim();
+    const looksLikeOcclusionJson = /^\s*\{.*"imageUrl"\s*:/.test(strippedFront);
     const isOcclusionContent = ct === 'image_occlusion' || looksLikeOcclusionJson;
 
     if (isOcclusionContent) {
       try {
-        const data = JSON.parse(currentCard.front_content);
+        // Try parsing raw content first, then try stripping HTML tags
+        let data: any;
+        try {
+          data = JSON.parse(currentCard.front_content);
+        } catch {
+          data = JSON.parse(strippedFront);
+        }
         setOcclusionImageUrl(data.imageUrl || '');
         setOcclusionRects(data.allRects || data.rects || []);
         setOcclusionCanvasSize(data.canvasWidth ? { w: data.canvasWidth, h: data.canvasHeight } : null);
@@ -353,21 +360,24 @@ const ManageDeck = () => {
                     </div>
                   ) : null}
 
-                  {/* Image occlusion area - inside front card */}
+                  {/* Image occlusion thumbnail - bottom-right of front card */}
                   {occlusionImageUrl && (
-                    <div className="p-3 pb-0">
-                      <button
-                        type="button"
-                        onClick={() => setOcclusionModalOpen(true)}
-                        className="relative inline-block rounded-lg overflow-hidden border border-border shrink-0"
-                        title="Editar oclusões"
-                      >
-                        <img src={occlusionImageUrl} alt="Imagem de oclusão" className="h-20 w-20 object-cover rounded-lg" />
-                        <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center bg-primary/80 py-0.5">
-                          <ImageIcon className="h-3 w-3 text-primary-foreground" />
+                    <button
+                      type="button"
+                      onClick={() => setOcclusionModalOpen(true)}
+                      className="absolute bottom-2 right-2 z-10 rounded-lg overflow-hidden border border-border shadow-sm hover:shadow-md transition-shadow"
+                      title="Editar oclusão"
+                    >
+                      <img src={occlusionImageUrl} alt="Oclusão" className="h-12 w-12 object-cover" />
+                      <div className="absolute inset-0 flex items-end justify-end p-0.5">
+                        <div className="rounded bg-primary/80 p-0.5">
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-2.5 w-2.5 text-primary-foreground">
+                            <path d="M2 18v-1.5h2V18h2v2H4a2 2 0 0 1-2-2M4 4h2v2H4v1.5H2V6a2 2 0 0 1 2-2M3.486 13.5H2v-3h2L6.586 8a2 2 0 0 1 2.828 0L13 11.586l.586-.586a2 2 0 0 1 2.828 0l5.086 5 .5.5V18a2 2 0 0 1-2 2h-2v-2h2v-.586l-5-5-.586.586 1.293 1.293a1 1 0 0 1-1.414 1.414L8 9.414 4.5 13l-.5.5h-.514M10 6V4h4v2zM18 6V4h2a2 2 0 0 1 2 2v1.5h-2V6zM20 10.5h2v3h-2z" />
+                            <path d="M14 18v2h-4v-2z" />
+                          </svg>
                         </div>
-                      </button>
-                    </div>
+                      </div>
+                    </button>
                   )}
 
                   <LazyRichEditor
@@ -425,15 +435,6 @@ const ManageDeck = () => {
                 >
                   <Plus className="h-4 w-4" />
                 </button>
-                {occlusionImageUrl && (
-                  <button
-                    onClick={() => setOcclusionModalOpen(true)}
-                    className="h-9 w-9 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
-                    title="Editar oclusão"
-                  >
-                    <ImageIcon className="h-4 w-4" />
-                  </button>
-                )}
               </div>
 
             </div>
