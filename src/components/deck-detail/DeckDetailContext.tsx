@@ -483,8 +483,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
 
   const unfreezeCard = useCallback(async (cardId: string) => {
     try {
-      const { error } = await supabase.from('cards').update({ scheduled_date: new Date().toISOString(), state: 0, stability: 0, difficulty: 0 }).eq('id', cardId);
-      if (error) throw error;
+      await unfreezeCardService(cardId);
       toast({ title: '🔥 Card descongelado', description: 'O card voltou para a fila de estudo.' });
       queryClient.invalidateQueries({ queryKey: ['cards'] });
     } catch { toast({ title: 'Erro ao descongelar card', variant: 'destructive' }); }
