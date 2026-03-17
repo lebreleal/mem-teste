@@ -134,7 +134,7 @@ const DeckList = ({
       }
       return 'Salvando...';
     }
-    if (pending.status === 'done') return 'Criando tags...';
+    if (pending.status === 'done') return 'Finalizando...';
     if (pending.status === 'error') return 'Erro — toque para remover';
     return `Gerando lote ${pending.progress.current}/${pending.progress.total}`;
   };
