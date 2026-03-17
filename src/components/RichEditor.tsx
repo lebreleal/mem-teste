@@ -577,20 +577,20 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
                   </Button>
                 );
               case 'occlusion':
-                if (!onOcclusionPaste || !onOcclusionAttach) return null;
+                if (!onOcclusionImageReady && !onOcclusionPaste && !onOcclusionAttach) return null;
                 return (
                   <DropdownMenu key={t.id}>
                     <DropdownMenuTrigger asChild>
                       <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Oclusão de imagem">
-                        <IconImage className="h-3.5 w-3.5" />
+                        <IconImageOcclusion className="h-3.5 w-3.5" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start">
-                      <DropdownMenuItem onClick={onOcclusionPaste} className="gap-2">
+                      <DropdownMenuItem onClick={onOcclusionImageReady ? handleOcclusionPasteClipboard : onOcclusionPaste} className="gap-2">
                         <ClipboardPaste className="h-4 w-4" /> Colar da área de transferência
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={onOcclusionAttach} className="gap-2">
-                        <ImagePlus className="h-4 w-4" /> Anexar imagem
+                      <DropdownMenuItem onClick={onOcclusionImageReady ? handleOcclusionAttach : onOcclusionAttach} className="gap-2">
+                        <IconImage className="h-4 w-4" /> Anexar imagem
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
