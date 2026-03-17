@@ -339,7 +339,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
   }
 
   /* ─── Shape rendering helpers ─── */
-  const renderShape = (s: OcclusionShape, idx: number) => {
+  const renderShape = (s: OcclusionShape) => {
     const isSelected = selectedId === s.id;
     const colorObj = getColorObj(s.color || COLORS[0].fill);
 
@@ -347,7 +347,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
       return (
         <div
           key={s.id}
-          className={`absolute flex items-center justify-center transition-shadow cursor-pointer ${
+          className={`absolute transition-shadow cursor-pointer ${
             isSelected ? 'ring-2 ring-yellow-400 shadow-lg' : ''
           }`}
           style={{
@@ -360,16 +360,12 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
             borderRadius: 4,
           }}
           onClick={(e) => { e.stopPropagation(); setSelectedId(s.id); }}
-        >
-          <span className="text-white font-bold text-xs select-none drop-shadow-sm">{idx + 1}</span>
-        </div>
+        />
       );
     }
 
     if ((s.type === 'polygon' || s.type === 'freehand') && s.points && s.points.length > 1) {
       const pts = s.points.map(p => `${p.x * scale},${p.y * scale}`).join(' ');
-      const cx = s.points.reduce((a, p) => a + p.x, 0) / s.points.length * scale;
-      const cy = s.points.reduce((a, p) => a + p.y, 0) / s.points.length * scale;
       return (
         <svg key={s.id} className="absolute inset-0 pointer-events-none" style={{ width: displaySize.w, height: displaySize.h }}>
           {s.type === 'polygon' ? (
@@ -393,7 +389,6 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
               onClick={(e) => { e.stopPropagation(); setSelectedId(s.id); }}
             />
           )}
-          <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central" fill="white" fontWeight="bold" fontSize="12">{idx + 1}</text>
         </svg>
       );
     }
