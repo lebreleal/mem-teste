@@ -128,7 +128,7 @@ const Study = () => {
     }
   }, [queue, queueInitialized, deckConfigs, deckConfig]);
 
-  const studyQueueKey = useMemo(() => ['study-queue', folderId ? `folder-${folderId}` : deckId], [deckId, folderId]);
+  const studyQueueKey = useMemo(() => ['study-queue', folderId ? `folder-${folderId}` : (deckId || 'all')], [deckId, folderId]);
   useEffect(() => () => { queryClient.removeQueries({ queryKey: studyQueueKey }); invalidateStudyQueries(queryClient); }, [queryClient, studyQueueKey]);
 
   const [isTransitioning, setIsTransitioning] = useState(false);
