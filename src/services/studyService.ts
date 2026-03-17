@@ -212,8 +212,8 @@ export async function fetchStudyQueue(
   if (cardsResult.error) throw cardsResult.error;
   const cards = cardsResult.data ?? [];
   // allCardRows already resolved from fetchAllCardIds() above
-  const studyPlans = plansResult.data as StudyPlanRow[] | null;
-  const profileData = profileResult.data as StudyProfileRow | null;
+  const studyPlans = (plansResult.data ?? []) as unknown as StudyPlanRow[];
+  const profileData = profileResult.data as unknown as StudyProfileRow | null;
 
   // Derive limitCardIds and globalCardIds from allCardRows (JS filtering, no extra queries)
   const limitScopeSet = new Set(limitScopeIds);
