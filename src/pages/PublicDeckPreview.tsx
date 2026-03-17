@@ -876,16 +876,7 @@ const PublicDeckPreview = () => {
   // Check if user is already a member of the turma
   const { data: isTurmaMember = false } = useQuery({
     queryKey: ['turma-membership-check', turmaDeck?.turma_id, user?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('turma_members')
-        .select('id')
-        .eq('turma_id', turmaDeck!.turma_id)
-        .eq('user_id', user!.id)
-        .maybeSingle();
-      if (error) throw error;
-      return !!data;
-    },
+    queryFn: () => checkTurmaMembership(turmaDeck!.turma_id, user!.id),
     enabled: !!turmaDeck?.turma_id && !!user,
   });
 
