@@ -520,7 +520,7 @@ export async function fetchActivityBreakdown(userId: string, days = 365, tzOffse
     p_user_id: userId,
     p_tz_offset_minutes: tzOffsetMinutes,
     p_days: days,
-  } as any);
+  });
   if (error) throw error;
   return (data as unknown as ActivityBreakdownResult) ?? null;
 }
