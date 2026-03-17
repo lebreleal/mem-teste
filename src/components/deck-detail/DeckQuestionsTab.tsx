@@ -923,10 +923,7 @@ const CreateQuestionDialog = ({
   // Fetch card count for the deck (including sub-decks)
   const { data: cardCount = 0 } = useQuery({
     queryKey: ['deck-card-count', deckId],
-    queryFn: async () => {
-      const { data } = await supabase.rpc('count_descendant_cards_by_state', { p_deck_id: deckId });
-      return (data as any)?.total ?? 0;
-    },
+    queryFn: () => countDescendantCards(deckId),
     enabled: !!deckId,
     staleTime: 60_000,
   });
