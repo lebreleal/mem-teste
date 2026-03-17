@@ -4,6 +4,9 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
+import type { Database } from '@/integrations/supabase/types';
+
+type DeckInsert = Database['public']['Tables']['decks']['Insert'];
 
 // ─── Row interfaces (Lei 3A) ───
 interface DeckNameRow { name: string }
