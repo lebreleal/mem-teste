@@ -52,6 +52,9 @@ interface DeckListProps {
 
   // Pending deck click handler
   onPendingClick?: (pending: PendingDeck) => void;
+  
+  // Organize mode
+  organizeMode?: boolean;
 }
 
 const DeckList = ({
