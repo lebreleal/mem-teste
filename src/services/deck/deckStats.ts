@@ -151,14 +151,14 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
     (async () => {
       const map = new Map<string, { author: string | null; updatedAt: string | null }>();
       if (orphanLiveDecks.length === 0) return map;
-      const orphanNames = [...new Set(orphanLiveDecks.map((d: any) => d.name))];
+      const orphanNames = [...new Set(orphanLiveDecks.map((d: DeckRow) => d.name))];
       const { data: originals } = await supabase.from('decks').select('name, user_id, updated_at').in('name', orphanNames).neq('user_id', userId).eq('is_live_deck', false);
       if (!originals || originals.length === 0) return map;
-      const ownerIds = [...new Set(originals.map((o: any) => o.user_id))];
+      const ownerIds = [...new Set((originals as OriginalDeckRow[]).map(o => o.user_id))];
       const { data: profiles } = await supabase.from('profiles').select('id, name').in('id', ownerIds);
       const profileMap = new Map<string, string>();
-      if (profiles) for (const p of profiles as any[]) profileMap.set(p.id, p.name);
-      for (const o of originals as any[]) {
+      if (profiles) for (const p of profiles as ProfileRow[]) profileMap.set(p.id, p.name);
+      for (const o of originals as OriginalDeckRow[]) {
         if (!map.has(o.name)) map.set(o.name, { author: profileMap.get(o.user_id) || null, updatedAt: o.updated_at });
       }
       return map;
