@@ -433,8 +433,8 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   // ─── Computed ──────────────────────────
   const isQuickReview = deck?.algorithm_mode === 'quick_review';
   const totalCards = cardCounts?.total ?? 0;
-  const dailyNewLimit = rootDeck?.daily_new_limit ?? (deck as any)?.daily_new_limit ?? 20;
-  const dailyReviewLimit = rootDeck?.daily_review_limit ?? (deck as any)?.daily_review_limit ?? 100;
+  const dailyNewLimit = rootDeck?.daily_new_limit ?? deck?.daily_new_limit ?? 20;
+  const dailyReviewLimit = rootDeck?.daily_review_limit ?? deck?.daily_review_limit ?? 100;
 
   const rawGlobalLimit = profileData?.daily_new_cards_limit ?? 9999;
   const weeklyNewCards = profileData?.weekly_new_cards ?? null;
