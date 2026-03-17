@@ -164,10 +164,6 @@ const DeckDetailDialogs = () => {
                 </Button>
               )}
 
-              {/* Card Tags (only when editing existing card) */}
-              {ctx.editingId && (
-                <CardTagEditor cardId={ctx.editingId} />
-              )}
 
               <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
                 <Button variant="outline" onClick={() => { ctx.setEditorOpen(false); ctx.resetForm(); }}>Cancelar</Button>
