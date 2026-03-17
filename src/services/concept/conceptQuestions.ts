@@ -484,7 +484,6 @@ LIMITES:
       .single();
 
     if (deckError || !createdDeck) {
-      console.error('generateReinforcementCards deck create error:', deckError);
       return [];
     }
 
