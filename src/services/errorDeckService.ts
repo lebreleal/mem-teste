@@ -349,6 +349,5 @@ export async function moveConceptCardsToErrorDeck(
   );
 
   const movedCount = updates.reduce((sum, n) => sum + n, 0);
-  console.log('[ErrorDeck] Moved', movedCount, 'cards to error deck from', bySourceDeck.size, 'source decks');
   return movedCount;
 }

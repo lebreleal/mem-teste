@@ -591,7 +591,6 @@ Crie cartões objetivos sobre "${conceptName}".
   });
 
   if (genError || genData?.error || !Array.isArray(genData?.cards) || genData.cards.length === 0) {
-    console.error('generateQuestionsForConcept card gen error:', genError ?? genData?.error);
     return null;
   }
 
