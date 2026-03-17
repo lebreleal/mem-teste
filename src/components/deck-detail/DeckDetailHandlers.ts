@@ -247,8 +247,7 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
     if (isCloze) {
       let frontContent = card?.front_content;
       if (!frontContent) {
-        const { data } = await supabase.from('cards').select('front_content').eq('id', deleteId).single();
-        frontContent = data?.front_content;
+        frontContent = await fetchCardFrontContent(deleteId);
       }
       const siblings = frontContent ? await cardService.fetchClozeSiblings(allDeckIds, frontContent) : [];
       const ids = siblings.map(c => c.id);
