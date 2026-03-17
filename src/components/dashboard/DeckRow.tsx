@@ -284,17 +284,29 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           className={`group flex items-center gap-3 px-4 py-4 cursor-pointer transition-all hover:bg-muted/50 ${dragHandlers ? dragHandlers.className : ''}`}
           onClick={handleClick}
         >
+          {organizeMode && (
+            <GripVertical className="h-4 w-4 text-muted-foreground/50 shrink-0 cursor-grab active:cursor-grabbing" />
+          )}
           <IconDeck solid={isErrorDeck} className={`h-5 w-5 shrink-0 ${isErrorDeck ? 'text-destructive' : 'text-muted-foreground'}`} />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <h3 className={`font-display font-semibold truncate ${isErrorDeck ? 'text-destructive' : 'text-foreground'}`}>{displayName}</h3>
+              <h3 className={`font-display text-[13px] font-semibold truncate text-foreground`}>{displayName}</h3>
               {isErrorDeck && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); setShowInfoModal(true); }}
-                  className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <HelpCircle className="h-4 w-4" />
-                </button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      onClick={(e) => e.stopPropagation()}
+                      className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <HelpCircle className="h-4 w-4" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent side="bottom" align="center" sideOffset={8} className="w-auto max-w-[17rem] rounded-2xl border border-border bg-background px-3 py-2.5 text-xs text-foreground shadow-md" onClick={(e) => e.stopPropagation()}>
+                    <p className="leading-relaxed">
+                      Errou? Vem pra cá! 🧠 Quando você corrige seus erros, o cérebro grava de verdade. Estude esse baralho pra dominar o que te pega e nunca mais esquecer.
+                    </p>
+                  </PopoverContent>
+                </Popover>
               )}
               {hasPendingUpdate && (
                 <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-destructive animate-pulse" title="Atualização disponível" />
