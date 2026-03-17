@@ -21,7 +21,7 @@ export async function fetchWallet(userId: string): Promise<WalletData> {
     .limit(50);
 
   return {
-    balance: (profile as any)?.memocoins ?? 0,
+    balance: profile?.memocoins ?? 0,
     transactions: (transactions ?? []) as WalletTransaction[],
   };
 }
