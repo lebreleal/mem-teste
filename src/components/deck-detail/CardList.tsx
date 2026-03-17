@@ -24,7 +24,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { List, type RowComponentProps } from 'react-window';
 import { useQuery } from '@tanstack/react-query';
 import { fetchCardTagsBatch } from '@/services/dashboardService';
-import SuggestCorrectionModal from '@/components/SuggestCorrectionModal';
+
 import { shortDisplayId } from '@/lib/shortId';
 
 const PAGE_SIZE_UI = 50;

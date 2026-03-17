@@ -7,7 +7,7 @@ import type { DifficultyData } from '@/lib/flashCardUtils';
 import { Lightbulb, Sparkles, CheckCircle2, XCircle, Gauge, RotateCcw, BookOpen, Keyboard, Undo2, Check, Loader2, X } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import TutorLoadingAnimation from '@/components/TutorLoadingAnimation';
-import TtsButton, { extractExplanationSection } from '@/components/TtsButton';
+
 import PersonalNotes from '@/components/PersonalNotes';
 import ReactMarkdown from 'react-markdown';
 import MultipleChoiceCard from '@/components/FlashCardMultipleChoice';

@@ -255,7 +255,7 @@ interface Props {
   onClose: () => void;
 }
 
-const SuggestCorrectionModal = lazy(() => import('@/components/SuggestCorrectionModal'));
+
 
 const CardPreviewSheet = forwardRef<HTMLDivElement, Props>(({ cards, initialIndex, open, onClose }, _ref) => {
   const { openEdit, setDeleteId, setMoveCardId, isFrozenCard, unfreezeCard, deck, decks } = useDeckDetail();

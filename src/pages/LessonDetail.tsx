@@ -15,7 +15,7 @@ import { useFolders } from '@/hooks/useFolders';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
-import { useTurmaExams, useTurmaExamMutations } from '@/hooks/useTurmaExams';
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';

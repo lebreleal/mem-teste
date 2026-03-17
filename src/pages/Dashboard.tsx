@@ -43,7 +43,7 @@ const StudySettingsSheet = lazy(() => import('@/components/dashboard/StudySettin
 import { importDeck, importDeckWithSubdecks } from '@/services/deckService';
 import BottomNav from '@/components/BottomNav';
 import { usePendingDecks, type PendingDeck } from '@/stores/usePendingDecks';
-import { useMissions } from '@/hooks/useMissions';
+
 import { useIsAdmin } from '@/hooks/useIsAdmin';
 import type { GeneratedCard } from '@/types/ai';
 

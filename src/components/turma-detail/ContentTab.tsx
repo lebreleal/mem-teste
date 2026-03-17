@@ -35,8 +35,6 @@ import {
   Search, Sparkles, ArrowLeft, TrendingUp, Paperclip, Share2,
 } from 'lucide-react';
 
-import SubscriberGateDialog from '@/components/turma-detail/SubscriberGateDialog';
-import TrialStudyModal from '@/components/turma-detail/TrialStudyModal';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 

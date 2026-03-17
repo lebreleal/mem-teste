@@ -26,7 +26,7 @@ import { useAIModel } from '@/hooks/useAIModel';
 import { useToast } from '@/hooks/use-toast';
 import * as cardService from '@/services/cardService';
 
-const SuggestCorrectionModal = lazy(() => import('@/components/SuggestCorrectionModal'));
+
 
 interface StudyCardActionsProps {
   card: {

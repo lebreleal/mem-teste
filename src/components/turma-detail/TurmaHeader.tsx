@@ -7,7 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useEnergy } from '@/hooks/useEnergy';
 import { useStudyStats } from '@/hooks/useStudyStats';
 import { useTheme } from '@/hooks/useTheme';
-import { useExamNotifications } from '@/hooks/useExamNotifications';
+
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {

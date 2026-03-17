@@ -21,8 +21,6 @@ import { fetchLinkedDeckSource, fetchPendingSuggestions, countPendingSuggestions
 import { fetchFolderImageUrl } from '@/services/folderService';
 import { toast } from '@/hooks/use-toast';
 
-const SuggestCorrectionModal = lazy(() => import('@/components/SuggestCorrectionModal'));
-const DeckQuestionsTab = lazy(() => import('@/components/deck-detail/DeckQuestionsTab'));
 
 /** Detect if a deck is linked to a community/marketplace source (including linked ancestors) */
 interface LinkableDeck {

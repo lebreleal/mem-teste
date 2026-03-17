@@ -11,8 +11,6 @@ import ImageOcclusion from '@/components/ImageOcclusion';
 import AICreateDeckDialog from '@/components/AICreateDeckDialog';
 import ImportCardsDialog from '@/components/ImportCardsDialog';
 import AIModelSelector from '@/components/AIModelSelector';
-import { TagInput } from '@/components/TagInput';
-import { useCardTags, useCardTagMutations } from '@/hooks/useTags';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';

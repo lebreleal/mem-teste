@@ -29,12 +29,11 @@ import { ArrowLeft, Brain, Moon, Sun, Timer, RefreshCw, Info } from 'lucide-reac
 import { useTheme } from '@/hooks/useTheme';
 import StudyCardActions from '@/components/StudyCardActions';
 import { useToast } from '@/hooks/use-toast';
-import { resolveCommunitySource, fetchLeechStreak } from '@/services/studyService';
+import { resolveCommunitySource } from '@/services/studyService';
 import { buryCards } from '@/services/card/cardMutations';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { Rating } from '@/lib/fsrs';
-import { getCardConcepts, updateConceptMastery } from '@/services/globalConceptService';
 
 const FAST_THRESHOLD_MS = 3000;
 const BASE_TUTOR_COST = 2;

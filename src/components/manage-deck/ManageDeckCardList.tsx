@@ -3,7 +3,7 @@ import { List, type RowComponentProps } from 'react-window';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { Pencil, Trash2, Send, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { CardTagsInline } from './CardTagWidgets';
+
 
 const ITEM_HEIGHT = 88;
 

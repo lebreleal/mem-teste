@@ -11,7 +11,7 @@ import type { Rating } from '@/lib/fsrs';
 import { Lightbulb, Sparkles, Gauge, BookOpen, Loader2, Undo2 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import TutorLoadingAnimation from '@/components/TutorLoadingAnimation';
-import TtsButton from '@/components/TtsButton';
+
 import PersonalNotes from '@/components/PersonalNotes';
 import ReactMarkdown from 'react-markdown';
 
