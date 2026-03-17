@@ -344,7 +344,8 @@ const SalaHero = ({
                   className="w-auto max-w-[18rem] rounded-2xl border border-border bg-background px-3 py-2 text-xs text-foreground shadow-md"
                 >
                   <p className="leading-relaxed">
-                    Você é rápido! Em <span className="font-semibold">{salaStudyStats.timeLabel}</span> você termina esses <IconDeck className="inline h-3 w-3 align-text-bottom" /> <span className="font-semibold">{salaStudyStats.totalDue} cartões</span>.
+                    Você é rápido! Em <span className="font-semibold">{salaStudyStats.timeLabel}</span> você termina esses{' '}
+                    <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> {salaStudyStats.totalDue} cartões</span>.
                   </p>
                 </PopoverContent>
               </Popover>

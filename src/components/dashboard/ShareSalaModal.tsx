@@ -62,7 +62,7 @@ const ShareSalaModal = ({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) setEditingSlug(false); }}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-w-[calc(100vw-2rem)]">
         <DialogHeader>
           <DialogTitle className="text-lg font-bold">Compartilhar sala</DialogTitle>
         </DialogHeader>
