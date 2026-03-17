@@ -36,31 +36,8 @@ function checkIsLinkedDeck(deck: any, decks: any[]): boolean {
   return false;
 }
 
-/** Resolve source deck ID from a linked deck — single unified query */
-async function resolveSourceDeckId(deck: any): Promise<string | null> {
-  const sourceTurmaDeckId = deck?.source_turma_deck_id;
-  const sourceListingId = deck?.source_listing_id;
+// resolveSourceDeckId removed — now handled by fetchLinkedDeckSource in deckCrud service
 
-  if (sourceTurmaDeckId) {
-    const { data: td } = await supabase.from('turma_decks').select('deck_id').eq('id', sourceTurmaDeckId).maybeSingle();
-    if (td?.deck_id) return td.deck_id;
-  }
-
-  if (sourceListingId) {
-    const { data: listing } = await supabase.from('marketplace_listings').select('deck_id').eq('id', sourceListingId).maybeSingle();
-    if (listing?.deck_id) return listing.deck_id;
-  }
-
-  if (deck?.is_live_deck) {
-    const { data: original } = await supabase
-      .from('decks').select('id')
-      .eq('name', deck.name).eq('is_public', true).neq('user_id', deck.user_id)
-      .limit(1).maybeSingle();
-    if (original?.id) return original.id;
-  }
-
-  return null;
-}
 
 /** @deprecated Sub-deck list view — no longer used, kept temporarily for reference */
 const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: string; subDecks: any[]; allDecks: any[] }) => {
