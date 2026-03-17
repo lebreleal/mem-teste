@@ -14,8 +14,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import OcclusionEditor from '@/components/manage-deck/OcclusionEditor';
 import { supabase } from '@/integrations/supabase/client';
 import { markdownToHtml } from '@/lib/markdownToHtml';
-import iconAttachImage from '@/assets/icon-attach-image.png';
-import iconClozeOcclusion from '@/assets/icon-cloze-occlusion.png';
+import type { ImageAttachment } from '@/components/RichEditor';
 
 const ManageDeck = () => {
   const { deckId } = useParams<{ deckId: string }>();
