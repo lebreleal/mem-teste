@@ -54,7 +54,6 @@ const DeckListItem = ({
   onEditPricing,
   onRemove,
   onTogglePublish,
-  tags,
   downloads,
   fileCount,
   examCount,
@@ -69,7 +68,6 @@ const DeckListItem = ({
   onEditPricing: () => void;
   onRemove: () => void;
   onTogglePublish?: () => void;
-  tags?: Tag[];
   downloads?: number;
   fileCount?: number;
   examCount?: number;
@@ -93,7 +91,7 @@ const DeckListItem = ({
           <p className="flex items-center gap-1"><EyeOff className="h-3 w-3" /> Rascunho</p>
         )}
         {subscriberOnly && (
-          <p className="flex items-center gap-1"><Crown className="h-3.5 w-3.5 shrink-0 text-purple-500 fill-purple-500/20" /> Assinantes</p>
+          <p className="flex items-center gap-1"><Crown className="h-3.5 w-3.5 shrink-0 text-primary fill-primary/20" /> Assinantes</p>
         )}
         {inCollection && (
           <p className="flex items-center gap-1 text-primary font-semibold">
@@ -304,7 +302,6 @@ const ContentTab = () => {
 
   // ── Local state ──
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
   const [showAddDeck, setShowAddDeck] = useState(false);
   const [addDeckSectionId, setAddDeckSectionId] = useState<string | null>(null);
   const [selectedDeckIds, setSelectedDeckIds] = useState<Set<string>>(new Set());
@@ -317,9 +314,6 @@ const ContentTab = () => {
   const [confirmImportItem, setConfirmImportItem] = useState<{ type: 'deck' | 'exam'; data: TurmaDeck | TurmaExam } | null>(null);
   const [gateDeck, setGateDeck] = useState<TurmaDeck | null>(null);
   const [trialDeck, setTrialDeck] = useState<{ deckId: string; deckName: string } | null>(null);
-  
-
-  // Tags system removed
 
   // ── Subscriber-only validation ──
   const canSetSubscribersOnly = (turma?.subscription_price ?? 0) > 0;
@@ -395,7 +389,7 @@ const ContentTab = () => {
     return count + childFolders.reduce((sum, cf) => sum + getFolderAttachmentCount(cf.id), 0);
   };
 
-  // ── Current folder's decks (when tag is active, search across ALL folders) ──
+  // ── Current folder's decks ──
   const currentDecks = useMemo(() => {
     const q = searchQuery.toLowerCase();
     const skipFolderFilter = !!q;
@@ -485,7 +479,6 @@ const ContentTab = () => {
       <div className="flex items-center gap-2">
         {!isRoot && (
           <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => {
-            // Go up one level
             const currentFolder = subjects.find((s: any) => s.id === contentFolderId);
             setContentFolderId(currentFolder?.parent_id ?? null);
           }}>
@@ -514,14 +507,6 @@ const ContentTab = () => {
           </div>
         )}
       </div>
-
-              }`}
-            >
-              {tag.name}
-            </button>
-          ))}
-        </div>
-      )}
 
       {/* Content */}
       {!hasContent ? (
@@ -594,7 +579,6 @@ const ContentTab = () => {
                         onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
                       });
                     } : undefined}
-                    tags={deckTagsMap[td.deck_id]}
                     downloads={downloadCounts[td.id] || 0}
                     fileCount={getDeckFilesCount(td)}
                     examCount={getDeckExamsCount(td)}
@@ -807,7 +791,6 @@ const ContentTab = () => {
           </div>
         </DialogContent>
       </Dialog>
-
 
     </div>
   );
