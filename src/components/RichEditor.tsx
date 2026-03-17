@@ -100,6 +100,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   const [linkUrl, setLinkUrl] = useState('');
   const [drawingOpen, setDrawingOpen] = useState(false);
   const [aiCreatorOpen, setAiCreatorOpen] = useState(false); // toggles inline row
+  const uploadImageFileRef = React.useRef<((file: File) => Promise<void>) | null>(null);
   // Sync toolbar config across all RichEditor instances
   useEffect(() => {
     const handler = () => setToolbarItems(loadToolbarConfig());
