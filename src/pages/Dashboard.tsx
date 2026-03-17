@@ -544,22 +544,13 @@ const Dashboard = () => {
                               if (!turmaId) {
                                 const cFolder = state.folders.find(f => f.id === state.currentFolderId);
                                 const fName = cFolder?.name ?? 'Minha Sala';
-                                const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-                                const { data: newTurma } = await supabase.from('turmas').insert({
-                                  name: fName, description: '', owner_id: user!.id,
-                                  invite_code: inviteCode, is_private: true,
-                                } as any).select('id, share_slug').single();
-                                if (newTurma) {
-                                  turmaId = (newTurma as any).id;
-                                  slug = (newTurma as any).share_slug;
-                                  await supabase.from('turma_members').insert({ turma_id: turmaId, user_id: user!.id, role: 'admin' } as any);
-                                  await refetchTurma();
-                                }
+                                const newTurma = await createTurmaWithOwner(user!.id, fName, { isPrivate: true });
+                                turmaId = newTurma.id;
+                                slug = newTurma.share_slug;
+                                await refetchTurma();
                               }
                               if (!slug && turmaId) {
-                                const generated = turmaId.substring(0, 8);
-                                await supabase.from('turmas').update({ share_slug: generated } as any).eq('id', turmaId);
-                                slug = generated;
+                                slug = await ensureShareSlug(turmaId);
                                 await refetchTurma();
                               }
                               setShareSlugEdit(slug || turmaId?.substring(0, 8) || '');
