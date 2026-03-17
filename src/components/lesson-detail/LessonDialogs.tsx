@@ -172,22 +172,6 @@ const LessonDialogs = ({
       />
     )}
 
-    {/* PDF Preview Dialog */}
-    <Dialog open={!!pdfPreviewUrl} onOpenChange={open => !open && setPdfPreviewUrl(null)}>
-      <DialogContent className="sm:max-w-3xl h-[85vh] p-0 flex flex-col overflow-hidden">
-        <DialogHeader className="px-4 py-3 border-b border-border/50 shrink-0">
-          <DialogTitle className="font-display text-sm">
-            Visualizar PDF
-            {pdfPreviewRestricted && (
-              <span className="ml-2 text-[10px] font-semibold bg-muted px-2 py-0.5 rounded-full" style={{ color: 'hsl(270 60% 55%)' }}>
-                Prévia limitada
-              </span>
-            )}
-          </DialogTitle>
-        </DialogHeader>
-        {pdfPreviewUrl && <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}><PdfCanvasViewer url={pdfPreviewUrl} restricted={pdfPreviewRestricted} /></Suspense>}
-      </DialogContent>
-    </Dialog>
   </>
 );
 

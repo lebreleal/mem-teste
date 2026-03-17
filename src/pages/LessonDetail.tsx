@@ -480,8 +480,6 @@ const LessonDetail = () => {
         onDownloadDeck={(td) => downloadDeck.mutate(td, { onSuccess: () => setPreviewDeck(null) })}
         isAddingToCollection={addToCollection.isPending}
         isDownloading={downloadDeck.isPending}
-        pdfPreviewUrl={pdfPreviewUrl} setPdfPreviewUrl={setPdfPreviewUrl}
-        pdfPreviewRestricted={pdfPreviewRestricted}
       />
     </div>
   );
