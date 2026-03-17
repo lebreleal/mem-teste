@@ -413,7 +413,8 @@ export async function publishDecksToTurma(turmaId: string, userId: string, deckI
       is_published: true,
     }) as Record<string, unknown>),
   );
-  await supabase.from('decks').update({ is_public: true } as Record<string, unknown>).in('id', newIds);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- partial update
+  await supabase.from('decks').update({ is_public: true } as any).in('id', newIds);
 }
 
 export async function removeTurmaMember(turmaId: string, userId: string) {
