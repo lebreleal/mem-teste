@@ -57,7 +57,7 @@ export async function uploadLessonFile(params: {
     uploaded_by: userId,
   } as any).select(LESSON_FILE_COLS).single();
   if (error) throw error;
-  return data as LessonFile;
+  return data as unknown as LessonFile;
 }
 
 export async function deleteLessonFile(fileId: string): Promise<void> {
