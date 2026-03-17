@@ -164,9 +164,9 @@ const LessonContent = ({
 
   // Helpers
   const userOwnsDeck = (deckId: string) => userDecks.some(d => d.id === deckId);
-  const userHasLinkedDeck = (turmaDeckId: string) => userDecks.some(d => (d as any).source_turma_deck_id === turmaDeckId && !d.is_archived);
-  const isDeckFree = (td: any) => !td.price_type || td.price_type === 'free';
-  const canAccessDeck = (td: any) => {
+  const userHasLinkedDeck = (turmaDeckId: string) => userDecks.some(d => d.source_turma_deck_id === turmaDeckId && !d.is_archived);
+  const isDeckFree = (td: TurmaDeck) => !td.price_type || td.price_type === 'free';
+  const canAccessDeck = (td: TurmaDeck) => {
     if (isDeckFree(td)) return true;
     if (td.shared_by === userId || userOwnsDeck(td.deck_id)) return true;
     if (isAdmin || isMod || isSubscriber) return true;
