@@ -6,6 +6,48 @@
 import { supabase } from '@/integrations/supabase/client';
 import { TZ_OFFSET_SP } from '@/lib/dateUtils';
 import type { DeckWithStats } from '@/types/deck';
+import type { DeckStatsRow, DeckCardCountsRow } from '@/types/study';
+
+/** Raw deck row shape from the decks table select. */
+interface DeckRow {
+  id: string;
+  name: string;
+  parent_deck_id: string | null;
+  folder_id: string | null;
+  user_id: string;
+  daily_new_limit: number;
+  daily_review_limit: number;
+  algorithm_mode: string;
+  learning_steps: string[];
+  requested_retention: number;
+  max_interval: number;
+  interval_modifier: number;
+  easy_bonus: number;
+  easy_graduating_interval: number;
+  shuffle_cards: boolean;
+  is_live_deck: boolean;
+  source_turma_deck_id: string | null;
+  source_listing_id: string | null;
+  bury_siblings: boolean;
+  bury_new_siblings: boolean;
+  bury_review_siblings: boolean;
+  bury_learning_siblings: boolean;
+  is_archived: boolean;
+  is_public: boolean;
+  is_free_in_community: boolean;
+  community_id: string | null;
+  sort_order: number;
+  allow_duplication: boolean;
+  synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ListingRow { id: string; seller_id: string }
+interface ProfileRow { id: string; name: string }
+interface TurmaDeckRow { id: string; shared_by: string; deck_id: string }
+interface SourceDeckRow { id: string; updated_at: string }
+interface OriginalDeckRow { name: string; user_id: string; updated_at: string }
 
 /** Fetch all user decks with computed stats using batch RPC (single query). */
 export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats[]> {
