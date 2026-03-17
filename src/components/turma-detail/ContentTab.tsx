@@ -315,11 +315,11 @@ const ContentTab = () => {
   const [deckSearchQuery, setDeckSearchQuery] = useState('');
   const [priceType, setPriceType] = useState<'free' | 'money' | 'credits'>('free');
   const [allowDownload, setAllowDownload] = useState(false);
-  const [editingDeck, setEditingDeck] = useState<any>(null);
+  const [editingDeck, setEditingDeck] = useState<TurmaDeck | null>(null);
   const [editPriceType, setEditPriceType] = useState<'free' | 'money' | 'credits'>('free');
   const [editAllowDownload, setEditAllowDownload] = useState(false);
-  const [confirmImportItem, setConfirmImportItem] = useState<{ type: 'deck' | 'exam'; data: any } | null>(null);
-  const [gateDeck, setGateDeck] = useState<any>(null);
+  const [confirmImportItem, setConfirmImportItem] = useState<{ type: 'deck' | 'exam'; data: TurmaDeck } | null>(null);
+  const [gateDeck, setGateDeck] = useState<TurmaDeck | null>(null);
   const [trialDeck, setTrialDeck] = useState<{ deckId: string; deckName: string } | null>(null);
   
 
