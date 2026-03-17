@@ -497,7 +497,7 @@ LIMITES:
     .eq('deck_id', reinforcementDeckId);
 
   if (deleteError) {
-    console.error('generateReinforcementCards card cleanup error:', deleteError);
+    throw deleteError;
   }
 
   const cardRows = generatedCards
