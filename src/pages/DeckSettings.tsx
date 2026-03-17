@@ -190,16 +190,17 @@ const DeckSettings = () => {
   const saveSettings = async (updates: Record<string, any>) => {
     if (!deckId) return;
     setSaving(true);
-    const { error } = await supabase.from('decks').update(updates as any).eq('id', deckId);
-    setSaving(false);
-    if (error) {
-      toast({ title: 'Erro ao salvar', variant: 'destructive' });
-    } else {
+    try {
+      await deckService.updateDeck(deckId, updates);
+      setSaving(false);
       toast({ title: 'Salvo!' });
       queryClient.invalidateQueries({ queryKey: ['deck', deckId] });
       queryClient.invalidateQueries({ queryKey: ['decks'] });
       queryClient.invalidateQueries({ queryKey: ['study-queue', deckId] });
       queryClient.invalidateQueries({ queryKey: ['deck-stats', deckId] });
+    } catch {
+      setSaving(false);
+      toast({ title: 'Erro ao salvar', variant: 'destructive' });
     }
   };
 
