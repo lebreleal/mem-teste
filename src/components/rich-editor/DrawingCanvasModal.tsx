@@ -310,6 +310,8 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
     if (!ctx || !canvas) return;
     const newIdx = historyIdx - 1;
     ctx.putImageData(history[newIdx], 0, 0);
+    const dpr = window.devicePixelRatio || 1;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     setHistoryIdx(newIdx);
   }, [history, historyIdx]);
 
@@ -320,6 +322,8 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
     if (!ctx || !canvas) return;
     const newIdx = historyIdx + 1;
     ctx.putImageData(history[newIdx], 0, 0);
+    const dpr = window.devicePixelRatio || 1;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     setHistoryIdx(newIdx);
   }, [history, historyIdx]);
 
