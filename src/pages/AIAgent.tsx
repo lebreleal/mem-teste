@@ -83,12 +83,9 @@ const AIAgent = () => {
   }, [activeConversationId]);
 
   const loadMessages = async (convId: string) => {
-    const { data } = await supabase
-      .from('ai_chat_messages')
-      .select('*')
-      .eq('conversation_id', convId)
-      .order('created_at', { ascending: true });
-    if (data) setMessages(data.map(m => ({ id: m.id, role: m.role as 'user' | 'assistant', content: m.content })));
+    const { fetchAIChatMessages } = await import('@/services/adminService');
+    const data = await fetchAIChatMessages(convId);
+    setMessages(data.map(m => ({ id: m.id, role: m.role as 'user' | 'assistant', content: m.content })));
   };
 
   // Auto-scroll only when user sends a new message (not on every streaming update)
