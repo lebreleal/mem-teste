@@ -222,7 +222,7 @@ export function useStatsData() {
   const addedVsReviewedData = useMemo(() => {
     if (!cardsAddedData) return [];
     const addedMap = new Map<string, number>();
-    cardsAddedData.forEach((row: any) => addedMap.set(row.day, Number(row.added) || 0));
+    cardsAddedData.forEach((row: { day: string; added: number }) => addedMap.set(row.day, Number(row.added) || 0));
 
     const { from, to } = addedVsReviewedFilter.range;
     const fromDate = from ?? subDays(new Date(), 6);
