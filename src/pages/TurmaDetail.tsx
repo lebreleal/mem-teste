@@ -172,19 +172,8 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
     if (!user) { navigate('/auth'); return; }
     setFollowing(true);
     try {
-      await supabase.from('turma_members').insert({ turma_id: turmaId, user_id: user.id } as any);
-      const { data: existingFolders } = await supabase.from('folders')
-        .select('id').eq('user_id', user.id).eq('source_turma_id', turmaId);
-      let folderId: string;
-      if (!existingFolders || existingFolders.length === 0) {
-        const { data: newFolder } = await supabase.from('folders')
-          .insert({ user_id: user.id, name: turma?.name || 'Sala', section: 'community', source_turma_id: turmaId } as any)
-          .select('id').single();
-        folderId = (newFolder as any)?.id;
-      } else {
-        folderId = existingFolders[0].id;
-      }
-      // Bootstrap local deck copies
+      await insertTurmaMember(turmaId, user.id);
+      const folderId = await getOrCreateTurmaFolder(user.id, turmaId, turma?.name || 'Sala');
       if (folderId) {
         const { bootstrapFollowerDecks } = await import('@/services/followerBootstrap');
         await bootstrapFollowerDecks(user.id, turmaId, folderId);
@@ -221,21 +210,10 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
   // Study handler — auto-follow + navigate to first deck with cards
   const handleStudy = async () => {
     if (!user) { navigate('/auth'); return; }
-    // Auto-follow if not already a follower
     if (!isFollower) {
       try {
-        await supabase.from('turma_members').insert({ turma_id: turmaId, user_id: user.id } as any);
-        const { data: existingFolders } = await supabase.from('folders')
-          .select('id').eq('user_id', user.id).eq('source_turma_id', turmaId);
-        let folderId: string | undefined;
-        if (!existingFolders || existingFolders.length === 0) {
-          const { data: newFolder } = await supabase.from('folders')
-            .insert({ user_id: user.id, name: turma?.name || 'Sala', section: 'community', source_turma_id: turmaId } as any)
-            .select('id').single();
-          folderId = (newFolder as any)?.id;
-        } else {
-          folderId = existingFolders[0].id;
-        }
+        await insertTurmaMember(turmaId, user.id);
+        const folderId = await getOrCreateTurmaFolder(user.id, turmaId, turma?.name || 'Sala');
         if (folderId) {
           const { bootstrapFollowerDecks } = await import('@/services/followerBootstrap');
           await bootstrapFollowerDecks(user.id, turmaId, folderId);
@@ -251,10 +229,7 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
         }
       }
     }
-    // Navigate to Dashboard — open the sala folder directly
-    const { data: folderData } = await supabase.from('folders')
-      .select('id').eq('user_id', user.id).eq('source_turma_id', turmaId).limit(1);
-    const targetFolderId = folderData?.[0]?.id;
+    const targetFolderId = await fetchTurmaFolderId(user.id, turmaId);
     navigate(targetFolderId ? `/dashboard?folder=${targetFolderId}` : '/dashboard');
   };
 
