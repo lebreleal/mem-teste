@@ -136,10 +136,10 @@ export async function fetchStudyQueue(
   const deckNewLimit = deckConfig?.daily_new_limit ?? 20;
   const reviewLimit = deckConfig?.daily_review_limit ?? 100;
 
-  const folderNewLimit = folderId
+  const folderNewLimit = (folderId || isStudyAll)
     ? folderLimitDecks.reduce((sum, d) => sum + (d.daily_new_limit ?? 20), 0)
     : deckNewLimit;
-  const folderReviewLimit = folderId
+  const folderReviewLimit = (folderId || isStudyAll)
     ? folderLimitDecks.reduce((sum, d) => sum + (d.daily_review_limit ?? 100), 0)
     : reviewLimit;
 
