@@ -290,7 +290,6 @@ const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: stri
         {sorted.map(sub => {
           const mastery = getMastery(sub.id);
           const masteryPct = mastery.total > 0 ? Math.round((mastery.mastered / mastery.total) * 1000) / 10 : 0;
-          const qCount = getQuestionCount(sub.id);
           const allCaughtUp = getDueCount(sub.id) === 0 && mastery.mastered > 0;
 
           return (
@@ -307,12 +306,6 @@ const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: stri
                     <Layers className="h-3 w-3" />
                     {mastery.total}
                   </span>
-                  {qCount > 0 && (
-                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                      <HelpCircle className="h-3 w-3" />
-                      {qCount}
-                    </span>
-                  )}
                   <span className="text-xs text-muted-foreground ml-auto">{masteryPct}%</span>
                 </div>
                 <Progress value={masteryPct} className="h-1 mt-1.5" />

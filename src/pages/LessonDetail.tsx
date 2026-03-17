@@ -250,7 +250,7 @@ const LessonDetail = () => {
           }
         }
         if (turmaFolder && (turmaFolder as any).is_archived) {
-          await unarchiveFolder((turmaFolder as any).id);
+          await archiveFolder((turmaFolder as any).id);
         }
         const sourceCards = await fetchCardsForCopy(td.deck_id);
         const userCards = await fetchCardsForCopy(existingLinked.id);
