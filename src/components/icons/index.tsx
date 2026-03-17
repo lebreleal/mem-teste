@@ -211,3 +211,11 @@ export const IconGlobe = ({ className = 'h-5 w-5' }: IconProps) => (
     <path fill="currentColor" d="M17.9 17.39c-.26-.8-1.01-1.39-1.9-1.39h-1v-3a1 1 0 0 0-1-1H8v-2h2a1 1 0 0 0 1-1V7h2a2 2 0 0 0 2-2v-.41a7.984 7.984 0 0 1 2.9 12.8M11 19.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.22.21-1.79L9 15v1a2 2 0 0 0 2 2m1-16a10 10 0 1 0 0 20 10 10 0 0 0 0-20" />
   </svg>
 );
+
+/* ─── Import / Download ─── */
+export const IconImport = ({ className = 'h-5 w-5' }: IconProps) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className={className}>
+    <path fill="currentColor" d="M16.988 10a1 1 0 0 0-1.707-.707L13 11.586V4c0-.542-.448-1-1-1s-1 .453-1 1v7.586L8.695 9.293a1 1 0 0 0-1.414 1.414l4 4c.187.188.454.293.719.293a.97.97 0 0 0 .695-.293l4-4a1 1 0 0 0 .293-.707" />
+    <path fill="currentColor" d="M3.879 20.121A3 3 0 0 1 2.999 18v-5c0-.545.449-1 1-1C4.553 12 5 12.455 5 13v5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5c0-.545.448-1 1-1s1 .455 1 1v5a3 3 0 0 1-3 3H6a3 3 0 0 1-2.121-.879" />
+  </svg>
+);

@@ -1,20 +1,25 @@
 /**
- * MateriaDetail — full-screen view for a "Matéria" (parent deck).
- * Header: back + name + edit icon.
+ * MateriaDetail — full-screen view for a "Pasta" (parent deck).
+ * Header: "< Sala" back + name + edit icon + 3-dot menu.
  * Lists sub-decks with classification bars.
  * Edit modal: rename + color selector.
+ * Add menu: only baralho + importar (no pasta creation inside a pasta).
  */
 import React, { useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, Plus, Play, ChevronRight } from 'lucide-react';
+import { ChevronLeft, Plus, Play, ChevronRight, MoreVertical, GripVertical } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useDecks } from '@/hooks/useDecks';
+import { useFolders } from '@/hooks/useFolders';
 import type { DeckWithStats } from '@/types/deck';
-import { IconFolder, IconEdit, IconDeck } from '@/components/icons';
+import { IconFolder, IconEdit, IconDeck, IconArchive, IconTrash } from '@/components/icons';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
@@ -72,6 +77,7 @@ const MateriaDetail: React.FC = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { decks } = useDecks();
+  const { folders } = useFolders();
 
   // Find the materia and its sub-decks from the cached decks list
   const materia = useMemo(() => decks?.find(d => d.id === id), [decks, id]);
@@ -79,6 +85,14 @@ const MateriaDetail: React.FC = () => {
     () => (decks ?? []).filter(d => d.parent_deck_id === id && !d.is_archived),
     [decks, id]
   );
+
+  // Find parent sala (folder) name
+  const parentFolder = useMemo(() => {
+    if (!materia?.folder_id) return null;
+    return (folders as Array<{ id: string; name: string }>)?.find(f => f.id === materia.folder_id) ?? null;
+  }, [materia, folders]);
+  const backLabel = parentFolder?.name ?? 'Sala';
+
   const [colorVersion, setColorVersion] = useState(0);
   const materiaColor = useMemo(() => id ? getMateriaColors()[id] ?? null : null, [id, colorVersion]);
 
@@ -86,6 +100,7 @@ const MateriaDetail: React.FC = () => {
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState<string | null>(null);
   const [showAddDeck, setShowAddDeck] = useState(false);
+  const [organizeMode, setOrganizeMode] = useState(false);
 
   const openEdit = useCallback(() => {
     if (!materia) return;
@@ -97,9 +112,7 @@ const MateriaDetail: React.FC = () => {
   const updateMutation = useMutation({
     mutationFn: async ({ name, color }: { name: string; color: string | null }) => {
       if (!id) throw new Error('No materia id');
-      // Save color locally
       setMateriaColor(id, color);
-      // Update name in DB
       const { error } = await supabase.from('decks').update({ name }).eq('id', id);
       if (error) throw error;
     },
@@ -107,10 +120,42 @@ const MateriaDetail: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['decks'] });
       setColorVersion(v => v + 1);
       setShowEdit(false);
-      toast({ title: 'Matéria atualizada' });
+      toast({ title: 'Pasta atualizada' });
     },
     onError: (err: Error) => {
       toast({ title: 'Erro ao salvar', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: async () => {
+      if (!id) throw new Error('No materia id');
+      const { error } = await supabase.from('decks').update({ is_archived: true }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['decks'] });
+      toast({ title: 'Pasta arquivada' });
+      navigate(-1);
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Erro ao arquivar', variant: 'destructive' });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      if (!id) throw new Error('No materia id');
+      const { error } = await supabase.from('decks').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['decks'] });
+      toast({ title: 'Pasta excluída' });
+      navigate(-1);
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Erro ao excluir', variant: 'destructive' });
     },
   });
 
@@ -136,18 +181,48 @@ const MateriaDetail: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background pb-24">
-      {/* Header */}
+      {/* Header — matches sala hero style */}
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border/50">
-        <div className="flex items-center gap-3 px-4 py-3">
-          <button onClick={() => navigate(-1)} className="shrink-0 text-muted-foreground hover:text-foreground transition-colors">
-            <ChevronLeft className="h-6 w-6" />
+        <div className="flex items-center justify-between px-4 py-3">
+          <button
+            onClick={() => navigate(-1)}
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            <span>{backLabel}</span>
           </button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted/60 transition-colors text-muted-foreground hover:text-foreground">
+                <MoreVertical className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={() => setOrganizeMode(!organizeMode)}>
+                <GripVertical className="h-4 w-4 mr-2" /> {organizeMode ? 'Concluir organização' : 'Organizar pasta'}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => archiveMutation.mutate()}>
+                <IconArchive className="h-4 w-4 mr-2" /> Arquivar pasta
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={() => deleteMutation.mutate()}
+              >
+                <IconTrash className="h-4 w-4 mr-2" /> Excluir pasta
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        {/* Pasta name row */}
+        <div className="flex items-center gap-3 px-4 pb-3">
           <div className="shrink-0" style={materiaColor ? { color: materiaColor } : undefined}>
             <IconFolder className="h-5 w-5" />
           </div>
           <h1 className="flex-1 text-base font-bold text-foreground truncate">{materia.name}</h1>
           <button onClick={openEdit} className="shrink-0 text-muted-foreground hover:text-foreground transition-colors">
-            <IconEdit className="h-5 w-5" />
+            <IconEdit className="h-4 w-4" />
           </button>
         </div>
       </div>
@@ -161,17 +236,17 @@ const MateriaDetail: React.FC = () => {
             <div
               key={sub.id}
               className="group flex items-center gap-3 px-4 py-4 cursor-pointer hover:bg-muted/50 transition-colors"
-              onClick={() => navigate(`/decks/${sub.id}`)}
+              onClick={() => !organizeMode && navigate(`/decks/${sub.id}`)}
             >
+              {organizeMode && (
+                <GripVertical className="h-4 w-4 text-muted-foreground/50 shrink-0 cursor-grab active:cursor-grabbing" />
+              )}
               <IconDeck className="h-5 w-5 text-muted-foreground shrink-0" />
               <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-medium text-foreground truncate">{sub.name}</h3>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  {sub.total_cards} {sub.total_cards === 1 ? 'cartão' : 'cartões'}
-                </p>
+                <h3 className="text-[13px] font-medium text-foreground truncate">{sub.name}</h3>
                 <ClassificationBar {...cls} className="mt-1" />
               </div>
-              {hasDue && (
+              {hasDue && !organizeMode && (
                 <button
                   onClick={(e) => { e.stopPropagation(); navigate(`/decks/${sub.id}`); }}
                   className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shrink-0"
@@ -180,7 +255,7 @@ const MateriaDetail: React.FC = () => {
                   <Play className="h-3.5 w-3.5 fill-current" />
                 </button>
               )}
-              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+              {!organizeMode && <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
             </div>
           );
         })}
@@ -190,7 +265,7 @@ const MateriaDetail: React.FC = () => {
       {subDecks.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-center px-4">
           <IconDeck className="h-10 w-10 text-muted-foreground/30 mb-3" />
-          <p className="text-sm text-muted-foreground">Nenhum baralho nesta matéria</p>
+          <p className="text-sm text-muted-foreground">Nenhum baralho nesta pasta</p>
         </div>
       )}
 
@@ -201,7 +276,7 @@ const MateriaDetail: React.FC = () => {
           className="w-full flex items-center justify-center gap-2 rounded-xl border border-dashed border-border/60 py-3 text-sm text-muted-foreground hover:text-foreground hover:border-border transition-colors"
         >
           <Plus className="h-4 w-4" />
-          Adicionar Deck
+          Adicionar Baralho
         </button>
       </div>
 
@@ -224,13 +299,13 @@ const MateriaDetail: React.FC = () => {
       <Dialog open={showEdit} onOpenChange={setShowEdit}>
         <DialogContent className="max-w-xs">
           <DialogHeader>
-            <DialogTitle>Editar Matéria</DialogTitle>
+            <DialogTitle>Editar Pasta</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <Input
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
-              placeholder="Nome da matéria"
+              placeholder="Nome da pasta"
               autoFocus
             />
             <div>
