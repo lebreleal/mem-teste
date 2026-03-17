@@ -379,7 +379,7 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
                 toggleExpand={toggleExpand}
                 expandedAccordionId={expandedAccordionId}
                 onAccordionToggle={(id) => setExpandedAccordionId(prev => prev === id ? null : id)}
-                questionCountMap={questionCountMap}
+                questionCountMap={undefined}
               />
             ))}
           </div>

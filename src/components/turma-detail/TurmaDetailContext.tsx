@@ -8,7 +8,7 @@ import { createContext, useContext, useState, useMemo, useEffect, type ReactNode
 import type { Turma, TurmaMember, TurmaSubject, TurmaLesson, TurmaExam, TurmaDeck } from '@/types/turma';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
-import { fetchTurmaPublic, fetchTurmaLessonFiles, fetchActiveSubscription, restoreSubscriptionStatus, processSubscription, importTurmaExam, type TurmaExamInput } from '@/services/turmaDetailService';
+import { fetchTurmaPublic, fetchTurmaLessonFiles, fetchActiveSubscription, restoreSubscriptionStatus, processSubscription } from '@/services/turmaDetailService';
 import { useAuth } from '@/hooks/useAuth';
 import { useTurmas } from '@/hooks/useTurmas';
 import {
