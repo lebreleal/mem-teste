@@ -103,7 +103,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
       const data = JSON.parse(initialFront);
       if (data.imageUrl) setImageUrl(data.imageUrl);
       if (data.allRects) {
-        const converted: OcclusionShape[] = data.allRects.map((r: any) => ({
+        const converted: OcclusionShape[] = data.allRects.map((r: Record<string, unknown>) => ({
           id: r.id || crypto.randomUUID(),
           type: r.type || 'rect',
           color: r.color || COLORS[0].fill,
