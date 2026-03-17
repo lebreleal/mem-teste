@@ -121,7 +121,7 @@ export async function searchGlobalConcepts(userId: string, search: string) {
     .eq('user_id', userId)
     .ilike('name', `%${search.trim()}%`)
     .limit(20);
-  return (data ?? []) as { id: string; name: string; description: string | null }[];
+  return (data ?? []) as unknown as { id: string; name: string; description: string | null }[];
 }
 
 export async function getGlobalConceptBySlug(userId: string, slug: string) {
