@@ -288,13 +288,9 @@ export const TurmaDetailProvider = ({ children }: { children: ReactNode }) => {
     });
   };
 
-  const handleImportExam = async (exam: TurmaExamInput) => {
-    try {
-      const examId = await importTurmaExam(user!.id, exam);
-      queryClient.invalidateQueries({ queryKey: ['exams'] });
-      toast({ title: 'Prova importada!', description: 'A prova foi adicionada à sua seção de provas.' });
-      navigate(`/exam/${examId}`);
-    } catch (err: unknown) { toast({ title: 'Erro ao importar', description: err instanceof Error ? err.message : 'Erro desconhecido', variant: 'destructive' }); }
+  // Exam import removed — stub to satisfy interface
+  const handleImportExam = async (_exam: TurmaExam) => {
+    toast({ title: 'Funcionalidade removida', variant: 'destructive' });
   };
 
   const value: TurmaDetailContextValue = {
