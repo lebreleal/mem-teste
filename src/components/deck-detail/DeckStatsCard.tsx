@@ -80,9 +80,7 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
     navigate(`/study/${deckId}`, { replace: true });
   };
 
-  const canStudy = isQMode
-    ? qd.total > 0
-    : (isQuickReview ? totalCards > 0 : studyPending > 0);
+  const canStudy = isQuickReview ? totalCards > 0 : studyPending > 0;
 
   return (
     <div className="space-y-1">
