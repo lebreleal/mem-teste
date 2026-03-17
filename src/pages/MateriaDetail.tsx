@@ -1,42 +1,34 @@
 /**
  * MateriaDetail — full-screen view for a "Matéria" (parent deck).
- * Shows header with back button + name + edit icon.
+ * Header: back + name + edit icon.
  * Lists sub-decks with classification bars.
  * Edit modal: rename + color selector.
  */
 import React, { useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, Plus, Play, Info, ChevronRight } from 'lucide-react';
-import { useDecks } from '@/hooks/useDecks';
+import { ChevronLeft, Plus, Play, ChevronRight } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
+import { useDecks } from '@/hooks/useDecks';
+import type { DeckWithStats } from '@/types/deck';
 import { IconFolder, IconEdit, IconDeck } from '@/components/icons';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import type { DeckWithStats } from '@/hooks/useDecks';
-import CreateDeckDialog from '@/components/CreateDeckDialog';
-import AICreateDeckDialog from '@/components/AICreateDeckDialog';
 
 const MATERIA_COLORS = [
-  '#6366F1', // indigo
-  '#F59E0B', // amber
-  '#10B981', // emerald
-  '#EF4444', // red
-  '#8B5CF6', // violet
-  '#EC4899', // pink
-  '#06B6D4', // cyan
-  '#F97316', // orange
+  '#6366F1', '#F59E0B', '#10B981', '#EF4444',
+  '#8B5CF6', '#EC4899', '#06B6D4', '#F97316',
 ];
 
-/** Parse color from image_url field (format: "color:#HEX") */
-function parseMateriaColor(imageUrl: string | null | undefined): string | null {
-  if (!imageUrl) return null;
-  const match = imageUrl.match(/^color:(#[0-9A-Fa-f]{6})$/);
+/** Parse color from deck name prefix convention: we store in a separate query */
+function parseMateriaColor(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const match = raw.match(/^color:(#[0-9A-Fa-f]{6})$/);
   return match ? match[1] : null;
 }
 
@@ -72,40 +64,56 @@ const MateriaDetail: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const { decks, getSubDecks, getAggregateStats } = useDecks();
+  const { decks } = useDecks();
 
+  // Find the materia and its sub-decks from the cached decks list
   const materia = useMemo(() => decks?.find(d => d.id === id), [decks, id]);
-  const subDecks = useMemo(() => (id ? getSubDecks(id) : []), [id, getSubDecks]);
-  const materiaColor = parseMateriaColor(materia?.image_url);
+  const subDecks = useMemo(
+    () => (decks ?? []).filter(d => d.parent_deck_id === id && !d.is_archived),
+    [decks, id]
+  );
+
+  // Fetch image_url (color) from DB since it's not in DeckWithStats
+  const { data: materiaExtra } = useQuery({
+    queryKey: ['materia-extra', id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('decks')
+        .select('image_url')
+        .eq('id', id!)
+        .single();
+      return data;
+    },
+    enabled: !!id,
+    staleTime: 60_000,
+  });
+
+  const materiaColor = parseMateriaColor(materiaExtra?.image_url);
 
   const [showEdit, setShowEdit] = useState(false);
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState<string | null>(null);
   const [showAddDeck, setShowAddDeck] = useState(false);
-  const [showCreateDeck, setShowCreateDeck] = useState(false);
-  const [showCreateAI, setShowCreateAI] = useState(false);
 
   const openEdit = useCallback(() => {
     if (!materia) return;
     setEditName(materia.name);
-    setEditColor(parseMateriaColor(materia.image_url));
+    setEditColor(materiaColor);
     setShowEdit(true);
-  }, [materia]);
+  }, [materia, materiaColor]);
 
   const updateMutation = useMutation({
     mutationFn: async ({ name, color }: { name: string; color: string | null }) => {
       if (!id) throw new Error('No materia id');
-      const updates: Record<string, string> = { name };
-      if (color) {
-        updates.image_url = `color:${color}`;
-      } else {
-        updates.image_url = '';
-      }
-      const { error } = await supabase.from('decks').update(updates).eq('id', id);
+      const { error } = await supabase.from('decks').update({
+        name,
+        image_url: color ? `color:${color}` : null,
+      }).eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['decks'] });
+      queryClient.invalidateQueries({ queryKey: ['materia-extra', id] });
       setShowEdit(false);
       toast({ title: 'Matéria atualizada' });
     },
@@ -113,6 +121,18 @@ const MateriaDetail: React.FC = () => {
       toast({ title: 'Erro ao salvar', description: err.message, variant: 'destructive' });
     },
   });
+
+  const { createDeck } = useDecks();
+
+  const handleCreateManual = useCallback((name: string) => {
+    if (!id || !user) return;
+    createDeck.mutate({ name, parentDeckId: id }, {
+      onSuccess: () => {
+        setShowAddDeck(false);
+        toast({ title: 'Baralho criado' });
+      },
+    });
+  }, [id, user, createDeck]);
 
   if (!materia) {
     return (
@@ -130,7 +150,9 @@ const MateriaDetail: React.FC = () => {
           <button onClick={() => navigate(-1)} className="shrink-0 text-muted-foreground hover:text-foreground transition-colors">
             <ChevronLeft className="h-6 w-6" />
           </button>
-          <IconFolder className="h-5 w-5 shrink-0" style={materiaColor ? { color: materiaColor } : undefined} />
+          <div className="shrink-0" style={materiaColor ? { color: materiaColor } : undefined}>
+            <IconFolder className="h-5 w-5" />
+          </div>
           <h1 className="flex-1 text-base font-bold text-foreground truncate">{materia.name}</h1>
           <button onClick={openEdit} className="shrink-0 text-muted-foreground hover:text-foreground transition-colors">
             <IconEdit className="h-5 w-5" />
@@ -141,9 +163,8 @@ const MateriaDetail: React.FC = () => {
       {/* Sub-decks list */}
       <div className="divide-y divide-border/30">
         {subDecks.map(sub => {
-          const stats = getAggregateStats(sub);
           const cls = getClassification(sub);
-          const hasDue = stats.new_count + stats.learning_count + stats.review_count > 0;
+          const hasDue = sub.new_count + sub.learning_count + sub.review_count > 0;
           return (
             <div
               key={sub.id}
@@ -199,20 +220,10 @@ const MateriaDetail: React.FC = () => {
             <DialogTitle>Novo baralho em {materia.name}</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-2 pt-1">
-            <button
-              onClick={() => { setShowAddDeck(false); setShowCreateDeck(true); }}
-              className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
-            >
-              <span className="text-sm font-medium text-foreground">Criar baralho manualmente</span>
-              <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto shrink-0" />
-            </button>
-            <button
-              onClick={() => { setShowAddDeck(false); setShowCreateAI(true); }}
-              className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
-            >
-              <span className="text-sm font-medium text-foreground">Criar baralho com IA</span>
-              <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto shrink-0" />
-            </button>
+            <AddDeckNameInput
+              onSubmit={(name) => { handleCreateManual(name); }}
+              loading={createDeck.isPending}
+            />
           </div>
         </DialogContent>
       </Dialog>
@@ -253,23 +264,20 @@ const MateriaDetail: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Create deck dialog */}
-      {showCreateDeck && (
-        <CreateDeckDialog
-          open={showCreateDeck}
-          onOpenChange={setShowCreateDeck}
-          parentDeckId={id}
-        />
-      )}
-      {showCreateAI && (
-        <AICreateDeckDialog
-          open={showCreateAI}
-          onOpenChange={setShowCreateAI}
-          parentDeckId={id}
-        />
-      )}
     </div>
+  );
+};
+
+/** Simple input to create a deck by name */
+const AddDeckNameInput = ({ onSubmit, loading }: { onSubmit: (name: string) => void; loading: boolean }) => {
+  const [name, setName] = useState('');
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); if (name.trim()) onSubmit(name.trim()); }} className="flex flex-col gap-2">
+      <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome do baralho" autoFocus />
+      <Button type="submit" disabled={!name.trim() || loading} className="w-full">
+        {loading ? 'Criando...' : 'Criar'}
+      </Button>
+    </form>
   );
 };
 
