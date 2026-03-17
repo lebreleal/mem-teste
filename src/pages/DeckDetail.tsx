@@ -648,19 +648,7 @@ const PersonalDeckTabs = ({ deckId, isLinkedDeck, activeTab, setActiveTab }: { d
 const SuggestionsList = ({ deckId }: { deckId: string }) => {
   const { data: suggestions = [], isLoading } = useQuery({
     queryKey: ['deck-suggestions-list', deckId],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('deck_suggestions')
-        .select('*')
-        .eq('deck_id', deckId)
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false });
-      if (!data || data.length === 0) return [];
-      const userIds = [...new Set(data.map((s: any) => s.suggester_user_id))];
-      const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: userIds });
-      const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
-      return data.map((s: any) => ({ ...s, suggester_name: profileMap.get(s.suggester_user_id) ?? 'Anônimo' }));
-    },
+    queryFn: () => fetchPendingSuggestions(deckId),
     enabled: !!deckId,
     staleTime: 30_000,
   });
