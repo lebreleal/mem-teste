@@ -253,7 +253,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
       setCurrentRect(null);
     } else if (tool === 'freehand' && drawing) {
       if (currentPoints.length > 5) {
-        const newShape: OcclusionShape = { id: crypto.randomUUID(), type: 'freehand', points: [...currentPoints] };
+        const newShape: OcclusionShape = { id: crypto.randomUUID(), type: 'freehand', points: [...currentPoints], color: shapeColor };
         setShapes(prev => [...prev, newShape]);
         setSelectedId(newShape.id);
       }
