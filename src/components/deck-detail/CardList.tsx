@@ -1,6 +1,6 @@
 /**
  * CardList – renders the card list with search, filter, selection, and progress bar.
- * Uses client-side pagination to handle large decks (50k+ cards).
+ * Uses react-window virtualisation to handle large decks (50k+ cards).
  */
 
 import { useDeckDetail } from './DeckDetailContext';
@@ -20,13 +20,15 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
+import { List, type RowComponentProps } from 'react-window';
 import { useQuery } from '@tanstack/react-query';
 import { fetchCardTagsBatch } from '@/services/dashboardService';
 import SuggestCorrectionModal from '@/components/SuggestCorrectionModal';
 import { shortDisplayId } from '@/lib/shortId';
 
 const PAGE_SIZE_UI = 50;
+const GROUP_ROW_HEIGHT = 120;
 
 /** Batch-fetch tags for visible card IDs only. */
 const useCardTagsBatch = (cardIds: string[]) => {
@@ -384,9 +386,8 @@ const CardListContent = ({
 }: any) => {
   const [suggestCard, setSuggestCard] = useState<any>(null);
   const [communityWarningOpen, setCommunityWarningOpen] = useState(false);
-  // Only show first N cards from already-loaded set
-  const visibleCards = useMemo(() => filteredCards.slice(0, visibleCount), [filteredCards, visibleCount]);
-  const hasMoreVisible = visibleCount < filteredCards.length;
+  // With virtualisation, show all cards — react-window handles DOM efficiency
+  const visibleCards = filteredCards;
 
   // Batch fetch tags only for visible cards
   const visibleCardIds = useMemo(() => visibleCards.map((c: any) => c.id), [visibleCards]);
@@ -436,237 +437,266 @@ const CardListContent = ({
     const nums = new Set(matches.map(m => parseInt(m.match(/\d+/)![0])));
     return Array.from(nums).sort((a, b) => a - b);
   };
+  interface CardListGroupRowProps {
+    groups: { cards: any[]; isClozeGroup: boolean }[];
+    selectionMode: boolean;
+    selectedCards: Set<string>;
+    toggleCardSelection: (id: string) => void;
+    setPreviewIndex: (idx: number) => void;
+    getStateInfo: (card: any) => { label: string; color: string };
+    stripHtml: (s: string) => string;
+    isFrozenCard: (card: any) => boolean;
+    unfreezeCard: (id: string) => void;
+    openEdit: (card: any) => void;
+    setDeleteId: (id: string | null) => void;
+    isLinkedDeck: boolean;
+    filteredCards: any[];
+    tagsMap: Record<string, { id: string; name: string; is_official: boolean }[]>;
+    setSuggestCard: (card: any) => void;
+    setCommunityWarningOpen: (v: boolean) => void;
+    isClozeCard: (card: any) => boolean;
+    getClozeDisplayText: (card: any) => string | null;
+    getClozeNumbers: (s: string) => number[];
+  }
 
-  return (
-    <>
-    <div className="space-y-2.5">
-      {groups.map((group: any, gi: number) => {
-        const card = group.cards[0];
-        const isCloze = isClozeCard(card);
-        const isMultiple = card.card_type === 'multiple_choice';
-        const isOcclusion = card.card_type === 'image_occlusion';
-        const isSelected = selectedCards.has(card.id);
-        const frozen = isFrozenCard(card);
+  const groupRowRenderer = useCallback(({ index, style, groups: gs, selectionMode: sm, selectedCards: sc, toggleCardSelection: tcc, setPreviewIndex: spi, getStateInfo: gsi, stripHtml: shtml, isFrozenCard: ifc, unfreezeCard: ufc, openEdit: oe, setDeleteId: sdi, isLinkedDeck: ild, filteredCards: fc, tagsMap: tm, setSuggestCard: ssc, setCommunityWarningOpen: scwo, isClozeCard: icc, getClozeDisplayText: gcdt, getClozeNumbers: gcn }: RowComponentProps<CardListGroupRowProps>): React.ReactElement | null => {
+    const group = gs[index];
+    if (!group) return null;
+    const card = group.cards[0];
+    const isCloze = icc(card);
+    const isMultiple = card.card_type === 'multiple_choice';
+    const isOcclusion = card.card_type === 'image_occlusion';
+    const isSelected = sc.has(card.id);
+    const frozen = ifc(card);
 
-        // Difficulty-based border color (matches ManageDeckCardList)
-        const borderColor = (() => {
-          if (card.state === 0 || card.state == null) return 'border-l-muted';
-          const d = card.difficulty ?? 5;
-          if (d <= 3) return 'border-l-info';
-          if (d <= 5) return 'border-l-success';
-          if (d <= 7) return 'border-l-warning';
-          return 'border-l-destructive';
-        })();
+    const borderColor = (() => {
+      if (card.state === 0 || card.state == null) return 'border-l-muted';
+      const d = card.difficulty ?? 5;
+      if (d <= 3) return 'border-l-info';
+      if (d <= 5) return 'border-l-success';
+      if (d <= 7) return 'border-l-warning';
+      return 'border-l-destructive';
+    })();
 
-        let mcOptions: string[] = [];
-        let mcCorrectIdx = -1;
-        if (isMultiple && card.back_content) {
-          try {
-            const parsed = JSON.parse(card.back_content);
-            if (parsed.options) mcOptions = parsed.options;
-            if (typeof parsed.correctIndex === 'number') mcCorrectIdx = parsed.correctIndex;
-          } catch {}
-        }
+    let mcOptions: string[] = [];
+    let mcCorrectIdx = -1;
+    if (isMultiple && card.back_content) {
+      try {
+        const parsed = JSON.parse(card.back_content);
+        if (parsed.options) mcOptions = parsed.options;
+        if (typeof parsed.correctIndex === 'number') mcCorrectIdx = parsed.correctIndex;
+      } catch {}
+    }
 
-        const clozeText = isCloze ? getClozeDisplayText(card) : null;
-        const clozeNums = clozeText ? getClozeNumbers(clozeText) : [];
+    const clozeText = isCloze ? gcdt(card) : null;
 
-        return (
-          <div key={card.id} className="relative">
-            {group.isClozeGroup && (
-              <div className="absolute inset-x-1 -bottom-1 h-2 rounded-b-xl border border-t-0 border-border/40 bg-card/50" />
-            )}
-            <div
-              className={`group rounded-xl border border-l-4 ${borderColor} bg-card p-4 transition-colors cursor-pointer relative ${
-                frozen ? 'opacity-50' : ''
-              } ${
-                isSelected ? 'border-primary/50 bg-primary/5' : 'border-border/60 hover:border-border hover:shadow-sm'
-              }`}
-              onClick={() => {
-                if (selectionMode) {
-                  if (isLinkedDeck) { setCommunityWarningOpen(true); return; }
-                  toggleCardSelection(card.id);
-                  return;
-                }
-                const flatIdx = filteredCards.findIndex((c: any) => c.id === card.id);
-                setPreviewIndex(flatIdx >= 0 ? flatIdx : 0);
-              }}
-            >
-              <div className="flex items-start gap-3">
-                {selectionMode && (
-                  <div
-                    className="pt-0.5 shrink-0"
-                    onClick={(e: any) => {
-                      e.stopPropagation();
-                      if (isLinkedDeck) { setCommunityWarningOpen(true); return; }
-                      toggleCardSelection(card.id);
-                    }}
-                  >
-                    <Checkbox
-                      checked={isSelected}
-                      className={isLinkedDeck ? 'opacity-40 cursor-not-allowed' : ''}
-                    />
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  {(() => {
-                    const stateInfo = getStateInfo(card);
-                    return (
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <span className="text-[10px] font-mono text-muted-foreground/60">{shortDisplayId(card.id)}</span>
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${stateInfo.color}`}>
-                          {stateInfo.label}
+    return (
+      <div style={{ ...style, paddingBottom: 10 }}>
+        <div className="relative">
+          {group.isClozeGroup && (
+            <div className="absolute inset-x-1 -bottom-1 h-2 rounded-b-xl border border-t-0 border-border/40 bg-card/50" />
+          )}
+          <div
+            className={`group rounded-xl border border-l-4 ${borderColor} bg-card p-4 transition-colors cursor-pointer relative h-full overflow-hidden ${
+              frozen ? 'opacity-50' : ''
+            } ${
+              isSelected ? 'border-primary/50 bg-primary/5' : 'border-border/60 hover:border-border hover:shadow-sm'
+            }`}
+            onClick={() => {
+              if (sm) {
+                if (ild) { scwo(true); return; }
+                tcc(card.id);
+                return;
+              }
+              const flatIdx = fc.findIndex((c: any) => c.id === card.id);
+              spi(flatIdx >= 0 ? flatIdx : 0);
+            }}
+          >
+            <div className="flex items-start gap-3">
+              {sm && (
+                <div
+                  className="pt-0.5 shrink-0"
+                  onClick={(e: any) => {
+                    e.stopPropagation();
+                    if (ild) { scwo(true); return; }
+                    tcc(card.id);
+                  }}
+                >
+                  <Checkbox
+                    checked={isSelected}
+                    className={ild ? 'opacity-40 cursor-not-allowed' : ''}
+                  />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                {(() => {
+                  const stateInfo = gsi(card);
+                  return (
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className="text-[10px] font-mono text-muted-foreground/60">{shortDisplayId(card.id)}</span>
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${stateInfo.color}`}>
+                        {stateInfo.label}
+                      </span>
+                      {card.state >= 2 && card.scheduled_date && (
+                        <span className="text-[10px] text-muted-foreground">
+                          {new Date(card.scheduled_date) <= new Date() ? 'Revisão agora' : `Próx: ${new Date(card.scheduled_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}`}
                         </span>
-                        {card.state >= 2 && card.scheduled_date && (
-                          <span className="text-[10px] text-muted-foreground">
-                            {new Date(card.scheduled_date) <= new Date() ? 'Revisão agora' : `Próx: ${new Date(card.scheduled_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}`}
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })()}
-                  {isCloze && clozeText ? (
-                    <p className="text-sm font-semibold text-foreground leading-snug">
-                      {(() => {
-                        const plain = stripHtml(clozeText);
-                        const parts: React.ReactNode[] = [];
-                        const regex = /\{\{c(\d+)::([^}]*)\}\}/g;
-                        let lastIdx = 0;
-                        let m;
-                        let k = 0;
-                        const BADGE_STYLE = 'bg-primary/15 text-primary border-b-2 border-primary/50 rounded';
-                        while ((m = regex.exec(plain)) !== null) {
-                          if (m.index > lastIdx) parts.push(<span key={k++}>{plain.slice(lastIdx, m.index)}</span>);
-                          const n = parseInt(m[1]);
-                          parts.push(
-                            <span key={k++} className={`inline-flex items-baseline gap-px px-1 py-0 text-xs font-semibold ${BADGE_STYLE}`}>
-                              <span className="text-[7px] font-bold opacity-50 leading-none" style={{ verticalAlign: 'super' }}>{n}</span>
-                              {m[2]}
-                            </span>
-                          );
-                          lastIdx = m.index + m[0].length;
-                        }
-                        if (lastIdx < plain.length) parts.push(<span key={k++}>{plain.slice(lastIdx)}</span>);
-                        return parts;
-                      })()}
-                    </p>
-                  ) : isOcclusion ? (
-                    (() => {
-                      try {
-                        const data = JSON.parse(card.front_content);
-                        const rectCount = data.allRects?.length || 0;
-                        return (
-                          <div className="flex items-center gap-2">
-                            <div className="h-10 w-14 rounded border border-border/50 bg-muted/50 overflow-hidden shrink-0">
-                              {data.imageUrl && (
-                                <img src={data.imageUrl} alt="" className="h-full w-full object-cover" />
-                              )}
-                            </div>
-                            <span className="text-xs text-muted-foreground">{rectCount} área{rectCount !== 1 ? 's' : ''} oculta{rectCount !== 1 ? 's' : ''}</span>
-                          </div>
-                        );
-                      } catch {
-                        return <p className="text-sm text-muted-foreground">Oclusão de imagem</p>;
-                      }
-                    })()
-                  ) : (
-                    <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">
-                      {stripHtml(card.front_content)}
-                    </p>
-                  )}
-
-                  {isMultiple && mcOptions.length > 0 ? (
-                    <div className="mt-2 space-y-0.5">
-                      {mcOptions.map((opt: string, oi: number) => (
-                        <p key={oi} className={`text-xs leading-snug ${oi === mcCorrectIdx ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-muted-foreground'}`}>
-                          {oi === mcCorrectIdx ? '✓ ' : '  '}{opt}
-                        </p>
-                      ))}
+                      )}
                     </div>
-                  ) : !isOcclusion && !isCloze && card.back_content ? (
-                    <p className="text-xs text-muted-foreground mt-1.5 leading-snug line-clamp-2">
-                      {(() => {
-                        const raw = card.back_content;
-                        try {
-                          const parsed = JSON.parse(raw);
-                          if (parsed && typeof parsed.clozeTarget === 'number') {
-                            return stripHtml(parsed.extra || '');
-                          }
-                          if (parsed && parsed.options) {
-                            return (parsed.options as string[]).join(' · ');
-                          }
-                        } catch { /* not JSON */ }
-                        return stripHtml(raw);
-                      })()}
-                    </p>
-                  ) : null}
+                  );
+                })()}
+                {isCloze && clozeText ? (
+                  <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">
+                    {(() => {
+                      const plain = shtml(clozeText);
+                      const parts: React.ReactNode[] = [];
+                      const regex = /\{\{c(\d+)::([^}]*)\}\}/g;
+                      let lastIdx = 0;
+                      let m;
+                      let k = 0;
+                      const BADGE_STYLE = 'bg-primary/15 text-primary border-b-2 border-primary/50 rounded';
+                      while ((m = regex.exec(plain)) !== null) {
+                        if (m.index > lastIdx) parts.push(<span key={k++}>{plain.slice(lastIdx, m.index)}</span>);
+                        const n = parseInt(m[1]);
+                        parts.push(
+                          <span key={k++} className={`inline-flex items-baseline gap-px px-1 py-0 text-xs font-semibold ${BADGE_STYLE}`}>
+                            <span className="text-[7px] font-bold opacity-50 leading-none" style={{ verticalAlign: 'super' }}>{n}</span>
+                            {m[2]}
+                          </span>
+                        );
+                        lastIdx = m.index + m[0].length;
+                      }
+                      if (lastIdx < plain.length) parts.push(<span key={k++}>{plain.slice(lastIdx)}</span>);
+                      return parts;
+                    })()}
+                  </p>
+                ) : isOcclusion ? (
+                  (() => {
+                    try {
+                      const data = JSON.parse(card.front_content);
+                      const rectCount = data.allRects?.length || 0;
+                      return (
+                        <div className="flex items-center gap-2">
+                          <div className="h-10 w-14 rounded border border-border/50 bg-muted/50 overflow-hidden shrink-0">
+                            {data.imageUrl && (
+                              <img src={data.imageUrl} alt="" className="h-full w-full object-cover" />
+                            )}
+                          </div>
+                          <span className="text-xs text-muted-foreground">{rectCount} área{rectCount !== 1 ? 's' : ''} oculta{rectCount !== 1 ? 's' : ''}</span>
+                        </div>
+                      );
+                    } catch {
+                      return <p className="text-sm text-muted-foreground">Oclusão de imagem</p>;
+                    }
+                  })()
+                ) : (
+                  <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">
+                    {shtml(card.front_content)}
+                  </p>
+                )}
 
-                  <CardTagsInline cardId={card.id} tagsMap={tagsMap} />
-                </div>
+                {isMultiple && mcOptions.length > 0 ? (
+                  <div className="mt-2 space-y-0.5">
+                    {mcOptions.map((opt: string, oi: number) => (
+                      <p key={oi} className={`text-xs leading-snug ${oi === mcCorrectIdx ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-muted-foreground'}`}>
+                        {oi === mcCorrectIdx ? '✓ ' : '  '}{opt}
+                      </p>
+                    ))}
+                  </div>
+                ) : !isOcclusion && !isCloze && card.back_content ? (
+                  <p className="text-xs text-muted-foreground mt-1.5 leading-snug line-clamp-1">
+                    {(() => {
+                      const raw = card.back_content;
+                      try {
+                        const parsed = JSON.parse(raw);
+                        if (parsed && typeof parsed.clozeTarget === 'number') {
+                          return shtml(parsed.extra || '');
+                        }
+                        if (parsed && parsed.options) {
+                          return (parsed.options as string[]).join(' · ');
+                        }
+                      } catch { /* not JSON */ }
+                      return shtml(raw);
+                    })()}
+                  </p>
+                ) : null}
 
-                <div className="flex items-center gap-1 shrink-0">
-                  {!selectionMode && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e: any) => e.stopPropagation()}>
-                          <MoreVertical className="h-3.5 w-3.5" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="min-w-[140px]">
-                        <DropdownMenuItem onClick={(e: any) => {
-                          e.stopPropagation();
-                          const flatIdx = filteredCards.findIndex((c: any) => c.id === card.id);
-                          setPreviewIndex(flatIdx >= 0 ? flatIdx : 0);
-                        }}>
-                          <Eye className="mr-2 h-4 w-4" /> Ver
+                <CardTagsInline cardId={card.id} tagsMap={tm} />
+              </div>
+
+              <div className="flex items-center gap-1 shrink-0">
+                {!sm && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e: any) => e.stopPropagation()}>
+                        <MoreVertical className="h-3.5 w-3.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="min-w-[140px]">
+                      <DropdownMenuItem onClick={(e: any) => {
+                        e.stopPropagation();
+                        const flatIdx = fc.findIndex((c: any) => c.id === card.id);
+                        spi(flatIdx >= 0 ? flatIdx : 0);
+                      }}>
+                        <Eye className="mr-2 h-4 w-4" /> Ver
+                      </DropdownMenuItem>
+                      {ild ? (
+                        <DropdownMenuItem onClick={(e: any) => { e.stopPropagation(); ssc(card); }}>
+                          <PenLine className="mr-2 h-4 w-4" /> Sugerir Edição
                         </DropdownMenuItem>
-                        {isLinkedDeck ? (
-                          <DropdownMenuItem onClick={(e: any) => { e.stopPropagation(); setSuggestCard(card); }}>
-                            <PenLine className="mr-2 h-4 w-4" /> Sugerir Edição
+                      ) : (
+                        <DropdownMenuItem onClick={(e: any) => { e.stopPropagation(); oe(card); }}>
+                          <PenLine className="mr-2 h-4 w-4" /> Editar
+                        </DropdownMenuItem>
+                      )}
+                      {frozen && (
+                        <DropdownMenuItem onClick={(e: any) => { e.stopPropagation(); ufc(card.id); }}>
+                          <Flame className="mr-2 h-4 w-4" /> Descongelar
+                        </DropdownMenuItem>
+                      )}
+                      {!ild && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={(e: any) => { e.stopPropagation(); sdi(card.id); }}>
+                            <Trash2 className="mr-2 h-4 w-4" /> Excluir
                           </DropdownMenuItem>
-                        ) : (
-                          <DropdownMenuItem onClick={(e: any) => { e.stopPropagation(); openEdit(card); }}>
-                            <PenLine className="mr-2 h-4 w-4" /> Editar
-                          </DropdownMenuItem>
-                        )}
-                        {frozen && (
-                          <DropdownMenuItem onClick={(e: any) => { e.stopPropagation(); unfreezeCard(card.id); }}>
-                            <Flame className="mr-2 h-4 w-4" /> Descongelar
-                          </DropdownMenuItem>
-                        )}
-                        {!isLinkedDeck && (
-                          <>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={(e: any) => { e.stopPropagation(); setDeleteId(card.id); }}>
-                              <Trash2 className="mr-2 h-4 w-4" /> Excluir
-                            </DropdownMenuItem>
-                          </>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                </div>
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </div>
             </div>
           </div>
-        );
-      })}
+        </div>
+      </div>
+    );
+  }, []);
 
-      {/* Load more button – first show more from loaded cards, then fetch more from server */}
-      {hasMoreVisible && (
+  const listHeight = Math.min(groups.length * GROUP_ROW_HEIGHT, 700);
+
+  return (
+    <>
+    <div>
+      <List
+        rowCount={groups.length}
+        rowHeight={GROUP_ROW_HEIGHT}
+        style={{ width: '100%', height: listHeight }}
+        rowComponent={groupRowRenderer}
+        rowProps={{
+          groups, selectionMode, selectedCards, toggleCardSelection,
+          setPreviewIndex, getStateInfo, stripHtml, isFrozenCard, unfreezeCard,
+          openEdit, setDeleteId, isLinkedDeck, filteredCards, tagsMap,
+          setSuggestCard, setCommunityWarningOpen, isClozeCard, getClozeDisplayText, getClozeNumbers,
+        }}
+        overscanCount={10}
+      />
+
+      {/* Load more from server when all loaded cards are shown */}
+      {hasMoreCards && (
         <Button
           variant="outline"
-          className="w-full gap-2"
-          onClick={() => setVisibleCount((v: number) => v + PAGE_SIZE_UI)}
-        >
-          <ChevronDown className="h-4 w-4" />
-          Mostrar mais ({filteredCards.length - visibleCount} restantes dos carregados)
-        </Button>
-      )}
-      {!hasMoreVisible && hasMoreCards && (
-        <Button
-          variant="outline"
-          className="w-full gap-2"
+          className="w-full gap-2 mt-2.5"
           onClick={loadMoreCards}
         >
           <ChevronDown className="h-4 w-4" />
