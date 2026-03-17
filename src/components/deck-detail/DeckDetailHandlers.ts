@@ -458,9 +458,10 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
     try {
       const newDeck = await deckService.createAlgorithmCopy(user.id, deckId, algorithmConfirm.value, algorithmConfirm.label);
       invalidateDeckRelatedQueries(queryClient);
-      toast({ title: 'Cópia criada!', description: `"${(newDeck as any).name}" como sub-baralho.` });
+      const created = newDeck as unknown as CreatedDeck;
+      toast({ title: 'Cópia criada!', description: `"${created.name}" como sub-baralho.` });
       setAlgorithmConfirm(null); setAlgorithmModalOpen(false);
-      navigate(`/decks/${(newDeck as any).id}`);
+      navigate(`/decks/${created.id}`);
     } catch { toast({ title: 'Erro ao criar cópia', variant: 'destructive' }); }
   }, [algorithmConfirm, deckId, user, queryClient, toast, navigate, setAlgorithmConfirm, setAlgorithmModalOpen]);
 
