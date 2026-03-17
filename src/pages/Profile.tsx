@@ -45,13 +45,14 @@ const Profile = () => {
   const handleSaveName = async () => {
     if (!user || !name.trim()) return;
     setSavingName(true);
-    const { error } = await supabase.from('profiles').update({ name: name.trim() }).eq('id', user.id);
-    setSavingName(false);
-    if (error) {
-      toast({ title: 'Erro', description: 'Não foi possível atualizar o nome.', variant: 'destructive' });
-    } else {
+    try {
+      await updateProfileName(user.id, name.trim());
       toast({ title: 'Nome atualizado!' });
       setEditNameOpen(false);
+    } catch {
+      toast({ title: 'Erro', description: 'Não foi possível atualizar o nome.', variant: 'destructive' });
+    } finally {
+      setSavingName(false);
     }
   };
 
