@@ -8,12 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { X, Undo2, Redo2 } from 'lucide-react';
 
-const COLORS = [
-  '#2E2E2E', '#ef4444', '#f97316', '#eab308',
-  '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899',
-];
-
-const THICKNESSES = [2, 4, 6, 8, 10];
+const STROKE_PATH = 'M7.5 18s6.269-1.673 9.5-7c1.601-2.64-6.5-.5-8-3-1.16-2.5 8-3 8-3';
+const THICKNESSES = [1, 2, 4, 6, 8];
 
 interface Props {
   open: boolean;
@@ -21,15 +17,170 @@ interface Props {
   onSave: (dataUrl: string) => void;
 }
 
+/* ─── Color Wheel Picker ─── */
+function ColorWheelPicker({ color, onChange }: { color: string; onChange: (c: string) => void }) {
+  const wheelRef = useRef<HTMLCanvasElement>(null);
+  const brightnessRef = useRef<HTMLCanvasElement>(null);
+  const [hue, setHue] = useState(200);
+  const [sat, setSat] = useState(100);
+  const [bright, setBright] = useState(100);
+
+  // Parse initial color to HSL on mount
+  useEffect(() => {
+    const ctx = document.createElement('canvas').getContext('2d')!;
+    ctx.fillStyle = color;
+    const hex = ctx.fillStyle;
+    const r = parseInt(hex.slice(1, 3), 16) / 255;
+    const g = parseInt(hex.slice(3, 5), 16) / 255;
+    const b = parseInt(hex.slice(5, 7), 16) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    const l = (max + min) / 2;
+    if (max !== min) {
+      const d = max - min;
+      const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      let h = 0;
+      if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+      else if (max === g) h = ((b - r) / d + 2) / 6;
+      else h = ((r - g) / d + 4) / 6;
+      setHue(Math.round(h * 360));
+      setSat(Math.round(s * 100));
+      setBright(Math.round(l * 200)); // rough
+    }
+  }, []);
+
+  // Draw wheel
+  useEffect(() => {
+    const canvas = wheelRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d')!;
+    const size = canvas.width;
+    const cx = size / 2, cy = size / 2, radius = size / 2 - 2;
+    ctx.clearRect(0, 0, size, size);
+    for (let angle = 0; angle < 360; angle++) {
+      const startAngle = (angle - 1) * Math.PI / 180;
+      const endAngle = (angle + 1) * Math.PI / 180;
+      const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+      gradient.addColorStop(0, `hsl(${angle}, 10%, 100%)`);
+      gradient.addColorStop(0.5, `hsl(${angle}, 100%, 50%)`);
+      gradient.addColorStop(1, `hsl(${angle}, 100%, 50%)`);
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, radius, startAngle, endAngle);
+      ctx.closePath();
+      ctx.fillStyle = gradient;
+      ctx.fill();
+    }
+  }, []);
+
+  // Draw brightness bar
+  useEffect(() => {
+    const canvas = brightnessRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d')!;
+    const w = canvas.width, h = canvas.height;
+    const grad = ctx.createLinearGradient(0, 0, w, 0);
+    grad.addColorStop(0, `hsl(${hue}, ${sat}%, 0%)`);
+    grad.addColorStop(0.5, `hsl(${hue}, ${sat}%, 50%)`);
+    grad.addColorStop(1, `hsl(${hue}, ${sat}%, 100%)`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+  }, [hue, sat]);
+
+  const emitColor = (h: number, s: number, b: number) => {
+    onChange(`hsl(${h}, ${s}%, ${Math.min(b, 95)}%)`);
+  };
+
+  const handleWheelClick = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = wheelRef.current!;
+    const rect = canvas.getBoundingClientRect();
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    const x = clientX - rect.left - rect.width / 2;
+    const y = clientY - rect.top - rect.height / 2;
+    const radius = rect.width / 2;
+    const dist = Math.sqrt(x * x + y * y);
+    if (dist > radius) return;
+    const angle = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+    const s = Math.min(100, Math.round((dist / radius) * 100));
+    setHue(Math.round(angle));
+    setSat(s);
+    emitColor(Math.round(angle), s, bright);
+  };
+
+  const handleBrightnessClick = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = brightnessRef.current!;
+    const rect = canvas.getBoundingClientRect();
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const x = clientX - rect.left;
+    const b = Math.round((x / rect.width) * 100);
+    setBright(b);
+    emitColor(hue, sat, b);
+  };
+
+  // Wheel indicator position
+  const rad = (hue * Math.PI) / 180;
+  const indicatorDist = (sat / 100) * 48; // 48% of container
+  const ix = 50 + (indicatorDist * Math.cos(rad));
+  const iy = 50 + (indicatorDist * Math.sin(rad));
+
+  return (
+    <div className="p-3 space-y-3">
+      {/* Color wheel */}
+      <div className="relative mx-auto" style={{ width: 180, height: 180 }}>
+        <canvas
+          ref={wheelRef}
+          width={180}
+          height={180}
+          className="rounded-full cursor-crosshair"
+          style={{ width: 180, height: 180 }}
+          onClick={handleWheelClick}
+          onTouchMove={handleWheelClick}
+        />
+        {/* Indicator */}
+        <div
+          className="absolute w-5 h-5 rounded-full border-[3px] border-white shadow-md pointer-events-none"
+          style={{
+            left: `${ix}%`,
+            top: `${iy}%`,
+            transform: 'translate(-50%, -50%)',
+            backgroundColor: `hsl(${hue}, ${sat}%, ${Math.min(bright, 95)}%)`,
+          }}
+        />
+      </div>
+      {/* Brightness slider */}
+      <div className="relative mx-auto" style={{ width: 180, height: 24 }}>
+        <canvas
+          ref={brightnessRef}
+          width={180}
+          height={24}
+          className="rounded-full cursor-pointer"
+          style={{ width: 180, height: 24 }}
+          onClick={handleBrightnessClick}
+          onTouchMove={handleBrightnessClick}
+        />
+        <div
+          className="absolute top-1/2 w-5 h-5 rounded-full border-[3px] border-white shadow-md pointer-events-none"
+          style={{
+            left: `${bright}%`,
+            transform: 'translate(-50%, -50%)',
+            backgroundColor: `hsl(${hue}, ${sat}%, ${Math.min(bright, 95)}%)`,
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [color, setColor] = useState(COLORS[0]);
-  const [thickness, setThickness] = useState(4);
+  const [color, setColor] = useState('#3b82f6');
+  const [thickness, setThickness] = useState(2);
   const [opacity, setOpacity] = useState(100);
   const [history, setHistory] = useState<ImageData[]>([]);
   const [historyIdx, setHistoryIdx] = useState(-1);
+  const [showColorPicker, setShowColorPicker] = useState(false);
 
   // Resize canvas to container
   useEffect(() => {
@@ -54,7 +205,6 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
       setHistoryIdx(0);
     };
 
-    // Delay to let dialog render
     const t = setTimeout(resize, 50);
     return () => clearTimeout(t);
   }, [open]);
@@ -175,51 +325,74 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
         </div>
 
         {/* Bottom toolbar */}
-        <div className="px-3 py-2.5 border-t border-border bg-card shrink-0">
-          <div className="flex items-center gap-3">
-            {/* Thickness */}
-            <div className="flex items-center gap-1">
+        <div className="border-t border-border bg-card shrink-0 relative">
+          {/* Color wheel popover */}
+          {showColorPicker && (
+            <div className="absolute bottom-full right-2 mb-2 bg-card border border-border rounded-2xl shadow-xl z-50">
+              <ColorWheelPicker
+                color={color}
+                onChange={(c) => setColor(c)}
+              />
+            </div>
+          )}
+
+          {/* Row 1: Thickness label + icons */}
+          <div className="flex items-center gap-3 px-3 pt-2.5 pb-1.5">
+            <span className="text-[11px] font-medium text-muted-foreground shrink-0">Espessura</span>
+            <div className="flex items-center gap-0.5">
               {THICKNESSES.map(t => (
                 <button
                   key={t}
                   onClick={() => setThickness(t)}
-                  className={`h-7 w-7 flex items-center justify-center rounded-md transition-colors ${
-                    thickness === t ? 'bg-primary/15 ring-1 ring-primary/40' : 'hover:bg-accent'
+                  className={`h-8 w-8 flex items-center justify-center rounded-lg transition-colors ${
+                    thickness === t ? 'bg-primary text-primary-foreground' : 'hover:bg-accent text-foreground'
                   }`}
                 >
-                  <span
-                    className="rounded-full bg-foreground"
-                    style={{ width: t + 2, height: t + 2 }}
-                  />
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <path
+                      d={STROKE_PATH}
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeWidth={t}
+                    />
+                  </svg>
                 </button>
               ))}
             </div>
+          </div>
 
-            {/* Opacity */}
-            <div className="flex-1 min-w-0">
+          {/* Row 2: Opacity + color circle */}
+          <div className="flex items-center gap-3 px-3 pb-2.5">
+            <span className="text-[11px] font-medium text-muted-foreground shrink-0">Opacidade</span>
+            <div className="flex-1 min-w-0 relative">
+              {/* Checkerboard + gradient background */}
+              <div
+                className="absolute inset-y-0 left-0 right-0 rounded-full overflow-hidden"
+                style={{
+                  backgroundImage: `
+                    linear-gradient(to right, transparent, ${color}),
+                    repeating-conic-gradient(#e5e7eb 0% 25%, white 0% 50%)
+                  `,
+                  backgroundSize: '100% 100%, 8px 8px',
+                }}
+              />
               <Slider
                 value={[opacity]}
                 onValueChange={([v]) => setOpacity(v)}
                 min={10}
                 max={100}
                 step={5}
-                className="w-full"
+                className="relative w-full [&_[role=slider]]:border-2 [&_[role=slider]]:border-white [&_[role=slider]]:shadow-md [&_[data-orientation=horizontal]>.bg-primary]:bg-transparent [&_[data-orientation=horizontal]]:bg-transparent"
               />
             </div>
 
-            {/* Color picker */}
-            <div className="flex items-center gap-1">
-              {COLORS.map(c => (
-                <button
-                  key={c}
-                  onClick={() => setColor(c)}
-                  className={`h-5 w-5 rounded-full border-2 transition-transform hover:scale-110 ${
-                    color === c ? 'border-primary scale-110' : 'border-transparent'
-                  }`}
-                  style={{ backgroundColor: c }}
-                />
-              ))}
-            </div>
+            {/* Color circle button */}
+            <button
+              onClick={() => setShowColorPicker(p => !p)}
+              className="h-7 w-7 rounded-full border-2 border-border shadow-sm shrink-0 transition-transform hover:scale-110"
+              style={{ backgroundColor: color }}
+              title="Cor"
+            />
           </div>
         </div>
       </DialogContent>
