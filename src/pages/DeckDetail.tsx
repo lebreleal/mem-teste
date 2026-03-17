@@ -15,7 +15,8 @@ import { calculateRealStudyTime, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils'
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchLinkedDeckSource, fetchPendingSuggestions } from '@/services/deck/deckCrud';
+import { fetchFolderImageUrl } from '@/services/folderService';
 import { toast } from '@/hooks/use-toast';
 
 const SuggestCorrectionModal = lazy(() => import('@/components/SuggestCorrectionModal'));

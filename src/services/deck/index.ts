@@ -29,6 +29,8 @@ export {
   detachCommunityDeck,
   reorderDecks,
   resetDeckProgress,
+  fetchLinkedDeckSource,
+  fetchPendingSuggestions,
 } from './deckCrud';
 
 // Import operations
