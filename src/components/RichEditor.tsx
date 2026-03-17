@@ -65,8 +65,12 @@ interface RichEditorProps {
   content: string;
   onChange: (html: string) => void;
   placeholder?: string;
+  /** @deprecated use onOcclusionImageReady */
   onOcclusionPaste?: () => void;
+  /** @deprecated use onOcclusionImageReady */
   onOcclusionAttach?: () => void;
+  /** Called with uploaded image URL when user attaches/pastes an occlusion image */
+  onOcclusionImageReady?: (imageUrl: string) => void;
   hideCloze?: boolean;
   chromeless?: boolean;
   hideToolbarUntilFocus?: boolean;
