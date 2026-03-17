@@ -550,10 +550,11 @@ export async function fetchRetentionOverTime(userId: string, days = 180): Promis
 
 /** Fetch cards added per day. */
 export async function fetchCardsAddedPerDay(userId: string, days = 90): Promise<CardsAddedRow[]> {
-  const { data, error } = await supabase.rpc('get_cards_added_per_day' as 'get_user_ranking', {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC not in generated types
+  const { data, error } = await (supabase.rpc as any)('get_cards_added_per_day', {
     p_user_id: userId,
     p_days: days,
-  } as unknown as Record<string, never>);
+  });
   if (error) throw error;
   return (data as unknown as CardsAddedRow[]) ?? [];
 }

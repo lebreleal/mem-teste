@@ -26,12 +26,12 @@ export async function countTurmaDeckDownloads(turmaDeckIds: string[]): Promise<R
 /** Count files per lesson_id in a turma. */
 export async function countTurmaFilesByLesson(turmaId: string): Promise<Record<string, number>> {
   const { data } = await supabase
-    .from('turma_lesson_files' as 'turma_members')
+    .from('turma_lesson_files')
     .select('lesson_id')
     .eq('turma_id', turmaId);
   const counts: Record<string, number> = {};
-  (data ?? []).forEach((f: Record<string, unknown>) => {
-    const key = f.lesson_id as string;
+  (data ?? []).forEach(f => {
+    const key = f.lesson_id;
     if (key) counts[key] = (counts[key] || 0) + 1;
   });
   return counts;
@@ -40,14 +40,13 @@ export async function countTurmaFilesByLesson(turmaId: string): Promise<Record<s
 /** Count published exams per lesson_id in a turma. */
 export async function countTurmaExamsByLesson(turmaId: string): Promise<Record<string, number>> {
   const { data } = await supabase
-    .from('turma_exams' as 'turma_members')
+    .from('turma_exams')
     .select('lesson_id')
     .eq('turma_id', turmaId)
     .eq('is_published', true);
   const counts: Record<string, number> = {};
-  (data ?? []).forEach((e: Record<string, unknown>) => {
-    const key = e.lesson_id as string;
-    if (key) counts[key] = (counts[key] || 0) + 1;
+  (data ?? []).forEach(e => {
+    if (e.lesson_id) counts[e.lesson_id] = (counts[e.lesson_id] || 0) + 1;
   });
   return counts;
 }
@@ -100,17 +99,14 @@ export async function fetchTurmaDecks(turmaId: string): Promise<TurmaDeck[]> {
   const typedData = data as TurmaDeckQueryRow[];
   const deckIds = typedData.map(d => d.deck_id);
 
-  // Fetch deck names (no sub-deck expansion)
   const { data: sharedDecks } = await supabase.from('decks').select('id, name, user_id').in('id', deckIds);
   const deckMap = new Map((sharedDecks ?? []).map(d => [d.id, { name: d.name }]));
 
-  // Count cards per deck (direct only, no sub-tree aggregation)
   const { data: countRows } = await supabase.rpc('count_cards_per_deck', { p_deck_ids: deckIds });
   const directCountMap = new Map<string, number>();
   interface CardCountRow { deck_id: string; card_count: number }
   ((countRows ?? []) as CardCountRow[]).forEach(r => directCountMap.set(r.deck_id, Number(r.card_count)));
 
-  // Fetch sharer profile names
   const sharerIds = [...new Set(typedData.map(d => d.shared_by).filter(Boolean))];
   const sharerNameMap = new Map<string, string>();
   if (sharerIds.length > 0) {
@@ -132,67 +128,55 @@ export async function fetchTurmaDecks(turmaId: string): Promise<TurmaDeck[]> {
 }
 
 export async function toggleDeckPublished(id: string, isPublished: boolean) {
-  const { error } = await supabase.from('turma_decks').update({ is_published: isPublished } as Record<string, unknown>).eq('id', id);
+  const { error } = await supabase.from('turma_decks').update({ is_published: isPublished }).eq('id', id);
   if (error) throw error;
 }
 
 // ── Hierarchy Mutations ──
 
 export async function createSemester(turmaId: string, userId: string, name: string, description?: string) {
-  const { data, error } = await supabase.from('turma_semesters').insert({ turma_id: turmaId, name, description: description ?? '', created_by: userId } as Record<string, unknown>).select().single();
+  const { data, error } = await supabase.from('turma_semesters').insert({ turma_id: turmaId, name, description: description ?? '', created_by: userId }).select().single();
   if (error) throw error; return data;
 }
 export async function deleteSemester(id: string) { const { error } = await supabase.from('turma_semesters').delete().eq('id', id); if (error) throw error; }
 export async function createSubject(turmaId: string, userId: string, params: { name: string; description?: string; semesterId?: string | null; parentId?: string | null }) {
-  const { data, error } = await supabase.from('turma_subjects').insert({ turma_id: turmaId, name: params.name, description: params.description ?? '', created_by: userId, semester_id: params.semesterId ?? null, parent_id: params.parentId ?? null } as Record<string, unknown>).select().single();
+  const { data, error } = await supabase.from('turma_subjects').insert({ turma_id: turmaId, name: params.name, description: params.description ?? '', created_by: userId, semester_id: params.semesterId ?? null, parent_id: params.parentId ?? null }).select().single();
   if (error) throw error; return data;
 }
-export async function updateSubject(id: string, name: string) { const { error } = await supabase.from('turma_subjects').update({ name } as Record<string, unknown>).eq('id', id); if (error) throw error; }
+export async function updateSubject(id: string, name: string) { const { error } = await supabase.from('turma_subjects').update({ name }).eq('id', id); if (error) throw error; }
 export async function deleteSubject(id: string) {
-  const { error } = await supabase.rpc('delete_subject_cascade', { p_subject_id: id } as Record<string, unknown>);
+  const { error } = await supabase.rpc('delete_subject_cascade', { p_subject_id: id });
   if (error) throw error;
 }
 export async function createLesson(turmaId: string, userId: string, params: { subjectId?: string | null; name: string; description?: string; lessonDate?: string | null; isPublished?: boolean }) {
-  const { data, error } = await supabase.from('turma_lessons').insert({ turma_id: turmaId, subject_id: params.subjectId ?? null, name: params.name, description: params.description ?? '', created_by: userId, lesson_date: params.lessonDate ?? null, is_published: params.isPublished ?? true } as Record<string, unknown>).select().single();
+  const { data, error } = await supabase.from('turma_lessons').insert({ turma_id: turmaId, subject_id: params.subjectId ?? null, name: params.name, description: params.description ?? '', created_by: userId, lesson_date: params.lessonDate ?? null, is_published: params.isPublished ?? true }).select().single();
   if (error) throw error; return data;
 }
 export async function deleteLesson(id: string) {
-  const { error } = await supabase.rpc('delete_lesson_cascade', { p_lesson_id: id } as Record<string, unknown>);
+  const { error } = await supabase.rpc('delete_lesson_cascade', { p_lesson_id: id });
   if (error) throw error;
 }
 
-interface LessonUpdateFields {
-  name?: string;
-  lesson_date?: string | null;
-  is_published?: boolean;
-}
-
 export async function updateLesson(id: string, params: { name?: string; lessonDate?: string | null; isPublished?: boolean }) {
-  const updateData: LessonUpdateFields = {};
+  const updateData: { name?: string; lesson_date?: string | null; is_published?: boolean } = {};
   if (params.name !== undefined) updateData.name = params.name;
   if (params.lessonDate !== undefined) updateData.lesson_date = params.lessonDate;
   if (params.isPublished !== undefined) updateData.is_published = params.isPublished;
-  const { error } = await supabase.from('turma_lessons').update(updateData as Record<string, unknown>).eq('id', id); if (error) throw error;
-}
-
-interface LessonContentFields {
-  summary?: string;
-  materials?: { title: string; url: string }[];
+  const { error } = await supabase.from('turma_lessons').update(updateData).eq('id', id); if (error) throw error;
 }
 
 export async function updateLessonContent(id: string, params: { summary?: string; materials?: { title: string; url: string }[] }) {
-  const updateData: LessonContentFields = {};
+  const updateData: { summary?: string; materials?: { title: string; url: string }[] } = {};
   if (params.summary !== undefined) updateData.summary = params.summary;
   if (params.materials !== undefined) updateData.materials = params.materials;
-  const { error } = await supabase.from('turma_lessons').update(updateData as Record<string, unknown>).eq('id', id); if (error) throw error;
+  const { error } = await supabase.from('turma_lessons').update(updateData).eq('id', id); if (error) throw error;
 }
 
 export async function shareDeck(turmaId: string, userId: string, params: { deckId: string; subjectId?: string | null; lessonId?: string | null; price?: number; priceType?: string; allowDownload?: boolean }) {
-  // Only share the selected deck (no sub-deck expansion)
   const { data: existingShares } = await supabase.from('turma_decks').select('id, deck_id').eq('turma_id', turmaId).eq('deck_id', params.deckId);
-  if (existingShares && existingShares.length > 0) return; // Already shared
+  if (existingShares && existingShares.length > 0) return;
 
-  await supabase.from('decks').update({ is_public: true } as Record<string, unknown>).eq('id', params.deckId);
+  await supabase.from('decks').update({ is_public: true }).eq('id', params.deckId);
 
   const { error } = await supabase.from('turma_decks').insert({
     turma_id: turmaId,
@@ -203,38 +187,40 @@ export async function shareDeck(turmaId: string, userId: string, params: { deckI
     price: params.price ?? 0,
     price_type: params.priceType ?? 'free',
     allow_download: params.allowDownload ?? false,
-  } as Record<string, unknown>);
+  });
   if (error) throw error;
 }
 
 export async function updateDeckPricing(id: string, params: { price: number; priceType: string; allowDownload?: boolean }) {
-  const updateData: Record<string, unknown> = { price: params.price, price_type: params.priceType };
+  const updateData: { price: number; price_type: string; allow_download?: boolean } = { price: params.price, price_type: params.priceType };
   if (params.allowDownload !== undefined) updateData.allow_download = params.allowDownload;
   const { error } = await supabase.from('turma_decks').update(updateData).eq('id', id); if (error) throw error;
 }
 export async function unshareDeck(id: string) { const { error } = await supabase.from('turma_decks').delete().eq('id', id); if (error) throw error; }
 
-/** Batch-update sort_order for turma subjects — uses single RPC when available. */
+/** Batch-update sort_order for turma subjects. */
 export async function reorderSubjects(orderedIds: string[]) {
   try {
-    const { error } = await supabase.rpc('batch_reorder_turma_subjects' as 'get_user_ranking', { p_ids: orderedIds } as Record<string, unknown>);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC not in generated types
+    const { error } = await (supabase.rpc as any)('batch_reorder_turma_subjects', { p_ids: orderedIds });
     if (error) throw error;
   } catch {
     for (let i = 0; i < orderedIds.length; i++) {
-      const { error } = await supabase.from('turma_subjects').update({ sort_order: i } as Record<string, unknown>).eq('id', orderedIds[i]);
+      const { error } = await supabase.from('turma_subjects').update({ sort_order: i }).eq('id', orderedIds[i]);
       if (error) throw error;
     }
   }
 }
 
-/** Batch-update sort_order for turma decks — uses single RPC when available. */
+/** Batch-update sort_order for turma decks. */
 export async function reorderTurmaDecks(orderedIds: string[]) {
   try {
-    const { error } = await supabase.rpc('batch_reorder_turma_decks' as 'get_user_ranking', { p_ids: orderedIds } as Record<string, unknown>);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC not in generated types
+    const { error } = await (supabase.rpc as any)('batch_reorder_turma_decks', { p_ids: orderedIds });
     if (error) throw error;
   } catch {
     for (let i = 0; i < orderedIds.length; i++) {
-      const { error } = await supabase.from('turma_decks').update({ sort_order: i } as Record<string, unknown>).eq('id', orderedIds[i]);
+      const { error } = await supabase.from('turma_decks').update({ sort_order: i }).eq('id', orderedIds[i]);
       if (error) throw error;
     }
   }
@@ -243,7 +229,7 @@ export async function reorderTurmaDecks(orderedIds: string[]) {
 /** Batch-update sort_order for turma lesson files. */
 export async function reorderTurmaFiles(orderedIds: string[]) {
   for (let i = 0; i < orderedIds.length; i++) {
-    const { error } = await supabase.from('turma_lesson_files').update({ sort_order: i } as Record<string, unknown>).eq('id', orderedIds[i]);
+    const { error } = await supabase.from('turma_lesson_files').update({ sort_order: i }).eq('id', orderedIds[i]);
     if (error) throw error;
   }
 }
@@ -251,7 +237,7 @@ export async function reorderTurmaFiles(orderedIds: string[]) {
 /** Batch-update sort_order for turma exams. */
 export async function reorderTurmaExams(orderedIds: string[]) {
   for (let i = 0; i < orderedIds.length; i++) {
-    const { error } = await supabase.from('turma_exams').update({ sort_order: i } as Record<string, unknown>).eq('id', orderedIds[i]);
+    const { error } = await supabase.from('turma_exams').update({ sort_order: i }).eq('id', orderedIds[i]);
     if (error) throw error;
   }
 }
@@ -263,7 +249,7 @@ interface TurmaRatingRow {
   turma_id: string;
   user_id: string;
   rating: number;
-  comment: string;
+  comment: string | null;
   created_at: string;
 }
 
@@ -274,10 +260,10 @@ export async function fetchMyTurmaRating(turmaId: string, userId: string): Promi
 
 export async function submitTurmaRating(turmaId: string, userId: string, rating: number, comment?: string, existingId?: string) {
   if (existingId) {
-    const { error } = await supabase.from('turma_ratings').update({ rating, comment: comment ?? '' } as Record<string, unknown>).eq('id', existingId);
+    const { error } = await supabase.from('turma_ratings').update({ rating, comment: comment ?? '' }).eq('id', existingId);
     if (error) throw error;
   } else {
-    const { error } = await supabase.from('turma_ratings').insert({ turma_id: turmaId, user_id: userId, rating, comment: comment ?? '' } as Record<string, unknown>);
+    const { error } = await supabase.from('turma_ratings').insert({ turma_id: turmaId, user_id: userId, rating, comment: comment ?? '' });
     if (error) throw error;
   }
 }
