@@ -277,8 +277,6 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
         </div>
       )}
 
-        </div>
-      )}
 
       {/* Regular deck (non-matéria) — original flat row */}
       {!isMateria && (
