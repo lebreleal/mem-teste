@@ -7,6 +7,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { X, Undo2, Redo2 } from 'lucide-react';
+import { canInitializeCanvas, getCanvasBitmapMetrics, getRelativePoint } from '@/components/rich-editor/drawingCanvasUtils';
 
 const STROKE_PATH = 'M7.5 18s6.269-1.673 9.5-7c1.601-2.64-6.5-.5-8-3-1.16-2.5 8-3 8-3';
 const THICKNESSES = [1, 2, 4, 6, 8];
@@ -206,11 +207,13 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
 
   // Use refs for drawing state to avoid stale closures
   const isDrawingRef = useRef(false);
+  const activePointerIdRef = useRef<number | null>(null);
   const historyRef = useRef<ImageData[]>([]);
   const historyIdxRef = useRef(-1);
   const colorRef = useRef(color);
   const thicknessRef = useRef(thickness);
   const opacityRef = useRef(opacity);
+  const hasInteractionRef = useRef(false);
 
   // Keep refs in sync with state
   historyRef.current = history;
@@ -219,32 +222,38 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
   thicknessRef.current = thickness;
   opacityRef.current = opacity;
 
-  // Resize canvas to container — use ResizeObserver to wait for real dimensions
-  const initializedRef = useRef(false);
-
   useEffect(() => {
     if (!open) {
-      initializedRef.current = false;
+      hasInteractionRef.current = false;
+      isDrawingRef.current = false;
+      activePointerIdRef.current = null;
       return;
     }
+
     const canvas = canvasRef.current;
     const container = containerRef.current;
     if (!canvas || !container) return;
 
     const initCanvas = (rect: DOMRectReadOnly) => {
-      if (rect.width < 10 || rect.height < 10) return;
-      if (initializedRef.current) return;
-      initializedRef.current = true;
+      if (!canInitializeCanvas(rect.width, rect.height) || hasInteractionRef.current) return;
 
       const dpr = window.devicePixelRatio || 1;
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      canvas.style.width = `${rect.width}px`;
-      canvas.style.height = `${rect.height}px`;
-      const ctx = canvas.getContext('2d')!;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const metrics = getCanvasBitmapMetrics(rect.width, rect.height, dpr);
+      if (canvas.width === metrics.pixelWidth && canvas.height === metrics.pixelHeight) return;
+
+      canvas.width = metrics.pixelWidth;
+      canvas.height = metrics.pixelHeight;
+      canvas.style.width = `${metrics.cssWidth}px`;
+      canvas.style.height = `${metrics.cssHeight}px`;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      ctx.setTransform(metrics.dpr, 0, 0, metrics.dpr, 0, 0);
+      ctx.clearRect(0, 0, metrics.cssWidth, metrics.cssHeight);
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, rect.width, rect.height);
+      ctx.fillRect(0, 0, metrics.cssWidth, metrics.cssHeight);
+
       const initial = ctx.getImageData(0, 0, canvas.width, canvas.height);
       setHistory([initial]);
       setHistoryIdx(0);
@@ -255,72 +264,46 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
         initCanvas(entry.contentRect);
       }
     });
+
     ro.observe(container);
 
     const rect = container.getBoundingClientRect();
-    if (rect.width > 10 && rect.height > 10) {
-      initCanvas(rect as DOMRectReadOnly);
-    }
+    initCanvas(rect as DOMRectReadOnly);
 
     return () => ro.disconnect();
   }, [open]);
 
   const getCtx = () => canvasRef.current?.getContext('2d') ?? null;
 
-  const getPos = useCallback((e: MouseEvent | TouchEvent): { x: number; y: number } => {
+  const getPos = useCallback((clientX: number, clientY: number): { x: number; y: number } => {
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
-    const touch = 'touches' in e ? (e.touches[0] ?? e.changedTouches[0]) : null;
-    const clientX = touch ? touch.clientX : (e as MouseEvent).clientX;
-    const clientY = touch ? touch.clientY : (e as MouseEvent).clientY;
+    const point = getRelativePoint(rect, clientX, clientY);
+
     return {
-      x: clientX - rect.left,
-      y: clientY - rect.top,
+      x: Math.max(0, Math.min(point.x, rect.width)),
+      y: Math.max(0, Math.min(point.y, rect.height)),
     };
   }, []);
 
-  // Use native event listeners for precise drawing (avoids React state batching)
+  // Use pointer events + pointer capture for full-area precise drawing
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !open) return;
 
-    const handleStart = (e: MouseEvent | TouchEvent) => {
-      e.preventDefault();
-      const ctx = getCtx();
-      if (!ctx) return;
-      isDrawingRef.current = true;
-      const pos = getPos(e);
-      ctx.beginPath();
-      ctx.moveTo(pos.x, pos.y);
-      ctx.strokeStyle = colorRef.current;
-      ctx.lineWidth = thicknessRef.current;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.globalAlpha = opacityRef.current / 100;
-    };
-
-    const handleMove = (e: MouseEvent | TouchEvent) => {
-      if (!isDrawingRef.current) return;
-      e.preventDefault();
-      const ctx = getCtx();
-      if (!ctx) return;
-      const pos = getPos(e);
-      ctx.lineTo(pos.x, pos.y);
-      ctx.stroke();
-      // Continue the path without restarting to avoid overdraw
-      ctx.beginPath();
-      ctx.moveTo(pos.x, pos.y);
-    };
-
-    const handleEnd = () => {
+    const finishStroke = () => {
       if (!isDrawingRef.current) return;
       isDrawingRef.current = false;
+
       const ctx = getCtx();
       if (!ctx || !canvas) return;
+
       ctx.globalAlpha = 1;
+      ctx.beginPath();
+
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const idx = historyIdxRef.current;
-      setHistory(prev => {
+      setHistory((prev) => {
         const next = prev.slice(0, idx + 1);
         next.push(imageData);
         return next;
@@ -328,22 +311,71 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
       setHistoryIdx(idx + 1);
     };
 
-    canvas.addEventListener('mousedown', handleStart);
-    canvas.addEventListener('mousemove', handleMove);
-    canvas.addEventListener('mouseup', handleEnd);
-    canvas.addEventListener('mouseleave', handleEnd);
-    canvas.addEventListener('touchstart', handleStart, { passive: false });
-    canvas.addEventListener('touchmove', handleMove, { passive: false });
-    canvas.addEventListener('touchend', handleEnd);
+    const handlePointerDown = (e: PointerEvent) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+
+      e.preventDefault();
+      const ctx = getCtx();
+      if (!ctx) return;
+
+      activePointerIdRef.current = e.pointerId;
+      isDrawingRef.current = true;
+      hasInteractionRef.current = true;
+      canvas.setPointerCapture?.(e.pointerId);
+
+      const pos = getPos(e.clientX, e.clientY);
+      ctx.beginPath();
+      ctx.moveTo(pos.x, pos.y);
+      ctx.strokeStyle = colorRef.current;
+      ctx.lineWidth = thicknessRef.current;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.globalAlpha = opacityRef.current / 100;
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(pos.x, pos.y);
+    };
+
+    const handlePointerMove = (e: PointerEvent) => {
+      if (!isDrawingRef.current || activePointerIdRef.current !== e.pointerId) return;
+
+      e.preventDefault();
+      const ctx = getCtx();
+      if (!ctx) return;
+
+      const pos = getPos(e.clientX, e.clientY);
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(pos.x, pos.y);
+    };
+
+    const handlePointerUp = (e: PointerEvent) => {
+      if (activePointerIdRef.current !== e.pointerId) return;
+      e.preventDefault();
+      canvas.releasePointerCapture?.(e.pointerId);
+      activePointerIdRef.current = null;
+      finishStroke();
+    };
+
+    const handlePointerCancel = (e: PointerEvent) => {
+      if (activePointerIdRef.current !== e.pointerId) return;
+      canvas.releasePointerCapture?.(e.pointerId);
+      activePointerIdRef.current = null;
+      finishStroke();
+    };
+
+    canvas.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('pointermove', handlePointerMove, { passive: false });
+    window.addEventListener('pointerup', handlePointerUp, { passive: false });
+    window.addEventListener('pointercancel', handlePointerCancel);
 
     return () => {
-      canvas.removeEventListener('mousedown', handleStart);
-      canvas.removeEventListener('mousemove', handleMove);
-      canvas.removeEventListener('mouseup', handleEnd);
-      canvas.removeEventListener('mouseleave', handleEnd);
-      canvas.removeEventListener('touchstart', handleStart);
-      canvas.removeEventListener('touchmove', handleMove);
-      canvas.removeEventListener('touchend', handleEnd);
+      canvas.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerCancel);
     };
   }, [open, getPos]);
 
