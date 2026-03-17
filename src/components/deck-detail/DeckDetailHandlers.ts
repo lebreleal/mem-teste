@@ -185,7 +185,7 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
       });
       const cardEntries: { activeRectIds: string[] }[] = [];
       ungrouped.forEach(r => cardEntries.push({ activeRectIds: [r.id] }));
-      Object.values(groups).forEach(groupRects => { cardEntries.push({ activeRectIds: groupRects.map((r: any) => r.id) }); });
+      Object.values(groups).forEach(groupRects => { cardEntries.push({ activeRectIds: groupRects.map(r => r.id) }); });
       const cw = occlusionCanvasSize?.w ?? undefined;
       const ch = occlusionCanvasSize?.h ?? undefined;
       const frontText = front.trim() ? front : undefined;
