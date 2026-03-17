@@ -108,16 +108,11 @@ const AdminUsageReport = () => {
   const fetchData = useCallback(async () => {
     setLoading(true);
     const { from, to } = getDateRange();
-    const { data, error } = await supabase.rpc('admin_get_global_token_usage' as any, {
-      p_user_id: null,
-      p_date_from: from,
-      p_date_to: to,
-      p_limit: 500,
-    });
-    if (error) {
+    try {
+      const data = await fetchGlobalTokenUsage({ dateFrom: from, dateTo: to, limit: 500 });
+      setEntries(data);
+    } catch {
       toast({ title: 'Erro', description: 'Falha ao carregar dados.', variant: 'destructive' });
-    } else {
-      setEntries((data as UsageEntry[]) || []);
     }
     setLoading(false);
   }, [getDateRange, toast]);
