@@ -241,7 +241,7 @@ export const TurmaDetailProvider = ({ children }: { children: ReactNode }) => {
     const buildPath = (fId: string) => {
       const folder = subjects.find(s => s.id === fId);
       if (!folder) return;
-      if ((folder as Record<string, unknown>).parent_id) buildPath((folder as Record<string, unknown>).parent_id as string);
+      if (folder.parent_id) buildPath(folder.parent_id);
       path.push({ id: folder.id, name: folder.name });
     };
     buildPath(folderId);
