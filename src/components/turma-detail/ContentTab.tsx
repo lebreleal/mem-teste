@@ -6,7 +6,7 @@
 
 import { useState, useMemo, lazy, Suspense } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { countTurmaDeckDownloads, countTurmaFilesByLesson, countTurmaExamsByLesson } from '@/services/turma/turmaContent';
 import { useTurmaDetail } from './TurmaDetailContext';
 import { useContentMutations } from './content/useContentMutations';
 import { useContentImport } from './content/useContentImport';
