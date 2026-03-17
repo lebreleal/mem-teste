@@ -344,6 +344,7 @@ const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: stri
 const DeckDetailContent = () => {
   const { deck, deckLoading, allCardsLoading, deckId, navigate, toast, setAlgorithmModalOpen, cardCounts, decks } = useDeckDetail();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const locState = location.state as { from?: string; folderId?: string; turmaId?: string } | null;
   const fromCommunity = locState?.from === 'community';
   const fromDashboardSala = locState?.from === 'dashboard-sala';
