@@ -65,7 +65,7 @@ export const useProfile = () => {
           table: 'profiles',
           filter: `id=eq.${user.id}`,
         },
-        (payload: any) => {
+        (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
           // Update cache directly with new data (avoid refetch)
           const newRow = payload.new;
           if (newRow) {
