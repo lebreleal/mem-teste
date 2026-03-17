@@ -179,6 +179,62 @@ function ClozePreview({ text }: { text: string }) {
   );
 }
 
+/* ─── Reversed Cards Toggle ─── */
+const ReversedCardsToggle = () => {
+  const [infoOpen, setInfoOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <div className="flex items-center justify-between py-1">
+        <div className="flex items-center gap-2">
+          <IconSwap className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium text-foreground">Cartões invertidos</span>
+          <button
+            type="button"
+            onClick={() => setInfoOpen(v => !v)}
+            className="h-5 w-5 shrink-0 flex items-center justify-center text-primary/60 hover:text-primary transition-colors"
+          >
+            <IconInfo className="h-4 w-4" />
+          </button>
+        </div>
+        {/* Toggle switch (visual only for now) */}
+        <button type="button" className="relative shrink-0" style={{ width: 44, height: 24 }}>
+          <div className="absolute inset-0 rounded-full transition-colors bg-muted" />
+          <div className="absolute top-0.5 rounded-full bg-white shadow-sm transition-transform" style={{ width: 20, height: 20, transform: 'translateX(2px)' }} />
+        </button>
+      </div>
+
+      {/* Info popover */}
+      {infoOpen && (
+        <div className="mt-2 rounded-xl border border-border bg-card shadow-lg p-4 space-y-3 animate-in fade-in-0 zoom-in-95 duration-200">
+          <div className="flex items-start justify-between">
+            <p className="text-sm text-muted-foreground leading-relaxed pr-2">
+              "Cartões invertidos" ajuda você a estudar os cartões em ambas as direções. Quando o modo é ativado, cada cartão terá uma cópia no formato invertido.
+            </p>
+            <button type="button" onClick={() => setInfoOpen(false)} className="shrink-0 h-5 w-5 flex items-center justify-center text-muted-foreground hover:text-foreground">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5"><path d="M18 6L6 18M6 6l12 12" /></svg>
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-border bg-background p-3 flex flex-col items-center gap-2">
+              <img src={cartaoInvertidoResposta} alt="Cartão normal" className="w-full max-w-[120px] h-auto rounded-lg object-contain" />
+            </div>
+            <div className="flex items-center justify-center text-lg text-muted-foreground font-bold select-none">+</div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-border bg-background p-3 flex flex-col items-center gap-2">
+              <img src={cartaoInvertidoPergunta} alt="Cartão invertido" className="w-full max-w-[120px] h-auto rounded-lg object-contain" />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Saiba mais sobre "Cartões invertidos" no <a href="#" className="text-primary font-medium hover:underline">Guia de suporte</a>.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
+
 /* ─── Main Component ─── */
 export const CardEditorForm = ({
   front, onFrontChange, back, onBackChange,
