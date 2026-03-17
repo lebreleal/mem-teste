@@ -103,7 +103,7 @@ export async function fetchStudyQueue(
       .filter((d): d is (typeof activeDecks)[number] => !!d);
 
     folderLimitDecks = rootDecks;
-    deckConfig = rootDecks[0] ?? {};
+    deckConfig = (rootDecks[0] as DeckStudyConfig | undefined);
     limitScopeIds = deckIds;
   } else {
     const descendantIds = collectDescendantIds(activeDecks, deckId);
