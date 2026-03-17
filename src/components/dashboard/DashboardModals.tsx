@@ -32,15 +32,6 @@ interface DashboardModalsProps {
   setSalaImageFile: (v: File | null) => void;
   handleSalaImageSave: () => void;
 
-  // Share
-  shareModalOpen: boolean;
-  setShareModalOpen: (v: boolean) => void;
-  shareSlugEdit: string;
-  setShareSlugEdit: (v: string) => void;
-  savingSlug: boolean;
-  handleSaveSlug: () => void;
-  onCopyLink: () => void;
-
   // Leave sala
   leaveSalaConfirm: { folderId: string; turmaId: string } | null;
   setLeaveSalaConfirm: (v: { folderId: string; turmaId: string } | null) => void;
