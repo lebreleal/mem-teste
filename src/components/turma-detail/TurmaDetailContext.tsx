@@ -124,12 +124,7 @@ export const TurmaDetailProvider = ({ children }: { children: ReactNode }) => {
     queryKey: ['turma-public', turmaId],
     queryFn: async () => {
       if (!turmaId) return null;
-      const { data } = await supabase.from('turmas').select('*').eq('id', turmaId).single();
-      if (!data) return null;
-      // Enrich with owner name
-      const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: [(data as any).owner_id] });
-      const ownerName = (profiles && profiles.length > 0) ? (profiles[0] as any).name || 'Anônimo' : 'Anônimo';
-      return { ...data, owner_name: ownerName };
+      return fetchTurmaPublic(turmaId);
     },
     enabled: !!turmaId && !myTurma,
     staleTime: 60_000,
