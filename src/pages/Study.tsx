@@ -1,10 +1,8 @@
 /**
- * Study.tsx — Slim orchestrator (~380 lines).
+ * Study.tsx — Slim orchestrator.
  * Logic extracted per Lei 2B into:
- *   - useLeechDetection (hook)
- *   - LeechMode (full-screen reinforcement)
  *   - SessionComplete (completion screen)
- *   - StudyDialogs (leech interruption, skip confirm, community info, chat, pro model)
+ *   - StudyDialogs (community info, chat, pro model)
  */
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
