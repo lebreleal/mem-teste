@@ -17,7 +17,7 @@ import { loadToolbarConfig, saveToolbarConfig, type ToolbarItem } from '@/compon
 import { lazy, Suspense } from 'react';
 const ToolbarConfigSheet = lazy(() => import('@/components/rich-editor/ToolbarConfigSheet'));
 const DrawingCanvasModal = lazy(() => import('@/components/rich-editor/DrawingCanvasModal'));
-const AICreatorSheet = lazy(() => import('@/components/rich-editor/AICreatorSheet'));
+const AICreatorInlineRow = lazy(() => import('@/components/rich-editor/AICreatorSheet').then(m => ({ default: m.AICreatorInlineRow })));
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -99,7 +99,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
   const [drawingOpen, setDrawingOpen] = useState(false);
-  const [aiCreatorOpen, setAiCreatorOpen] = useState(false);
+  const [aiCreatorOpen, setAiCreatorOpen] = useState(false); // toggles inline row
   // Sync toolbar config across all RichEditor instances
   useEffect(() => {
     const handler = () => setToolbarItems(loadToolbarConfig());
@@ -441,7 +441,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
               <Button type="button" variant="ghost" size="icon"
                 className="h-7 w-7 shrink-0"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => setAiCreatorOpen(true)}
+                onClick={() => setAiCreatorOpen(v => !v)}
                 title="Criador de IA"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="h-4 w-4">
@@ -677,19 +677,18 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
           />
         )}
       </Suspense>
-      <Suspense fallback={null}>
-        {aiCreatorOpen && onAICreate && (
-          <AICreatorSheet
-            open={aiCreatorOpen}
-            onOpenChange={setAiCreatorOpen}
+      {/* AI Creator Inline Row — shown when sparkle is toggled */}
+      {aiCreatorOpen && onAICreate && (
+        <Suspense fallback={null}>
+          <AICreatorInlineRow
             onGenerate={(prompt) => {
               onAICreate(prompt);
               setAiCreatorOpen(false);
             }}
             isGenerating={isAICreating}
           />
-        )}
-      </Suspense>
+        </Suspense>
+      )}
     </div>
   );
 };
