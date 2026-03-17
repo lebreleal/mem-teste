@@ -90,7 +90,7 @@ interface RichEditorProps {
   /** Called when user removes an attachment thumbnail */
   onRemoveAttachment?: (url: string) => void;
   /** Called when user clicks an attachment thumbnail */
-  onClickAttachment?: (url: string, isOcclusion: boolean) => void;
+  onClickAttachment?: (attachment: ImageAttachment) => void;
 }
 
 const TEXT_COLORS = [
