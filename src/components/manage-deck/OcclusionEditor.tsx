@@ -686,9 +686,9 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
       </header>
 
       {/* ─── Content: toolbar + image + floating controls ─── */}
-      <div className="flex-1 min-h-0 flex flex-col items-center justify-center p-2 sm:p-3 overflow-hidden">
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-1.5 pt-1 pb-1 overflow-hidden">
         {/* Drawing toolbar — above image */}
-        <div className="shrink-0 flex items-center gap-1 bg-card/90 backdrop-blur-sm rounded-xl border border-border/60 p-1 shadow-sm mb-2">
+        <div className="shrink-0 flex items-center gap-1 bg-card/90 backdrop-blur-sm rounded-xl border border-border/60 p-1 shadow-sm mb-1">
           {drawTools.map(t => (
             <button
               key={t.id}
