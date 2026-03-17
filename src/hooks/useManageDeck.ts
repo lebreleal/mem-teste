@@ -35,6 +35,7 @@ export function useManageDeck() {
   const [mcOptions, setMcOptions] = useState<string[]>(['', '', '', '']);
   const [mcCorrectIndex, setMcCorrectIndex] = useState<number>(0);
   const [isImproving, setIsImproving] = useState(false);
+  const [isAICreating, setIsAICreating] = useState(false);
   const [improvePreview, setImprovePreview] = useState<{ front: string; back: string } | null>(null);
   const [improveModalOpen, setImproveModalOpen] = useState(false);
 
