@@ -559,7 +559,7 @@ export async function fetchReadyToLearnConcepts(userId: string): Promise<GlobalC
   // Get all user concepts
   const { data: all } = await supabase
     .from('global_concepts' as any)
-    .select('*')
+    .select(GLOBAL_CONCEPT_COLS)
     .eq('user_id', userId);
 
   if (!all || all.length === 0) return [];
