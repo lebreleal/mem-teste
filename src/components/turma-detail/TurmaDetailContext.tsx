@@ -7,7 +7,7 @@
 import { createContext, useContext, useState, useMemo, useEffect, type ReactNode } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchTurmaPublic, fetchTurmaLessonFiles, fetchActiveSubscription, restoreSubscriptionStatus, processSubscription, importTurmaExam } from '@/services/turmaDetailService';
 import { useAuth } from '@/hooks/useAuth';
 import { useTurmas } from '@/hooks/useTurmas';
 import {
