@@ -8,7 +8,7 @@ import { createContext, useContext, useState, useMemo, useEffect, type ReactNode
 import type { Turma, TurmaMember, TurmaSubject, TurmaLesson, TurmaExam, TurmaDeck } from '@/types/turma';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
-import { fetchTurmaPublic, fetchTurmaLessonFiles, fetchActiveSubscription, restoreSubscriptionStatus, processSubscription, importTurmaExam } from '@/services/turmaDetailService';
+import { fetchTurmaPublic, fetchTurmaLessonFiles, fetchActiveSubscription, restoreSubscriptionStatus, processSubscription, importTurmaExam, type TurmaExamInput } from '@/services/turmaDetailService';
 import { useAuth } from '@/hooks/useAuth';
 import { useTurmas } from '@/hooks/useTurmas';
 import {
@@ -208,10 +208,11 @@ export const TurmaDetailProvider = ({ children }: { children: ReactNode }) => {
       queryClient.invalidateQueries({ queryKey: ['turma-active-sub', turmaId] });
       queryClient.invalidateQueries({ queryKey: ['profile'] });
       toast({ title: 'Assinatura ativada! 🎉', description: 'Você agora tem acesso por 7 dias.' });
-    } catch (e: any) {
-      if (e.message?.includes('Insufficient credits')) toast({ title: 'Créditos insuficientes', description: `Você precisa de ${subscriptionPrice} créditos.`, variant: 'destructive' });
-      else if (e.message?.includes('Already subscribed')) toast({ title: 'Já assinado', description: 'Sua assinatura ainda está ativa.' });
-      else toast({ title: 'Erro ao assinar', description: e.message, variant: 'destructive' });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '';
+      if (msg.includes('Insufficient credits')) toast({ title: 'Créditos insuficientes', description: `Você precisa de ${subscriptionPrice} créditos.`, variant: 'destructive' });
+      else if (msg.includes('Already subscribed')) toast({ title: 'Já assinado', description: 'Sua assinatura ainda está ativa.' });
+      else toast({ title: 'Erro ao assinar', description: msg, variant: 'destructive' });
     }
     finally { setSubscribing(false); }
   };
@@ -240,7 +241,7 @@ export const TurmaDetailProvider = ({ children }: { children: ReactNode }) => {
     const buildPath = (fId: string) => {
       const folder = subjects.find(s => s.id === fId);
       if (!folder) return;
-      if ((folder as any).parent_id) buildPath((folder as any).parent_id);
+      if (folder.parent_id) buildPath(folder.parent_id);
       path.push({ id: folder.id, name: folder.name });
     };
     buildPath(folderId);
@@ -287,13 +288,13 @@ export const TurmaDetailProvider = ({ children }: { children: ReactNode }) => {
     });
   };
 
-  const handleImportExam = async (exam: any) => {
+  const handleImportExam = async (exam: TurmaExamInput) => {
     try {
       const examId = await importTurmaExam(user!.id, exam);
       queryClient.invalidateQueries({ queryKey: ['exams'] });
       toast({ title: 'Prova importada!', description: 'A prova foi adicionada à sua seção de provas.' });
       navigate(`/exam/${examId}`);
-    } catch (err: any) { toast({ title: 'Erro ao importar', description: err.message, variant: 'destructive' }); }
+    } catch (err: unknown) { toast({ title: 'Erro ao importar', description: err instanceof Error ? err.message : 'Erro desconhecido', variant: 'destructive' }); }
   };
 
   const value: TurmaDetailContextValue = {

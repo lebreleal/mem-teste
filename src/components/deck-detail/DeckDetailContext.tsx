@@ -6,6 +6,7 @@
  */
 
 import { createContext, useContext, useState, useMemo, useCallback, useEffect, useRef, type ReactNode } from 'react';
+import type { User } from '@supabase/supabase-js';
 import type { CardMeta, DescendantCardCounts } from '@/services/cardService';
 import { countReviewDueCards, fetchStudyPlanDeckIds, unfreezeCard as unfreezeCardService } from '@/services/card/cardMutations';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -21,15 +22,16 @@ import { useAIModel } from '@/hooks/useAIModel';
 import { useExamNotifications } from '@/hooks/useExamNotifications';
 import * as cardService from '@/services/cardService';
 import * as deckService from '@/services/deckService';
-import type { CardRow } from '@/types/deck';
+import type { CardRow, DeckWithStats } from '@/types/deck';
+import type { Tables } from '@/integrations/supabase/types';
 import { findRootAncestorId } from '@/lib/studyUtils';
-import { useDeckDetailHandlers } from './DeckDetailHandlers';
+import { useDeckDetailHandlers, type OcclusionRect } from './DeckDetailHandlers';
 
 // ─── Context value shape ────────────────────────────────
 interface DeckDetailContextValue {
   // Core data
   deckId: string;
-  deck: any;
+  deck: Tables<'decks'> | null | undefined;
   deckLoading: boolean;
   allCards: CardRow[];
   allCardsLoading: boolean;
@@ -138,8 +140,8 @@ interface DeckDetailContextValue {
   // Occlusion
   occlusionImageUrl: string;
   setOcclusionImageUrl: (v: string) => void;
-  occlusionRects: any[];
-  setOcclusionRects: (v: any[]) => void;
+  occlusionRects: OcclusionRect[];
+  setOcclusionRects: (v: OcclusionRect[]) => void;
   occlusionCanvasSize: { w: number; h: number } | null;
   setOcclusionCanvasSize: (v: { w: number; h: number } | null) => void;
   occlusionModalOpen: boolean;
@@ -188,8 +190,8 @@ interface DeckDetailContextValue {
   navigate: ReturnType<typeof useNavigate>;
   toast: ReturnType<typeof useToast>['toast'];
   queryClient: ReturnType<typeof useQueryClient>;
-  user: any;
-  otherDecks: any[];
+  user: User | null;
+  otherDecks: DeckWithStats[];
   isSaving: boolean;
   canImprove: boolean;
 }
@@ -246,7 +248,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const [improvePreview, setImprovePreview] = useState<{ front: string; back: string } | null>(null);
   const [improveModalOpen, setImproveModalOpen] = useState(false);
   const [occlusionImageUrl, setOcclusionImageUrl] = useState<string>('');
-  const [occlusionRects, setOcclusionRects] = useState<any[]>([]);
+  const [occlusionRects, setOcclusionRects] = useState<OcclusionRect[]>([]);
   const [occlusionCanvasSize, setOcclusionCanvasSize] = useState<{ w: number; h: number } | null>(null);
   const [occlusionModalOpen, setOcclusionModalOpen] = useState(false);
   const [mcOptions, setMcOptions] = useState<string[]>(['', '', '', '']);
@@ -296,7 +298,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const allDeckIds = useMemo(() => [deckId, ...descendantIds], [deckId, descendantIds]);
 
   // Detect community deck (belongs to another user) — RPCs filter by auth.uid(), so use direct queries instead
-  const isCommunityDeck = !!deck && !!user && (deck as any).user_id !== user.id;
+  const isCommunityDeck = !!deck && !!user && deck.user_id !== user.id;
 
   const CARDS_PAGE = 200;
   const [displayLimit, setDisplayLimit] = useState(CARDS_PAGE);
@@ -316,10 +318,10 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
           new_count: total,
           learning_count: 0,
           review_count: 0,
-          basic_count: cards.filter((c: any) => c.card_type === 'basic').length,
-          cloze_count: cards.filter((c: any) => c.card_type === 'cloze').length,
-          mc_count: cards.filter((c: any) => c.card_type === 'multiple_choice').length,
-          occlusion_count: cards.filter((c: any) => c.card_type === 'occlusion').length,
+          basic_count: cards.filter((c) => c.card_type === 'basic').length,
+          cloze_count: cards.filter((c) => c.card_type === 'cloze').length,
+          mc_count: cards.filter((c) => c.card_type === 'multiple_choice').length,
+          occlusion_count: cards.filter((c) => c.card_type === 'occlusion').length,
           frozen_count: 0,
           diff_novo: total,
           diff_facil: 0,
@@ -341,7 +343,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
       if (isCommunityDeck) {
         const cards = await cardService.fetchCards(deckId);
         // Reset state and difficulty so gauge shows 0% progress for the viewer
-        return cards.slice(0, displayLimit).map((c: any) => ({
+        return cards.slice(0, displayLimit).map((c) => ({
           ...c,
           state: 0,
           difficulty: 0,
@@ -429,16 +431,17 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const isPlanControlled = hasPlanActive && planRootIds.has(rootId);
 
   // ─── Computed ──────────────────────────
-  const isQuickReview = (deck as any)?.algorithm_mode === 'quick_review';
+  const isQuickReview = deck?.algorithm_mode === 'quick_review';
   const totalCards = cardCounts?.total ?? 0;
-  const dailyNewLimit = rootDeck?.daily_new_limit ?? (deck as any)?.daily_new_limit ?? 20;
-  const dailyReviewLimit = rootDeck?.daily_review_limit ?? (deck as any)?.daily_review_limit ?? 100;
+  const dailyNewLimit = rootDeck?.daily_new_limit ?? deck?.daily_new_limit ?? 20;
+  const dailyReviewLimit = rootDeck?.daily_review_limit ?? deck?.daily_review_limit ?? 100;
 
   const rawGlobalLimit = profileData?.daily_new_cards_limit ?? 9999;
   const weeklyNewCards = profileData?.weekly_new_cards ?? null;
   const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
-  const todayGlobalLimit = (weeklyNewCards && (weeklyNewCards as any)[DAY_KEYS[new Date().getDay()]] != null)
-    ? (weeklyNewCards as any)[DAY_KEYS[new Date().getDay()]]
+  const weeklyMap = weeklyNewCards as Record<string, number> | null;
+  const todayGlobalLimit = (weeklyMap && weeklyMap[DAY_KEYS[new Date().getDay()]] != null)
+    ? weeklyMap[DAY_KEYS[new Date().getDay()]]
     : rawGlobalLimit;
 
   const learningCount = (stats?.learning_count ?? 0);

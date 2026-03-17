@@ -121,7 +121,7 @@ export function useDashboardSalas({ currentFolderId, setCurrentFolderId, folders
       setCurrentFolderId(null);
       setSearchParams({}, { replace: true });
       toast({ title: 'Sala removida do seu menu Início', description: 'Suas estatísticas e progresso ficam salvos por 30 dias.' });
-    } catch (e: any) {
+    } catch {
       toast({ title: 'Erro ao sair da sala', variant: 'destructive' });
     } finally {
       setLeaveSalaConfirm(null);

@@ -252,7 +252,7 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
   const newSecsPerCard = (useAdaptiveTiming && timing?.avg_new_seconds) ? timing.avg_new_seconds : 30;
   const reviewSecsPerCard = (useAdaptiveTiming && timing?.avg_review_seconds) ? timing.avg_review_seconds : 8;
   const learningSecsPerCard = (useAdaptiveTiming && timing?.avg_learning_seconds) ? timing.avg_learning_seconds : 15;
-  const relearningSecsPerCard = (useAdaptiveTiming && (timing as any)?.avg_relearning_seconds) ? (timing as any).avg_relearning_seconds : 12;
+  const relearningSecsPerCard = (useAdaptiveTiming && timing?.avg_relearning_seconds) ? timing.avg_relearning_seconds : 12;
 
   const points: ForecastPoint[] = [];
   const newCardsIntroducedPerDeck = new Map<string, number>();
@@ -518,8 +518,8 @@ self.onmessage = (e: MessageEvent<WorkerMessage>) => {
     try {
       const result = runSimulation(e.data.input);
       self.postMessage({ type: 'result', result } as WorkerResponse);
-    } catch (err: any) {
-      self.postMessage({ type: 'error', error: err.message || 'Simulation error' } as WorkerResponse);
+    } catch (err: unknown) {
+      self.postMessage({ type: 'error', error: err instanceof Error ? err.message : 'Simulation error' } as WorkerResponse);
     }
   }
 };

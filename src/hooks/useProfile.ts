@@ -5,9 +5,10 @@
  */
 
 import { useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
 export interface ProfileData {
   id: string;
@@ -57,16 +58,16 @@ export const useProfile = () => {
     const channel = supabase
       .channel(`profile-${user.id}`)
       .on(
-        'postgres_changes' as any,
+        'postgres_changes' as 'system',
         {
           event: 'UPDATE',
           schema: 'public',
           table: 'profiles',
           filter: `id=eq.${user.id}`,
         },
-        (payload: any) => {
+        (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
           // Update cache directly with new data (avoid refetch)
-          const newRow = payload.new;
+          const newRow = 'new' in payload ? payload.new : null;
           if (newRow) {
             queryClient.setQueryData(profileQueryKey(user.id), (old: ProfileData | undefined) => {
               if (!old) return old;
@@ -86,7 +87,7 @@ export const useProfile = () => {
 };
 
 /** Prefetch profile data — call once after auth to warm the cache. */
-export const prefetchProfile = async (userId: string, queryClient: any) => {
+export const prefetchProfile = async (userId: string, queryClient: QueryClient) => {
   await queryClient.prefetchQuery({
     queryKey: profileQueryKey(userId),
     queryFn: async () => {

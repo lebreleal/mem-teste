@@ -77,7 +77,7 @@ export const DeleteCardDialog = ({ deleteId, setDeleteId, handleDelete }: Delete
 
 interface SuggestCorrectionWrapperProps {
   suggestCard: { id: string; front_content: string; back_content: string; deck_id: string; card_type: string } | null;
-  setSuggestCard: (v: any) => void;
+  setSuggestCard: (v: SuggestCorrectionWrapperProps['suggestCard']) => void;
 }
 
 export const SuggestCorrectionWrapper = ({ suggestCard, setSuggestCard }: SuggestCorrectionWrapperProps) => {

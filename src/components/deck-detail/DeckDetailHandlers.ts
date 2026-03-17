@@ -30,7 +30,7 @@ export interface OcclusionRect {
   y: number;
   w: number;
   h: number;
-  type?: string;
+  type: 'rect' | 'ellipse' | 'polygon' | 'text';
   text?: string;
   groupId?: string;
   points?: { x: number; y: number }[];
