@@ -243,7 +243,7 @@ export async function unarchiveFolder(folderId: string): Promise<void> {
 interface ExamQuestionRow {
   question_type: string;
   question_text: string;
-  options: unknown | null;
+  options: Json | null;
   correct_answer: string;
   correct_indices: number[] | null;
   points: number;
