@@ -834,22 +834,7 @@ const PublicDeckPreview = () => {
   // Fetch deck info
   const { data: deck, isLoading: deckLoading } = useQuery({
     queryKey: ['public-deck-info', deckId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('decks')
-        .select('id, name, is_public, updated_at, user_id')
-        .eq('id', deckId!)
-        .single();
-      if (error) throw error;
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('name')
-        .eq('id', data.user_id)
-        .single();
-
-      return { ...data, owner_name: profile?.name ?? 'Criador' };
-    },
+    queryFn: () => fetchPublicDeckInfo(deckId!),
     enabled: !!deckId,
   });
 
