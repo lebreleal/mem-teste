@@ -116,35 +116,12 @@ const DashboardModals = (props: DashboardModalsProps) => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Sala image change dialog */}
-      <Dialog open={props.salaImageOpen} onOpenChange={props.setSalaImageOpen}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Mudar imagem da sala</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 pt-2">
-            <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border rounded-xl p-6 cursor-pointer hover:bg-muted/30 transition-colors">
-              <ImageIcon className="h-8 w-8 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">
-                {props.salaImageFile ? props.salaImageFile.name : 'Selecionar imagem'}
-              </span>
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => props.setSalaImageFile(e.target.files?.[0] ?? null)}
-              />
-            </label>
-            <Button
-              className="w-full"
-              disabled={!props.salaImageFile}
-              onClick={props.handleSalaImageSave}
-            >
-              Salvar
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Sala image crop dialog */}
+      <SalaImageCropDialog
+        open={props.salaImageOpen}
+        onOpenChange={props.setSalaImageOpen}
+        onSave={props.onSalaImageCropped}
+      />
 
 
 
