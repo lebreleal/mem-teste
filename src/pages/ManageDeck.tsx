@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, lazy, Suspense, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ChevronUp, ChevronDown, Trash2, Copy, Plus, Loader2, Image as ImageIcon, Check, X } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Trash2, Copy, Plus, Loader2, Check, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { CardContent as CardPreviewContent, buildVirtualCards } from '@/components/deck-detail/CardPreviewSheet';
@@ -9,15 +9,13 @@ import { useEnergy } from '@/hooks/useEnergy';
 import { useAIModel } from '@/hooks/useAIModel';
 import { useToast } from '@/hooks/use-toast';
 import LazyRichEditor from '@/components/LazyRichEditor';
-import { Label } from '@/components/ui/label';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useQueryClient } from '@tanstack/react-query';
-import { Skeleton } from '@/components/ui/skeleton';
 import OcclusionEditor from '@/components/manage-deck/OcclusionEditor';
 import { supabase } from '@/integrations/supabase/client';
 import { markdownToHtml } from '@/lib/markdownToHtml';
-
-
+import iconAttachImage from '@/assets/icon-attach-image.png';
+import iconClozeOcclusion from '@/assets/icon-cloze-occlusion.png';
 
 const ManageDeck = () => {
   const { deckId } = useParams<{ deckId: string }>();
@@ -50,17 +48,13 @@ const ManageDeck = () => {
   const currentCard = sortedCards[selectedIndex] ?? null;
   const totalCards = sortedCards.length;
 
-  // Apply URL card only once; after that preserve local selection and prioritize newly created card
+  // Apply URL card only once
   useEffect(() => {
     if (pendingNewCardId && sortedCards.length > 0) {
       const idx = sortedCards.findIndex(c => c.id === pendingNewCardId);
-      if (idx >= 0) {
-        setSelectedIndex(idx);
-        setPendingNewCardId(null);
-      }
+      if (idx >= 0) { setSelectedIndex(idx); setPendingNewCardId(null); }
       return;
     }
-
     if (!hasAppliedInitialCardRef.current && initialCardId && sortedCards.length > 0) {
       const idx = sortedCards.findIndex(c => c.id === initialCardId);
       if (idx >= 0) setSelectedIndex(idx);
@@ -74,81 +68,47 @@ const ManageDeck = () => {
     const ct = (currentCard.card_type ?? 'basic') as string;
     let needsAutoSave = false;
 
-    // Detect image_occlusion by card_type OR by JSON content shape (fallback for mistyped cards)
     const strippedFront = currentCard.front_content.replace(/<[^>]*>/g, '').trim();
     const looksLikeOcclusionJson = /^\s*\{.*"imageUrl"\s*:/.test(strippedFront);
     const isOcclusionContent = ct === 'image_occlusion' || looksLikeOcclusionJson;
 
     if (isOcclusionContent) {
       try {
-        // Try parsing raw content first, then try stripping HTML tags
         let data: any;
-        try {
-          data = JSON.parse(currentCard.front_content);
-        } catch {
-          data = JSON.parse(strippedFront);
-        }
+        try { data = JSON.parse(currentCard.front_content); }
+        catch { data = JSON.parse(strippedFront); }
         setOcclusionImageUrl(data.imageUrl || '');
         setOcclusionRects(data.allRects || data.rects || []);
         setOcclusionCanvasSize(data.canvasWidth ? { w: data.canvasWidth, h: data.canvasHeight } : null);
         setFront(data.frontText || '');
       } catch { setFront(''); setOcclusionImageUrl(''); setOcclusionRects([]); }
-      // Parse back for cloze extra
       let backRaw = currentCard.back_content || '';
-      try {
-        const parsed = JSON.parse(backRaw);
-        if (parsed && typeof parsed.clozeTarget === 'number') {
-          backRaw = parsed.extra || '';
-        }
-      } catch {}
+      try { const p = JSON.parse(backRaw); if (p && typeof p.clozeTarget === 'number') backRaw = p.extra || ''; } catch {}
       setBack(backRaw);
     } else {
-      // Unified handling for basic & cloze
       let clozeExtra = '';
       let backRaw = currentCard.back_content || '';
-      try {
-        const parsed = JSON.parse(backRaw);
-        if (parsed && typeof parsed.clozeTarget === 'number') {
-          clozeExtra = parsed.extra || '';
-          backRaw = clozeExtra;
-        }
-      } catch {}
-
+      try { const p = JSON.parse(backRaw); if (p && typeof p.clozeTarget === 'number') { clozeExtra = p.extra || ''; backRaw = clozeExtra; } } catch {}
       const frontVal = currentCard.front_content || '';
       const backPlain = backRaw.replace(/<[^>]*>/g, '');
       const frontPlain = frontVal.replace(/<[^>]*>/g, '');
       const frontHasCloze = /\{\{c\d+::/.test(frontPlain);
       const backHasCloze = /\{\{c\d+::/.test(backPlain);
-
       if (backHasCloze && !frontHasCloze) {
-        // Cloze markup is in the back — move it to front
-        setFront(backRaw);
-        setBack(frontVal && frontVal !== '<p></p>' ? frontVal : '');
-        needsAutoSave = true;
+        setFront(backRaw); setBack(frontVal && frontVal !== '<p></p>' ? frontVal : ''); needsAutoSave = true;
       } else if (frontHasCloze) {
-        setFront(frontVal);
-        setBack(clozeExtra || (backRaw !== currentCard.back_content ? '' : backRaw));
+        setFront(frontVal); setBack(clozeExtra || (backRaw !== currentCard.back_content ? '' : backRaw));
       } else {
-        setFront(frontVal);
-        setBack(backRaw);
+        setFront(frontVal); setBack(backRaw);
       }
-
-      // Clear occlusion state for non-image cards
-      setOcclusionImageUrl('');
-      setOcclusionRects([]);
-      setOcclusionCanvasSize(null);
+      setOcclusionImageUrl(''); setOcclusionRects([]); setOcclusionCanvasSize(null);
     }
-
     setIsDirty(needsAutoSave);
   }, [currentCard?.id]);
 
-  // Auto-detect card type from content
   const detectCardType = useCallback((): string => {
-    const hasImage = !!occlusionImageUrl;
-    const plainFront = front.replace(/<[^>]*>/g, '');
-    const hasCloze = /\{\{c\d+::/.test(plainFront);
-    if (hasImage) return 'image_occlusion';
-    if (hasCloze) return 'cloze';
+    if (occlusionImageUrl) return 'image_occlusion';
+    if (/\{\{c\d+::/.test(front.replace(/<[^>]*>/g, ''))) return 'cloze';
     return 'basic';
   }, [front, occlusionImageUrl]);
 
@@ -156,37 +116,24 @@ const ManageDeck = () => {
     const detectedType = detectCardType();
     let frontContent = front;
     let backContent = back;
-
     if (detectedType === 'image_occlusion') {
       frontContent = JSON.stringify({
-        imageUrl: occlusionImageUrl,
-        frontText: front,
-        rects: occlusionRects,
-        allRects: occlusionRects,
-        canvasWidth: occlusionCanvasSize?.w ?? 0,
-        canvasHeight: occlusionCanvasSize?.h ?? 0,
+        imageUrl: occlusionImageUrl, frontText: front, rects: occlusionRects, allRects: occlusionRects,
+        canvasWidth: occlusionCanvasSize?.w ?? 0, canvasHeight: occlusionCanvasSize?.h ?? 0,
       });
     }
-    
     if (detectedType === 'cloze' || detectedType === 'image_occlusion') {
-      const plainForNumbers = front.replace(/<[^>]*>/g, '');
-      const clozeNumMatches = [...plainForNumbers.matchAll(/\{\{c(\d+)::/g)];
-      const uniqueNums = [...new Set(clozeNumMatches.map(m => parseInt(m[1])))].sort((a, b) => a - b);
-      if (uniqueNums.length > 0) {
-        backContent = JSON.stringify({ clozeTarget: uniqueNums[0] || 1, extra: back });
-      }
+      const nums = [...front.replace(/<[^>]*>/g, '').matchAll(/\{\{c(\d+)::/g)].map(m => parseInt(m[1]));
+      const unique = [...new Set(nums)].sort((a, b) => a - b);
+      if (unique.length > 0) backContent = JSON.stringify({ clozeTarget: unique[0] || 1, extra: back });
     }
-
     return { frontContent, backContent, cardType: detectedType };
   }, [front, back, occlusionImageUrl, occlusionRects, occlusionCanvasSize, detectCardType]);
 
   const saveCurrentCard = useCallback(async () => {
     if (!currentCard || !isDirty) return;
     const { frontContent, backContent } = buildSavePayload();
-    updateCard.mutate(
-      { id: currentCard.id, frontContent, backContent },
-      { onSuccess: () => { setIsDirty(false); } }
-    );
+    updateCard.mutate({ id: currentCard.id, frontContent, backContent }, { onSuccess: () => setIsDirty(false) });
   }, [currentCard, isDirty, buildSavePayload, updateCard]);
 
   const selectCard = useCallback((idx: number) => {
@@ -206,44 +153,27 @@ const ManageDeck = () => {
       onSuccess: () => {
         setDeleteConfirmOpen(false);
         toast({ title: 'Cartão excluído' });
-        if (selectedIndex >= totalCards - 1 && selectedIndex > 0) {
-          setSelectedIndex(selectedIndex - 1);
-        }
+        if (selectedIndex >= totalCards - 1 && selectedIndex > 0) setSelectedIndex(selectedIndex - 1);
       },
     });
   }, [currentCard, deleteCard, selectedIndex, totalCards, toast]);
 
   const handleAddCard = useCallback(() => {
-    createCard.mutate(
-      { frontContent: '', backContent: '', cardType: 'basic' },
-      {
-        onSuccess: (createdCard) => {
-          if (!Array.isArray(createdCard) && createdCard?.id) {
-            setPendingNewCardId(createdCard.id);
-          }
-          toast({ title: 'Novo cartão criado' });
-        },
-      }
-    );
+    createCard.mutate({ frontContent: '', backContent: '', cardType: 'basic' }, {
+      onSuccess: (createdCard) => {
+        if (!Array.isArray(createdCard) && createdCard?.id) setPendingNewCardId(createdCard.id);
+        toast({ title: 'Novo cartão criado' });
+      },
+    });
   }, [createCard, toast]);
 
   const handleDuplicate = useCallback(() => {
     if (!currentCard) return;
     createCard.mutate(
       { frontContent: currentCard.front_content, backContent: currentCard.back_content, cardType: currentCard.card_type },
-      {
-        onSuccess: () => {
-          toast({ title: 'Cartão duplicado' });
-          setTimeout(() => setSelectedIndex(totalCards), 100);
-        },
-      }
+      { onSuccess: () => { toast({ title: 'Cartão duplicado' }); setTimeout(() => setSelectedIndex(totalCards), 100); } }
     );
   }, [currentCard, createCard, totalCards, toast]);
-
-  const handleOcclusionAction = useCallback(() => {
-    setOcclusionModalOpen(true);
-    setIsDirty(true);
-  }, []);
 
   const handleAICreate = useCallback(async (templatePrompt: string) => {
     const strippedFront = front.replace(/<[^>]*>/g, '').trim();
@@ -265,6 +195,12 @@ const ManageDeck = () => {
     } finally { setIsAICreating(false); }
   }, [front, back, energy, model, queryClient, toast]);
 
+  // Check if front has a regular image (not occlusion) via <img> tag
+  const hasRegularImage = useMemo(() => {
+    if (occlusionImageUrl) return false;
+    return /<img\s+[^>]*src=/.test(front);
+  }, [front, occlusionImageUrl]);
+
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -275,203 +211,190 @@ const ManageDeck = () => {
 
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-10 shrink-0 border-b border-border/50 bg-background/80 backdrop-blur-sm">
-        <div className="flex items-center justify-between px-4 py-3">
-          <button onClick={handleBack} className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-            <ArrowLeft className="h-4 w-4" />
-            Voltar
+      {/* Header — clean & minimal */}
+      <header className="shrink-0 border-b border-border/40 bg-background">
+        <div className="flex items-center justify-between px-3 py-2.5">
+          <button onClick={handleBack} className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+            <ArrowLeft className="h-4.5 w-4.5" />
           </button>
 
           {totalCards > 0 && (
-            <div className="flex items-center gap-1">
-              <button onClick={() => selectCard(selectedIndex - 1)} disabled={selectedIndex === 0} className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors">
-                <ChevronUp className="h-4 w-4" />
+            <div className="flex items-center gap-0.5">
+              <button onClick={() => selectCard(selectedIndex - 1)} disabled={selectedIndex === 0} className="h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-20 transition-colors">
+                <ChevronLeft className="h-4 w-4" />
               </button>
-              <span className="text-sm font-medium text-foreground min-w-[80px] text-center">
-                Cartão {selectedIndex + 1} de {totalCards}
+              <span className="text-xs font-semibold text-foreground tabular-nums min-w-[56px] text-center">
+                {selectedIndex + 1}/{totalCards}
               </span>
-              <button onClick={() => selectCard(selectedIndex + 1)} disabled={selectedIndex >= totalCards - 1} className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors">
-                <ChevronDown className="h-4 w-4" />
+              <button onClick={() => selectCard(selectedIndex + 1)} disabled={selectedIndex >= totalCards - 1} className="h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-20 transition-colors">
+                <ChevronRight className="h-4 w-4" />
               </button>
             </div>
           )}
-          {/* Right header: Preview + Save */}
-          <div className="flex items-center gap-1.5">
+
+          <div className="flex items-center gap-1">
             {totalCards > 0 && (
               <button
                 onClick={() => { if (isDirty) saveCurrentCard(); setPreviewOpen(true); }}
-                className="h-9 w-9 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
-                title="Previsualizar"
+                className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                title="Preview"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" fillRule="evenodd" clipRule="evenodd">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" fillRule="evenodd" clipRule="evenodd">
                   <path d="M15 6H9v12h6zM9 4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zM5 8v8a1 1 0 1 1-2 0V8a1 1 0 0 1 2 0M21 8v8a1 1 0 1 1-2 0V8a1 1 0 1 1 2 0" />
                 </svg>
               </button>
             )}
-            {isDirty ? (
+            {isDirty && (
               <button
                 onClick={saveCurrentCard}
                 disabled={updateCard.isPending}
-                className="h-9 w-9 rounded-full bg-primary flex items-center justify-center text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
-                title="Salvar"
+                className="h-8 px-3 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 gap-1"
               >
-                {updateCard.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                {updateCard.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                Salvar
               </button>
-            ) : (
-              <div className="w-9" />
             )}
           </div>
         </div>
       </header>
 
-      <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* Left sidebar - card numbers */}
-        <aside className="w-12 sm:w-14 overflow-y-auto flex-shrink-0">
-          <div className="flex flex-col gap-1.5 p-1.5">
-            {sortedCards.map((card, idx) => (
-              <button
-                key={card.id}
-                onClick={() => selectCard(idx)}
-                className={`flex items-center justify-center h-8 w-8 sm:h-9 sm:w-9 mx-auto rounded-sm text-xs font-medium transition-all border ${
-                  idx === selectedIndex
-                    ? 'border-foreground text-foreground'
-                    : 'border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground'
-                }`}
-              >
-                {idx + 1}
-              </button>
-            ))}
+      {/* Main content — cards take full space */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {currentCard ? (
+          <div className="mx-auto max-w-2xl flex flex-col h-full p-3 sm:p-5 gap-2">
+
+            {/* Front card */}
+            <div className="flex-1 min-h-[100px] rounded-xl border border-border/60 bg-card overflow-hidden relative flex flex-col">
+              {(!front || front === '<p></p>') && !occlusionImageUrl ? (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <span className="text-muted-foreground/30 text-base font-medium">Frente</span>
+                </div>
+              ) : null}
+
+              {/* Image indicator — small icon in bottom-left */}
+              {(occlusionImageUrl || hasRegularImage) && (
+                <button
+                  type="button"
+                  onClick={occlusionImageUrl ? () => setOcclusionModalOpen(true) : undefined}
+                  className={`absolute bottom-2 left-2 z-10 h-8 w-8 rounded-lg border border-border/60 bg-card/90 backdrop-blur-sm flex items-center justify-center shadow-sm transition-all ${
+                    occlusionImageUrl ? 'hover:shadow-md hover:border-primary/40 cursor-pointer' : 'cursor-default'
+                  }`}
+                  title={occlusionImageUrl ? 'Editar oclusão' : 'Imagem anexada'}
+                >
+                  <img
+                    src={occlusionImageUrl ? iconClozeOcclusion : iconAttachImage}
+                    alt=""
+                    className="h-4.5 w-4.5 object-contain opacity-60"
+                  />
+                </button>
+              )}
+
+              <LazyRichEditor
+                content={front}
+                onChange={(v) => { setFront(v); setIsDirty(true); }}
+                placeholder=""
+                chromeless
+                hideCloze={false}
+                onOcclusionPaste={() => { setOcclusionModalOpen(true); setIsDirty(true); }}
+                onOcclusionAttach={() => { setOcclusionModalOpen(true); setIsDirty(true); }}
+                onAICreate={handleAICreate}
+                isAICreating={isAICreating}
+              />
+            </div>
+
+            {/* Back card */}
+            <div className="flex-1 min-h-[100px] rounded-xl border border-border/60 bg-card overflow-hidden relative flex flex-col">
+              {!back || back === '<p></p>' ? (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <span className="text-muted-foreground/30 text-base font-medium">Verso</span>
+                </div>
+              ) : null}
+              <LazyRichEditor
+                content={back}
+                onChange={(v) => { setBack(v); setIsDirty(true); }}
+                placeholder=""
+                chromeless
+                hideCloze
+                onAICreate={handleAICreate}
+                isAICreating={isAICreating}
+              />
+            </div>
           </div>
-        </aside>
-
-        {/* Main editor area */}
-        <main className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-6">
-          {currentCard ? (
-            <div className="mx-auto flex h-full min-h-0 max-w-2xl flex-row gap-2">
-              {/* Cards column */}
-              <div className="flex-1 min-w-0 flex flex-col gap-3">
-
-                {/* Front */}
-                <div className="rounded-2xl border border-border bg-card flex-1 min-h-[120px] overflow-hidden relative flex flex-col">
-                  {!front || front === '<p></p>' && !occlusionImageUrl ? (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <span className="text-muted-foreground/40 text-lg font-medium">[Frente]</span>
-                    </div>
-                  ) : null}
-
-                  {/* Image occlusion thumbnail - bottom-right of front card */}
-                  {occlusionImageUrl && (
-                    <button
-                      type="button"
-                      onClick={() => setOcclusionModalOpen(true)}
-                      className="absolute bottom-2 right-2 z-10 rounded-lg overflow-hidden border border-border shadow-sm hover:shadow-md transition-shadow"
-                      title="Editar oclusão"
-                    >
-                      <img src={occlusionImageUrl} alt="Oclusão" className="h-12 w-12 object-cover" />
-                      <div className="absolute inset-0 flex items-end justify-end p-0.5">
-                        <div className="rounded bg-primary/80 p-0.5">
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-2.5 w-2.5 text-primary-foreground">
-                            <path d="M2 18v-1.5h2V18h2v2H4a2 2 0 0 1-2-2M4 4h2v2H4v1.5H2V6a2 2 0 0 1 2-2M3.486 13.5H2v-3h2L6.586 8a2 2 0 0 1 2.828 0L13 11.586l.586-.586a2 2 0 0 1 2.828 0l5.086 5 .5.5V18a2 2 0 0 1-2 2h-2v-2h2v-.586l-5-5-.586.586 1.293 1.293a1 1 0 0 1-1.414 1.414L8 9.414 4.5 13l-.5.5h-.514M10 6V4h4v2zM18 6V4h2a2 2 0 0 1 2 2v1.5h-2V6zM20 10.5h2v3h-2z" />
-                            <path d="M14 18v2h-4v-2z" />
-                          </svg>
-                        </div>
-                      </div>
-                    </button>
-                  )}
-
-                  <LazyRichEditor
-                    content={front}
-                    onChange={(v) => { setFront(v); setIsDirty(true); }}
-                    placeholder=""
-                    chromeless
-                    hideCloze={false}
-                    onOcclusionPaste={handleOcclusionAction}
-                    onOcclusionAttach={handleOcclusionAction}
-                    onAICreate={handleAICreate}
-                    isAICreating={isAICreating}
-                  />
-                </div>
-
-                {/* Back */}
-                <div className="rounded-2xl border border-border bg-card flex-1 min-h-[120px] overflow-hidden relative flex flex-col">
-                  {!back || back === '<p></p>' ? (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <span className="text-muted-foreground/40 text-lg font-medium">[Verso]</span>
-                    </div>
-                  ) : null}
-                  <LazyRichEditor
-                    content={back}
-                    onChange={(v) => { setBack(v); setIsDirty(true); }}
-                    placeholder=""
-                    chromeless
-                    hideCloze
-                    onAICreate={handleAICreate}
-                    isAICreating={isAICreating}
-                  />
-                </div>
-              </div>
-
-              {/* Right sidebar - actions */}
-              <div className="flex flex-col items-center justify-center gap-2 shrink-0">
-                <button
-                  onClick={() => setDeleteConfirmOpen(true)}
-                  className="h-9 w-9 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-destructive hover:border-destructive/40 transition-colors"
-                  title="Excluir"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={handleDuplicate}
-                  className="h-9 w-9 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
-                  title="Duplicar"
-                >
-                  <Copy className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={handleAddCard}
-                  className="h-9 w-9 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
-                  title="Novo cartão"
-                >
-                  <Plus className="h-4 w-4" />
-                </button>
-              </div>
-
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <p className="text-muted-foreground mb-4">Nenhum cartão neste baralho</p>
-              <Button onClick={handleAddCard} className="gap-2">
-                <Plus className="h-4 w-4" /> Adicionar cartão
-              </Button>
-            </div>
-          )}
-        </main>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full text-center px-4">
+            <p className="text-muted-foreground mb-4 text-sm">Nenhum cartão neste baralho</p>
+            <Button onClick={handleAddCard} size="sm" className="gap-1.5 rounded-xl">
+              <Plus className="h-4 w-4" /> Adicionar cartão
+            </Button>
+          </div>
+        )}
       </div>
 
-      {/* Card Preview Modal */}
-      <ManageDeckPreview
-        cards={sortedCards}
-        initialIndex={selectedIndex}
-        open={previewOpen}
-        onClose={() => setPreviewOpen(false)}
-      />
+      {/* Bottom bar — actions (mobile-friendly) */}
+      {currentCard && (
+        <div className="shrink-0 border-t border-border/40 bg-background px-4 py-2">
+          <div className="mx-auto max-w-2xl flex items-center justify-between">
+            {/* Left: card list scroll */}
+            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar max-w-[55%]">
+              {sortedCards.map((card, idx) => (
+                <button
+                  key={card.id}
+                  onClick={() => selectCard(idx)}
+                  className={`shrink-0 h-7 min-w-[28px] px-1.5 rounded-md text-[11px] font-medium transition-all ${
+                    idx === selectedIndex
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                  }`}
+                >
+                  {idx + 1}
+                </button>
+              ))}
+            </div>
 
-      {/* Occlusion Editor Dialog (for upload + draw) */}
+            {/* Right: action buttons */}
+            <div className="flex items-center gap-0.5">
+              <button
+                onClick={handleAddCard}
+                className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                title="Novo cartão"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+              <button
+                onClick={handleDuplicate}
+                className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                title="Duplicar"
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => setDeleteConfirmOpen(true)}
+                className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                title="Excluir"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Preview Modal */}
+      <ManageDeckPreview cards={sortedCards} initialIndex={selectedIndex} open={previewOpen} onClose={() => setPreviewOpen(false)} />
+
+      {/* Occlusion Editor Dialog */}
       <Dialog open={occlusionModalOpen} onOpenChange={setOcclusionModalOpen}>
         <DialogContent className="sm:max-w-4xl max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-display flex items-center gap-2">
-              <ImageIcon className="h-5 w-5 text-primary" /> Oclusão de Imagem
+              <img src={iconClozeOcclusion} alt="" className="h-5 w-5 object-contain" />
+              Oclusão de Imagem
             </DialogTitle>
           </DialogHeader>
           <OcclusionEditor
             initialFront={occlusionImageUrl ? JSON.stringify({
-              imageUrl: occlusionImageUrl,
-              rects: occlusionRects,
-              allRects: occlusionRects,
-              canvasWidth: occlusionCanvasSize?.w ?? 0,
-              canvasHeight: occlusionCanvasSize?.h ?? 0,
+              imageUrl: occlusionImageUrl, rects: occlusionRects, allRects: occlusionRects,
+              canvasWidth: occlusionCanvasSize?.w ?? 0, canvasHeight: occlusionCanvasSize?.h ?? 0,
             }) : ''}
             onSave={(frontContent) => {
               try {
@@ -484,11 +407,8 @@ const ManageDeck = () => {
               setOcclusionModalOpen(false);
             }}
             onRemoveImage={() => {
-              setOcclusionImageUrl('');
-              setOcclusionRects([]);
-              setOcclusionCanvasSize(null);
-              setIsDirty(true);
-              setOcclusionModalOpen(false);
+              setOcclusionImageUrl(''); setOcclusionRects([]); setOcclusionCanvasSize(null);
+              setIsDirty(true); setOcclusionModalOpen(false);
             }}
             onCancel={() => setOcclusionModalOpen(false)}
             isSaving={false}
@@ -515,13 +435,9 @@ const ManageDeck = () => {
   );
 };
 
-/* ─── Lightweight preview modal for ManageDeck ─── */
-
+/* ─── Preview modal ─── */
 function ManageDeckPreview({ cards, initialIndex, open, onClose }: {
-  cards: any[];
-  initialIndex: number;
-  open: boolean;
-  onClose: () => void;
+  cards: any[]; initialIndex: number; open: boolean; onClose: () => void;
 }) {
   const virtualCards = useMemo(() => buildVirtualCards(cards), [cards]);
   const [index, setIndex] = useState(initialIndex);
@@ -547,7 +463,6 @@ function ManageDeckPreview({ cards, initialIndex, open, onClose }: {
     return () => window.removeEventListener('keydown', handler);
   }, [open, goPrev, goNext, onClose]);
 
-  // Swipe
   const touchRef = useRef<{ x: number } | null>(null);
   useEffect(() => {
     if (!open) return;
@@ -571,26 +486,23 @@ function ManageDeckPreview({ cards, initialIndex, open, onClose }: {
         <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full" onClick={onClose}>
           <X className="h-5 w-5" />
         </Button>
-        <span className="inline-flex items-center rounded-full border border-border/50 bg-card/80 px-3 py-1 text-xs font-semibold text-foreground shadow-sm tabular-nums">
+        <span className="text-xs font-semibold text-foreground tabular-nums">
           <span className="text-primary">{safeIndex + 1}</span>/{virtualCards.length}
         </span>
         <div className="w-9" />
       </header>
-
       <div className="flex-1 flex items-center justify-center px-4 pb-6 min-h-0">
         <div className="w-full max-w-lg">
           <CardPreviewContent vc={vc} revealed={revealed} onClick={() => setRevealed(r => !r)} />
         </div>
       </div>
-
-      {/* Navigation dots */}
       <div className="shrink-0 flex items-center justify-center gap-3 pb-4">
-        <button onClick={goPrev} disabled={safeIndex === 0} className="h-10 w-10 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors">
-          <ChevronUp className="h-5 w-5 -rotate-90" />
+        <button onClick={goPrev} disabled={safeIndex === 0} className="h-10 w-10 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-20 transition-colors">
+          <ChevronLeft className="h-5 w-5" />
         </button>
         <span className="text-xs text-muted-foreground">Toque para revelar</span>
-        <button onClick={goNext} disabled={safeIndex >= virtualCards.length - 1} className="h-10 w-10 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors">
-          <ChevronDown className="h-5 w-5 -rotate-90" />
+        <button onClick={goNext} disabled={safeIndex >= virtualCards.length - 1} className="h-10 w-10 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-20 transition-colors">
+          <ChevronRight className="h-5 w-5" />
         </button>
       </div>
     </div>
