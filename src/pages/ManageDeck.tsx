@@ -220,11 +220,15 @@ const ManageDeck = () => {
     } finally { setIsAICreating(false); }
   }, [front, back, energy, model, queryClient, toast]);
 
-  // Check if front has a regular image (not occlusion) via <img> tag
-  const hasRegularImage = useMemo(() => {
-    if (occlusionImageUrl) return false;
-    return /<img\s+[^>]*src=/.test(front);
-  }, [front, occlusionImageUrl]);
+  // Build image attachments array for the thumbnail row
+  const frontImageAttachments = useMemo(() => {
+    const atts: Array<{ url: string; isOcclusion: boolean; hasOcclusionRects: boolean }> = [];
+    attachedImages.forEach(url => atts.push({ url, isOcclusion: false, hasOcclusionRects: false }));
+    if (occlusionImageUrl) {
+      atts.push({ url: occlusionImageUrl, isOcclusion: true, hasOcclusionRects: occlusionRects.length > 0 });
+    }
+    return atts;
+  }, [attachedImages, occlusionImageUrl, occlusionRects]);
 
   if (isLoading) {
     return (
