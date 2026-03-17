@@ -320,7 +320,7 @@ const ManageDeck = () => {
             <div className="flex-1 min-w-0 flex flex-col gap-2">
               {/* Front card */}
               <div className="flex-1 min-h-[100px] rounded-xl border border-border/60 bg-card overflow-hidden relative flex flex-col">
-                {(!front || front === '<p></p>') && !occlusionImageUrl && attachedImages.length === 0 ? (
+                {(!front || front === '<p></p>') && !occlusionImageUrl && frontAttachedImages.length === 0 ? (
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <span className="text-muted-foreground/30 text-base font-medium">Frente</span>
                   </div>
@@ -334,7 +334,7 @@ const ManageDeck = () => {
                   hideCloze={false}
                   imageAttachments={frontImageAttachments}
                   onImageAttached={(url) => {
-                    setAttachedImages(prev => [...prev, url]);
+                    setFrontAttachedImages(prev => [...prev, url]);
                     setIsDirty(true);
                   }}
                   onRemoveAttachment={(url) => {
@@ -343,12 +343,16 @@ const ManageDeck = () => {
                       setOcclusionRects([]);
                       setOcclusionCanvasSize(null);
                     } else {
-                      setAttachedImages(prev => prev.filter(u => u !== url));
+                      setFrontAttachedImages(prev => prev.filter(u => u !== url));
                     }
                     setIsDirty(true);
                   }}
-                  onClickAttachment={(url, isOcclusion) => {
-                    if (isOcclusion) setOcclusionModalOpen(true);
+                  onClickAttachment={(att) => {
+                    if (att.isOcclusion && att.hasOcclusionRects) {
+                      setOcclusionModalOpen(true);
+                    } else {
+                      setPreviewAttachment({ attachment: att, allowOcclusion: true });
+                    }
                   }}
                   onOcclusionImageReady={(imageUrl) => {
                     setOcclusionImageUrl(imageUrl);
