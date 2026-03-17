@@ -176,9 +176,9 @@ export const TurmaDetailProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     if (activeSubscription && currentMember && !currentMember.is_subscriber && turmaId && user) {
-      supabase.rpc('restore_subscription_status', { p_turma_id: turmaId })
-        .then(({ data }) => {
-          if (data) queryClient.invalidateQueries({ queryKey: ['turma-members', turmaId] });
+      restoreSubscriptionStatus(turmaId)
+        .then((restored) => {
+          if (restored) queryClient.invalidateQueries({ queryKey: ['turma-members', turmaId] });
         });
     }
   }, [activeSubscription, currentMember, turmaId, user]);
