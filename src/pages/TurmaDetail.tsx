@@ -33,9 +33,10 @@ function useSalaDecks(turmaId: string) {
       const { decks, rootDeckIds, cardCountMap } = await fetchSalaDecksData(turmaId);
       if (!decks || decks.length === 0) return [];
 
+      interface SalaDeckRow { id: string; name: string; created_at: string; updated_at: string; folder_id: string | null; parent_deck_id: string | null; is_archived: boolean; daily_new_limit: number; daily_review_limit: number }
       return decks
-        .filter((d: any) => !d.name?.includes('Baralho de Erros'))
-        .map((d: any) => {
+        .filter((d: SalaDeckRow) => !d.name?.includes('Baralho de Erros'))
+        .map((d: SalaDeckRow) => {
           const cc = cardCountMap.get(d.id) ?? { total: 0, mastered: 0, novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
           return {
             id: d.id,
