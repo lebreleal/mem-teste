@@ -83,6 +83,16 @@ export const CardEditorDialog = ({
                     setFront(d.frontText || '');
                   } catch { setFront(''); }
                 }}
+                onOcclusionImageReady={(imageUrl) => {
+                  try {
+                    const existing = JSON.parse(front);
+                    existing.imageUrl = imageUrl;
+                    setFront(JSON.stringify(existing));
+                  } catch {
+                    setFront(JSON.stringify({ imageUrl, allRects: [] }));
+                  }
+                  setOcclusionModalOpen(true);
+                }}
                 onImprove={canImprove ? handleImprove : undefined}
                 isImproving={isImproving}
                 onAICreate={handleAICreate}

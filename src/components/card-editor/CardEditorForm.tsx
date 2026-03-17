@@ -36,6 +36,8 @@ export interface CardEditorFormProps {
   occlusionImageUrl?: string;
   onOpenOcclusion?: () => void;
   onRemoveOcclusion?: () => void;
+  /** Called when user attaches/pastes an occlusion image via toolbar */
+  onOcclusionImageReady?: (imageUrl: string) => void;
 
   /** AI improve */
   onImprove?: () => void;
@@ -238,7 +240,7 @@ export const CardEditorForm = ({
   front, onFrontChange, back, onBackChange,
   cardType,
   mcOptions = [], onMcOptionsChange, mcCorrectIndex = 0, onMcCorrectIndexChange,
-  occlusionImageUrl, onOpenOcclusion, onRemoveOcclusion,
+  occlusionImageUrl, onOpenOcclusion, onRemoveOcclusion, onOcclusionImageReady,
   onImprove, isImproving = false,
   onAICreate, isAICreating = false,
   onSave, onSaveAndAdd, onCancel, isSaving = false,
@@ -311,8 +313,7 @@ export const CardEditorForm = ({
           onChange={editorOnChange}
           placeholder="Pergunta, texto com lacunas, ou contexto"
           hideCloze={hideCloze}
-          onOcclusionPaste={onOpenOcclusion}
-          onOcclusionAttach={onOpenOcclusion}
+          onOcclusionImageReady={onOcclusionImageReady}
           onAICreate={onAICreate}
           isAICreating={isAICreating}
         />

@@ -13,7 +13,7 @@ import {
   List, ListOrdered, Code, Volume2, Palette, ImagePlus, ScanEye,
   ClipboardPaste, Paperclip, Settings2,
 } from 'lucide-react';
-import { IconImage } from '@/components/icons';
+import { IconImage, IconImageOcclusion } from '@/components/icons';
 import { loadToolbarConfig, saveToolbarConfig, type ToolbarItem } from '@/components/rich-editor/toolbarConfig';
 import { lazy, Suspense } from 'react';
 const ToolbarConfigSheet = lazy(() => import('@/components/rich-editor/ToolbarConfigSheet'));
@@ -65,8 +65,12 @@ interface RichEditorProps {
   content: string;
   onChange: (html: string) => void;
   placeholder?: string;
+  /** @deprecated use onOcclusionImageReady */
   onOcclusionPaste?: () => void;
+  /** @deprecated use onOcclusionImageReady */
   onOcclusionAttach?: () => void;
+  /** Called with uploaded image URL when user attaches/pastes an occlusion image */
+  onOcclusionImageReady?: (imageUrl: string) => void;
   hideCloze?: boolean;
   chromeless?: boolean;
   hideToolbarUntilFocus?: boolean;
@@ -86,7 +90,7 @@ const TEXT_COLORS = [
   { label: 'Rosa', value: '#ec4899' },
 ];
 
-const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclusionAttach, hideCloze, chromeless = false, hideToolbarUntilFocus = false, onAICreate, isAICreating = false }: RichEditorProps) => {
+const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclusionAttach, onOcclusionImageReady, hideCloze, chromeless = false, hideToolbarUntilFocus = false, onAICreate, isAICreating = false }: RichEditorProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [colorOpen, setColorOpen] = useState(false);
@@ -261,6 +265,54 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
           const ext = imageType.split('/')[1] || 'png';
           const file = new File([blob], `paste.${ext}`, { type: imageType });
           await uploadImageFile(file);
+          return;
+        }
+      }
+      toast({ title: 'Nenhuma imagem na área de transferência', variant: 'destructive' });
+    } catch {
+      toast({ title: 'Não foi possível acessar a área de transferência', variant: 'destructive' });
+    }
+  };
+
+  /* ─── Occlusion image handlers ─── */
+  const uploadOcclusionFile = async (file: File) => {
+    if (!user) return;
+    try {
+      const compressed = await compressImage(file);
+      const ext = compressed.name.split('.').pop() || 'webp';
+      const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
+      const { error } = await supabase.storage.from('card-images').upload(path, compressed);
+      if (error) throw error;
+      const { data: urlData } = supabase.storage.from('card-images').getPublicUrl(path);
+      onOcclusionImageReady?.(urlData.publicUrl);
+    } catch {
+      toast({ title: 'Erro ao enviar imagem', variant: 'destructive' });
+    }
+  };
+
+  const handleOcclusionAttach = () => {
+    if (!user) return;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (file) await uploadOcclusionFile(file);
+    };
+    input.click();
+  };
+
+  const handleOcclusionPasteClipboard = async () => {
+    if (!user) return;
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        const imageType = item.types.find(t => t.startsWith('image/'));
+        if (imageType) {
+          const blob = await item.getType(imageType);
+          const ext = imageType.split('/')[1] || 'png';
+          const file = new File([blob], `paste.${ext}`, { type: imageType });
+          await uploadOcclusionFile(file);
           return;
         }
       }
@@ -495,7 +547,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
                         <ClipboardPaste className="h-4 w-4" /> Colar da área de transferência
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={handleImageAttach} className="gap-2">
-                        <ImagePlus className="h-4 w-4" /> Anexar imagem
+                        <IconImage className="h-4 w-4" /> Anexar imagem
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -525,20 +577,20 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
                   </Button>
                 );
               case 'occlusion':
-                if (!onOcclusionPaste || !onOcclusionAttach) return null;
+                if (!onOcclusionImageReady && !onOcclusionPaste && !onOcclusionAttach) return null;
                 return (
                   <DropdownMenu key={t.id}>
                     <DropdownMenuTrigger asChild>
                       <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Oclusão de imagem">
-                        <IconImage className="h-3.5 w-3.5" />
+                        <IconImageOcclusion className="h-3.5 w-3.5" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start">
-                      <DropdownMenuItem onClick={onOcclusionPaste} className="gap-2">
+                      <DropdownMenuItem onClick={onOcclusionImageReady ? handleOcclusionPasteClipboard : onOcclusionPaste} className="gap-2">
                         <ClipboardPaste className="h-4 w-4" /> Colar da área de transferência
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={onOcclusionAttach} className="gap-2">
-                        <ImagePlus className="h-4 w-4" /> Anexar imagem
+                      <DropdownMenuItem onClick={onOcclusionImageReady ? handleOcclusionAttach : onOcclusionAttach} className="gap-2">
+                        <IconImage className="h-4 w-4" /> Anexar imagem
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -668,7 +720,6 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
           </Button>
         </div>
       )}
-      
 
       <Suspense fallback={null}>
         {configOpen && (

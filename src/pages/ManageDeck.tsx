@@ -309,8 +309,17 @@ const ManageDeck = () => {
                   placeholder=""
                   chromeless
                   hideCloze={false}
-                  onOcclusionPaste={() => { setOcclusionModalOpen(true); setIsDirty(true); }}
-                  onOcclusionAttach={() => { setOcclusionModalOpen(true); setIsDirty(true); }}
+                  onOcclusionImageReady={(imageUrl) => {
+                    try {
+                      const existing = JSON.parse(front);
+                      existing.imageUrl = imageUrl;
+                      setFront(JSON.stringify(existing));
+                    } catch {
+                      setFront(JSON.stringify({ imageUrl, allRects: [] }));
+                    }
+                    setOcclusionModalOpen(true);
+                    setIsDirty(true);
+                  }}
                   onAICreate={handleAICreate}
                   isAICreating={isAICreating}
                 />
