@@ -9,7 +9,7 @@ import { Brain, Send, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { supabase } from '@/integrations/supabase/client';
+import { getAccessToken } from '@/services/authService';
 import { useToast } from '@/hooks/use-toast';
 import { useEnergy } from '@/hooks/useEnergy';
 import { useAIModel } from '@/hooks/useAIModel';
@@ -134,8 +134,7 @@ const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, is
         { role: 'user' as const, content: text },
       ];
 
-      const session = await supabase.auth.getSession();
-      const token = session.data.session?.access_token || '';
+      const token = await getAccessToken();
 
       const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`, {
         method: 'POST',

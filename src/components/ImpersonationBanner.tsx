@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { signOut, setSession } from '@/services/authService';
 import { Button } from '@/components/ui/button';
 import { LogOut, Eye } from 'lucide-react';
 
@@ -27,14 +27,8 @@ const ImpersonationBanner = () => {
 
       const adminSession = JSON.parse(stored);
 
-      // Sign out from impersonated session
-      await supabase.auth.signOut();
-
-      // Restore admin session
-      await supabase.auth.setSession({
-        access_token: adminSession.access_token,
-        refresh_token: adminSession.refresh_token,
-      });
+      await signOut();
+      await setSession(adminSession.access_token, adminSession.refresh_token);
 
       sessionStorage.removeItem('admin_session');
       sessionStorage.removeItem('impersonated_name');

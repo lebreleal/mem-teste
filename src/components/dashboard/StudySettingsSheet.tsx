@@ -9,7 +9,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { updateDeckDailyLimits } from '@/services/uiQueryService';
 import { useQueryClient } from '@tanstack/react-query';
 import type { DeckWithStats } from '@/hooks/useDecks';
 
@@ -118,10 +118,8 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
-      const updates = Object.values(settings).map(s =>
-        supabase.from('decks').update({ daily_new_limit: s.dailyNewLimit }).eq('id', s.id)
-      );
-      await Promise.all(updates);
+      const updates = Object.values(settings).map(s => ({ id: s.id, daily_new_limit: s.dailyNewLimit }));
+      await updateDeckDailyLimits(updates);
       queryClient.invalidateQueries({ queryKey: ['decks'] });
       toast({ title: 'Configurações salvas!' });
       onOpenChange(false);

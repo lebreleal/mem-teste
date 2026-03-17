@@ -5,17 +5,10 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchDeckConceptsByHierarchy, type DeckConcept } from '@/services/uiQueryService';
 import { useAuth } from '@/hooks/useAuth';
 import { BrainCircuit, ChevronDown, ChevronUp } from 'lucide-react';
 
-interface DeckConcept {
-  id: string;
-  name: string;
-  state: number;
-  correct_count: number;
-  wrong_count: number;
-}
 
 const STATE_LABELS: Record<number, { label: string; className: string }> = {
   0: { label: 'Novo', className: 'bg-muted text-muted-foreground' },
@@ -34,60 +27,7 @@ const DeckConceptsSection = ({ deckId, sourceDeckId }: { deckId: string; sourceD
 
   const { data: concepts = [] } = useQuery({
     queryKey: ['deck-concepts-contextual', effectiveDeckId, user?.id],
-    queryFn: async (): Promise<DeckConcept[]> => {
-      if (!user) return [];
-
-      // 1. Get all deck IDs in hierarchy (BFS descendants)
-      const allDeckIds: string[] = [effectiveDeckId];
-      let frontier = [effectiveDeckId];
-      while (frontier.length > 0) {
-        const { data: children } = await supabase
-          .from('decks')
-          .select('id')
-          .in('parent_deck_id', frontier)
-          .eq('user_id', user.id);
-        if (!children || children.length === 0) break;
-        const childIds = children.map((d: any) => d.id);
-        allDeckIds.push(...childIds);
-        frontier = childIds;
-      }
-
-      // 2. Get question IDs for all decks in hierarchy
-      const { data: questions } = await supabase
-        .from('deck_questions' as any)
-        .select('id')
-        .in('deck_id', allDeckIds);
-
-      if (!questions || questions.length === 0) return [];
-
-      const qIds = (questions as any[]).map(q => q.id);
-
-      // 3. Get concept IDs linked to these questions (batch if needed)
-      const allConceptIds: string[] = [];
-      for (let i = 0; i < qIds.length; i += 100) {
-        const batch = qIds.slice(i, i + 100);
-        const { data: links } = await supabase
-          .from('question_concepts' as any)
-          .select('concept_id')
-          .in('question_id', batch);
-        if (links) {
-          allConceptIds.push(...(links as any[]).map(l => l.concept_id));
-        }
-      }
-
-      if (allConceptIds.length === 0) return [];
-
-      const uniqueConceptIds = [...new Set(allConceptIds)];
-
-      // 4. Fetch user's global concepts
-      const { data: gc } = await supabase
-        .from('global_concepts' as any)
-        .select('id, name, state, correct_count, wrong_count')
-        .eq('user_id', user.id)
-        .in('id', uniqueConceptIds);
-
-      return (gc ?? []) as unknown as DeckConcept[];
-    },
+    queryFn: () => fetchDeckConceptsByHierarchy(effectiveDeckId, user!.id),
     enabled: !!user && !!effectiveDeckId,
     staleTime: 60_000,
   });

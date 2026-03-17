@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Search } from 'lucide-react';
 import { useCards } from '@/hooks/useCards';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchConceptCardIds } from '@/services/uiQueryService';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 // ─── Create Concept Dialog ───────────────────────
@@ -124,13 +124,7 @@ export const EditConceptCardsDialog = ({ open, onOpenChange, deckId, conceptId, 
   const { cards } = useCards(deckId);
   const { data: existingCardIds = [] } = useQuery({
     queryKey: ['concept-cards-legacy', conceptId],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('concept_cards' as any)
-        .select('card_id')
-        .eq('concept_id', conceptId);
-      return ((data ?? []) as any[]).map((r: any) => r.card_id);
-    },
+    queryFn: () => fetchConceptCardIds(conceptId),
     enabled: !!conceptId && open,
     staleTime: 60_000,
   });

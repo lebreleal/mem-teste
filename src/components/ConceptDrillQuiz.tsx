@@ -7,7 +7,7 @@ import { useState, useCallback } from 'react';
 import { Zap, CheckCircle2, XCircle, Loader2, ChevronRight, BrainCircuit, StopCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchConceptsBySlug } from '@/services/uiQueryService';
 import { useAuth } from '@/hooks/useAuth';
 import * as globalConceptService from '@/services/globalConceptService';
 import { toast } from 'sonner';
@@ -129,16 +129,14 @@ const ConceptDrillQuiz = ({
       if (results.weakConcepts.length > 0 && depth < maxDepth && user) {
         // Find the weakest concept from wrong answers
         const allConcepts = results.weakConcepts;
-        const { data: concepts } = await supabase
-          .from('global_concepts' as any)
-          .select('id, name, state, stability')
-          .eq('user_id', user.id)
-          .in('slug', allConcepts.map(c => globalConceptService.conceptSlug(c)));
+        const concepts = await fetchConceptsBySlug(
+          user.id,
+          allConcepts.map(c => globalConceptService.conceptSlug(c))
+        );
 
-        if (concepts && (concepts as any[]).length > 0) {
-          // Sort by stability (weakest first)
-          const sorted = (concepts as any[]).sort((a: any, b: any) => a.stability - b.stability);
-          setCascadeConcepts(sorted.slice(0, 3).map((c: any) => ({ id: c.id, name: c.name, state: c.state })));
+        if (concepts.length > 0) {
+          const sorted = [...concepts].sort((a, b) => a.stability - b.stability);
+          setCascadeConcepts(sorted.slice(0, 3).map(c => ({ id: c.id, name: c.name, state: c.state })));
         }
       }
     }

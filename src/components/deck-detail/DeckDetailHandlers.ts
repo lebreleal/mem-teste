@@ -4,7 +4,8 @@
  */
 
 import { useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchCardFrontContent } from '@/services/uiQueryService';
+import { getCurrentUserId, invokeEdgeFunction } from '@/services/authService';
 import * as cardService from '@/services/cardService';
 import * as deckService from '@/services/deckService';
 import { invalidateDeckRelatedQueries } from '@/lib/queryKeys';
@@ -171,8 +172,7 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
         const editingCard = allCards.find(c => c.id === editingId);
         let frontContentForCloze = editingCard?.front_content;
         if (!frontContentForCloze && editingId) {
-          const { data } = await supabase.from('cards').select('front_content').eq('id', editingId).single();
-          frontContentForCloze = data?.front_content;
+          frontContentForCloze = await fetchCardFrontContent(editingId);
         }
         const allSiblingCards = frontContentForCloze
           ? await cardService.fetchClozeSiblings(allDeckIds, frontContentForCloze)
@@ -247,8 +247,7 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
     if (isCloze) {
       let frontContent = card?.front_content;
       if (!frontContent) {
-        const { data } = await supabase.from('cards').select('front_content').eq('id', deleteId).single();
-        frontContent = data?.front_content;
+        frontContent = await fetchCardFrontContent(deleteId);
       }
       const siblings = frontContent ? await cardService.fetchClozeSiblings(allDeckIds, frontContent) : [];
       const ids = siblings.map(c => c.id);
@@ -371,24 +370,20 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
   const handleImportCards = useCallback(async (subDeckName: string, importedCards: { frontContent: string; backContent: string; cardType?: string }[], subdecks?: any[]) => {
     if (!deckId) return;
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+      const userId = await getCurrentUserId();
+      if (!userId) throw new Error('Not authenticated');
 
       if (subdecks && subdecks.length > 0) {
         await deckService.importDeckWithSubdecks(
-          user.id, subDeckName, deck?.folder_id ?? null,
+          userId, subDeckName, deck?.folder_id ?? null,
           importedCards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType || 'basic' })),
           subdecks, deck?.algorithm_mode,
         );
         toast({ title: `${importedCards.length} cartões importados em subdecks!` });
       } else {
         const newName = subDeckName || 'Importado';
-        const { data: newDeck, error } = await supabase
-          .from('decks')
-          .insert({ name: newName, user_id: user.id, folder_id: deck?.folder_id ?? null, parent_deck_id: deckId, algorithm_mode: deck?.algorithm_mode || 'sm2' } as any)
-          .select().single();
-        if (error || !newDeck) throw error;
-        await cardService.createCards((newDeck as any).id, importedCards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType || 'basic' })));
+        const newDeck = await deckService.createDeck(userId, newName, deck?.folder_id ?? null, deckId, deck?.algorithm_mode || 'sm2');
+        await cardService.createCards((newDeck as unknown as { id: string }).id, importedCards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType || 'basic' })));
         toast({ title: `${importedCards.length} cartões importados como subdeck "${newName}"!` });
       }
       invalidateDeckRelatedQueries(queryClient, deckId);
@@ -442,13 +437,11 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
         return `Q: ${fr}\nA: ${bk}`;
       }).join('\n\n');
 
-      const { data: aiData, error: fnError } = await supabase.functions.invoke('generate-deck', {
-        body: {
-          textContent, cardCount: examTotalQuestions, detailLevel: 'standard',
-          cardFormats: [...(mcCount > 0 ? ['multiple_choice'] : []), ...(examWrittenCount > 0 ? ['qa'] : [])],
-          customInstructions: `PROVA ACADÊMICA. Gere ${mcCount} questões de múltipla escolha (${examOptionsCount} alternativas cada) e ${examWrittenCount} dissertativas.\nCada questão DEVE ter um ENUNCIADO (caso clínico, situação-problema ou texto-base) na "front", separado da pergunta por "---".\nDissertativas: "front" = enunciado + pergunta, "back" = resposta completa.\nBaseie-se APENAS no material fornecido. Varie a dificuldade.`,
-          aiModel: model, energyCost: totalCost,
-        },
+      const { data: aiData, error: fnError } = await invokeEdgeFunction<{ cards: Array<{ front: string; back: string; type: string; options?: string[]; correctIndex?: number }>; error?: string }>('generate-deck', {
+        textContent, cardCount: examTotalQuestions, detailLevel: 'standard',
+        cardFormats: [...(mcCount > 0 ? ['multiple_choice'] : []), ...(examWrittenCount > 0 ? ['qa'] : [])],
+        customInstructions: `PROVA ACADÊMICA. Gere ${mcCount} questões de múltipla escolha (${examOptionsCount} alternativas cada) e ${examWrittenCount} dissertativas.\nCada questão DEVE ter um ENUNCIADO (caso clínico, situação-problema ou texto-base) na "front", separado da pergunta por "---".\nDissertativas: "front" = enunciado + pergunta, "back" = resposta completa.\nBaseie-se APENAS no material fornecido. Varie a dificuldade.`,
+        aiModel: model, energyCost: totalCost,
       });
       if (fnError || aiData?.error) throw new Error(aiData?.error || 'Erro na geração');
       queryClient.invalidateQueries({ queryKey: ['profile'] });
