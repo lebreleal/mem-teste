@@ -398,7 +398,8 @@ export async function fetchDeckSuggestions(deckId: string, userId: string | unde
     .in('suggestion_id', suggestionIds);
   
   const voteMap = new Map<string, { score: number; userVote: number }>();
-  (votes ?? []).forEach((v: any) => {
+  interface VoteRow { suggestion_id: string; vote: number; user_id: string }
+  ((votes ?? []) as unknown as VoteRow[]).forEach(v => {
     const existing = voteMap.get(v.suggestion_id) ?? { score: 0, userVote: 0 };
     existing.score += v.vote;
     if (v.user_id === userId) existing.userVote = v.vote;
