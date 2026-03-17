@@ -207,11 +207,13 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
 
   // Use refs for drawing state to avoid stale closures
   const isDrawingRef = useRef(false);
+  const activePointerIdRef = useRef<number | null>(null);
   const historyRef = useRef<ImageData[]>([]);
   const historyIdxRef = useRef(-1);
   const colorRef = useRef(color);
   const thicknessRef = useRef(thickness);
   const opacityRef = useRef(opacity);
+  const hasInteractionRef = useRef(false);
 
   // Keep refs in sync with state
   historyRef.current = history;
@@ -220,32 +222,38 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
   thicknessRef.current = thickness;
   opacityRef.current = opacity;
 
-  // Resize canvas to container — use ResizeObserver to wait for real dimensions
-  const initializedRef = useRef(false);
-
   useEffect(() => {
     if (!open) {
-      initializedRef.current = false;
+      hasInteractionRef.current = false;
+      isDrawingRef.current = false;
+      activePointerIdRef.current = null;
       return;
     }
+
     const canvas = canvasRef.current;
     const container = containerRef.current;
     if (!canvas || !container) return;
 
     const initCanvas = (rect: DOMRectReadOnly) => {
-      if (rect.width < 10 || rect.height < 10) return;
-      if (initializedRef.current) return;
-      initializedRef.current = true;
+      if (!canInitializeCanvas(rect.width, rect.height) || hasInteractionRef.current) return;
 
       const dpr = window.devicePixelRatio || 1;
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      canvas.style.width = `${rect.width}px`;
-      canvas.style.height = `${rect.height}px`;
-      const ctx = canvas.getContext('2d')!;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const metrics = getCanvasBitmapMetrics(rect.width, rect.height, dpr);
+      if (canvas.width === metrics.pixelWidth && canvas.height === metrics.pixelHeight) return;
+
+      canvas.width = metrics.pixelWidth;
+      canvas.height = metrics.pixelHeight;
+      canvas.style.width = `${metrics.cssWidth}px`;
+      canvas.style.height = `${metrics.cssHeight}px`;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      ctx.setTransform(metrics.dpr, 0, 0, metrics.dpr, 0, 0);
+      ctx.clearRect(0, 0, metrics.cssWidth, metrics.cssHeight);
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, rect.width, rect.height);
+      ctx.fillRect(0, 0, metrics.cssWidth, metrics.cssHeight);
+
       const initial = ctx.getImageData(0, 0, canvas.width, canvas.height);
       setHistory([initial]);
       setHistoryIdx(0);
@@ -256,12 +264,11 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
         initCanvas(entry.contentRect);
       }
     });
+
     ro.observe(container);
 
     const rect = container.getBoundingClientRect();
-    if (rect.width > 10 && rect.height > 10) {
-      initCanvas(rect as DOMRectReadOnly);
-    }
+    initCanvas(rect as DOMRectReadOnly);
 
     return () => ro.disconnect();
   }, [open]);
