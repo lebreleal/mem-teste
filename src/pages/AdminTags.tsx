@@ -26,10 +26,10 @@ const TagEditDialog = ({
   onSave,
   isPending,
 }: {
-  tag: any;
-  allTags: any[];
+  tag: Tag;
+  allTags: Tag[];
   onClose: () => void;
-  onSave: (updates: any) => void;
+  onSave: (updates: { id: string; name: string; parent_id: string | null; synonyms: string[] }) => void;
   isPending: boolean;
 }) => {
   const [name, setName] = useState(tag.name);
