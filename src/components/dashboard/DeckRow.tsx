@@ -271,23 +271,14 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
               )}
             </div>
 
-            {/* Actions */}
-            {!deckSelectionMode && !readOnly && (
-              <div className="flex items-center gap-1.5 shrink-0">
-                {!effectiveDisableManagement && (
-                  <DeckMenu deck={deck} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
-                )}
-              </div>
-            )}
-
-            {/* Chevron */}
-            {hasChildren && (
-              <ChevronRight className={`h-4 w-4 text-muted-foreground shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
-            )}
+            {/* Chevron — always points right (navigates) */}
+            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
           </div>
+        </div>
+      )}
 
-          {/* Sub-decks (expanded) inside the container */}
-          {hasChildren && isExpanded && (
+      {/* Accordion content removed — matérias now navigate to /materia/:id */}
+      {false && hasChildren && isExpanded && (
             <>
               {subDecks.map(sub => {
                 const subStats = getAggregateStats(sub);
