@@ -153,7 +153,7 @@ const ManageDeck = () => {
       if (unique.length > 0) backContent = JSON.stringify({ clozeTarget: unique[0] || 1, extra: back });
     }
     return { frontContent, backContent, cardType: detectedType };
-  }, [front, back, occlusionImageUrl, occlusionRects, occlusionCanvasSize, detectCardType]);
+  }, [front, back, attachedImages, occlusionImageUrl, occlusionRects, occlusionCanvasSize, detectCardType]);
 
   const saveCurrentCard = useCallback(async () => {
     if (!currentCard || !isDirty) return;
