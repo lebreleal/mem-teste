@@ -186,7 +186,7 @@ export const CreateQuestionDialog = ({
       queryClient.invalidateQueries({ queryKey: ['deck-questions', deckId] });
       toast({ title: 'Questão criada!' }); onOpenChange(false); resetForm();
     },
-    onError: (err: any) => toast({ title: err.message || 'Erro ao criar questão', variant: 'destructive' }),
+    onError: (err: Error) => toast({ title: err.message || 'Erro ao criar questão', variant: 'destructive' }),
   });
 
   const [generationStep, setGenerationStep] = useState(0);
@@ -245,7 +245,7 @@ export const CreateQuestionDialog = ({
           // Shuffle options so correct answer isn't always in the same position
           const opts = qi.options || [];
           const correctIdx = qi.correct_index ?? 0;
-          const indices = opts.map((_: any, i: number) => i);
+          const indices = opts.map((_: string, i: number) => i);
           // Fisher-Yates shuffle
           for (let j = indices.length - 1; j > 0; j--) {
             const k = Math.floor(Math.random() * (j + 1));

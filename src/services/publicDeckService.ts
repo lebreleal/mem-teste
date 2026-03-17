@@ -34,10 +34,11 @@ export async function fetchDeckSubtreeCards(deckId: string) {
       .from('decks')
       .select('id, parent_deck_id')
       .in('parent_deck_id', parentIds);
-    const newChildren = (children ?? []).filter((c: any) => !allSubtreeIds.has(c.id));
+    interface ChildRow { id: string; parent_deck_id: string | null }
+    const newChildren = (children ?? []).filter((c: ChildRow) => !allSubtreeIds.has(c.id));
     if (newChildren.length === 0) break;
-    newChildren.forEach((c: any) => allSubtreeIds.add(c.id));
-    parentIds = newChildren.map((c: any) => c.id);
+    newChildren.forEach((c: ChildRow) => allSubtreeIds.add(c.id));
+    parentIds = newChildren.map((c: ChildRow) => c.id);
   }
 
   const subtreeIds = [...allSubtreeIds];
@@ -186,18 +187,19 @@ async function copySingleDeck(params: {
 }) {
   const { sourceDeckId, deckName, userId, parentDeckId, sourceTurmaDeckId, folderId, communityId } = params;
   const { data: srcDeck } = await supabase.from('decks').select('algorithm_mode, daily_new_limit, daily_review_limit').eq('id', sourceDeckId).single();
-  const sd = srcDeck as any;
-  const insertData: any = {
+  interface DeckInsertData { name: string; user_id: string; is_public: boolean; is_live_deck: boolean; folder_id: string | null; parent_deck_id: string | null; algorithm_mode: string; daily_new_limit: number; daily_review_limit: number; source_turma_deck_id?: string; community_id?: string }
+  const insertData: DeckInsertData = {
     name: deckName, user_id: userId, is_public: false, is_live_deck: true,
     folder_id: folderId, parent_deck_id: parentDeckId,
-    algorithm_mode: sd?.algorithm_mode ?? 'fsrs',
-    daily_new_limit: sd?.daily_new_limit ?? 20,
-    daily_review_limit: sd?.daily_review_limit ?? 9999,
+    algorithm_mode: srcDeck?.algorithm_mode ?? 'fsrs',
+    daily_new_limit: srcDeck?.daily_new_limit ?? 20,
+    daily_review_limit: srcDeck?.daily_review_limit ?? 9999,
   };
   if (sourceTurmaDeckId) insertData.source_turma_deck_id = sourceTurmaDeckId;
   if (communityId) insertData.community_id = communityId;
 
-  const { data: newDeck, error } = await supabase.from('decks').insert(insertData).select('id').single();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: newDeck, error } = await supabase.from('decks').insert(insertData as any).select('id').single();
   if (error) throw error;
 
   if (newDeck) {
@@ -218,10 +220,11 @@ async function copyCardsInBatches(sourceDeckId: string, targetDeckId: string) {
       .range(offset, offset + BATCH - 1)
       .order('created_at', { ascending: true });
     if (!cards || cards.length === 0) break;
-    await supabase.from('cards').insert(cards.map((c: any) => ({
+    interface CardCopyRow { front_content: string; back_content: string; card_type: string }
+    await supabase.from('cards').insert((cards as CardCopyRow[]).map(c => ({
       deck_id: targetDeckId, front_content: c.front_content,
       back_content: c.back_content, card_type: c.card_type ?? 'basic',
-    })) as any);
+    })));
     if (cards.length < BATCH) hasMore = false;
     else offset += BATCH;
   }
@@ -237,7 +240,8 @@ export async function followDeckWithHierarchy(params: {
 
   if (!turmaDeck) {
     // Non-turma public deck
-    const insertData: any = {
+    interface NonTurmaInsert { name: string; user_id: string; is_public: boolean; is_live_deck: boolean; source_listing_id?: string; community_id?: string }
+    const insertData: NonTurmaInsert = {
       name: deckName, user_id: userId, is_public: false, is_live_deck: true,
     };
     const { data: listing } = await supabase
@@ -251,14 +255,15 @@ export async function followDeckWithHierarchy(params: {
         const { data: ownerMembership } = await supabase
           .from('turma_members')
           .select('turma_id')
-          .eq('user_id', (srcDeck as any).user_id)
+          .eq('user_id', srcDeck.user_id)
           .limit(1)
           .maybeSingle();
-        if (ownerMembership) insertData.community_id = (ownerMembership as any).turma_id;
+        if (ownerMembership) insertData.community_id = ownerMembership.turma_id;
       }
     }
 
-    const { data: newDeck, error } = await supabase.from('decks').insert(insertData).select('id').single();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: newDeck, error } = await supabase.from('decks').insert(insertData as any).select('id').single();
     if (error) throw error;
     if (newDeck) {
       await copyCardsInBatches(deckId, newDeck.id);
@@ -286,7 +291,8 @@ export async function followDeckWithHierarchy(params: {
 
     if (childDecks?.length) {
       for (const child of childDecks) {
-        const childTd = (childTurmaDeckRows ?? []).find((r: any) => r.deck_id === child.id);
+        interface TurmaDeckRef { id: string; deck_id: string }
+        const childTd = (childTurmaDeckRows ?? []).find((r: TurmaDeckRef) => r.deck_id === child.id);
         await copySingleDeck({
           sourceDeckId: child.id, deckName: child.name, userId,
           parentDeckId: mainDeck.id, sourceTurmaDeckId: childTd?.id ?? null,
@@ -350,11 +356,13 @@ export async function fetchSuggestionComments(suggestionId: string) {
   if (!data || data.length === 0) return [];
   const userIds = [...new Set(data.map(c => c.user_id))];
   const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: userIds });
-  const nameMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
+  interface ProfileRow { id: string; name: string | null }
+  const nameMap = new Map(((profiles ?? []) as unknown as ProfileRow[]).map(p => [p.id, p.name || 'Anônimo']));
   return data.map(c => ({ ...c, user_name: nameMap.get(c.user_id) ?? 'Usuário' }));
 }
 
 export async function insertSuggestionComment(suggestionId: string, userId: string, content: string) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await supabase.from('suggestion_comments').insert({
     suggestion_id: suggestionId,
     user_id: userId,
@@ -375,7 +383,8 @@ export async function fetchDeckSuggestions(deckId: string, userId: string | unde
 
   const userIds = [...new Set(data.map(s => s.suggester_user_id))];
   const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: userIds });
-  const nameMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
+  interface ProfileRow2 { id: string; name: string | null }
+  const nameMap = new Map(((profiles ?? []) as unknown as ProfileRow2[]).map(p => [p.id, p.name || 'Anônimo']));
 
   const cardIds = data.map(s => s.card_id).filter(Boolean) as string[];
   const { data: cards } = cardIds.length > 0
@@ -390,7 +399,8 @@ export async function fetchDeckSuggestions(deckId: string, userId: string | unde
     .in('suggestion_id', suggestionIds);
   
   const voteMap = new Map<string, { score: number; userVote: number }>();
-  (votes ?? []).forEach((v: any) => {
+  interface VoteRow { suggestion_id: string; vote: number; user_id: string }
+  ((votes ?? []) as unknown as VoteRow[]).forEach(v => {
     const existing = voteMap.get(v.suggestion_id) ?? { score: 0, userVote: 0 };
     existing.score += v.vote;
     if (v.user_id === userId) existing.userVote = v.vote;
@@ -402,7 +412,8 @@ export async function fetchDeckSuggestions(deckId: string, userId: string | unde
     .select('suggestion_id')
     .in('suggestion_id', suggestionIds);
   const commentCountMap = new Map<string, number>();
-  (commentCounts ?? []).forEach((c: any) => {
+  interface CommentCountRow { suggestion_id: string }
+  ((commentCounts ?? []) as unknown as CommentCountRow[]).forEach(c => {
     commentCountMap.set(c.suggestion_id, (commentCountMap.get(c.suggestion_id) ?? 0) + 1);
   });
 

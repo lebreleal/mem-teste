@@ -33,9 +33,10 @@ function useSalaDecks(turmaId: string) {
       const { decks, rootDeckIds, cardCountMap } = await fetchSalaDecksData(turmaId);
       if (!decks || decks.length === 0) return [];
 
+      interface SalaDeckRow { id: string; name: string; created_at: string; updated_at: string; folder_id: string | null; parent_deck_id: string | null; is_archived: boolean; daily_new_limit: number; daily_review_limit: number }
       return decks
-        .filter((d: any) => !d.name?.includes('Baralho de Erros'))
-        .map((d: any) => {
+        .filter((d: SalaDeckRow) => !d.name?.includes('Baralho de Erros'))
+        .map((d: SalaDeckRow) => {
           const cc = cardCountMap.get(d.id) ?? { total: 0, mastered: 0, novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
           return {
             id: d.id,
@@ -63,8 +64,8 @@ function useSalaDecks(turmaId: string) {
           } satisfies DeckWithStats;
         })
         .sort((a: DeckWithStats, b: DeckWithStats) => {
-          const aHasChildren = decks.some((d: any) => d.parent_deck_id === a.id);
-          const bHasChildren = decks.some((d: any) => d.parent_deck_id === b.id);
+          const aHasChildren = decks.some((d: SalaDeckRow) => d.parent_deck_id === a.id);
+          const bHasChildren = decks.some((d: SalaDeckRow) => d.parent_deck_id === b.id);
           if (aHasChildren && !bHasChildren) return -1;
           if (!aHasChildren && bHasChildren) return 1;
           return 0;
@@ -183,8 +184,9 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
       queryClient.invalidateQueries({ queryKey: ['folders'] });
       queryClient.invalidateQueries({ queryKey: ['decks'] });
       toast({ title: '✅ Seguindo sala! Ela aparece agora no seu menu Início.' });
-    } catch (e: any) {
-      if (e.code === '23505') {
+    } catch (e: unknown) {
+      const err = e as { code?: string };
+      if (err.code === '23505') {
         toast({ title: 'Você já segue esta sala' });
       } else {
         toast({ title: 'Erro ao seguir', variant: 'destructive' });
@@ -223,8 +225,9 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
         queryClient.invalidateQueries({ queryKey: ['folders'] });
         queryClient.invalidateQueries({ queryKey: ['decks'] });
         toast({ title: '✅ Sala adicionada ao seu menu Início!' });
-      } catch (e: any) {
-        if (e.code !== '23505') {
+      } catch (e: unknown) {
+        const err = e as { code?: string };
+        if (err.code !== '23505') {
           toast({ title: 'Erro ao entrar na sala', variant: 'destructive' });
         }
       }

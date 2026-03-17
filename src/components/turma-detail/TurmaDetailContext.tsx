@@ -5,6 +5,7 @@
  */
 
 import { createContext, useContext, useState, useMemo, useEffect, type ReactNode } from 'react';
+import type { Turma, TurmaMember, TurmaSubject, TurmaLesson, TurmaExam, TurmaDeck } from '@/types/turma';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { fetchTurmaPublic, fetchTurmaLessonFiles, fetchActiveSubscription, restoreSubscriptionStatus, processSubscription, importTurmaExam } from '@/services/turmaDetailService';
@@ -19,18 +20,28 @@ import { useToast } from '@/hooks/use-toast';
 import type { BreadcrumbItem } from './constants';
 
 // ─── Context value shape ────────────────────────────────
+/** Subscription row shape */
+interface ActiveSubscription {
+  id: string;
+  turma_id: string;
+  user_id: string;
+  status: string;
+  started_at: string;
+  expires_at: string;
+}
+
 interface TurmaDetailContextValue {
   // Core data
   turmaId: string;
-  turma: any;
+  turma: Turma | null | undefined;
   myRole: string | null | undefined;
-  members: any[];
-  subjects: any[];
-  lessons: any[];
-  turmaExams: any[];
-  turmaDecks: any[];
+  members: TurmaMember[];
+  subjects: TurmaSubject[];
+  lessons: TurmaLesson[];
+  turmaExams: TurmaExam[];
+  turmaDecks: TurmaDeck[];
   lessonFiles: { id: string; lesson_id: string }[];
-  user: any;
+  user: { id: string } | null;
 
   // Derived permissions
   isMember: boolean;
@@ -41,7 +52,7 @@ interface TurmaDetailContextValue {
   // Subscription
   hasSubscription: boolean;
   isSubscriber: boolean;
-  activeSubscription: any;
+  activeSubscription: ActiveSubscription | null | undefined;
   subscriptionPrice: number;
   subscribing: boolean;
   handleSubscribe: () => Promise<void>;
@@ -56,12 +67,12 @@ interface TurmaDetailContextValue {
 
   // Calendar
   lessonDates: Date[];
-  lessonDateMap: Map<string, any[]>;
+  lessonDateMap: Map<string, TurmaLesson[]>;
 
   // Mutations
   mutations: ReturnType<typeof useTurmaHierarchyMutations>;
   examMutations: ReturnType<typeof useTurmaExamMutations>;
-  updateTurma: any;
+  updateTurma: ReturnType<typeof useTurmas>['updateTurma'];
 
   // Dialog states
   showSettings: boolean;
@@ -90,7 +101,7 @@ interface TurmaDetailContextValue {
   // Handlers
   handleCreateSubject: () => void;
   handleCreateLesson: () => void;
-  handleImportExam: (exam: any) => Promise<void>;
+  handleImportExam: (exam: TurmaExam) => Promise<void>;
 
   // Loading
   isLoading: boolean;

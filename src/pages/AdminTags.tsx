@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAllTags, useTagAdminMutations } from '@/hooks/useTags';
+import type { Tag } from '@/types/tag';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,15 +27,15 @@ const TagEditDialog = ({
   onSave,
   isPending,
 }: {
-  tag: any;
-  allTags: any[];
+  tag: Tag;
+  allTags: Tag[];
   onClose: () => void;
-  onSave: (updates: any) => void;
+  onSave: (updates: { id: string; name: string; parent_id: string | null; synonyms: string[] }) => void;
   isPending: boolean;
 }) => {
   const [name, setName] = useState(tag.name);
   const [parentId, setParentId] = useState<string | null>(tag.parent_id);
-  const [synonyms, setSynonyms] = useState<string[]>((tag as any).synonyms ?? []);
+  const [synonyms, setSynonyms] = useState<string[]>(tag.synonyms ?? []);
   const [synInput, setSynInput] = useState('');
 
   const possibleParents = allTags.filter(t => t.id !== tag.id && t.parent_id !== tag.id);
@@ -176,7 +177,7 @@ const AdminTags = () => {
     });
   };
 
-  const handleSaveEdit = (updates: any) => {
+  const handleSaveEdit = (updates: { id: string; name: string; parent_id: string | null; synonyms: string[] }) => {
     updateTag.mutate(updates, {
       onSuccess: () => {
         toast.success('Tag atualizada');
