@@ -45,7 +45,6 @@ const TurmaHeader = () => {
               <span className="text-xs font-bold tabular-nums text-foreground">{energy}</span>
             </button>
           </div>
-          </div>
           <div className="flex items-center gap-1.5">
             <button onClick={toggleTheme} className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
               {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
