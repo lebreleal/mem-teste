@@ -411,7 +411,8 @@ export async function fetchDeckSuggestions(deckId: string, userId: string | unde
     .select('suggestion_id')
     .in('suggestion_id', suggestionIds);
   const commentCountMap = new Map<string, number>();
-  (commentCounts ?? []).forEach((c: any) => {
+  interface CommentCountRow { suggestion_id: string }
+  ((commentCounts ?? []) as unknown as CommentCountRow[]).forEach(c => {
     commentCountMap.set(c.suggestion_id, (commentCountMap.get(c.suggestion_id) ?? 0) + 1);
   });
 
