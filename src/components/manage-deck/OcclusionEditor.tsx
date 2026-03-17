@@ -618,6 +618,14 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
 
     if ((s.type === 'polygon' || s.type === 'freehand') && s.points && s.points.length > 1) {
       const pts = s.points.map(p => `${p.x * scale},${p.y * scale}`).join(' ');
+      const sharedCursor = tool === 'hand'
+        ? 'grab'
+        : tool === 'eraser'
+          ? 'pointer'
+          : s.type === 'polygon' && (hoveredSelectableId === s.id || tool === 'select')
+            ? 'move'
+            : 'crosshair';
+
       return (
         <svg key={s.id} className="absolute inset-0 pointer-events-none" style={{ width: displaySize.w, height: displaySize.h }}>
           {s.type === 'polygon' ? (
@@ -627,16 +635,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
               stroke={colorObj.border}
               strokeWidth={isSelected ? 3 : 2}
               className="pointer-events-auto"
-              style={{ cursor: tool === 'hand' ? 'grab' : tool === 'select' ? 'move' : tool === 'eraser' ? 'pointer' : 'crosshair' }}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (tool === 'select' || tool === 'eraser') setSelectedId(s.id);
-                else if (tool !== 'hand') {
-                  setPrevDrawTool(tool);
-                  setTool('select');
-                  setSelectedId(s.id);
-                }
-              }}
+              style={{ cursor: sharedCursor }}
             />
           ) : (
             <polyline
@@ -647,16 +646,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
               strokeLinecap="round"
               strokeLinejoin="round"
               className="pointer-events-auto"
-              style={{ cursor: tool === 'hand' ? 'grab' : tool === 'select' ? 'move' : tool === 'eraser' ? 'pointer' : 'crosshair' }}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (tool === 'select' || tool === 'eraser') setSelectedId(s.id);
-                else if (tool !== 'hand') {
-                  setPrevDrawTool(tool);
-                  setTool('select');
-                  setSelectedId(s.id);
-                }
-              }}
+              style={{ cursor: sharedCursor }}
             />
           )}
         </svg>
