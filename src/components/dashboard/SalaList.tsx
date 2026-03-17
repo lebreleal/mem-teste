@@ -137,13 +137,12 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
           deckCount: countAllDecksRecursive(folderDecks),
           totalCards,
           masteredCards,
-          questionCount: getQuestionCount(allIds),
           dueCount,
           ownerName: meta?.ownerName,
           lastUpdated: meta?.lastUpdated,
         };
       }),
-    [folders, decksByFolder, childrenIndex, communityMeta, getAggregateStats, questionCounts]
+    [folders, decksByFolder, childrenIndex, communityMeta, getAggregateStats]
   );
 
   if (isLoading) {
