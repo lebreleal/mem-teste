@@ -338,7 +338,7 @@ const ManageDeck = () => {
         {/* Main editor area */}
         <main className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-6">
           {currentCard ? (
-            <div className="mx-auto flex h-full min-h-0 max-w-2xl flex-col gap-0">
+            <div className="mx-auto flex h-full min-h-0 max-w-2xl flex-row gap-2">
               {/* Cards column */}
               <div className="flex-1 min-w-0 flex flex-col gap-3">
 
