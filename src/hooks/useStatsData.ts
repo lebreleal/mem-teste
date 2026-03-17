@@ -162,7 +162,7 @@ export function useStatsData() {
   });
 
   const todayKey = getToday();
-  const dayMap: Record<string, any> = activityData?.dayMap ?? {};
+  const dayMap: Record<string, DayEntry> = activityData?.dayMap ?? {};
   const currentStreak = activityData?.streak ?? 0;
 
   // Filtered data per section
