@@ -274,6 +274,54 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     }
   };
 
+  /* ─── Occlusion image handlers ─── */
+  const uploadOcclusionFile = async (file: File) => {
+    if (!user) return;
+    try {
+      const compressed = await compressImage(file);
+      const ext = compressed.name.split('.').pop() || 'webp';
+      const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
+      const { error } = await supabase.storage.from('card-images').upload(path, compressed);
+      if (error) throw error;
+      const { data: urlData } = supabase.storage.from('card-images').getPublicUrl(path);
+      onOcclusionImageReady?.(urlData.publicUrl);
+    } catch {
+      toast({ title: 'Erro ao enviar imagem', variant: 'destructive' });
+    }
+  };
+
+  const handleOcclusionAttach = () => {
+    if (!user) return;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (file) await uploadOcclusionFile(file);
+    };
+    input.click();
+  };
+
+  const handleOcclusionPasteClipboard = async () => {
+    if (!user) return;
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        const imageType = item.types.find(t => t.startsWith('image/'));
+        if (imageType) {
+          const blob = await item.getType(imageType);
+          const ext = imageType.split('/')[1] || 'png';
+          const file = new File([blob], `paste.${ext}`, { type: imageType });
+          await uploadOcclusionFile(file);
+          return;
+        }
+      }
+      toast({ title: 'Nenhuma imagem na área de transferência', variant: 'destructive' });
+    } catch {
+      toast({ title: 'Não foi possível acessar a área de transferência', variant: 'destructive' });
+    }
+  };
+
   const handleAudioUpload = async () => {
     if (!user || !editor) return;
     const input = document.createElement('input');
