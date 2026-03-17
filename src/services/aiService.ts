@@ -74,8 +74,8 @@ export async function generateDeckCards(params: GenerateDeckParams): Promise<Gen
   if (error) throw error;
   if (data?.error) throw new Error(data.error);
 
-  // Convert markdown formatting in AI-generated cards to HTML
-  const cards = (data?.cards ?? []).map((c: any) => ({
+  interface RawCard { front: string; back: string; options?: string[]; type?: string; correctIndex?: number }
+  const cards = (data?.cards ?? []).map((c: RawCard) => ({
     ...c,
     front: markdownToHtml(c.front),
     back: markdownToHtml(c.back),
