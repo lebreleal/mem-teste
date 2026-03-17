@@ -61,6 +61,12 @@ function editorToCloze(html: string): string {
   return html.replace(/<span[^>]*data-cloze="(\d+)"[^>]*>(.*?)<\/span>/g, '{{c$1::$2}}');
 }
 
+export interface ImageAttachment {
+  url: string;
+  isOcclusion: boolean;
+  hasOcclusionRects: boolean;
+}
+
 interface RichEditorProps {
   content: string;
   onChange: (html: string) => void;
@@ -77,6 +83,14 @@ interface RichEditorProps {
   /** AI Creator — pass callback to show the AI Creator button in toolbar */
   onAICreate?: (templatePrompt: string) => void;
   isAICreating?: boolean;
+  /** Image attachments displayed as thumbnails below text, above toolbar */
+  imageAttachments?: ImageAttachment[];
+  /** Called when user attaches a normal image (instead of inserting inline) */
+  onImageAttached?: (url: string) => void;
+  /** Called when user removes an attachment thumbnail */
+  onRemoveAttachment?: (url: string) => void;
+  /** Called when user clicks an attachment thumbnail */
+  onClickAttachment?: (url: string, isOcclusion: boolean) => void;
 }
 
 const TEXT_COLORS = [
@@ -90,7 +104,7 @@ const TEXT_COLORS = [
   { label: 'Rosa', value: '#ec4899' },
 ];
 
-const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclusionAttach, onOcclusionImageReady, hideCloze, chromeless = false, hideToolbarUntilFocus = false, onAICreate, isAICreating = false }: RichEditorProps) => {
+const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclusionAttach, onOcclusionImageReady, hideCloze, chromeless = false, hideToolbarUntilFocus = false, onAICreate, isAICreating = false, imageAttachments, onImageAttached, onRemoveAttachment, onClickAttachment }: RichEditorProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [colorOpen, setColorOpen] = useState(false);
@@ -280,20 +294,23 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
 
   const uploadImageFile = async (file: File) => {
     const url = await uploadToStorage(file);
-    if (url) insertImageUrl(url);
+    if (url) {
+      if (onImageAttached) onImageAttached(url);
+      else insertImageUrl(url);
+    }
   };
   uploadImageFileRef.current = uploadImageFile;
 
   const handleImageAttach = () => {
-    if (!user || !editor) return;
+    if (!user || (!editor && !onImageAttached)) return;
     setImageMenuOpen(false);
-    pickFileAndUpload(insertImageUrl);
+    pickFileAndUpload(onImageAttached || insertImageUrl);
   };
 
   const handleImagePaste = () => {
-    if (!user || !editor) return;
+    if (!user || (!editor && !onImageAttached)) return;
     setImageMenuOpen(false);
-    pasteClipboardAndUpload(insertImageUrl);
+    pasteClipboardAndUpload(onImageAttached || insertImageUrl);
   };
 
   /* ─── Occlusion image — reuses shared helpers ─── */
@@ -498,6 +515,41 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       }}
     >
       <EditorContent editor={editor} className="tiptap-editor-fill" />
+
+      {/* Image attachment thumbnails */}
+      {imageAttachments && imageAttachments.length > 0 && (
+        <div className="flex flex-wrap items-end gap-2 px-3 py-2">
+          {imageAttachments.map(att => (
+            <div
+              key={att.url}
+              className="relative group cursor-pointer"
+              onClick={() => onClickAttachment?.(att.url, att.isOcclusion)}
+            >
+              <img
+                src={att.url}
+                alt=""
+                className="h-16 w-16 rounded-lg object-cover border border-border/50"
+              />
+              {/* Remove button */}
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onRemoveAttachment?.(att.url); }}
+                className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-muted border border-border flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-3 w-3"><path d="M18 6L6 18M6 6l12 12" /></svg>
+              </button>
+              {/* Type badge */}
+              <div className="absolute bottom-0.5 right-0.5 h-5 w-5 rounded bg-background/80 backdrop-blur-sm flex items-center justify-center border border-border/30">
+                {att.isOcclusion && att.hasOcclusionRects
+                  ? <IconImageOcclusion className="h-3.5 w-3.5 text-muted-foreground" />
+                  : <IconImage className="h-3.5 w-3.5 text-muted-foreground" />
+                }
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {showToolbar && (
         <div className={`flex items-center gap-0.5 px-2 py-1 overflow-x-auto scrollbar-none ${chromeless ? 'border-t border-border/80' : 'border-t border-border'}`}>
           {/* AI Creator — always first */}

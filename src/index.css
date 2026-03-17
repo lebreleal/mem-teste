@@ -226,15 +226,10 @@
 
 .tiptap img {
   display: inline-block;
-  max-width: 80px;
-  max-height: 80px;
+  max-width: 100%;
   height: auto;
   border-radius: 0.5rem;
-  margin: 0.25rem 0.25rem 0.25rem 0;
-  object-fit: cover;
-  vertical-align: bottom;
-  cursor: pointer;
-  border: 1px solid hsl(var(--border) / 0.5);
+  margin: 0.25rem 0;
 }
 
 /* Prose overrides for flashcard content */

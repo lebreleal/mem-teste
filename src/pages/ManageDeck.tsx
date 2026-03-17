@@ -14,8 +14,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import OcclusionEditor from '@/components/manage-deck/OcclusionEditor';
 import { supabase } from '@/integrations/supabase/client';
 import { markdownToHtml } from '@/lib/markdownToHtml';
-import iconAttachImage from '@/assets/icon-attach-image.png';
-import iconClozeOcclusion from '@/assets/icon-cloze-occlusion.png';
+import type { ImageAttachment } from '@/components/RichEditor';
 
 const ManageDeck = () => {
   const { deckId } = useParams<{ deckId: string }>();
@@ -37,6 +36,9 @@ const ManageDeck = () => {
   const [isDirty, setIsDirty] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+
+  // Image attachments (normal images stored separately from text)
+  const [attachedImages, setAttachedImages] = useState<string[]>([]);
 
   // Image occlusion state
   const [occlusionImageUrl, setOcclusionImageUrl] = useState('');
@@ -62,6 +64,16 @@ const ManageDeck = () => {
     }
   }, [initialCardId, pendingNewCardId, sortedCards]);
 
+  // Helper: extract <img> URLs from HTML and return clean text
+  const extractImages = (html: string): { text: string; images: string[] } => {
+    const images: string[] = [];
+    const regex = /<img[^>]+src="([^"]+)"[^>]*\/?>/g;
+    let m;
+    while ((m = regex.exec(html)) !== null) images.push(m[1]);
+    const text = html.replace(/<img[^>]+\/?>/g, '').replace(/<p>\s*<\/p>$/g, '');
+    return { text, images };
+  };
+
   // Load card content when selection changes
   useEffect(() => {
     if (!currentCard) return;
@@ -80,8 +92,10 @@ const ManageDeck = () => {
         setOcclusionImageUrl(data.imageUrl || '');
         setOcclusionRects(data.allRects || data.rects || []);
         setOcclusionCanvasSize(data.canvasWidth ? { w: data.canvasWidth, h: data.canvasHeight } : null);
-        setFront(data.frontText || '');
-      } catch { setFront(''); setOcclusionImageUrl(''); setOcclusionRects([]); }
+        const { text, images } = extractImages(data.frontText || '');
+        setFront(text);
+        setAttachedImages(images);
+      } catch { setFront(''); setOcclusionImageUrl(''); setOcclusionRects([]); setAttachedImages([]); }
       let backRaw = currentCard.back_content || '';
       try { const p = JSON.parse(backRaw); if (p && typeof p.clozeTarget === 'number') backRaw = p.extra || ''; } catch {}
       setBack(backRaw);
@@ -95,11 +109,18 @@ const ManageDeck = () => {
       const frontHasCloze = /\{\{c\d+::/.test(frontPlain);
       const backHasCloze = /\{\{c\d+::/.test(backPlain);
       if (backHasCloze && !frontHasCloze) {
-        setFront(backRaw); setBack(frontVal && frontVal !== '<p></p>' ? frontVal : ''); needsAutoSave = true;
+        const { text, images } = extractImages(backRaw);
+        setFront(text); setBack(frontVal && frontVal !== '<p></p>' ? frontVal : '');
+        setAttachedImages(images);
+        needsAutoSave = true;
       } else if (frontHasCloze) {
-        setFront(frontVal); setBack(clozeExtra || (backRaw !== currentCard.back_content ? '' : backRaw));
+        const { text, images } = extractImages(frontVal);
+        setFront(text); setBack(clozeExtra || (backRaw !== currentCard.back_content ? '' : backRaw));
+        setAttachedImages(images);
       } else {
-        setFront(frontVal); setBack(backRaw);
+        const { text, images } = extractImages(frontVal);
+        setFront(text); setBack(backRaw);
+        setAttachedImages(images);
       }
       setOcclusionImageUrl(''); setOcclusionRects([]); setOcclusionCanvasSize(null);
     }
@@ -114,11 +135,14 @@ const ManageDeck = () => {
 
   const buildSavePayload = useCallback(() => {
     const detectedType = detectCardType();
-    let frontContent = front;
+    // Merge attached images back as <img> tags
+    const imgTags = attachedImages.map(url => `<img src="${url}">`).join('');
+    const frontWithImages = front + imgTags;
+    let frontContent = frontWithImages;
     let backContent = back;
     if (detectedType === 'image_occlusion') {
       frontContent = JSON.stringify({
-        imageUrl: occlusionImageUrl, frontText: front, rects: occlusionRects, allRects: occlusionRects,
+        imageUrl: occlusionImageUrl, frontText: frontWithImages, rects: occlusionRects, allRects: occlusionRects,
         canvasWidth: occlusionCanvasSize?.w ?? 0, canvasHeight: occlusionCanvasSize?.h ?? 0,
       });
     }
@@ -128,7 +152,7 @@ const ManageDeck = () => {
       if (unique.length > 0) backContent = JSON.stringify({ clozeTarget: unique[0] || 1, extra: back });
     }
     return { frontContent, backContent, cardType: detectedType };
-  }, [front, back, occlusionImageUrl, occlusionRects, occlusionCanvasSize, detectCardType]);
+  }, [front, back, attachedImages, occlusionImageUrl, occlusionRects, occlusionCanvasSize, detectCardType]);
 
   const saveCurrentCard = useCallback(async () => {
     if (!currentCard || !isDirty) return;
@@ -195,11 +219,15 @@ const ManageDeck = () => {
     } finally { setIsAICreating(false); }
   }, [front, back, energy, model, queryClient, toast]);
 
-  // Check if front has a regular image (not occlusion) via <img> tag
-  const hasRegularImage = useMemo(() => {
-    if (occlusionImageUrl) return false;
-    return /<img\s+[^>]*src=/.test(front);
-  }, [front, occlusionImageUrl]);
+  // Build image attachments array for the thumbnail row
+  const frontImageAttachments = useMemo(() => {
+    const atts: Array<{ url: string; isOcclusion: boolean; hasOcclusionRects: boolean }> = [];
+    attachedImages.forEach(url => atts.push({ url, isOcclusion: false, hasOcclusionRects: false }));
+    if (occlusionImageUrl) {
+      atts.push({ url: occlusionImageUrl, isOcclusion: true, hasOcclusionRects: occlusionRects.length > 0 });
+    }
+    return atts;
+  }, [attachedImages, occlusionImageUrl, occlusionRects]);
 
   if (isLoading) {
     return (
@@ -284,24 +312,11 @@ const ManageDeck = () => {
             <div className="flex-1 min-w-0 flex flex-col gap-2">
               {/* Front card */}
               <div className="flex-1 min-h-[100px] rounded-xl border border-border/60 bg-card overflow-hidden relative flex flex-col">
-                {(!front || front === '<p></p>') && !occlusionImageUrl ? (
+                {(!front || front === '<p></p>') && !occlusionImageUrl && attachedImages.length === 0 ? (
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <span className="text-muted-foreground/30 text-base font-medium">Frente</span>
                   </div>
                 ) : null}
-
-                {(occlusionImageUrl || hasRegularImage) && (
-                  <button
-                    type="button"
-                    onClick={occlusionImageUrl ? () => setOcclusionModalOpen(true) : undefined}
-                    className={`absolute bottom-2 left-2 z-10 h-8 w-8 rounded-lg border border-border/60 bg-card/90 backdrop-blur-sm flex items-center justify-center shadow-sm transition-all ${
-                      occlusionImageUrl ? 'hover:shadow-md hover:border-primary/40 cursor-pointer' : 'cursor-default'
-                    }`}
-                    title={occlusionImageUrl ? 'Editar oclusão' : 'Imagem anexada'}
-                  >
-                    <img src={occlusionImageUrl ? iconClozeOcclusion : iconAttachImage} alt="" className="h-4.5 w-4.5 object-contain opacity-60" />
-                  </button>
-                )}
 
                 <LazyRichEditor
                   content={front}
@@ -309,6 +324,24 @@ const ManageDeck = () => {
                   placeholder=""
                   chromeless
                   hideCloze={false}
+                  imageAttachments={frontImageAttachments}
+                  onImageAttached={(url) => {
+                    setAttachedImages(prev => [...prev, url]);
+                    setIsDirty(true);
+                  }}
+                  onRemoveAttachment={(url) => {
+                    if (url === occlusionImageUrl) {
+                      setOcclusionImageUrl('');
+                      setOcclusionRects([]);
+                      setOcclusionCanvasSize(null);
+                    } else {
+                      setAttachedImages(prev => prev.filter(u => u !== url));
+                    }
+                    setIsDirty(true);
+                  }}
+                  onClickAttachment={(url, isOcclusion) => {
+                    if (isOcclusion) setOcclusionModalOpen(true);
+                  }}
                   onOcclusionImageReady={(imageUrl) => {
                     setOcclusionImageUrl(imageUrl);
                     setOcclusionRects([]);
