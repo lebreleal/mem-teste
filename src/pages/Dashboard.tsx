@@ -241,6 +241,8 @@ const Dashboard = () => {
             setStudySettingsOpen={setStudySettingsOpen}
             realStudyMetrics={realStudyMetrics}
             salaDifficultyStats={salaDifficultyStats}
+            organizeMode={organizeMode}
+            setOrganizeMode={setOrganizeMode}
           />
         )}
 
