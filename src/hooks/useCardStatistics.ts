@@ -92,12 +92,13 @@ export function useCardStatistics() {
     queryKey: ['card-statistics', user?.id],
     queryFn: async (): Promise<CardStatistics> => {
       if (!user) return defaults;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await supabase.rpc('get_card_statistics' as any, { p_user_id: user.id });
       if (error) {
         console.warn('[useCardStatistics] RPC error, using defaults:', error.message);
         return defaults;
       }
-      const r = data as any;
+      const r = data as unknown as CardStatisticsRpc | null;
       if (!r) return defaults;
 
       return {

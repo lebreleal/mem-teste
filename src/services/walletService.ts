@@ -54,9 +54,10 @@ export async function fetchCreatorTier(userId: string): Promise<CreatorTierData>
   else if (totalListings >= 5 && avgRating >= 4.0) newTier = 2;
 
   if (newTier !== currentTier) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await supabase
       .from('profiles')
-      .update({ creator_tier: newTier, tier_last_evaluated: new Date().toISOString() } as any)
+      .update({ creator_tier: newTier, tier_last_evaluated: new Date().toISOString() } as Record<string, unknown>)
       .eq('id', userId);
   }
 

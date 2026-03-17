@@ -30,7 +30,7 @@ export const useAISettings = () => {
   const updateSetting = async (key: string, value: string) => {
     const { error } = await supabase
       .from('ai_settings')
-      .update({ value, updated_at: new Date().toISOString() } as any)
+      .update({ value, updated_at: new Date().toISOString() })
       .eq('key', key);
     if (error) {
       toast({ title: 'Erro', description: 'Falha ao salvar.', variant: 'destructive' });

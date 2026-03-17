@@ -58,8 +58,8 @@ const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
       <div className="flex items-center justify-around px-2 pb-2 pt-1">
         {items.map((item, i) => {
           const Icon = item.icon;
-          const isItemDisabled = !!(item as any).disabled;
-          const isDimmed = !!(item as any).dimmed;
+          const isItemDisabled = !!item.disabled;
+          const isDimmed = !!item.dimmed;
           return (
             <button
               key={i}
