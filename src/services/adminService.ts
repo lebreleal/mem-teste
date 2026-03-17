@@ -336,7 +336,7 @@ export async function fetchDeckQuestionCounts(deckIds: string[]): Promise<Map<st
 
 export async function joinTurmaAndCreateFolder(userId: string, turmaId: string, turmaName: string): Promise<string | undefined> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- turma_members insert typing
-  await supabase.from('turma_members').insert({ turma_id: turmaId, user_id: userId } as Record<string, unknown>);
+  await supabase.from('turma_members').insert({ turma_id: turmaId, user_id: userId } as any);
   const { data: existingFolders } = await supabase.from('folders')
     .select('id').eq('user_id', userId).eq('source_turma_id', turmaId);
   let folderId: string | undefined;
