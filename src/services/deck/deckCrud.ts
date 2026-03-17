@@ -5,6 +5,8 @@
 
 import { supabase } from '@/integrations/supabase/client';
 
+const DECK_ALL_COLS = 'id, name, parent_deck_id, folder_id, user_id, daily_new_limit, daily_review_limit, algorithm_mode, learning_steps, requested_retention, max_interval, interval_modifier, easy_bonus, easy_graduating_interval, shuffle_cards, is_live_deck, source_turma_deck_id, source_listing_id, bury_siblings, bury_new_siblings, bury_review_siblings, bury_learning_siblings, is_archived, is_public, is_free_in_community, community_id, sort_order, allow_duplication, synced_at, created_at, updated_at' as const;
+
 /** Resolve a unique deck name by appending (1), (2), etc. if needed. */
 export async function resolveUniqueDeckName(userId: string, baseName: string): Promise<string> {
   const { data } = await supabase
@@ -93,7 +95,7 @@ export async function bulkDeleteDecks(ids: string[]) {
 
 /** Fetch a single deck by ID. */
 export async function fetchDeck(deckId: string) {
-  const { data, error } = await supabase.from('decks').select('*').eq('id', deckId).single();
+  const { data, error } = await supabase.from('decks').select(DECK_ALL_COLS).eq('id', deckId).single();
   if (error) throw error;
   return data;
 }
@@ -121,7 +123,7 @@ export async function changeAlgorithm(deckId: string, algorithmMode: string, for
 
 /** Create a copy of a deck with a different algorithm as a sub-deck. */
 export async function createAlgorithmCopy(userId: string, deckId: string, algorithmMode: string, algorithmLabel: string) {
-  const { data: currentDeck } = await supabase.from('decks').select('*').eq('id', deckId).single();
+  const { data: currentDeck } = await supabase.from('decks').select('name, folder_id').eq('id', deckId).single();
   if (!currentDeck) throw new Error('Deck not found');
   const { data: newDeck, error } = await supabase
     .from('decks')
@@ -168,7 +170,7 @@ export async function archiveDeck(id: string) {
 
 /** Duplicate a deck and its cards. */
 export async function duplicateDeck(userId: string, id: string) {
-  const { data: deck } = await supabase.from('decks').select('*').eq('id', id).single();
+  const { data: deck } = await supabase.from('decks').select('name, folder_id').eq('id', id).single();
   if (!deck) throw new Error('Deck not found');
 
   const { data: newDeck, error } = await supabase
