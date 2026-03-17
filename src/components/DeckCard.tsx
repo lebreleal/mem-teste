@@ -35,10 +35,9 @@ const DeckCard = ({ deck, onStudy, onDelete }: DeckCardProps) => {
                   className="shrink-0 text-info hover:text-info/70 transition-colors"
                   onClick={(e) => {
                     e.stopPropagation();
-                    const findTurma = async () => {
-                      const { data } = await supabase.from('turma_decks').select('turma_id, lesson_id').eq('id', deck.source_turma_deck_id!).single();
-                      if (data) {
-                        const td = data as any;
+                    const doNavigate = async () => {
+                      const td = await findTurmaDeckSource(deck.source_turma_deck_id!);
+                      if (td) {
                         if (td.lesson_id) {
                           navigate(`/turmas/${td.turma_id}/lessons/${td.lesson_id}`);
                         } else {
@@ -46,7 +45,7 @@ const DeckCard = ({ deck, onStudy, onDelete }: DeckCardProps) => {
                         }
                       }
                     };
-                    findTurma();
+                    doNavigate();
                   }}
                   title="Ver na comunidade"
                 >

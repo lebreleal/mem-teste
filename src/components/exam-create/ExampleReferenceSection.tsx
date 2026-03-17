@@ -34,12 +34,8 @@ const ExampleReferenceSection = ({
     setExampleImageUploading(true);
     try {
       const compressed = await compressImage(file);
-      const ext = compressed.name.split('.').pop() || 'webp';
-      const path = `exam-examples/${userId}/${crypto.randomUUID()}.${ext}`;
-      const { error } = await supabase.storage.from('card-images').upload(path, compressed);
-      if (error) throw error;
-      const { data: urlData } = supabase.storage.from('card-images').getPublicUrl(path);
-      setExampleImageUrl(urlData.publicUrl);
+      const publicUrl = await uploadImage(userId, compressed, 'exam-examples');
+      setExampleImageUrl(publicUrl);
       setExampleMode('image');
     } catch (err: any) {
       toast({ title: 'Erro ao enviar imagem', description: err.message, variant: 'destructive' });
