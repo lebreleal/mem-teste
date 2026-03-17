@@ -105,24 +105,13 @@ const AIAgent = () => {
 
   const createConversation = async (firstMessage: string): Promise<string> => {
     const title = firstMessage.slice(0, 60) + (firstMessage.length > 60 ? '...' : '');
-    const { data, error } = await supabase
-      .from('ai_conversations')
-      .insert({ user_id: user!.id, title })
-      .select()
-      .single();
-    if (error || !data) throw new Error('Failed to create conversation');
+    const data = await createAIConversation(user!.id, title);
     setConversations(prev => [data, ...prev]);
     return data.id;
   };
 
   const saveMessage = async (convId: string, role: string, content: string) => {
-    await supabase.from('ai_chat_messages').insert({
-      conversation_id: convId,
-      user_id: user!.id,
-      role,
-      content,
-    });
-    await supabase.from('ai_conversations').update({ updated_at: new Date().toISOString() }).eq('id', convId);
+    await saveAIChatMessage(convId, user!.id, role, content);
   };
 
   const handleSend = useCallback(async () => {

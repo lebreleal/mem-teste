@@ -70,10 +70,7 @@ const CreatorPanel = () => {
 
   const reviewMutation = useMutation({
     mutationFn: async ({ id, status, content }: { id: string; status: 'accepted' | 'rejected'; content?: { front_content: string; back_content: string } }) => {
-      const updateData: any = { status, moderator_user_id: user!.id };
-      if (content) updateData.suggested_content = content;
-      const { error } = await supabase.from('deck_suggestions').update(updateData).eq('id', id);
-      if (error) throw error;
+      await reviewSuggestion(id, status, user!.id, content);
     },
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ['creator-pending-suggestions'] });

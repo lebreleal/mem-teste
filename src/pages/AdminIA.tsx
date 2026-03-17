@@ -136,7 +136,7 @@ const AdminIA = () => {
         : 'Hello! This is a preview of the selected voice for American English.';
 
       // Use fetch directly for binary audio response (supabase.functions.invoke doesn't handle binary well)
-      const { data: { session } } = await supabase.auth.getSession();
+      const token = await getAuthToken();
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const res = await fetch(`${supabaseUrl}/functions/v1/tts`, {
         method: 'POST',
