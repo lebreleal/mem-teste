@@ -93,7 +93,7 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
   // ── Card counts from server-side RPC (single query) ──
   const cardCountMap = new Map<string, { total: number; mastered: number; novo: number; facil: number; bom: number; dificil: number; errei: number }>();
   if (cardCountsResult.data) {
-    for (const r of cardCountsResult.data as any[]) {
+    for (const r of cardCountsResult.data as unknown as DeckCardCountsRow[]) {
       cardCountMap.set(r.deck_id, {
         total: Number(r.total), mastered: Number(r.mastered),
         novo: Number(r.novo), facil: Number(r.facil),
