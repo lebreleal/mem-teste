@@ -565,9 +565,9 @@ export function useStudyPlan(options?: { full?: boolean }) {
   const updatePlan = useMutation({
     mutationFn: async (input: { id: string; name?: string; deck_ids?: string[]; target_date?: string | null }) => {
       const { id, ...rest } = input;
-      const { error } = await supabase
-        .from('study_plans' as any)
-        .update(rest as any)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- study_plans not in generated types
+      const { error } = await (supabase.from as any)('study_plans')
+        .update(rest)
         .eq('id', id);
       if (error) throw error;
     },
