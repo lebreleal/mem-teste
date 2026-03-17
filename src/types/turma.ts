@@ -87,6 +87,7 @@ export interface TurmaDeck {
   card_count?: number;
   parent_deck_id?: string | null;
   is_published?: boolean;
+  content_folder_id?: string | null;
 }
 
 export interface TurmaExam {
