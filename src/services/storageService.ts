@@ -8,9 +8,9 @@ import { supabase } from '@/integrations/supabase/client';
 const BUCKET = 'card-images';
 
 /** Upload an image file and return the public URL. */
-export async function uploadImage(file: File, userId?: string, folder?: string): Promise<string> {
+export async function uploadImage(userId: string, file: File, folder?: string): Promise<string> {
   const ext = file.name.split('.').pop() || 'webp';
-  const prefix = folder ? `${folder}/${userId ?? 'anon'}` : (userId ?? 'anon');
+  const prefix = folder ? `${folder}/${userId}` : userId;
   const path = `${prefix}/${crypto.randomUUID()}.${ext}`;
   const { error } = await supabase.storage.from(BUCKET).upload(path, file);
   if (error) throw error;
