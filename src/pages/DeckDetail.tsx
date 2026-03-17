@@ -17,7 +17,7 @@ import { calculateRealStudyTime, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils'
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { fetchLinkedDeckSource, fetchPendingSuggestions, countPendingSuggestions, countDeckQuestionsRecursive, fetchQuestionCountsByDeck } from '@/services/deck/deckCrud';
+import { fetchLinkedDeckSource, fetchPendingSuggestions, countPendingSuggestions } from '@/services/deck/deckCrud';
 import { fetchFolderImageUrl } from '@/services/folderService';
 import { toast } from '@/hooks/use-toast';
 
