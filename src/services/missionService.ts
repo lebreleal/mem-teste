@@ -24,7 +24,7 @@ export async function fetchMissions(userId: string, stats: MissionStats): Promis
   const [{ data: definitions }, { data: userMissions }] = await Promise.all([
     supabase
       .from('mission_definitions')
-      .select('*')
+      .select('id, key, title, description, icon, category, target_value, target_type, reward_credits, sort_order, is_active')
       .eq('is_active', true)
       .order('sort_order'),
     supabase
