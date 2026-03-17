@@ -66,15 +66,7 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
     queryKey: ['deck-question-counts', user?.id],
     queryFn: async () => {
       if (allDeckIds.length === 0) return new Map<string, number>();
-      const { data } = await supabase
-        .from('deck_questions')
-        .select('deck_id')
-        .in('deck_id', allDeckIds);
-      const counts = new Map<string, number>();
-      for (const row of data ?? []) {
-        counts.set(row.deck_id, (counts.get(row.deck_id) ?? 0) + 1);
-      }
-      return counts;
+      return fetchDeckQuestionCounts(allDeckIds);
     },
     enabled: !!user && allDeckIds.length > 0 && !isLoading,
     staleTime: 120_000,
