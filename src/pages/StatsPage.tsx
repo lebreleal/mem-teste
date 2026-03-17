@@ -294,12 +294,7 @@ const StatsPage = () => {
   // Cards added per day RPC
   const { data: cardsAddedData } = useQuery({
     queryKey: ['cards-added-per-day', user?.id],
-    queryFn: async () => {
-      if (!user) return [];
-      const { data, error } = await supabase.rpc('get_cards_added_per_day' as any, { p_user_id: user.id, p_days: 90 });
-      if (error) { console.warn('[cards-added] RPC error:', error.message); return []; }
-      return (data as any[]) ?? [];
-    },
+    queryFn: () => fetchCardsAddedPerDay(user!.id, 90),
     enabled: !!user,
     staleTime: 120_000,
   });
