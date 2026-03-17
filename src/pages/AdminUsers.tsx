@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { useAuth } from '@/hooks/useAuth';
 import { useAdminUsers, type AdminProfile, type UserDeck, type TokenUsageSummary, type TokenUsageEntry, type StudyDay, type PremiumGiftPlan } from '@/hooks/useAdminUsers';
-import { adminImpersonate, verifyOtp, fetchProfilePremiumExpiry } from '@/services/adminService';
+import { invokeImpersonate, verifyOtp, fetchProfilePremiumExpiry } from '@/services/adminService';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
