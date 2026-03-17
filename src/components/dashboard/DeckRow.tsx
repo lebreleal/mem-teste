@@ -514,4 +514,4 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
 
 DeckRow.displayName = 'DeckRow';
 
-export default DeckRow;
+export default React.memo(DeckRow);
