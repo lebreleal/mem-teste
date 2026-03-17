@@ -234,7 +234,7 @@ const DashboardModals = (props: DashboardModalsProps) => {
                 className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
                 onClick={() => { props.setSalaAddMenuOpen(false); setAddMenuStep('main'); props.onCreateDeckAI(); }}
               >
-                <IconSparkle className="h-5 w-5 text-muted-foreground shrink-0" />
+                <IconAIGradient className="h-5 w-5 shrink-0" />
                 <span className="text-sm font-medium text-foreground flex-1">Criar baralho com IA</span>
                 <button
                   onClick={(e) => { e.stopPropagation(); props.setAddMenuInfoType('deck-ia'); }}
