@@ -219,26 +219,11 @@ const Study = () => {
   }, [localQueue, reviewCount, cardKey, deckConfig, deckConfigs, getCardDeckConfig, undo, tutor, addSuccessfulCard, submitReview, user]);
 
   const handleRate = useCallback(async (rating: Rating) => {
-    if (!currentCard || isTransitioning || leech.leechMode) return;
+    if (!currentCard || isTransitioning) return;
     if (submittingRef.current === currentCard.id) return;
     submittingRef.current = currentCard.id;
-    const leechKey = getLeechKey(currentCard);
-    const bypassLeechInterruption = leech.leechBypassOnceRef.current.has(leechKey);
-    if (bypassLeechInterruption) leech.leechBypassOnceRef.current.delete(leechKey);
-
-    if (rating === 1) {
-      let previousFails = leech.failCountRef.current.get(leechKey) ?? 0;
-      if (previousFails === 0 && user) { try { const recoveredStreak = await fetchLeechStreak(user.id, currentCard.id, LEECH_THRESHOLD - 1); if (recoveredStreak > 0) { previousFails = recoveredStreak; leech.failCountRef.current.set(leechKey, recoveredStreak); } } catch {} }
-      const count = previousFails + 1; leech.failCountRef.current.set(leechKey, count); leech.persistLeechFailCounts();
-      if (count >= LEECH_THRESHOLD && user && !bypassLeechInterruption) {
-        executeReview(currentCard, rating);
-        const interruption = { cardId: currentCard.id, leechKey, failCount: count, interruptedAt: new Date().toISOString(), cardSnapshot: { ...currentCard } };
-        setTimeout(() => { leech.setLeechInterruption(interruption); leech.setLeechSkipConfirmOpen(false); leech.persistLeechInterruption(interruption); }, 300);
-        return;
-      }
-    } else { leech.failCountRef.current.delete(leechKey); leech.persistLeechFailCounts(); }
     executeReview(currentCard, rating);
-  }, [currentCard, isTransitioning, leech, user, executeReview]);
+  }, [currentCard, isTransitioning, executeReview]);
 
   // ─── Render: Leech Mode ───
   if (leech.leechMode) {
