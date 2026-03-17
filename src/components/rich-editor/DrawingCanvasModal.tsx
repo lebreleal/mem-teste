@@ -468,29 +468,29 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
     };
   }, [applyBrushStyle, getPos, open]);
 
+  const restoreSnapshot = useCallback((snapshot: ImageData) => {
+    const ctx = getCtx();
+    const metrics = bitmapMetricsRef.current;
+    if (!ctx || !metrics) return;
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.putImageData(snapshot, 0, 0);
+    ctx.setTransform(metrics.dpr, 0, 0, metrics.dpr, 0, 0);
+  }, []);
+
   const undo = useCallback(() => {
     if (historyIdx <= 0) return;
-    const ctx = getCtx();
-    const canvas = canvasRef.current;
-    if (!ctx || !canvas) return;
     const newIdx = historyIdx - 1;
-    ctx.putImageData(history[newIdx], 0, 0);
-    const dpr = window.devicePixelRatio || 1;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    restoreSnapshot(history[newIdx]);
     setHistoryIdx(newIdx);
-  }, [history, historyIdx]);
+  }, [history, historyIdx, restoreSnapshot]);
 
   const redo = useCallback(() => {
     if (historyIdx >= history.length - 1) return;
-    const ctx = getCtx();
-    const canvas = canvasRef.current;
-    if (!ctx || !canvas) return;
     const newIdx = historyIdx + 1;
-    ctx.putImageData(history[newIdx], 0, 0);
-    const dpr = window.devicePixelRatio || 1;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    restoreSnapshot(history[newIdx]);
     setHistoryIdx(newIdx);
-  }, [history, historyIdx]);
+  }, [history, historyIdx, restoreSnapshot]);
 
   const handleSave = () => {
     const canvas = canvasRef.current;
