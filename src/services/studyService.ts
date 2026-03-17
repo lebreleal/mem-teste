@@ -58,7 +58,6 @@ export async function fetchStudyQueue(
   let folderLimitDecks: typeof activeDecks = [];
 
   // "Study All" mode: no specific deck or folder → use ALL active decks
-  const isStudyAll = !deckId && !folderId;
 
   if (isStudyAll) {
     deckIds = activeDecks.map(d => d.id);
