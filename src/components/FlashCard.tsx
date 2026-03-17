@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
 import type { Rating } from '@/lib/fsrs';
 import { buildPreviewParams, getPreviewIntervals, getCardDifficulty, getDifficultyColor, getDifficultyBgColor } from '@/lib/flashCardUtils';
@@ -604,4 +604,4 @@ const FlashCard = ({
   );
 };
 
-export default FlashCard;
+export default React.memo(FlashCard);

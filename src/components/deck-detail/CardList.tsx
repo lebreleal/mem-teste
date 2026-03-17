@@ -45,7 +45,7 @@ const useCardTagsBatch = (cardIds: string[]) => {
 };
 
 /** Inline tag display using batch data */
-const CardTagsInline = ({ cardId, tagsMap }: { cardId: string; tagsMap: Record<string, { id: string; name: string; is_official: boolean }[]> }) => {
+const CardTagsInline = React.memo(({ cardId, tagsMap }: { cardId: string; tagsMap: Record<string, { id: string; name: string; is_official: boolean }[]> }) => {
   const tags = tagsMap[cardId];
   if (!tags || tags.length === 0) return null;
   return (
@@ -57,7 +57,8 @@ const CardTagsInline = ({ cardId, tagsMap }: { cardId: string; tagsMap: Record<s
       ))}
     </div>
   );
-};
+});
+CardTagsInline.displayName = 'CardTagsInline';
 
 const CardList = () => {
   const navigate = useNavigate();
