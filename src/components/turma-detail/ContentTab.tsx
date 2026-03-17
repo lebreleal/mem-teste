@@ -388,8 +388,8 @@ const ContentTab = () => {
 
   const currentFolders = useMemo(() => {
     return subjects
-      .filter((s: any) => (s.parent_id ?? null) === contentFolderId)
-      .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+      .filter(s => (s.parent_id ?? null) === contentFolderId)
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
   }, [subjects, contentFolderId]);
 
   // ── Count decks recursively in a folder ──
