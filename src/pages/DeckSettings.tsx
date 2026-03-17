@@ -271,9 +271,10 @@ const DeckSettings = () => {
   const handleDuplicate = () => {
     if (!deckId) return;
     duplicateDeck.mutate(deckId, {
-      onSuccess: (data: any) => {
+      onSuccess: (data: unknown) => {
         toast({ title: 'Baralho duplicado!' });
-        if (data?.id) navigate(`/decks/${data.id}`);
+        const created = data as { id?: string } | null;
+        if (created?.id) navigate(`/decks/${created.id}`);
       },
     });
   };
