@@ -87,6 +87,7 @@ const IconOcclusionHeader = () => (
 );
 
 const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSaving }: OcclusionEditorProps) => {
+  const { user } = useAuth();
   const [imageUrl, setImageUrl] = useState('');
   const [shapes, setShapes] = useState<OcclusionShape[]>([]);
   const [uploading, setUploading] = useState(false);
