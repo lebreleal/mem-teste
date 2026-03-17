@@ -991,8 +991,7 @@ const PublicDeckPreview = () => {
   const handleDeleteFile = async (fileId: string) => {
     try {
       setDeletingFileId(fileId);
-      const { error } = await supabase.from('turma_lesson_files' as any).delete().eq('id', fileId);
-      if (error) throw error;
+      await deleteLessonFile(fileId);
       queryClient.invalidateQueries({ queryKey: ['turma-deck-files'] });
       queryClient.invalidateQueries({ queryKey: ['turma-content-files'] });
       toast({ title: 'Arquivo removido' });
