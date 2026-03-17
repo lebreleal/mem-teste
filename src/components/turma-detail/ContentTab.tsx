@@ -242,7 +242,7 @@ const TopDeckCard = ({
   fileCount,
   examCount,
 }: {
-  td: any;
+  td: TurmaDeck;
   onClick: () => void;
   inCollection: boolean;
   downloads: number;
