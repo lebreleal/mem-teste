@@ -34,7 +34,7 @@ interface CardRowData {
   setSuggestCard: (card: any) => void;
 }
 
-const CardRow = ({ index, style, ...data }: RowComponentProps<CardRowData>) => {
+const CardRow = ({ index, style, ...data }: { index: number; style: React.CSSProperties; ariaAttributes: any } & CardRowData): React.ReactElement | null => {
   const { cards, isCommunityDeck, openEdit, setDeleteId, setSuggestCard } = data;
   const card = cards[index];
   if (!card) return null;
