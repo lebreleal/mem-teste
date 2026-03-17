@@ -1,9 +1,38 @@
 /**
  * Dashboard service — queries used exclusively by dashboard components.
- * Covers WeekStrip, SalaList, CommunityRecommendations, DashboardDueThemes.
+ * Covers WeekStrip, SalaList, CommunityRecommendations, DashboardDueThemes, DeckList.
  */
 
 import { supabase } from '@/integrations/supabase/client';
+
+// ─── Types ───
+
+export interface CommunityFolderMeta {
+  ownerName: string;
+  lastUpdated: string;
+  coverUrl: string | null;
+  deckCount: number;
+  cardCount: number;
+}
+
+export interface CommunityRecommendation {
+  id: string;
+  title: string;
+  deck_id: string;
+  deck_count: number;
+  card_count: number;
+  question_count: number;
+  category: string;
+  seller_id: string;
+  seller_name?: string;
+  turma_id?: string;
+}
+
+export interface ProfileCapacity {
+  daily_study_minutes: number;
+  weekly_study_minutes: Record<string, number> | null;
+  weekly_new_cards: Record<string, number> | null;
+}
 
 // ─── WeekStrip ───
 
@@ -32,7 +61,7 @@ export async function fetchDeckQuestionCounts(deckIds: string[]): Promise<Map<st
   return counts;
 }
 
-export async function fetchCommunityFolderMeta(turmaIds: string[]) {
+export async function fetchCommunityFolderMeta(turmaIds: string[]): Promise<Map<string, CommunityFolderMeta>> {
   if (turmaIds.length === 0) return new Map();
   const [turmasRes, turmaDecksRes] = await Promise.all([
     supabase.from('turmas').select('id, owner_id, cover_image_url').in('id', turmaIds),
@@ -41,25 +70,27 @@ export async function fetchCommunityFolderMeta(turmaIds: string[]) {
   const turmas = turmasRes.data;
   if (!turmas) return new Map();
 
-  const ownerIds = [...new Set((turmas as any[]).map(t => t.owner_id))];
+  const ownerIds = [...new Set(turmas.map(t => t.owner_id))];
   const deckIdsByTurma = new Map<string, string[]>();
-  for (const td of (turmaDecksRes.data ?? []) as any[]) {
+  for (const td of turmaDecksRes.data ?? []) {
     const arr = deckIdsByTurma.get(td.turma_id) ?? [];
     arr.push(td.deck_id);
     deckIdsByTurma.set(td.turma_id, arr);
   }
-  const allTDeckIds = (turmaDecksRes.data ?? []).map((td: any) => td.deck_id);
+  const allTDeckIds = (turmaDecksRes.data ?? []).map(td => td.deck_id);
 
   const [profilesRes, tDecksRes] = await Promise.all([
-    supabase.rpc('get_public_profiles' as any, { p_user_ids: ownerIds }),
+    supabase.rpc('get_public_profiles' as 'get_public_profiles', { p_user_ids: ownerIds }),
     allTDeckIds.length > 0
       ? supabase.from('decks').select('id, updated_at').in('id', allTDeckIds)
-      : Promise.resolve({ data: [] }),
+      : Promise.resolve({ data: [] as { id: string; updated_at: string }[] }),
   ]);
 
-  const profileMap = new Map((profilesRes.data as any[] ?? []).map((p: any) => [p.id, p.name]));
+  type ProfileRow = { id: string; name: string };
+  const profileMap = new Map(((profilesRes.data ?? []) as ProfileRow[]).map(p => [p.id, p.name]));
   const lastUpdatedMap = new Map<string, string>();
-  for (const d of ((tDecksRes as any).data ?? []) as any[]) {
+  const deckList = (tDecksRes as { data: { id: string; updated_at: string }[] | null }).data ?? [];
+  for (const d of deckList) {
     for (const [tid, dids] of deckIdsByTurma.entries()) {
       if (dids.includes(d.id)) {
         const cur = lastUpdatedMap.get(tid) ?? '';
@@ -68,8 +99,8 @@ export async function fetchCommunityFolderMeta(turmaIds: string[]) {
     }
   }
 
-  const result = new Map<string, { ownerName: string; lastUpdated: string; coverUrl: string | null; deckCount: number; cardCount: number }>();
-  for (const t of turmas as any[]) {
+  const result = new Map<string, CommunityFolderMeta>();
+  for (const t of turmas) {
     result.set(t.id, {
       ownerName: profileMap.get(t.owner_id) || 'Anônimo',
       lastUpdated: lastUpdatedMap.get(t.id) ?? '',
@@ -83,8 +114,8 @@ export async function fetchCommunityFolderMeta(turmaIds: string[]) {
 
 // ─── CommunityRecommendations ───
 
-export async function fetchCommunityRecommendations(userId: string | undefined) {
-  const results: any[] = [];
+export async function fetchCommunityRecommendations(userId: string | undefined): Promise<CommunityRecommendation[]> {
+  const results: CommunityRecommendation[] = [];
 
   // 1) Marketplace listings
   const { data: listings } = await supabase
@@ -103,7 +134,7 @@ export async function fetchCommunityRecommendations(userId: string | undefined) 
     let ownedSourceIds = new Set<string>();
     if (userId) {
       const { data: ownedDecks } = await supabase.from('decks').select('source_listing_id').eq('user_id', userId).not('source_listing_id', 'is', null);
-      if (ownedDecks) ownedSourceIds = new Set(ownedDecks.map((d: any) => d.source_listing_id));
+      if (ownedDecks) ownedSourceIds = new Set(ownedDecks.map(d => d.source_listing_id!));
     }
 
     for (const l of listings) {
@@ -129,18 +160,18 @@ export async function fetchCommunityRecommendations(userId: string | undefined) 
       const tdDeckIds = turmaDecks.map(td => td.deck_id);
       const { data: decks } = await supabase.from('decks').select('id, name, user_id').in('id', tdDeckIds);
       const deckMap = new Map<string, { name: string; user_id: string }>();
-      if (decks) for (const d of decks as any[]) deckMap.set(d.id, { name: d.name, user_id: d.user_id });
+      if (decks) for (const d of decks) deckMap.set(d.id, { name: d.name, user_id: d.user_id });
 
       const turmaIds = [...new Set(turmaDecks.map(td => td.turma_id))];
       const { data: turmas } = await supabase.from('turmas').select('id, name').in('id', turmaIds);
       const turmaMap = new Map<string, string>();
-      if (turmas) for (const t of turmas as any[]) turmaMap.set(t.id, t.name);
+      if (turmas) for (const t of turmas) turmaMap.set(t.id, t.name);
 
       const { data: cardCounts } = await supabase.from('cards').select('deck_id').in('deck_id', tdDeckIds);
       const countMap = new Map<string, number>();
-      if (cardCounts) for (const c of cardCounts as any[]) countMap.set(c.deck_id, (countMap.get(c.deck_id) ?? 0) + 1);
+      if (cardCounts) for (const c of cardCounts) countMap.set(c.deck_id, (countMap.get(c.deck_id) ?? 0) + 1);
 
-      const seenIds = new Set(results.map((r: any) => r.deck_id));
+      const seenIds = new Set(results.map(r => r.deck_id));
       for (const td of turmaDecks) {
         if (seenIds.has(td.deck_id)) continue;
         const deck = deckMap.get(td.deck_id);
@@ -163,7 +194,7 @@ export async function fetchCommunityRecommendations(userId: string | undefined) 
 
 export async function findConceptLinkedDeck(conceptId: string): Promise<string | null> {
   const { data: links } = await supabase
-    .from('question_concepts' as any)
+    .from('question_concepts')
     .select('question_id')
     .eq('concept_id', conceptId)
     .limit(1);
@@ -171,12 +202,12 @@ export async function findConceptLinkedDeck(conceptId: string): Promise<string |
   if (!links || links.length === 0) return null;
 
   const { data: question } = await supabase
-    .from('deck_questions' as any)
+    .from('deck_questions')
     .select('deck_id')
-    .eq('id', (links as any[])[0].question_id)
+    .eq('id', links[0].question_id)
     .maybeSingle();
 
-  return (question as any)?.deck_id ?? null;
+  return question?.deck_id ?? null;
 }
 
 // ─── DeckCard ───
@@ -187,7 +218,7 @@ export async function findTurmaDeckSource(sourceTurmaDeckId: string): Promise<{ 
     .select('turma_id, lesson_id')
     .eq('id', sourceTurmaDeckId)
     .single();
-  return data as any ?? null;
+  return (data as { turma_id: string; lesson_id: string | null } | null) ?? null;
 }
 
 // ─── DeckPreviewSheet ───
@@ -216,10 +247,11 @@ export async function fetchCardTagsBatch(cardIds: string[]): Promise<Record<stri
       .select('card_id, tags(id, name, is_official)')
       .in('card_id', batch);
     if (data) {
-      for (const row of data as any[]) {
-        if (!row.tags) continue;
+      for (const row of data) {
+        const tags = row.tags as unknown as { id: string; name: string; is_official: boolean } | null;
+        if (!tags) continue;
         if (!map[row.card_id]) map[row.card_id] = [];
-        map[row.card_id].push(row.tags);
+        map[row.card_id].push(tags);
       }
     }
   }
@@ -228,13 +260,13 @@ export async function fetchCardTagsBatch(cardIds: string[]): Promise<Record<stri
 
 // ─── DeckStatsTab ───
 
-export async function fetchProfileCapacity(userId: string) {
+export async function fetchProfileCapacity(userId: string): Promise<ProfileCapacity | null> {
   const { data } = await supabase
     .from('profiles')
     .select('daily_study_minutes, weekly_study_minutes, weekly_new_cards')
     .eq('id', userId)
     .single();
-  return data as any;
+  return data as ProfileCapacity | null;
 }
 
 // ─── SuggestCorrectionModal ───
@@ -283,7 +315,24 @@ export async function resolveDeckSource(deckId: string): Promise<string> {
   return deckId;
 }
 
-export async function insertDeckSuggestion(payload: Record<string, any>) {
-  const { error } = await supabase.from('deck_suggestions').insert(payload as any);
+export async function insertDeckSuggestion(payload: Record<string, unknown>) {
+  const { error } = await supabase.from('deck_suggestions').insert(payload as never);
   if (error) throw error;
+}
+
+// ─── Community deck updates (RPC) ───
+
+export interface CommunityDeckUpdateRow {
+  local_deck_id: string;
+  has_update: boolean;
+}
+
+export async function fetchCommunityDeckUpdates(userId: string): Promise<Set<string>> {
+  const { data, error } = await supabase.rpc('get_community_deck_updates' as 'get_community_deck_updates', { p_user_id: userId });
+  if (error) return new Set<string>();
+  const pending = new Set<string>();
+  for (const row of (data as CommunityDeckUpdateRow[] | null) ?? []) {
+    if (row.has_update) pending.add(row.local_deck_id);
+  }
+  return pending;
 }

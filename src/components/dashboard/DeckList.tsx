@@ -9,13 +9,15 @@ import {
   GraduationCap, ChevronRight, Loader2, Search, Tag as TagIcon, CheckCircle2, XCircle,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Progress } from '@/components/ui/progress';
 import DeckRow from './DeckRow';
 import { usePendingDecks, type PendingDeck } from '@/stores/usePendingDecks';
 import { useDragReorder } from '@/hooks/useDragReorder';
+import { fetchDeckQuestionCounts } from '@/services/dashboardService';
 import type { DeckWithStats } from '@/hooks/useDecks';
+
+const ERROR_DECK_NAME = '📕 Baralho de Erros';
 
 interface DeckListProps {
   isLoading: boolean;
@@ -62,7 +64,7 @@ const DeckList = ({
   const { user } = useAuth();
   const { pendingDecks } = usePendingDecks();
 
-  // Fetch question counts per deck (including sub-decks so matérias aggregate)
+  // Fetch question counts per deck via service (Lei 2A compliant)
   const allDeckIdsWithSubs = useMemo(() => {
     const ids = new Set<string>();
     const collect = (parentId: string) => {
@@ -76,28 +78,18 @@ const DeckList = ({
 
   const { data: questionCountMap } = useQuery({
     queryKey: ['deck-question-counts-list', user?.id, allDeckIdsWithSubs.join(',')],
-    queryFn: async () => {
-      if (allDeckIdsWithSubs.length === 0) return new Map<string, number>();
-      const { data } = await supabase
-        .from('deck_questions')
-        .select('deck_id')
-        .in('deck_id', allDeckIdsWithSubs);
-      const counts = new Map<string, number>();
-      for (const row of data ?? []) {
-        counts.set(row.deck_id, (counts.get(row.deck_id) ?? 0) + 1);
-      }
-      return counts;
-    },
+    queryFn: () => fetchDeckQuestionCounts(allDeckIdsWithSubs),
     enabled: !!user && allDeckIdsWithSubs.length > 0,
     staleTime: 60_000,
   });
+
   const [expandedAccordionId, setExpandedAccordionId] = useState<string | null>(null);
 
   const q = searchQuery.toLowerCase();
   // Sort: error deck first, then matérias (decks with sub-decks), then loose decks
   const sortedDecks = useMemo(() => {
-    const errorDeck = currentDecks.filter(d => d.name === '📕 Baralho de Erros');
-    const rest = currentDecks.filter(d => d.name !== '📕 Baralho de Erros');
+    const errorDeck = currentDecks.filter(d => d.name === ERROR_DECK_NAME);
+    const rest = currentDecks.filter(d => d.name !== ERROR_DECK_NAME);
     const materias = rest.filter(d => deckRowProps.getSubDecks(d.id).length > 0);
     const loose = rest.filter(d => deckRowProps.getSubDecks(d.id).length === 0);
     return [...errorDeck, ...materias, ...loose];
