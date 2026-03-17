@@ -2301,17 +2301,11 @@ const EditQuestionDialog = ({
   const handleConceptClick = async (conceptName: string) => {
     if (!user) return;
     const slug = conceptSlug(conceptName);
-    const { data } = await supabase
-      .from('global_concepts' as any)
-      .select('id, name, description')
-      .eq('user_id', user.id)
-      .eq('slug', slug)
-      .maybeSingle();
+    const data = await getGlobalConceptBySlug(user.id, slug);
     if (data) {
-      const r = data as any;
-      setEditingConcept({ name: r.name, id: r.id, description: r.description });
-      setEditName(r.name);
-      setEditDescription(r.description || '');
+      setEditingConcept({ name: data.name, id: data.id, description: data.description });
+      setEditName(data.name);
+      setEditDescription(data.description || '');
     }
   };
 
