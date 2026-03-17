@@ -1,8 +1,11 @@
 /**
- * AICreatorSheet — Manage AI prompt templates for card generation.
+ * AICreatorSheet — AI prompt templates for card generation.
+ * 
  * Two-level UI:
- *   1. Inline row (rendered inside RichEditor toolbar area) with template chips + "+ Adicionar" + gear
- *   2. Sheet (opened by gear or "+ Adicionar") for creating/editing/deleting templates
+ *   1. Inline row (inside toolbar) → template chips + "+ Adicionar" + ⚙️
+ *   2. Sheet (⚙️ or chip long-press) → edit/delete/create templates
+ *
+ * Ships with sensible pre-built templates so new users can generate immediately.
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -10,7 +13,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Trash2, ArrowLeft, Sparkles, HelpCircle, Loader2, Settings } from 'lucide-react';
+import { Trash2, Sparkles, Loader2, Settings, X } from 'lucide-react';
 
 export interface AITemplate {
   id: string;
@@ -18,12 +21,52 @@ export interface AITemplate {
   prompt: string;
 }
 
-const STORAGE_KEY = 'ai-creator-templates';
+const STORAGE_KEY = 'ai-creator-templates-v2';
+
+/* ─── Default templates (seeded on first use) ─── */
+const DEFAULT_TEMPLATES: AITemplate[] = [
+  {
+    id: 'default-definicao',
+    name: 'Definição',
+    prompt: `Com base no texto da frente, gere um flashcard assim:
+
+Frente: O próprio termo ou conceito
+Verso: Uma definição clara, direta e completa (mínimo 2 frases)
+
+Use linguagem simples. Não invente informações.`,
+  },
+  {
+    id: 'default-cloze',
+    name: 'Cloze',
+    prompt: `Com base no texto da frente, transforme em um cartão Cloze.
+
+Use o formato {{c1::resposta}} para ocultar as partes mais importantes.
+Mantenha contexto suficiente ao redor (mínimo 15 palavras no total).
+Use índices incrementais (c1, c2, c3...) se houver mais de uma lacuna.
+
+Deixe o verso vazio (o cloze já contém a resposta).`,
+  },
+  {
+    id: 'default-explicacao',
+    name: 'Explique como se eu tivesse 5 anos',
+    prompt: `Com base no texto da frente, gere um flashcard assim:
+
+Frente: Uma pergunta simples sobre o conceito
+Verso: Uma explicação extremamente simples, como se estivesse explicando para uma criança de 5 anos. Use analogias do dia a dia e linguagem coloquial.`,
+  },
+];
 
 function loadTemplates(): AITemplate[] {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-  } catch { return []; }
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) {
+      // First time → seed defaults
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_TEMPLATES));
+      return [...DEFAULT_TEMPLATES];
+    }
+    const parsed = JSON.parse(stored);
+    return parsed.length > 0 ? parsed : [...DEFAULT_TEMPLATES];
+  } catch { return [...DEFAULT_TEMPLATES]; }
 }
 
 function saveTemplates(templates: AITemplate[]) {
@@ -42,26 +85,40 @@ export const GradientSparkle = ({ className = 'h-5 w-5' }: { className?: string 
   </svg>
 );
 
-/* ─── Template Chip (gradient border) ─── */
-const TemplateChip = ({ template, onClick, selected }: { template: AITemplate; onClick: () => void; selected?: boolean }) => (
-  <button
-    onClick={onClick}
-    className={`relative rounded-full px-3 py-1 text-xs font-medium transition-all shrink-0 ${
-      selected ? 'text-foreground' : 'text-foreground/80 hover:text-foreground'
-    }`}
-  >
-    <span className="absolute inset-0 rounded-full p-[1.5px]" style={{
-      background: selected
-        ? 'linear-gradient(135deg, #00B3FF 0%, #3347FF 33%, #FF306B 66%, #FF9B23 100%)'
-        : 'hsl(var(--border))',
-    }}>
-      <span className="block h-full w-full rounded-full bg-card" />
-    </span>
-    <span className="relative z-10 truncate max-w-[180px] block">{template.name}</span>
-  </button>
-);
+/* ─── Template Chip ─── */
+const TemplateChip = ({ template, onClick, selected, onLongPress }: {
+  template: AITemplate; onClick: () => void; selected?: boolean; onLongPress?: () => void;
+}) => {
+  const [pressTimer, setPressTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
 
-/* ─── Inline Row: template chips + add + gear ─── */
+  return (
+    <button
+      onClick={onClick}
+      onPointerDown={() => {
+        if (onLongPress) {
+          const timer = setTimeout(() => onLongPress(), 500);
+          setPressTimer(timer);
+        }
+      }}
+      onPointerUp={() => { if (pressTimer) { clearTimeout(pressTimer); setPressTimer(null); } }}
+      onPointerLeave={() => { if (pressTimer) { clearTimeout(pressTimer); setPressTimer(null); } }}
+      className={`relative rounded-full px-3 py-1 text-xs font-medium transition-all shrink-0 ${
+        selected ? 'text-foreground' : 'text-foreground/80 hover:text-foreground'
+      }`}
+    >
+      <span className="absolute inset-0 rounded-full p-[1.5px]" style={{
+        background: selected
+          ? 'linear-gradient(135deg, #00B3FF 0%, #3347FF 33%, #FF306B 66%, #FF9B23 100%)'
+          : 'hsl(var(--border))',
+      }}>
+        <span className="block h-full w-full rounded-full bg-card" />
+      </span>
+      <span className="relative z-10 truncate max-w-[180px] block">{template.name}</span>
+    </button>
+  );
+};
+
+/* ─── Inline Row ─── */
 interface InlineProps {
   onGenerate: (templatePrompt: string) => void;
   isGenerating?: boolean;
@@ -71,33 +128,18 @@ export function AICreatorInlineRow({ onGenerate, isGenerating = false }: InlineP
   const [templates, setTemplates] = useState<AITemplate[]>(loadTemplates);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [sheetMode, setSheetMode] = useState<'add' | 'detail'>('add');
+  const [sheetMode, setSheetMode] = useState<'add' | 'edit'>('add');
   const [editingTemplate, setEditingTemplate] = useState<AITemplate | null>(null);
 
-  // Reload templates when sheet closes
   useEffect(() => { if (!sheetOpen) setTemplates(loadTemplates()); }, [sheetOpen]);
 
   const handleChipClick = useCallback((tpl: AITemplate) => {
-    if (selectedId === tpl.id) {
-      // Already selected → generate
-      onGenerate(tpl.prompt);
-    } else {
-      setSelectedId(tpl.id);
-    }
-  }, [selectedId, onGenerate]);
+    setSelectedId(prev => prev === tpl.id ? null : tpl.id);
+  }, []);
 
-  const handleGearClick = () => {
-    if (selectedId) {
-      const tpl = templates.find(t => t.id === selectedId);
-      if (tpl) {
-        setEditingTemplate(tpl);
-        setSheetMode('detail');
-        setSheetOpen(true);
-        return;
-      }
-    }
-    // No selection → open add
-    setSheetMode('add');
+  const openEdit = (tpl: AITemplate) => {
+    setEditingTemplate(tpl);
+    setSheetMode('edit');
     setSheetOpen(true);
   };
 
@@ -110,6 +152,7 @@ export function AICreatorInlineRow({ onGenerate, isGenerating = false }: InlineP
             template={tpl}
             selected={selectedId === tpl.id}
             onClick={() => handleChipClick(tpl)}
+            onLongPress={() => openEdit(tpl)}
           />
         ))}
         <button
@@ -119,7 +162,10 @@ export function AICreatorInlineRow({ onGenerate, isGenerating = false }: InlineP
           + Adicionar
         </button>
         <button
-          onClick={handleGearClick}
+          onClick={() => {
+            const tpl = selectedId ? templates.find(t => t.id === selectedId) : null;
+            if (tpl) { openEdit(tpl); } else { setSheetMode('add'); setEditingTemplate(null); setSheetOpen(true); }
+          }}
           className="shrink-0 ml-auto p-1 text-muted-foreground hover:text-foreground transition-colors"
           title="Configurações"
         >
@@ -127,14 +173,14 @@ export function AICreatorInlineRow({ onGenerate, isGenerating = false }: InlineP
         </button>
       </div>
 
-      {/* Generate button when a template is selected */}
+      {/* Generate bar */}
       {selectedId && (
         <div className="flex items-center gap-2 px-2 pb-1.5">
           <Button
             onClick={() => { const tpl = templates.find(t => t.id === selectedId); if (tpl) onGenerate(tpl.prompt); }}
             disabled={isGenerating}
             size="sm"
-            className="flex-1 h-8 rounded-lg text-xs font-semibold gap-1.5"
+            className="flex-1 h-8 rounded-lg text-xs font-semibold gap-1.5 text-white border-0"
             style={{ background: 'linear-gradient(135deg, #00B3FF 0%, #3347FF 33%, #FF306B 66%, #FF9B23 100%)' }}
           >
             {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
@@ -155,30 +201,24 @@ export function AICreatorInlineRow({ onGenerate, isGenerating = false }: InlineP
   );
 }
 
-/* ─── Sheet Modal for Add/Edit/Delete ─── */
-
-type SheetMode = 'add' | 'detail';
+/* ─── Sheet Modal ─── */
 
 interface SheetProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  mode: SheetMode;
+  mode: 'add' | 'edit';
   editingTemplate: AITemplate | null;
   onGenerate: (prompt: string) => void;
   isGenerating?: boolean;
 }
 
 function AICreatorSheetModal({ open, onOpenChange, mode, editingTemplate, onGenerate, isGenerating = false }: SheetProps) {
-  const [templates, setTemplates] = useState<AITemplate[]>(loadTemplates);
-  const [view, setView] = useState<SheetMode>(mode);
   const [name, setName] = useState('');
   const [prompt, setPrompt] = useState('');
 
-  useEffect(() => { setTemplates(loadTemplates()); }, [open]);
   useEffect(() => {
     if (open) {
-      setView(mode);
-      if (mode === 'detail' && editingTemplate) {
+      if (mode === 'edit' && editingTemplate) {
         setName(editingTemplate.name);
         setPrompt(editingTemplate.prompt);
       } else {
@@ -190,129 +230,98 @@ function AICreatorSheetModal({ open, onOpenChange, mode, editingTemplate, onGene
 
   const handleSave = () => {
     if (!name.trim() || !prompt.trim()) return;
-    if (view === 'detail' && editingTemplate) {
-      // Update existing
+    const templates = loadTemplates();
+    if (mode === 'edit' && editingTemplate) {
       const updated = templates.map(t => t.id === editingTemplate.id ? { ...t, name: name.trim(), prompt: prompt.trim() } : t);
       saveTemplates(updated);
-      setTemplates(updated);
     } else {
-      // Add new
-      const tpl: AITemplate = { id: crypto.randomUUID(), name: name.trim(), prompt: prompt.trim() };
-      const updated = [...templates, tpl];
-      saveTemplates(updated);
-      setTemplates(updated);
+      saveTemplates([...templates, { id: crypto.randomUUID(), name: name.trim(), prompt: prompt.trim() }]);
     }
     onOpenChange(false);
   };
 
   const handleDelete = () => {
     if (!editingTemplate) return;
-    const updated = templates.filter(t => t.id !== editingTemplate.id);
-    saveTemplates(updated);
-    setTemplates(updated);
-    onOpenChange(false);
-  };
-
-  const handleGenerate = () => {
-    if (editingTemplate) onGenerate(editingTemplate.prompt);
+    saveTemplates(loadTemplates().filter(t => t.id !== editingTemplate.id));
     onOpenChange(false);
   };
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">
-        <SheetHeader className="pb-3">
-          <SheetTitle className="flex items-center justify-center gap-2">
+        <SheetHeader className="pb-2">
+          <SheetTitle className="flex items-center justify-center gap-2 text-base">
             <GradientSparkle className="h-5 w-5" />
-            <span>Criador de IA</span>
+            {mode === 'edit' ? 'Editar modelo' : 'Novo modelo'}
           </SheetTitle>
         </SheetHeader>
 
-        <div className="space-y-4 pb-4">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            {view === 'detail' ? 'Detalhes do comando' : 'Novo comando'}
-          </p>
+        <div className="space-y-3 pb-4">
+          {/* Name */}
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Nome curto</label>
+            <Input
+              placeholder="ex: Definição, Cloze Médico, Vocabulário..."
+              value={name}
+              onChange={e => setName(e.target.value)}
+              className="bg-muted/30 text-sm"
+            />
+          </div>
 
-          <Input
-            placeholder="Nome do modelo (ex: Palavra/Definição)"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            className="bg-muted/30"
-          />
+          {/* Prompt */}
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">
+              O que a IA deve fazer?
+            </label>
+            <Textarea
+              placeholder={`Escreva aqui as instruções para a IA. Exemplo:\n\n"Pegue o texto da frente e gere:\n\nFrente → O termo principal\nVerso → Definição + 2 exemplos práticos"\n\nQuanto mais claro, melhor o resultado!`}
+              value={prompt}
+              onChange={e => setPrompt(e.target.value)}
+              rows={7}
+              className="bg-muted/20 border-border text-sm leading-relaxed"
+            />
+            <p className="text-[10px] text-muted-foreground/60 mt-1">
+              💡 Dica: escreva na frente do cartão o assunto, selecione um modelo e clique Gerar.
+            </p>
+          </div>
 
-          <Textarea
-            placeholder={`ex.\nUse a palavra da frente e gere:\n\nFrente\n— A própria palavra\n\nVerso\n— Tradução para o espanhol\n— 2 exemplos de uso`}
-            value={prompt}
-            onChange={e => setPrompt(e.target.value)}
-            rows={8}
-            className="bg-primary/5 border-primary/20 text-sm"
-          />
-
-          {view === 'detail' && editingTemplate && (
-            <div className="flex items-center justify-end">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-xs text-muted-foreground"
-                onClick={() => {
-                  // "Melhorar comando" — placeholder for future AI improvement
-                  // For now just focus the textarea
-                }}
-              >
-                Melhorar comando
-              </Button>
-            </div>
-          )}
-
-          <div className="flex gap-2">
-            {view === 'detail' && editingTemplate ? (
+          {/* Actions */}
+          <div className="flex gap-2 pt-1">
+            {mode === 'edit' ? (
               <>
                 <Button
-                  onClick={handleGenerate}
-                  disabled={isGenerating}
-                  className="flex-1 h-12 rounded-xl text-base font-semibold gap-2"
-                  style={{ background: 'linear-gradient(135deg, #00B3FF 0%, #3347FF 33%, #FF306B 66%, #FF9B23 100%)' }}
+                  onClick={handleSave}
+                  disabled={!name.trim() || !prompt.trim()}
+                  className="flex-1 h-11 rounded-xl text-sm font-semibold"
                 >
-                  {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                  {isGenerating ? 'Gerando...' : 'Gerar'}
+                  Salvar alterações
                 </Button>
                 <Button
                   variant="outline"
                   size="icon"
-                  className="h-12 w-12 rounded-xl border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive shrink-0"
+                  className="h-11 w-11 rounded-xl border-destructive/30 text-destructive hover:bg-destructive/10 shrink-0"
                   onClick={handleDelete}
                 >
-                  <Trash2 className="h-5 w-5" />
+                  <Trash2 className="h-4 w-4" />
                 </Button>
               </>
             ) : (
               <Button
                 onClick={handleSave}
                 disabled={!name.trim() || !prompt.trim()}
-                className="w-full h-12 rounded-xl text-base font-semibold"
+                className="w-full h-11 rounded-xl text-sm font-semibold"
               >
-                Salvar
+                Salvar modelo
               </Button>
             )}
           </div>
-
-          {view === 'detail' && editingTemplate && (
-            <Button
-              variant="ghost"
-              onClick={handleSave}
-              disabled={!name.trim() || !prompt.trim()}
-              className="w-full text-sm text-muted-foreground"
-            >
-              Salvar alterações
-            </Button>
-          )}
         </div>
       </SheetContent>
     </Sheet>
   );
 }
 
-/* ─── Legacy default export (kept for backward compat) ─── */
+/* ─── Legacy default export ─── */
 export default function AICreatorSheet({ open, onOpenChange, onGenerate, isGenerating = false }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
