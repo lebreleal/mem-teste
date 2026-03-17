@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Compass, EyeOff, LogOut, MoreVertical, Play, RefreshCw, Share2, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
