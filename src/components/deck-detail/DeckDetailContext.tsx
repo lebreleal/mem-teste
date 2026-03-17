@@ -215,6 +215,8 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const createExam = { mutateAsync: async () => ({ id: '' }), isPending: false } as any;
   const addNotification = (_n: any) => {};
   const updateNotification = (_id: string, _update: any) => {};
+  const { energy, spendEnergy } = useEnergy();
+  const { model, setModel, getCost } = useAIModel();
 
   // ─── State ─────────────────────────────
   const [examTitle, setExamTitle] = useState('');
