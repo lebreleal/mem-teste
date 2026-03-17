@@ -52,6 +52,30 @@ export async function moveFolder(id: string, parentId: string | null) {
   if (error) throw error;
 }
 
+/** Clear turma link from a folder (before leaving a sala). */
+export async function clearFolderTurmaLink(folderId: string) {
+  const { error } = await supabase
+    .from('folders')
+    .update({ source_turma_id: null, source_turma_subject_id: null } as any)
+    .eq('id', folderId);
+  if (error) throw error;
+}
+
+/** Upload a sala cover image and update the folder's image_url. */
+export async function uploadFolderImage(folderId: string, file: File): Promise<string> {
+  const ext = file.name.split('.').pop() || 'jpg';
+  const filePath = `sala-images/${folderId}.${ext}`;
+  const { error: uploadErr } = await supabase.storage
+    .from('deck-covers')
+    .upload(filePath, file, { upsert: true });
+  if (uploadErr) throw uploadErr;
+  const { data: urlData } = supabase.storage.from('deck-covers').getPublicUrl(filePath);
+  const imageUrl = urlData.publicUrl + '?t=' + Date.now();
+  const { error } = await supabase.from('folders').update({ image_url: imageUrl } as any).eq('id', folderId);
+  if (error) throw error;
+  return imageUrl;
+}
+
 /** Batch-update sort_order for a list of folder IDs. */
 export async function reorderFolders(orderedIds: string[]) {
   for (let i = 0; i < orderedIds.length; i++) {

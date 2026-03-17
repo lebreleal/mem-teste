@@ -193,6 +193,35 @@ export async function duplicateDeck(userId: string, id: string) {
   return newDeck;
 }
 
+/** Create an independent copy of a community deck (detach). */
+export async function detachCommunityDeck(userId: string, sourceDeckId: string) {
+  const { data: originalDeck } = await supabase.from('decks').select('name').eq('id', sourceDeckId).single();
+  if (!originalDeck) throw new Error('Deck not found');
+
+  const { data: newDeck, error } = await supabase
+    .from('decks')
+    .insert({ name: (originalDeck as any).name, user_id: userId } as any)
+    .select()
+    .single();
+  if (error || !newDeck) throw error || new Error('Failed to create deck');
+
+  const { data: cards } = await supabase
+    .from('cards')
+    .select('front_content, back_content, card_type')
+    .eq('deck_id', sourceDeckId);
+  if (cards && cards.length > 0) {
+    await supabase.from('cards').insert(
+      cards.map((c: any) => ({
+        deck_id: (newDeck as any).id,
+        front_content: c.front_content,
+        back_content: c.back_content,
+        card_type: c.card_type ?? 'basic',
+      })) as any,
+    );
+  }
+  return newDeck;
+}
+
 /** Batch-update sort_order for a list of deck IDs. */
 export async function reorderDecks(orderedIds: string[]) {
   const { error } = await supabase.rpc('batch_reorder_decks', { p_deck_ids: orderedIds });
