@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { IconInfo } from '@/components/icons';
+import { IconInfo, IconDeck, IconFolder, IconImport, IconSparkle } from '@/components/icons';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -44,6 +44,9 @@ interface DashboardModalsProps {
   onCreateDeckAI: () => void;
   onCreateMateria: () => void;
   onImportCards: () => void;
+
+  // Whether we're inside a matéria (pasta) — hides "Criar pasta" option
+  hideCreatePasta?: boolean;
 }
 
 const DashboardModals = (props: DashboardModalsProps) => {
@@ -56,7 +59,7 @@ const DashboardModals = (props: DashboardModalsProps) => {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>
-               {props.addMenuInfoType === 'materia' && 'O que é uma Matéria?'}
+               {props.addMenuInfoType === 'materia' && 'O que é uma Pasta?'}
                {props.addMenuInfoType === 'deck' && 'O que é um Baralho?'}
                {props.addMenuInfoType === 'deck-manual' && 'Criar baralho manualmente'}
                {props.addMenuInfoType === 'deck-ia' && 'Criar baralho com IA'}
@@ -64,15 +67,28 @@ const DashboardModals = (props: DashboardModalsProps) => {
             <DialogDescription className="text-sm text-muted-foreground leading-relaxed pt-2 space-y-2">
               {props.addMenuInfoType === 'materia' && (
                 <>
-                  <p>Uma <strong>Matéria</strong> é um agrupador que organiza seus decks por tema ou disciplina.</p>
-                  <p>Por exemplo, dentro da matéria <em>"Farmacologia"</em> você pode ter os decks <em>"Antibióticos"</em>, <em>"Anti-inflamatórios"</em>, etc.</p>
-                  <p>Ao estudar, você pode revisar todos os decks de uma matéria de uma só vez.</p>
+                  <p>
+                    A <span className="inline-flex items-center gap-0.5 font-semibold"><IconFolder className="inline h-3.5 w-3.5" /> Pasta</span> serve para organizar seus baralhos por temas maiores.
+                  </p>
+                  <p>
+                    Por exemplo, dentro da <span className="inline-flex items-center gap-0.5"><IconFolder className="inline h-3 w-3" /> Pasta</span> <em>"Clínica Médica"</em>, você guarda os baralhos de <em>"Cardiologia"</em> ou <em>"Nefrologia"</em>.
+                  </p>
+                  <p>
+                    Você também pode estudar todos os baralhos dentro da pasta com um clique. Se preferir, nossa <span className="inline-flex items-center gap-0.5"><IconSparkle className="inline h-3 w-3" /> IA</span> lê seu material de estudo e cria esses baralhos direto dentro da <span className="inline-flex items-center gap-0.5"><IconFolder className="inline h-3 w-3" /> pasta</span> para você não ter trabalho nenhum.
+                  </p>
                 </>
               )}
                {props.addMenuInfoType === 'deck' && (
                  <>
-                   <p>Um <strong>Baralho</strong> é um conjunto de flashcards sobre um assunto específico.</p>
-                   <p>Você pode criar baralhos manualmente ou usar a IA para gerar cartões automaticamente.</p>
+                   <p>
+                     O baralho organiza seus <span className="inline-flex items-center gap-0.5"><IconDeck className="inline h-3.5 w-3.5" /> cartões</span> por tema. No <span className="inline-flex items-center gap-0.5"><IconDeck className="inline h-3.5 w-3.5" /> baralho</span> de <em>"Antibióticos"</em>, por exemplo, ficam guardados todos os seus cartões sobre esse assunto.
+                   </p>
+                   <p>
+                     Lá dentro, cada cartão tem <strong>Frente</strong> e <strong>Verso</strong>.
+                   </p>
+                   <p>
+                     Você pode criar os seus manualmente ou deixar que nossa <span className="inline-flex items-center gap-0.5"><IconSparkle className="inline h-3 w-3" /> IA</span> gere tudo no automático usando seu material de estudo.
+                   </p>
                  </>
                )}
                {props.addMenuInfoType === 'deck-manual' && (
@@ -83,7 +99,7 @@ const DashboardModals = (props: DashboardModalsProps) => {
                )}
               {props.addMenuInfoType === 'deck-ia' && (
                 <>
-                  <p>Envie seu material de estudo (PDF, imagem ou texto) e a inteligência artificial gera os cartões automaticamente.</p>
+                  <p>Envie seu material de estudo (PDF, imagem ou texto) e a <span className="inline-flex items-center gap-0.5"><IconSparkle className="inline h-3 w-3" /> IA</span> gera os cartões automaticamente.</p>
                   <p>Ideal para transformar anotações, slides ou apostilas em flashcards rapidamente.</p>
                 </>
               )}
@@ -123,9 +139,6 @@ const DashboardModals = (props: DashboardModalsProps) => {
         onSave={props.onSalaImageCropped}
       />
 
-
-
-
       {/* Leave Sala Confirmation */}
       <AlertDialog open={!!props.leaveSalaConfirm} onOpenChange={(open) => { if (!open) props.setLeaveSalaConfirm(null); }}>
         <AlertDialogContent>
@@ -159,37 +172,42 @@ const DashboardModals = (props: DashboardModalsProps) => {
           {addMenuStep === 'main' && (
             <div className="flex flex-col gap-1">
               <button
-                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
                 onClick={() => setAddMenuStep('create-deck')}
               >
-                <span className="text-sm font-medium text-foreground">Criar baralho</span>
+                <IconDeck className="h-5 w-5 text-muted-foreground shrink-0" />
+                <span className="text-sm font-medium text-foreground flex-1">Criar baralho</span>
                 <button
                   onClick={(e) => { e.stopPropagation(); props.setAddMenuInfoType('deck'); }}
                   className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
                 >
                   <IconInfo className="h-3.5 w-3.5" />
                 </button>
-                <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 ml-auto shrink-0" />
+                <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 shrink-0" />
               </button>
-              <button
-                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
-                onClick={() => { props.setSalaAddMenuOpen(false); setAddMenuStep('main'); props.onCreateMateria(); }}
-              >
-                <span className="text-sm font-medium text-foreground">Criar matéria</span>
+              {!props.hideCreatePasta && (
                 <button
-                  onClick={(e) => { e.stopPropagation(); props.setAddMenuInfoType('materia'); }}
-                  className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                  className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
+                  onClick={() => { props.setSalaAddMenuOpen(false); setAddMenuStep('main'); props.onCreateMateria(); }}
                 >
-                  <IconInfo className="h-3.5 w-3.5" />
+                  <IconFolder className="h-5 w-5 text-muted-foreground shrink-0" />
+                  <span className="text-sm font-medium text-foreground flex-1">Criar pasta</span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); props.setAddMenuInfoType('materia'); }}
+                    className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                  >
+                    <IconInfo className="h-3.5 w-3.5" />
+                  </button>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 shrink-0" />
                 </button>
-                <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 ml-auto shrink-0" />
-              </button>
+              )}
               <button
-                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
                 onClick={() => { props.setSalaAddMenuOpen(false); setAddMenuStep('main'); props.onImportCards(); }}
               >
-                <span className="text-sm font-medium text-foreground">Importar cartões</span>
-                <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 ml-auto shrink-0" />
+                <IconImport className="h-5 w-5 text-muted-foreground shrink-0" />
+                <span className="text-sm font-medium text-foreground flex-1">Importar cartões</span>
+                <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 shrink-0" />
               </button>
             </div>
           )}
@@ -197,30 +215,32 @@ const DashboardModals = (props: DashboardModalsProps) => {
           {addMenuStep === 'create-deck' && (
             <div className="flex flex-col gap-1">
               <button
-                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
                 onClick={() => { props.setSalaAddMenuOpen(false); setAddMenuStep('main'); props.onCreateDeckManual(); }}
               >
-                <span className="text-sm font-medium text-foreground">Criar baralho manualmente</span>
+                <IconDeck className="h-5 w-5 text-muted-foreground shrink-0" />
+                <span className="text-sm font-medium text-foreground flex-1">Criar baralho manualmente</span>
                 <button
                   onClick={(e) => { e.stopPropagation(); props.setAddMenuInfoType('deck-manual'); }}
                   className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
                 >
                   <IconInfo className="h-3.5 w-3.5" />
                 </button>
-                <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 ml-auto shrink-0" />
+                <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 shrink-0" />
               </button>
               <button
-                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
                 onClick={() => { props.setSalaAddMenuOpen(false); setAddMenuStep('main'); props.onCreateDeckAI(); }}
               >
-                <span className="text-sm font-medium text-foreground">Criar baralho com IA</span>
+                <IconSparkle className="h-5 w-5 text-muted-foreground shrink-0" />
+                <span className="text-sm font-medium text-foreground flex-1">Criar baralho com IA</span>
                 <button
                   onClick={(e) => { e.stopPropagation(); props.setAddMenuInfoType('deck-ia'); }}
                   className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
                 >
                   <IconInfo className="h-3.5 w-3.5" />
                 </button>
-                <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 ml-auto shrink-0" />
+                <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 shrink-0" />
               </button>
               <Button variant="ghost" size="sm" className="mt-2 self-start text-xs gap-1" onClick={() => setAddMenuStep('main')}>
                 <ChevronLeft className="h-3.5 w-3.5" /> Voltar
