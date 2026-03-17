@@ -7,6 +7,8 @@ import Link from '@tiptap/extension-link';
 import Underline from '@tiptap/extension-underline';
 import Color from '@tiptap/extension-color';
 import { TextStyle } from '@tiptap/extension-text-style';
+// @ts-ignore - types may lag behind install
+import Placeholder from '@tiptap/extension-placeholder';
 import { Mark, mergeAttributes } from '@tiptap/core';
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough, Heading2,
@@ -143,6 +145,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       TextStyle,
       Color,
       ClozeMark,
+      Placeholder.configure({ placeholder: placeholder || '' }),
       Link.configure({ openOnClick: false, HTMLAttributes: { class: 'text-primary underline' } }),
     ],
     content: clozeToEditor(content),
@@ -544,7 +547,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onRemoveAttachment?.(att.url); }}
-                  className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-border bg-muted text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                  className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-border bg-muted text-muted-foreground/50 transition-colors hover:text-destructive"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-3 w-3"><path d="M18 6L6 18M6 6l12 12" /></svg>
                 </button>
