@@ -244,7 +244,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
     setDragOffset(null);
     if (tool === 'rect') {
       if (drawing && currentRect && currentRect.w > 5 && currentRect.h > 5) {
-        const newShape: OcclusionShape = { id: crypto.randomUUID(), type: 'rect', ...currentRect };
+        const newShape: OcclusionShape = { id: crypto.randomUUID(), type: 'rect', ...currentRect, color: shapeColor };
         setShapes(prev => [...prev, newShape]);
         setSelectedId(newShape.id);
       }
