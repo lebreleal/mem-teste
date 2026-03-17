@@ -253,7 +253,7 @@ const SalaHero = ({
                     }}
                     className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    <Pencil className="h-3.5 w-3.5" />
+                    <IconEdit className="h-3.5 w-3.5" />
                   </button>
                 )}
               </div>
