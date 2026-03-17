@@ -468,7 +468,7 @@ export async function submitCardReview(
       user_id: userId, card_id: card.id, rating,
       stability: result.stability, difficulty: result.difficulty,
       scheduled_date: result.scheduled_date, state: card.state, elapsed_ms: cappedMs,
-    } as any),
+    } as Record<string, unknown>),
   ]);
   if (updateResult.error) throw updateResult.error;
   if (logResult.error) throw logResult.error;
