@@ -55,7 +55,7 @@ export async function fetchCards(deckId: string) {
   return paginatedFetch((from) =>
     supabase
       .from('cards')
-      .select('*')
+      .select(CARD_COLS)
       .eq('deck_id', deckId)
       .order('created_at', { ascending: false })
       .range(from, from + PAGE_SIZE - 1)
