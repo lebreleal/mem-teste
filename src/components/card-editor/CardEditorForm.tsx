@@ -215,15 +215,13 @@ const ReversedCardsToggle = () => {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5"><path d="M18 6L6 18M6 6l12 12" /></svg>
             </button>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl border border-border bg-background p-3 flex flex-col items-center gap-2">
-              <img src={cartaoInvertidoResposta} alt="Cartão normal" className="w-full max-w-[120px] h-auto rounded-lg object-contain" />
+          <div className="flex items-center justify-center gap-3">
+            <div className="rounded-xl border border-border bg-background p-2 flex-1 flex items-center justify-center">
+              <img src={cartaoInvertidoResposta} alt="Cartão normal" className="h-28 w-auto rounded-lg object-contain" />
             </div>
-            <div className="flex items-center justify-center text-lg text-muted-foreground font-bold select-none">+</div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl border border-border bg-background p-3 flex flex-col items-center gap-2">
-              <img src={cartaoInvertidoPergunta} alt="Cartão invertido" className="w-full max-w-[120px] h-auto rounded-lg object-contain" />
+            <span className="text-xl text-primary font-bold select-none shrink-0">+</span>
+            <div className="rounded-xl border border-border bg-background p-2 flex-1 flex items-center justify-center">
+              <img src={cartaoInvertidoPergunta} alt="Cartão invertido" className="h-28 w-auto rounded-lg object-contain" />
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
