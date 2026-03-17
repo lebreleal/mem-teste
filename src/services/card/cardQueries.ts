@@ -99,7 +99,7 @@ export async function fetchAggregatedCardsPage(deckIds: string[], limit: number,
     const batch = deckIds.slice(i, i + IN_BATCH);
     const needed = offset + limit;
     const { data, error } = await withRetry(async () => {
-      const res = await supabase.from('cards').select('*').in('deck_id', batch).order('created_at', { ascending: false }).range(0, needed - 1);
+      const res = await supabase.from('cards').select(CARD_COLS).in('deck_id', batch).order('created_at', { ascending: false }).range(0, needed - 1);
       return res as { data: CardRow[] | null; error: any };
     });
     if (error) throw error;
