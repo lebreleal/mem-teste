@@ -305,7 +305,7 @@ const DeckSettings = () => {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) throw new Error('Not authenticated');
 
-      const { data: originalDeck } = await supabase.from('decks').select('*').eq('id', deckId).single();
+      const { data: originalDeck } = await supabase.from('decks').select('name').eq('id', deckId).single();
       if (!originalDeck) throw new Error('Deck not found');
 
       const { data: newDeck, error } = await supabase.from('decks').insert({
