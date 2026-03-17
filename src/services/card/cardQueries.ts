@@ -8,6 +8,8 @@ import type { CardRow } from '@/types/deck';
 
 const CARD_COLS = 'id, deck_id, front_content, back_content, card_type, state, stability, difficulty, scheduled_date, learning_step, last_reviewed_at, origin_deck_id, created_at, updated_at' as const;
 
+const CARD_EXPORT_COLS = 'front_content, back_content, card_type' as const;
+
 const PAGE_SIZE = 1000;
 const IN_BATCH = 300;
 
@@ -218,4 +220,15 @@ export async function fetchAggregatedStats(deckIds: string[]) {
     else if (c.state === 2 && new Date(c.scheduled_date) <= now) totals.review_count++;
   }
   return totals;
+}
+
+/** Fetch card contents for export (CSV / Anki). */
+export async function fetchCardsForExport(deckId: string) {
+  const { data, error } = await supabase
+    .from('cards')
+    .select(CARD_EXPORT_COLS)
+    .eq('deck_id', deckId)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return data ?? [];
 }

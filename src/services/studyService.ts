@@ -492,3 +492,13 @@ export async function fetchStudyStats(userId: string, _cachedProfile?: any): Pro
     todayMinutes: result.today_minutes ?? 0, freezesAvailable: result.freezes_available ?? 0,
   };
 }
+
+/** Fetch deck_ids from all study plans of a user. */
+export async function fetchStudyPlanDeckIds(userId: string): Promise<Array<{ deck_ids: string[] | null }>> {
+  const { data, error } = await supabase
+    .from('study_plans')
+    .select('deck_ids')
+    .eq('user_id', userId);
+  if (error) throw error;
+  return (data ?? []) as Array<{ deck_ids: string[] | null }>;
+}
