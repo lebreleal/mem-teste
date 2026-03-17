@@ -677,19 +677,18 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
           />
         )}
       </Suspense>
-      <Suspense fallback={null}>
-        {aiCreatorOpen && onAICreate && (
-          <AICreatorSheet
-            open={aiCreatorOpen}
-            onOpenChange={setAiCreatorOpen}
+      {/* AI Creator Inline Row — shown when sparkle is toggled */}
+      {aiCreatorOpen && onAICreate && (
+        <Suspense fallback={null}>
+          <AICreatorInlineRow
             onGenerate={(prompt) => {
               onAICreate(prompt);
               setAiCreatorOpen(false);
             }}
             isGenerating={isAICreating}
           />
-        )}
-      </Suspense>
+        </Suspense>
+      )}
     </div>
   );
 };
