@@ -11,7 +11,8 @@ import {
   useTurmaDecks, useTurmaHierarchyMutations,
 } from '@/hooks/useTurmaHierarchy';
 import { useDecks } from '@/hooks/useDecks';
-import { useFolders } from '@/hooks/useFolders';
+import { useFolders, type FolderActions } from '@/hooks/useFolders';
+import { archiveFolder } from '@/services/folderService';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
