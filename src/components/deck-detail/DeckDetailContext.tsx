@@ -22,9 +22,10 @@ import { useAIModel } from '@/hooks/useAIModel';
 import { useExamNotifications } from '@/hooks/useExamNotifications';
 import * as cardService from '@/services/cardService';
 import * as deckService from '@/services/deckService';
-import type { CardRow } from '@/types/deck';
+import type { CardRow, DeckWithStats } from '@/types/deck';
+import type { Tables } from '@/integrations/supabase/types';
 import { findRootAncestorId } from '@/lib/studyUtils';
-import { useDeckDetailHandlers } from './DeckDetailHandlers';
+import { useDeckDetailHandlers, type OcclusionRect } from './DeckDetailHandlers';
 
 // ─── Context value shape ────────────────────────────────
 interface DeckDetailContextValue {
