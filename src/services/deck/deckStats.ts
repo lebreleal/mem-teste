@@ -116,11 +116,11 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
       if (listingIds.length === 0) return map;
       const { data: listings } = await supabase.from('marketplace_listings').select('id, seller_id').in('id', listingIds);
       if (!listings || listings.length === 0) return map;
-      const sellerIds = [...new Set(listings.map((l: any) => l.seller_id))];
+      const sellerIds = [...new Set(listings.map((l: ListingRow) => l.seller_id))];
       const { data: profiles } = await supabase.from('profiles').select('id, name').in('id', sellerIds);
       const profileMap = new Map<string, string>();
-      if (profiles) for (const p of profiles as any[]) profileMap.set(p.id, p.name);
-      for (const l of listings as any[]) map.set(l.id, profileMap.get(l.seller_id) || null);
+      if (profiles) for (const p of profiles as ProfileRow[]) profileMap.set(p.id, p.name);
+      for (const l of listings as ListingRow[]) map.set(l.id, profileMap.get(l.seller_id) || null);
       return map;
     })(),
     // 2. Author via turma_decks + source deck updated_at
