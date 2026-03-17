@@ -15,7 +15,8 @@ import { calculateRealStudyTime, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils'
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchLinkedDeckSource, fetchPendingSuggestions, countPendingSuggestions, countDeckQuestionsRecursive, fetchQuestionCountsByDeck } from '@/services/deck/deckCrud';
+import { fetchFolderImageUrl } from '@/services/folderService';
 import { toast } from '@/hooks/use-toast';
 
 const SuggestCorrectionModal = lazy(() => import('@/components/SuggestCorrectionModal'));
@@ -35,31 +36,8 @@ function checkIsLinkedDeck(deck: any, decks: any[]): boolean {
   return false;
 }
 
-/** Resolve source deck ID from a linked deck — single unified query */
-async function resolveSourceDeckId(deck: any): Promise<string | null> {
-  const sourceTurmaDeckId = deck?.source_turma_deck_id;
-  const sourceListingId = deck?.source_listing_id;
+// resolveSourceDeckId removed — now handled by fetchLinkedDeckSource in deckCrud service
 
-  if (sourceTurmaDeckId) {
-    const { data: td } = await supabase.from('turma_decks').select('deck_id').eq('id', sourceTurmaDeckId).maybeSingle();
-    if (td?.deck_id) return td.deck_id;
-  }
-
-  if (sourceListingId) {
-    const { data: listing } = await supabase.from('marketplace_listings').select('deck_id').eq('id', sourceListingId).maybeSingle();
-    if (listing?.deck_id) return listing.deck_id;
-  }
-
-  if (deck?.is_live_deck) {
-    const { data: original } = await supabase
-      .from('decks').select('id')
-      .eq('name', deck.name).eq('is_public', true).neq('user_id', deck.user_id)
-      .limit(1).maybeSingle();
-    if (original?.id) return original.id;
-  }
-
-  return null;
-}
 
 /** @deprecated Sub-deck list view — no longer used, kept temporarily for reference */
 const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: string; subDecks: any[]; allDecks: any[] }) => {
@@ -161,19 +139,7 @@ const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: stri
 
   const { data: questionCounts } = useQuery({
     queryKey: ['sub-deck-question-counts', parentDeckId],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('deck_questions')
-        .select('deck_id')
-        .in('deck_id', allDescendantIds);
-      const map = new Map<string, number>();
-      if (data) {
-        for (const q of data as any[]) {
-          map.set(q.deck_id, (map.get(q.deck_id) ?? 0) + 1);
-        }
-      }
-      return map;
-    },
+    queryFn: () => fetchQuestionCountsByDeck(allDescendantIds),
     enabled: allDescendantIds.length > 0,
     staleTime: 60_000,
   });
@@ -396,10 +362,7 @@ const DeckDetailContent = () => {
 
   const { data: folderImageUrl } = useQuery({
     queryKey: ['folder-image', folderImage],
-    queryFn: async () => {
-      const { data } = await supabase.from('folders').select('image_url').eq('id', folderImage!).single();
-      return data?.image_url ?? null;
-    },
+    queryFn: () => fetchFolderImageUrl(folderImage!),
     enabled: !!folderImage,
     staleTime: 300_000,
   });
@@ -420,28 +383,9 @@ const DeckDetailContent = () => {
     return { label: 'Dashboard', path: '/dashboard' };
   }, [deck, decks, fromCommunity, fromDashboardSala, dashboardSalaFolderId, communityTurmaId]);
 
-  // Unified source resolution: resolves source deck ID, owner name, and updatedAt in one query
   const { data: sourceData } = useQuery({
     queryKey: ['linked-deck-source', deckId],
-    queryFn: async () => {
-      const sourceDeckId = await resolveSourceDeckId(deck);
-      if (!sourceDeckId) return null;
-
-      const [deckResult] = await Promise.all([
-        supabase.from('decks').select('user_id, updated_at').eq('id', sourceDeckId).single(),
-        Promise.resolve(null),
-      ]);
-
-      if (!deckResult.data) return { sourceDeckId, ownerName: 'Criador', updatedAt: null };
-
-      const { data: profile } = await supabase.from('profiles').select('name').eq('id', deckResult.data.user_id).single();
-
-      return {
-        sourceDeckId,
-        ownerName: profile?.name ?? 'Criador',
-        updatedAt: deckResult.data.updated_at,
-      };
-    },
+    queryFn: () => fetchLinkedDeckSource(deck),
     enabled: isLinkedDeck && !!deck,
     staleTime: 120_000,
   });
@@ -608,38 +552,14 @@ const LinkedDeckTabs = ({ deckId, resolvedSourceDeckId, isLinkedDeck, activeTab,
 
   const { data: suggestionCount = 0 } = useQuery({
     queryKey: ['suggestion-count', effectiveDeckId],
-    queryFn: async () => {
-      const { count } = await supabase
-        .from('deck_suggestions')
-        .select('id', { count: 'exact', head: true })
-        .eq('deck_id', effectiveDeckId)
-        .eq('status', 'pending');
-      return count ?? 0;
-    },
+    queryFn: () => countPendingSuggestions(effectiveDeckId),
     enabled: !!effectiveDeckId,
     staleTime: 60_000,
   });
 
   const { data: questionCount = 0 } = useQuery({
     queryKey: ['deck-questions-count', effectiveDeckId],
-    queryFn: async () => {
-      // Recursively get all descendant deck IDs
-      const allIds: string[] = [effectiveDeckId];
-      let frontier = [effectiveDeckId];
-      while (frontier.length > 0) {
-        const { data: children } = await supabase
-          .from('decks').select('id').in('parent_deck_id', frontier);
-        if (!children || children.length === 0) break;
-        const childIds = children.map((d: any) => d.id);
-        allIds.push(...childIds);
-        frontier = childIds;
-      }
-      const { count } = await supabase
-        .from('deck_questions' as any)
-        .select('id', { count: 'exact', head: true })
-        .in('deck_id', allIds);
-      return count ?? 0;
-    },
+    queryFn: () => countDeckQuestionsRecursive(effectiveDeckId),
     enabled: !!effectiveDeckId,
     staleTime: 60_000,
   });
@@ -728,19 +648,7 @@ const PersonalDeckTabs = ({ deckId, isLinkedDeck, activeTab, setActiveTab }: { d
 const SuggestionsList = ({ deckId }: { deckId: string }) => {
   const { data: suggestions = [], isLoading } = useQuery({
     queryKey: ['deck-suggestions-list', deckId],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('deck_suggestions')
-        .select('*')
-        .eq('deck_id', deckId)
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false });
-      if (!data || data.length === 0) return [];
-      const userIds = [...new Set(data.map((s: any) => s.suggester_user_id))];
-      const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: userIds });
-      const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
-      return data.map((s: any) => ({ ...s, suggester_name: profileMap.get(s.suggester_user_id) ?? 'Anônimo' }));
-    },
+    queryFn: () => fetchPendingSuggestions(deckId),
     enabled: !!deckId,
     staleTime: 30_000,
   });

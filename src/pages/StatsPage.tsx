@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchActivityBreakdown, fetchHourlyBreakdown, fetchRetentionOverTime, fetchCardsAddedPerDay } from '@/services/studyService';
 import { useCardStatistics } from '@/hooks/useCardStatistics';
 import { useDecks } from '@/hooks/useDecks';
 import { useProfile } from '@/hooks/useProfile';
@@ -271,16 +271,7 @@ const StatsPage = () => {
   // Activity data from RPC
   const { data: activityData } = useQuery({
     queryKey: ['activity-full', user?.id],
-    queryFn: async () => {
-      if (!user) return null;
-      const tzOffsetMinutes = -180;
-      const { data } = await supabase.rpc('get_activity_daily_breakdown', {
-        p_user_id: user.id,
-        p_tz_offset_minutes: tzOffsetMinutes,
-        p_days: 365,
-      } as any);
-      return data as any;
-    },
+    queryFn: () => fetchActivityBreakdown(user!.id, 365),
     enabled: !!user,
     staleTime: 60_000,
   });
@@ -288,26 +279,14 @@ const StatsPage = () => {
   // Hourly breakdown RPC
   const { data: hourlyData } = useQuery({
     queryKey: ['hourly-breakdown', user?.id],
-    queryFn: async () => {
-      if (!user) return [];
-      const tzOffsetMinutes = -180;
-      const { data, error } = await supabase.rpc('get_hourly_breakdown' as any, { p_user_id: user.id, p_tz_offset_minutes: tzOffsetMinutes, p_days: 30 });
-      if (error) { console.warn('[hourly] RPC error:', error.message); return []; }
-      return (data as any[]) ?? [];
-    },
+    queryFn: () => fetchHourlyBreakdown(user!.id, 30),
     enabled: !!user,
     staleTime: 60_000,
   });
 
-  // Retention over time RPC
   const { data: retentionOverTime } = useQuery({
     queryKey: ['retention-over-time', user?.id],
-    queryFn: async () => {
-      if (!user) return [];
-      const { data, error } = await supabase.rpc('get_retention_over_time' as any, { p_user_id: user.id, p_days: 180 });
-      if (error) { console.warn('[retention-over-time] RPC error:', error.message); return []; }
-      return (data as any[]) ?? [];
-    },
+    queryFn: () => fetchRetentionOverTime(user!.id, 180),
     enabled: !!user,
     staleTime: 120_000,
   });
@@ -315,12 +294,7 @@ const StatsPage = () => {
   // Cards added per day RPC
   const { data: cardsAddedData } = useQuery({
     queryKey: ['cards-added-per-day', user?.id],
-    queryFn: async () => {
-      if (!user) return [];
-      const { data, error } = await supabase.rpc('get_cards_added_per_day' as any, { p_user_id: user.id, p_days: 90 });
-      if (error) { console.warn('[cards-added] RPC error:', error.message); return []; }
-      return (data as any[]) ?? [];
-    },
+    queryFn: () => fetchCardsAddedPerDay(user!.id, 90),
     enabled: !!user,
     staleTime: 120_000,
   });

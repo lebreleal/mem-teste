@@ -83,3 +83,10 @@ export async function reorderFolders(orderedIds: string[]) {
     if (error) throw error;
   }
 }
+
+/** Fetch image_url for a folder. */
+export async function fetchFolderImageUrl(folderId: string): Promise<string | null> {
+  const { data, error } = await supabase.from('folders').select('image_url').eq('id', folderId).single();
+  if (error) return null;
+  return data?.image_url ?? null;
+}

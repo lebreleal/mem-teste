@@ -29,6 +29,11 @@ export {
   detachCommunityDeck,
   reorderDecks,
   resetDeckProgress,
+  fetchLinkedDeckSource,
+  fetchPendingSuggestions,
+  countPendingSuggestions,
+  countDeckQuestionsRecursive,
+  fetchQuestionCountsByDeck,
 } from './deckCrud';
 
 // Import operations

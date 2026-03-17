@@ -278,3 +278,105 @@ export async function resetDeckProgress(deckId: string) {
     .in('deck_id', deckIds);
   if (error) throw error;
 }
+
+/** Resolve the source deck info for a linked (community/marketplace) deck.
+ *  Returns sourceDeckId, ownerName, and updatedAt in a single call flow. */
+export async function fetchLinkedDeckSource(deck: {
+  source_turma_deck_id?: string | null;
+  source_listing_id?: string | null;
+  is_live_deck?: boolean;
+  name?: string;
+  user_id?: string;
+}): Promise<{ sourceDeckId: string; ownerName: string; updatedAt: string | null } | null> {
+  let sourceDeckId: string | null = null;
+
+  if (deck.source_turma_deck_id) {
+    const { data: td } = await supabase.from('turma_decks').select('deck_id').eq('id', deck.source_turma_deck_id).maybeSingle();
+    if (td?.deck_id) sourceDeckId = td.deck_id;
+  }
+
+  if (!sourceDeckId && deck.source_listing_id) {
+    const { data: listing } = await supabase.from('marketplace_listings').select('deck_id').eq('id', deck.source_listing_id).maybeSingle();
+    if (listing?.deck_id) sourceDeckId = listing.deck_id;
+  }
+
+  if (!sourceDeckId && deck.is_live_deck && deck.name && deck.user_id) {
+    const { data: original } = await supabase
+      .from('decks').select('id')
+      .eq('name', deck.name).eq('is_public', true).neq('user_id', deck.user_id)
+      .limit(1).maybeSingle();
+    if (original?.id) sourceDeckId = original.id;
+  }
+
+  if (!sourceDeckId) return null;
+
+  const { data: deckData } = await supabase.from('decks').select('user_id, updated_at').eq('id', sourceDeckId).single();
+  if (!deckData) return { sourceDeckId, ownerName: 'Criador', updatedAt: null };
+
+  const { data: profile } = await supabase.from('profiles').select('name').eq('id', deckData.user_id).single();
+
+  return {
+    sourceDeckId,
+    ownerName: profile?.name ?? 'Criador',
+    updatedAt: deckData.updated_at,
+  };
+}
+
+/** Fetch pending deck suggestions with suggester names. */
+export async function fetchPendingSuggestions(deckId: string) {
+  const { data } = await supabase
+    .from('deck_suggestions')
+    .select('id, deck_id, card_id, suggestion_type, suggested_content, suggested_tags, rationale, status, content_status, tags_status, suggester_user_id, moderator_user_id, created_at, updated_at')
+    .eq('deck_id', deckId)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false });
+  if (!data || data.length === 0) return [];
+
+  const userIds = [...new Set(data.map((s: any) => s.suggester_user_id))];
+  const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: userIds });
+  const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
+  return data.map((s: any) => ({ ...s, suggester_name: profileMap.get(s.suggester_user_id) ?? 'Anônimo' }));
+}
+
+/** Count pending suggestions for a deck. */
+export async function countPendingSuggestions(deckId: string): Promise<number> {
+  const { count } = await supabase
+    .from('deck_suggestions')
+    .select('id', { count: 'exact', head: true })
+    .eq('deck_id', deckId)
+    .eq('status', 'pending');
+  return count ?? 0;
+}
+
+/** Count questions across a deck and all its descendants. */
+export async function countDeckQuestionsRecursive(deckId: string): Promise<number> {
+  const allIds: string[] = [deckId];
+  let frontier = [deckId];
+  while (frontier.length > 0) {
+    const { data: children } = await supabase.from('decks').select('id').in('parent_deck_id', frontier);
+    if (!children || children.length === 0) break;
+    const childIds = children.map((d: any) => d.id);
+    allIds.push(...childIds);
+    frontier = childIds;
+  }
+  const { count } = await supabase
+    .from('deck_questions' as any)
+    .select('id', { count: 'exact', head: true })
+    .in('deck_id', allIds);
+  return count ?? 0;
+}
+
+/** Fetch question counts grouped by deck_id for a set of deck IDs. */
+export async function fetchQuestionCountsByDeck(deckIds: string[]): Promise<Map<string, number>> {
+  const { data } = await supabase
+    .from('deck_questions')
+    .select('deck_id')
+    .in('deck_id', deckIds);
+  const map = new Map<string, number>();
+  if (data) {
+    for (const q of data as any[]) {
+      map.set(q.deck_id, (map.get(q.deck_id) ?? 0) + 1);
+    }
+  }
+  return map;
+}
