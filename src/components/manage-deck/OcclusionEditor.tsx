@@ -447,6 +447,23 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
         </Button>
       </div>
 
+      {/* Color palette */}
+      <div className="flex items-center gap-1.5 px-1">
+        {COLORS.map(c => (
+          <button
+            key={c.label}
+            className="h-6 w-6 rounded-md border-2 transition-transform hover:scale-110 focus:outline-none"
+            style={{
+              backgroundColor: c.fill,
+              borderColor: shapeColor === c.fill ? 'hsl(var(--primary))' : 'transparent',
+              boxShadow: shapeColor === c.fill ? '0 0 0 2px hsl(var(--primary) / 0.3)' : 'none',
+            }}
+            onClick={() => setShapeColor(c.fill)}
+            title={c.label}
+          />
+        ))}
+      </div>
+
       {/* Polygon hint */}
       {tool === 'polygon' && currentPoints.length > 0 && (
         <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-1.5">
