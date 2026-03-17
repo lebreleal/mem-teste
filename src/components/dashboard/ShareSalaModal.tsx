@@ -76,10 +76,10 @@ const ShareSalaModal = ({
                 <p className="text-sm font-medium text-foreground">
                   {isPublished ? 'Aberta para todos' : 'Só você tem acesso'}
                 </p>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-[11px] text-muted-foreground leading-snug">
                   {isPublished
-                    ? 'Qualquer pessoa com o link pode entrar'
-                    : 'Ative para outras pessoas entrarem'}
+                    ? 'Sua sala aparece no Explorar e qualquer pessoa com o link pode entrar'
+                    : 'Ative para publicar no Explorar e permitir que outros entrem pelo link'}
                 </p>
               </div>
             </div>
