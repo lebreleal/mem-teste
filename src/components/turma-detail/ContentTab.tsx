@@ -62,7 +62,7 @@ const DeckListItem = ({
   fileCount,
   examCount,
 }: {
-  td: any;
+  td: TurmaDeck;
   onClick: () => void;
   inCollection: boolean;
   subscriberOnly: boolean;
