@@ -281,7 +281,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           <IconDeck className={`h-5 w-5 shrink-0 ${isErrorDeck ? 'text-destructive' : 'text-muted-foreground'}`} />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <h3 className="font-display font-semibold text-foreground truncate">{displayName}</h3>
+              <h3 className={`font-display font-semibold truncate ${isErrorDeck ? 'text-destructive' : 'text-foreground'}`}>{displayName}</h3>
               {isErrorDeck && (
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowInfoModal(true); }}
