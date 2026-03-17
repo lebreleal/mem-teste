@@ -96,6 +96,69 @@ export async function buryCards(cardIds: string[], scheduledDate: string) {
   if (error) throw error;
 }
 
+/** Freeze a card (push scheduled_date 100 years ahead and set state to review). */
+export async function freezeCard(cardId: string) {
+  const farFuture = new Date();
+  farFuture.setFullYear(farFuture.getFullYear() + 100);
+  const { error } = await supabase
+    .from('cards')
+    .update({ scheduled_date: farFuture.toISOString(), state: 2 })
+    .eq('id', cardId);
+  if (error) throw error;
+}
+
+/** Unfreeze a card (reset to new state). */
+export async function unfreezeCard(cardId: string) {
+  const { error } = await supabase
+    .from('cards')
+    .update({ scheduled_date: new Date().toISOString(), state: 0, stability: 0, difficulty: 0 })
+    .eq('id', cardId);
+  if (error) throw error;
+}
+
+/** Bury a single card until tomorrow. */
+export async function burySingleCard(cardId: string) {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0);
+  const { error } = await supabase
+    .from('cards')
+    .update({ scheduled_date: tomorrow.toISOString() })
+    .eq('id', cardId);
+  if (error) throw error;
+}
+
+/** Patch specific fields on a card row. */
+export async function patchCard(cardId: string, fields: { front_content?: string; back_content?: string }) {
+  const { error } = await supabase
+    .from('cards')
+    .update(fields)
+    .eq('id', cardId);
+  if (error) throw error;
+}
+
+/** Count review-state cards due now across multiple deck IDs. */
+export async function countReviewDueCards(deckIds: string[], nowISO: string): Promise<number> {
+  const { count, error } = await supabase
+    .from('cards')
+    .select('id', { count: 'exact', head: true })
+    .in('deck_id', deckIds)
+    .eq('state', 2)
+    .lte('scheduled_date', nowISO);
+  if (error) throw error;
+  return count ?? 0;
+}
+
+/** Fetch study plan deck_ids for a user. */
+export async function fetchStudyPlanDeckIds(userId: string): Promise<Array<{ deck_ids: string[] | null }>> {
+  const { data, error } = await supabase
+    .from('study_plans')
+    .select('deck_ids')
+    .eq('user_id', userId);
+  if (error) throw error;
+  return (data ?? []) as Array<{ deck_ids: string[] | null }>;
+}
+
 /** Upload a card image to storage. Returns the public URL. */
 export async function uploadCardImage(userId: string, file: File): Promise<string> {
   if (file.size > 5 * 1024 * 1024) throw new Error('Máximo 5MB');

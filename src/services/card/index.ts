@@ -31,6 +31,12 @@ export {
   bulkMoveCards,
   bulkDeleteCards,
   buryCards,
+  freezeCard,
+  unfreezeCard,
+  burySingleCard,
+  patchCard,
+  countReviewDueCards,
+  fetchStudyPlanDeckIds,
   uploadCardImage,
 } from './cardMutations';
 
