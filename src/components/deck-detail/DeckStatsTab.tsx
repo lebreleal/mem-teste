@@ -3,7 +3,7 @@ import { useForecastSimulator, useForecastView } from '@/hooks/useForecastSimula
 import { ForecastSimulator } from '@/components/study-plan/PlanComponents';
 import type { WeeklyMinutes, WeeklyNewCards } from '@/hooks/useStudyPlan';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchProfileCapacity } from '@/services/dashboardService';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2 } from 'lucide-react';
 import { collectDescendantIds } from '@/lib/studyUtils';
