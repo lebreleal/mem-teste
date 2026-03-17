@@ -77,7 +77,7 @@ export async function updateTurma(turmaId: string, updates: { name?: string; des
 }
 
 export async function fetchTurmaBySlug(slug: string): Promise<Turma | null> {
-  const { data } = await supabase.from('turmas').select('*').eq('share_slug', slug).single();
+  const { data } = await supabase.from('turmas').select('id, name, description, owner_id, is_private, cover_image_url, created_at, updated_at, subscription_price, share_slug, avg_rating, rating_count').eq('share_slug', slug).single();
   return data as Turma | null;
 }
 
