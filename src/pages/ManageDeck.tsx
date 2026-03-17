@@ -136,11 +136,14 @@ const ManageDeck = () => {
 
   const buildSavePayload = useCallback(() => {
     const detectedType = detectCardType();
-    let frontContent = front;
+    // Merge attached images back as <img> tags
+    const imgTags = attachedImages.map(url => `<img src="${url}">`).join('');
+    const frontWithImages = front + imgTags;
+    let frontContent = frontWithImages;
     let backContent = back;
     if (detectedType === 'image_occlusion') {
       frontContent = JSON.stringify({
-        imageUrl: occlusionImageUrl, frontText: front, rects: occlusionRects, allRects: occlusionRects,
+        imageUrl: occlusionImageUrl, frontText: frontWithImages, rects: occlusionRects, allRects: occlusionRects,
         canvasWidth: occlusionCanvasSize?.w ?? 0, canvasHeight: occlusionCanvasSize?.h ?? 0,
       });
     }
