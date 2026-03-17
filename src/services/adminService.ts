@@ -432,7 +432,7 @@ export async function fetchSalaQuestionCounts(deckIds: string[]): Promise<Map<st
 
 export async function insertTurmaMember(turmaId: string, userId: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- turma_members insert
-  const { error } = await supabase.from('turma_members').insert({ turma_id: turmaId, user_id: userId } as Record<string, unknown>);
+  const { error } = await supabase.from('turma_members').insert({ turma_id: turmaId, user_id: userId } as any);
   if (error) throw error;
 }
 
