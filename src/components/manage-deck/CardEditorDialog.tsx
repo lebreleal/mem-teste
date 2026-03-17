@@ -84,6 +84,8 @@ export const CardEditorDialog = ({
             }}
             onImprove={canImprove ? handleImprove : undefined}
             isImproving={isImproving}
+            onAICreate={handleAICreate}
+            isAICreating={isAICreating}
             onSave={() => handleSave(false)}
             onSaveAndAdd={!editingId ? () => handleSave(true) : undefined}
             onCancel={() => { setEditorOpen(false); resetForm(); }}
