@@ -34,7 +34,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     }
     return false;
   }, [folderId, queryClient, user]);
-  const showNavRoutes = ['/dashboard', '/turmas', '/profile', '/desempenho'];
+  const showNavRoutes = ['/dashboard', '/turmas', '/profile', '/desempenho', '/materia'];
   const hideNavPatterns = ['/study/', '/exam/', '/lessons/'];
   const showNav = showNavRoutes.some(r => location.pathname === r || location.pathname.startsWith(r + '/'))
     && !hideNavPatterns.some(p => location.pathname.includes(p));
