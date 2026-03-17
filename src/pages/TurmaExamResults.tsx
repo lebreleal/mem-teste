@@ -30,19 +30,7 @@ const TurmaExamResults = () => {
 
   const { data: attempt } = useQuery({
     queryKey: ['turma-exam-attempt', attemptId],
-    queryFn: async () => {
-      if (!attemptId) {
-        // Get latest completed attempt
-        const { data } = await supabase.from('turma_exam_attempts')
-          .select('*').eq('exam_id', examId!).eq('user_id', user!.id)
-          .eq('status', 'completed').order('completed_at', { ascending: false }).limit(1);
-        return data?.[0] || null;
-      }
-      const { data, error } = await supabase.from('turma_exam_attempts')
-        .select('*').eq('id', attemptId).single();
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => fetchTurmaExamAttemptForResults(examId!, user!.id, attemptId),
     enabled: !!user && !!examId,
   });
 
