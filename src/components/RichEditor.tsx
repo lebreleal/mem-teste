@@ -11,7 +11,7 @@ import { Mark, mergeAttributes } from '@tiptap/core';
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough, Heading2,
   List, ListOrdered, Code, Volume2, Palette, ImagePlus, ScanEye,
-  ClipboardPaste, Paperclip, Settings2,
+  ClipboardPaste, Paperclip, Search, Settings2,
 } from 'lucide-react';
 import { IconImage, IconImageOcclusion } from '@/components/icons';
 import { loadToolbarConfig, saveToolbarConfig, type ToolbarItem } from '@/components/rich-editor/toolbarConfig';
