@@ -36,13 +36,7 @@ const TurmaExamResults = () => {
 
   const { data: examAnswers = [] } = useQuery({
     queryKey: ['turma-exam-answers', attempt?.id],
-    queryFn: async () => {
-      if (!attempt?.id) return [];
-      const { data, error } = await supabase.from('turma_exam_answers')
-        .select('*').eq('attempt_id', attempt.id);
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => fetchTurmaExamAnswers(attempt!.id),
     enabled: !!attempt?.id,
   });
 
