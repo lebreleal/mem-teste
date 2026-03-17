@@ -1066,10 +1066,9 @@ const CreateQuestionDialog = ({
             concepts: qi.concepts || [],
           });
 
-          // Collect for global concept linking
-          if (inserted && qi.concepts?.length > 0) {
+          if (insertedId && qi.concepts?.length > 0) {
             questionConceptPairs.push({
-              questionId: (inserted as any).id,
+              questionId: insertedId,
               conceptNames: qi.concepts,
               prerequisites: qi.prerequisites ?? [],
               category: qi.category ?? undefined,
