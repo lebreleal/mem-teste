@@ -397,7 +397,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
       setImageUrl(publicUrl);
       setShapes([]);
       setImgLoaded(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Upload error:', err);
       toast({ title: 'Erro ao enviar imagem', variant: 'destructive' });
     } finally {
