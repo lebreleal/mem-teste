@@ -321,29 +321,7 @@ const ContentTab = () => {
   const [trialDeck, setTrialDeck] = useState<{ deckId: string; deckName: string } | null>(null);
   
 
-  // ── Batch tags for all community decks ──
-  const allDeckIds = useMemo(() => turmaDecks.map(d => d.deck_id), [turmaDecks]);
-  const { data: deckTagsMap = {} } = useDeckTagsBatch(allDeckIds);
-
-  // ── Collect unique tags from community decks for filter chips ──
-  const communityTags = useMemo(() => {
-    const tagMap = new Map<string, Tag>();
-    Object.values(deckTagsMap).forEach((tags: Tag[]) => {
-      tags.forEach(tag => { if (!tagMap.has(tag.id)) tagMap.set(tag.id, tag); });
-    });
-    return Array.from(tagMap.values())
-      .sort((a, b) => {
-        if (a.is_official !== b.is_official) return a.is_official ? -1 : 1;
-        return b.usage_count - a.usage_count;
-      });
-  }, [deckTagsMap]);
-
-  // ── Get descendant tag IDs for inclusive filtering ──
-  const { data: descendantIds = [] } = useTagDescendants(selectedTagId);
-  const activeTagIds = useMemo(() => {
-    if (!selectedTagId) return null;
-    return new Set([selectedTagId, ...descendantIds]);
-  }, [selectedTagId, descendantIds]);
+  // Tags system removed
 
   // ── Subscriber-only validation ──
   const canSetSubscribersOnly = (turma?.subscription_price ?? 0) > 0;
