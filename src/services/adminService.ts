@@ -70,12 +70,12 @@ export async function fetchGlobalTokenUsage(params: {
   limit?: number;
 }): Promise<UsageEntry[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC not in generated types
-  const { data, error } = await supabase.rpc('admin_get_global_token_usage' as 'get_user_ranking', {
+  const { data, error } = await (supabase.rpc as any)('admin_get_global_token_usage', {
     p_user_id: null,
     p_date_from: params.dateFrom,
     p_date_to: params.dateTo,
     p_limit: params.limit ?? 500,
-  } as Record<string, unknown>);
+  });
   if (error) throw error;
   return (data as unknown as UsageEntry[]) || [];
 }
