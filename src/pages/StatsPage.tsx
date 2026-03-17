@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchActivityBreakdown, fetchHourlyBreakdown, fetchRetentionOverTime, fetchCardsAddedPerDay } from '@/services/studyService';
 import { useCardStatistics } from '@/hooks/useCardStatistics';
 import { useDecks } from '@/hooks/useDecks';
 import { useProfile } from '@/hooks/useProfile';
