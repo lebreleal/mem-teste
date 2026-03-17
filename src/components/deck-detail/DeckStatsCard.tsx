@@ -44,39 +44,8 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
   const { data: questionData } = useQuery({
     queryKey: ['deck-stats-questions', deckId],
     queryFn: async () => {
-      // Get all descendant deck IDs
-      const allIds: string[] = [deckId!];
-      let frontier = [deckId!];
-      while (frontier.length > 0) {
-        const { data: children } = await supabase
-          .from('decks').select('id').in('parent_deck_id', frontier);
-        if (!children || children.length === 0) break;
-        const childIds = children.map((d: any) => d.id);
-        allIds.push(...childIds);
-        frontier = childIds;
-      }
-      // Get questions
-      const { data: questions } = await supabase
-        .from('deck_questions' as any).select('id').in('deck_id', allIds);
-      const qIds = (questions ?? []).map((q: any) => q.id);
-      if (qIds.length === 0) return { total: 0, correct: 0, wrong: 0, unanswered: 0 };
-      // Get latest attempts
-      const { data: attempts } = await supabase
-        .from('deck_question_attempts' as any)
-        .select('question_id, is_correct, answered_at')
-        .eq('user_id', user!.id)
-        .in('question_id', qIds);
-      const latestMap = new Map<string, { is_correct: boolean; answered_at: string }>();
-      for (const a of (attempts ?? []) as any[]) {
-        const prev = latestMap.get(a.question_id);
-        if (!prev || a.answered_at > prev.answered_at) latestMap.set(a.question_id, a);
-      }
-      let correct = 0, wrong = 0;
-      for (const [, a] of latestMap) {
-        if (a.is_correct) correct++; else wrong++;
-      }
-      const unanswered = qIds.length - latestMap.size;
-      return { total: qIds.length, correct, wrong, unanswered };
+      const allIds = await fetchDeckHierarchyIds(deckId!);
+      return fetchDeckQuestionStats(allIds, user!.id);
     },
     enabled: !!deckId && !!user,
     staleTime: 30_000,

@@ -22,52 +22,24 @@ const QuestionStatsCard = ({ deckId, sourceDeckId, isReadOnly, onPractice, onCre
 
   const { data: hierarchyDeckIds = [effectiveDeckId] } = useQuery({
     queryKey: ['deck-hierarchy-ids', effectiveDeckId],
-    queryFn: async () => {
-      const allIds: string[] = [effectiveDeckId];
-      let frontier = [effectiveDeckId];
-      while (frontier.length > 0) {
-        const { data: children } = await supabase
-          .from('decks')
-          .select('id')
-          .in('parent_deck_id', frontier);
-        if (!children || children.length === 0) break;
-        const childIds = children.map((d: any) => d.id);
-        allIds.push(...childIds);
-        frontier = childIds;
-      }
-      return allIds;
-    },
+    queryFn: () => fetchDeckHierarchyIds(effectiveDeckId),
     enabled: !!effectiveDeckId,
     staleTime: 120_000,
   });
 
-  const { data: questions = [] } = useQuery({
-    queryKey: ['deck-questions-ids', effectiveDeckId, hierarchyDeckIds],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('deck_questions' as any).select('id')
-        .in('deck_id', hierarchyDeckIds);
-      return (data ?? []) as unknown as { id: string }[];
-    },
-    enabled: !!effectiveDeckId && hierarchyDeckIds.length > 0,
+  const { data: qStats } = useQuery({
+    queryKey: ['deck-questions-stats', effectiveDeckId, hierarchyDeckIds],
+    queryFn: () => fetchDeckQuestionStats(hierarchyDeckIds, user!.id),
+    enabled: !!effectiveDeckId && hierarchyDeckIds.length > 0 && !!user,
     staleTime: 30_000,
   });
 
-  const { data: attempts = [] } = useQuery({
-    queryKey: ['question-attempts', effectiveDeckId],
-    queryFn: async () => {
-      if (!user) return [];
-      const questionIds = questions.map(q => q.id);
-      if (questionIds.length === 0) return [];
-      const { data } = await supabase
-        .from('deck_question_attempts' as any).select('question_id, is_correct, answered_at')
-        .eq('user_id', user.id)
-        .in('question_id', questionIds);
-      return (data ?? []) as unknown as { question_id: string; is_correct: boolean; answered_at: string }[];
-    },
-    enabled: !!user && questions.length > 0,
-    staleTime: 30_000,
-  });
+  const questions = qStats ? Array.from({ length: qStats.total }, (_, i) => ({ id: String(i) })) : [];
+  const attempts = qStats ? Array.from({ length: qStats.correct + qStats.wrong }, (_, i) => ({
+    question_id: String(i),
+    is_correct: i < qStats.correct,
+    answered_at: new Date().toISOString(),
+  })) : [];
 
   const masteryPct = useMemo(() => {
     const total = questions.length;
