@@ -95,36 +95,29 @@ export const CardEditorDialog = ({
         </DialogContent>
       </Dialog>
 
-      {/* Occlusion Editor Modal */}
-      <Dialog open={occlusionModalOpen} onOpenChange={setOcclusionModalOpen}>
-        <DialogContent className="sm:max-w-4xl max-h-[90dvh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="font-display flex items-center gap-2">
-              <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5 text-primary">
-                <path d="M2 18v-1.5h2V18h2v2H4a2 2 0 0 1-2-2M4 4h2v2H4v1.5H2V6a2 2 0 0 1 2-2M3.486 13.5H2v-3h2L6.586 8a2 2 0 0 1 2.828 0L13 11.586l.586-.586a2 2 0 0 1 2.828 0l5.086 5 .5.5V18a2 2 0 0 1-2 2h-2v-2h2v-.586l-5-5-.586.586 1.293 1.293a1 1 0 0 1-1.414 1.414L8 9.414 4.5 13l-.5.5h-.514M10 6V4h4v2zM18 6V4h2a2 2 0 0 1 2 2v1.5h-2V6zM20 10.5h2v3h-2z" />
-                <path d="M14 18v2h-4v-2z" />
-              </svg>
-              Oclusão de Imagem
-            </DialogTitle>
-          </DialogHeader>
-          <OcclusionEditor
-            initialFront={front}
-            onSave={(frontContent) => {
-              try {
-                const existing = JSON.parse(front);
-                if (existing.frontText) {
-                  const newData = JSON.parse(frontContent);
-                  newData.frontText = existing.frontText;
-                  setFront(JSON.stringify(newData));
-                } else { setFront(frontContent); }
-              } catch { setFront(frontContent); }
-              setOcclusionModalOpen(false);
-            }}
-            onCancel={() => setOcclusionModalOpen(false)}
-            isSaving={false}
-          />
-        </DialogContent>
-      </Dialog>
+      {/* Occlusion Editor — inline overlay within same dialog area */}
+      {occlusionModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="bg-background rounded-lg border shadow-xl w-[95vw] max-w-2xl h-[80dvh] flex flex-col overflow-hidden">
+            <OcclusionEditor
+              initialFront={front}
+              onSave={(frontContent) => {
+                try {
+                  const existing = JSON.parse(front);
+                  if (existing.frontText) {
+                    const newData = JSON.parse(frontContent);
+                    newData.frontText = existing.frontText;
+                    setFront(JSON.stringify(newData));
+                  } else { setFront(frontContent); }
+                } catch { setFront(frontContent); }
+                setOcclusionModalOpen(false);
+              }}
+              onCancel={() => setOcclusionModalOpen(false)}
+              isSaving={false}
+            />
+          </div>
+        </div>
+      )}
     </>
   );
 };

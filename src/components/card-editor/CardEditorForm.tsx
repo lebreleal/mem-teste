@@ -6,11 +6,14 @@
  * Wrap it in a Dialog, Sheet, or inline layout as needed.
  */
 import React, { useState } from 'react';
-import { Image, Trash2, Sparkles, Loader2, Upload, Plus, ChevronDown, ChevronUp } from 'lucide-react';
+import { Trash2, Sparkles, Loader2, Plus, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import LazyRichEditor from '@/components/LazyRichEditor';
+import { IconImage, IconSwap, IconInfo } from '@/components/icons';
+import cartaoInvertidoResposta from '@/assets/cartao-invertido-resposta.png';
+import cartaoInvertidoPergunta from '@/assets/cartao-invertido-pergunta.png';
 
 export type CardEditorType = 'basic' | 'cloze' | 'multiple_choice' | 'image_occlusion';
 
@@ -176,6 +179,60 @@ function ClozePreview({ text }: { text: string }) {
   );
 }
 
+/* ─── Reversed Cards Toggle ─── */
+const ReversedCardsToggle = () => {
+  const [infoOpen, setInfoOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <div className="flex items-center justify-between py-1">
+        <div className="flex items-center gap-2">
+          <IconSwap className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium text-foreground">Cartões invertidos</span>
+          <button
+            type="button"
+            onClick={() => setInfoOpen(v => !v)}
+            className="h-5 w-5 shrink-0 flex items-center justify-center text-primary/60 hover:text-primary transition-colors"
+          >
+            <IconInfo className="h-4 w-4" />
+          </button>
+        </div>
+        {/* Toggle switch (visual only for now) */}
+        <button type="button" className="relative shrink-0" style={{ width: 44, height: 24 }}>
+          <div className="absolute inset-0 rounded-full transition-colors bg-muted" />
+          <div className="absolute top-0.5 rounded-full bg-white shadow-sm transition-transform" style={{ width: 20, height: 20, transform: 'translateX(2px)' }} />
+        </button>
+      </div>
+
+      {/* Info popover */}
+      {infoOpen && (
+        <div className="mt-2 rounded-xl border border-border bg-card shadow-lg p-4 space-y-3 animate-in fade-in-0 zoom-in-95 duration-200">
+          <div className="flex items-start justify-between">
+            <p className="text-sm text-muted-foreground leading-relaxed pr-2">
+              "Cartões invertidos" ajuda você a estudar os cartões em ambas as direções. Quando o modo é ativado, cada cartão terá uma cópia no formato invertido.
+            </p>
+            <button type="button" onClick={() => setInfoOpen(false)} className="shrink-0 h-5 w-5 flex items-center justify-center text-muted-foreground hover:text-foreground">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5"><path d="M18 6L6 18M6 6l12 12" /></svg>
+            </button>
+          </div>
+          <div className="flex items-center justify-center gap-3">
+            <div className="rounded-xl border border-border bg-background p-2 flex-1 flex items-center justify-center">
+              <img src={cartaoInvertidoResposta} alt="Cartão normal" className="h-28 w-auto rounded-lg object-contain" />
+            </div>
+            <span className="text-xl text-primary font-bold select-none shrink-0">+</span>
+            <div className="rounded-xl border border-border bg-background p-2 flex-1 flex items-center justify-center">
+              <img src={cartaoInvertidoPergunta} alt="Cartão invertido" className="h-28 w-auto rounded-lg object-contain" />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Saiba mais sobre "Cartões invertidos" no <a href="#" className="text-primary font-medium hover:underline">Guia de suporte</a>.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
+
 /* ─── Main Component ─── */
 export const CardEditorForm = ({
   front, onFrontChange, back, onBackChange,
@@ -332,6 +389,9 @@ export const CardEditorForm = ({
 
       {extraContent}
 
+      {/* Cartões invertidos */}
+      <ReversedCardsToggle />
+
       {/* Bottom bar: image occlusion (left) + actions (right) */}
       <div className="flex items-end gap-2 pt-2">
         {/* Image occlusion – bottom left */}
@@ -339,9 +399,9 @@ export const CardEditorForm = ({
           <div className="flex-shrink-0">
             {isImageMode && occlusionImageUrl ? (
               <button type="button" onClick={onOpenOcclusion} className="relative group inline-block rounded-lg overflow-hidden border border-border">
-                <img src={occlusionImageUrl} alt="Oclusão" className="h-12 w-12 object-cover rounded-lg" />
+                <img src={occlusionImageUrl} alt="Oclusão" className="h-16 w-16 object-cover rounded-lg" />
                 <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center bg-primary/80 py-0.5">
-                  <Image className="h-2.5 w-2.5 text-primary-foreground" />
+                  <IconImage className="h-2.5 w-2.5 text-primary-foreground" />
                 </div>
                 {onRemoveOcclusion && (
                   <button type="button" onClick={(e) => { e.stopPropagation(); onRemoveOcclusion(); }}
@@ -350,7 +410,7 @@ export const CardEditorForm = ({
               </button>
             ) : (
               <button type="button" onClick={onOpenOcclusion} className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-border px-3 py-2 text-xs font-medium text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors">
-                <Upload className="h-3.5 w-3.5" /> Imagem
+                <IconImage className="h-3.5 w-3.5" /> Imagem
               </button>
             )}
           </div>
