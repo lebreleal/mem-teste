@@ -66,7 +66,7 @@ const SalaHero = ({
   const navigate = useNavigate();
   const [infoOpen, setInfoOpen] = useState(false);
 
-  const cf = state.folders.find((f: any) => f.id === state.currentFolderId);
+  const cf = state.folders.find((f: Folder) => f.id === state.currentFolderId);
   const folderName = cf?.name ?? 'Sala';
   const folderImage = cf?.image_url;
   const isComm = isCommunityFolder;
