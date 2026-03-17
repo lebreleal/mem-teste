@@ -219,7 +219,7 @@ export const useContentImport = () => {
     setImportingExamId(exam.id);
     try {
       if (!user || !turmaId) return;
-      const { data: questions, error } = await supabase.from('exam_questions').select('*').eq('exam_id', exam.id).order('sort_order', { ascending: true });
+      const { data: questions, error } = await supabase.from('exam_questions').select('id, exam_id, question_type, question_text, options, correct_answer, correct_indices, points, sort_order, card_id, is_graded, scored_points, selected_indices, user_answer, ai_feedback, created_at').eq('exam_id', exam.id).order('sort_order', { ascending: true });
       if (error) throw error;
       if (!questions?.length) { toast({ title: 'Prova sem questões', variant: 'destructive' }); return; }
       const { data: turmaExam, error: examError } = await supabase.from('turma_exams').insert({
