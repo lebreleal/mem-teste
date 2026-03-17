@@ -13,6 +13,7 @@ export async function enhanceCard(params: {
   cardType: string;
   aiModel: string;
   energyCost: number;
+  customPrompt?: string;
 }) {
   const { data, error } = await supabase.functions.invoke('enhance-card', { body: params });
   if (error) throw error;
