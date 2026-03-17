@@ -5,7 +5,7 @@
 
 import { GraduationCap } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchDeckQuestionCounts, fetchCommunityFolderMeta } from '@/services/dashboardService';
 import { useAuth } from '@/hooks/useAuth';
 import SalaCard from './SalaCard';
 import type { Folder } from '@/types/folder';
