@@ -41,11 +41,13 @@ export async function fetchCreatorTier(userId: string): Promise<CreatorTierData>
     .select('id, avg_rating, rating_count, downloads')
     .eq('seller_id', userId);
 
+  interface ListingRow { id: string; avg_rating: number | null; rating_count: number; downloads: number }
   const totalListings = listings?.length ?? 0;
+  const typedListings = (listings ?? []) as ListingRow[];
   const avgRating = totalListings > 0
-    ? (listings ?? []).reduce((sum: number, l: any) => sum + (Number(l.avg_rating) || 0), 0) / totalListings
+    ? typedListings.reduce((sum, l) => sum + (Number(l.avg_rating) || 0), 0) / totalListings
     : 0;
-  const totalSales = (listings ?? []).reduce((sum: number, l: any) => sum + (l.downloads ?? 0), 0);
+  const totalSales = typedListings.reduce((sum, l) => sum + (l.downloads ?? 0), 0);
 
   let newTier = 1;
   if (totalListings >= 20 && avgRating >= 4.6 && totalSales >= 50) newTier = 3;
