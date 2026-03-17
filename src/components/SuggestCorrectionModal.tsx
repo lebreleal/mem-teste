@@ -164,7 +164,7 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
         return;
       }
 
-      const { error } = await supabase.from('deck_suggestions').insert({
+      await insertDeckSuggestion({
         suggester_user_id: user.id,
         deck_id: resolvedDeckId,
         card_id: card?.id ?? null,
@@ -175,9 +175,7 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
         status: 'pending',
         content_status: Object.keys(suggestedContent).length > 0 ? 'pending' : 'none',
         tags_status: suggestedTagsPayload ? 'pending' : 'none',
-      } as any);
-
-      if (error) throw error;
+      });
 
       toast({ title: '✅ Sugestão enviada!', description: 'O criador do baralho será notificado.' });
       onOpenChange(false);

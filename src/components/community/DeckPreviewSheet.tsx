@@ -229,14 +229,7 @@ const PreviewContent = ({
   const { data: cards = [], isLoading } = useQuery({
     queryKey: ['preview-cards', deckId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('cards')
-        .select('id, front_content, back_content, card_type')
-        .eq('deck_id', deckId)
-        .order('created_at', { ascending: true })
-        .limit(50);
-      if (error) throw error;
-      return data ?? [];
+      return fetchPreviewCards(deckId);
     },
     enabled: !!deckId,
   });

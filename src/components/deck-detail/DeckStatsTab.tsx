@@ -37,12 +37,7 @@ export function DeckStatsTab({ deckId }: DeckStatsTabProps) {
   const profileQuery = useQuery({
     queryKey: ['profile-capacity', user?.id],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('profiles')
-        .select('daily_study_minutes, weekly_study_minutes, weekly_new_cards')
-        .eq('id', user!.id)
-        .single();
-      return data as any;
+      return fetchProfileCapacity(user!.id);
     },
     enabled: !!user,
     staleTime: 5 * 60_000,
