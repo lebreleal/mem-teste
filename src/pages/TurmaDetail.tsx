@@ -14,7 +14,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TurmaDetailProvider, useTurmaDetail } from '@/components/turma-detail/TurmaDetailContext';
 import { Button } from '@/components/ui/button';
-import { fetchSalaDecksData, fetchSalaQuestionCounts, insertTurmaMember, getOrCreateTurmaFolder, fetchTurmaFolderId } from '@/services/adminService';
+import { fetchSalaDecksData, insertTurmaMember, getOrCreateTurmaFolder, fetchTurmaFolderId } from '@/services/adminService';
 import { ChevronLeft, Star, FolderOpen, Share2, Play, Plus, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
