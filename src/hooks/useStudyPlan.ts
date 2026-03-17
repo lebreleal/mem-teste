@@ -576,7 +576,8 @@ export function useStudyPlan(options?: { full?: boolean }) {
 
   const deletePlan = useMutation({
     mutationFn: async (planId: string) => {
-      const { error } = await supabase.from('study_plans' as any).delete().eq('id', planId);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- study_plans not in generated types
+      const { error } = await (supabase.from as any)('study_plans').delete().eq('id', planId);
       if (error) throw error;
     },
     onSuccess: invalidate,
