@@ -439,8 +439,8 @@ const ContentTab = () => {
   // ── Top decks (most subscribed across the entire community) ──
   const topDecks = useMemo(() => {
     return [...turmaDecks]
-      .filter((d: any) => isAdmin || d.is_published !== false)
-      .sort((a: any, b: any) => (downloadCounts[b.id] || 0) - (downloadCounts[a.id] || 0))
+      .filter(d => isAdmin || d.is_published !== false)
+      .sort((a, b) => (downloadCounts[b.id] || 0) - (downloadCounts[a.id] || 0))
       .slice(0, 8);
   }, [turmaDecks, downloadCounts, isAdmin]);
 
