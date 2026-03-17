@@ -305,6 +305,7 @@ const Dashboard = () => {
             onReorderDecks={salas.isCommunityFolder ? undefined : (reordered) => state.reorderDecks.mutate(reordered.map(d => d.id))}
             onPendingClick={handlePendingClick}
             decksWithPendingUpdates={state.decksWithPendingUpdates}
+            organizeMode={organizeMode}
           />
         )}
 
