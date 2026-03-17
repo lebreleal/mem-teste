@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   canInitializeCanvas,
+  clamp,
   getCanvasBitmapMetrics,
+  getMidpoint,
   getRelativePoint,
 } from '@/components/rich-editor/drawingCanvasUtils';
 
@@ -10,6 +12,16 @@ describe('DrawingCanvas helpers', () => {
     const point = getRelativePoint({ left: 100, top: 50 }, 150, 120);
 
     expect(point).toEqual({ x: 50, y: 70 });
+  });
+
+  it('clamps pointer coordinates within drawable bounds', () => {
+    expect(clamp(-20, 0, 400)).toBe(0);
+    expect(clamp(180, 0, 400)).toBe(180);
+    expect(clamp(999, 0, 400)).toBe(400);
+  });
+
+  it('getMidpoint returns the center between two points', () => {
+    expect(getMidpoint({ x: 10, y: 10 }, { x: 30, y: 50 })).toEqual({ x: 20, y: 30 });
   });
 
   it('getCanvasBitmapMetrics applies DPR scaling', () => {

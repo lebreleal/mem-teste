@@ -7,7 +7,15 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { X, Undo2, Redo2 } from 'lucide-react';
-import { canInitializeCanvas, getCanvasBitmapMetrics, getRelativePoint } from '@/components/rich-editor/drawingCanvasUtils';
+import {
+  canInitializeCanvas,
+  clamp,
+  getCanvasBitmapMetrics,
+  getMidpoint,
+  getRelativePoint,
+  type CanvasBitmapMetrics,
+  type RelativePoint,
+} from '@/components/rich-editor/drawingCanvasUtils';
 
 const STROKE_PATH = 'M7.5 18s6.269-1.673 9.5-7c1.601-2.64-6.5-.5-8-3-1.16-2.5 8-3 8-3';
 const THICKNESSES = [1, 2, 4, 6, 8];
@@ -205,7 +213,6 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
   const [historyIdx, setHistoryIdx] = useState(-1);
   const [showColorPicker, setShowColorPicker] = useState(false);
 
-  // Use refs for drawing state to avoid stale closures
   const isDrawingRef = useRef(false);
   const activePointerIdRef = useRef<number | null>(null);
   const historyRef = useRef<ImageData[]>([]);
@@ -214,8 +221,10 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
   const thicknessRef = useRef(thickness);
   const opacityRef = useRef(opacity);
   const hasInteractionRef = useRef(false);
+  const lastPointRef = useRef<RelativePoint | null>(null);
+  const lastMidPointRef = useRef<RelativePoint | null>(null);
+  const bitmapMetricsRef = useRef<CanvasBitmapMetrics | null>(null);
 
-  // Keep refs in sync with state
   historyRef.current = history;
   historyIdxRef.current = historyIdx;
   colorRef.current = color;
@@ -227,6 +236,10 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
       hasInteractionRef.current = false;
       isDrawingRef.current = false;
       activePointerIdRef.current = null;
+      lastPointRef.current = null;
+      lastMidPointRef.current = null;
+      bitmapMetricsRef.current = null;
+      setShowColorPicker(false);
       return;
     }
 
@@ -234,56 +247,116 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
     const container = containerRef.current;
     if (!canvas || !container) return;
 
-    const initCanvas = (rect: DOMRectReadOnly) => {
-      if (!canInitializeCanvas(rect.width, rect.height) || hasInteractionRef.current) return;
+    const syncCanvasToContainer = (rect: DOMRectReadOnly) => {
+      if (!canInitializeCanvas(rect.width, rect.height)) return;
 
       const dpr = window.devicePixelRatio || 1;
-      const metrics = getCanvasBitmapMetrics(rect.width, rect.height, dpr);
-      if (canvas.width === metrics.pixelWidth && canvas.height === metrics.pixelHeight) return;
+      const nextMetrics = getCanvasBitmapMetrics(rect.width, rect.height, dpr);
+      const previousMetrics = bitmapMetricsRef.current;
 
-      canvas.width = metrics.pixelWidth;
-      canvas.height = metrics.pixelHeight;
-      canvas.style.width = `${metrics.cssWidth}px`;
-      canvas.style.height = `${metrics.cssHeight}px`;
+      if (
+        canvas.width === nextMetrics.pixelWidth
+        && canvas.height === nextMetrics.pixelHeight
+        && previousMetrics
+      ) {
+        bitmapMetricsRef.current = nextMetrics;
+        return;
+      }
+
+      const previousCanvas = document.createElement('canvas');
+      let hasPreviousBitmap = false;
+
+      if (previousMetrics && canvas.width > 0 && canvas.height > 0) {
+        previousCanvas.width = canvas.width;
+        previousCanvas.height = canvas.height;
+        const previousCtx = previousCanvas.getContext('2d');
+        if (previousCtx) {
+          previousCtx.drawImage(canvas, 0, 0);
+          hasPreviousBitmap = true;
+        }
+      }
+
+      canvas.width = nextMetrics.pixelWidth;
+      canvas.height = nextMetrics.pixelHeight;
+      bitmapMetricsRef.current = nextMetrics;
 
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      ctx.setTransform(metrics.dpr, 0, 0, metrics.dpr, 0, 0);
-      ctx.clearRect(0, 0, metrics.cssWidth, metrics.cssHeight);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.setTransform(nextMetrics.dpr, 0, 0, nextMetrics.dpr, 0, 0);
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, metrics.cssWidth, metrics.cssHeight);
+      ctx.fillRect(0, 0, nextMetrics.cssWidth, nextMetrics.cssHeight);
 
-      const initial = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      setHistory([initial]);
+      if (hasPreviousBitmap && previousMetrics) {
+        ctx.drawImage(
+          previousCanvas,
+          0,
+          0,
+          previousMetrics.cssWidth,
+          previousMetrics.cssHeight,
+          0,
+          0,
+          nextMetrics.cssWidth,
+          nextMetrics.cssHeight,
+        );
+      }
+
+      const snapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      setHistory([snapshot]);
       setHistoryIdx(0);
     };
 
+    const syncFromDom = () => {
+      syncCanvasToContainer(container.getBoundingClientRect());
+    };
+
+    let frameA = 0;
+    let frameB = 0;
+
+    frameA = requestAnimationFrame(() => {
+      syncFromDom();
+      frameB = requestAnimationFrame(syncFromDom);
+    });
+
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        initCanvas(entry.contentRect);
+        syncCanvasToContainer(entry.contentRect);
       }
     });
 
     ro.observe(container);
 
-    const rect = container.getBoundingClientRect();
-    initCanvas(rect as DOMRectReadOnly);
-
-    return () => ro.disconnect();
+    return () => {
+      cancelAnimationFrame(frameA);
+      cancelAnimationFrame(frameB);
+      ro.disconnect();
+    };
   }, [open]);
 
   const getCtx = () => canvasRef.current?.getContext('2d') ?? null;
 
-  const getPos = useCallback((clientX: number, clientY: number): { x: number; y: number } => {
-    const canvas = canvasRef.current!;
+  const getPos = useCallback((clientX: number, clientY: number): RelativePoint => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+
     const rect = canvas.getBoundingClientRect();
     const point = getRelativePoint(rect, clientX, clientY);
 
     return {
-      x: Math.max(0, Math.min(point.x, rect.width)),
-      y: Math.max(0, Math.min(point.y, rect.height)),
+      x: clamp(point.x, 0, rect.width),
+      y: clamp(point.y, 0, rect.height),
     };
+  }, []);
+
+  const applyBrushStyle = useCallback((ctx: CanvasRenderingContext2D) => {
+    ctx.strokeStyle = colorRef.current;
+    ctx.fillStyle = colorRef.current;
+    ctx.lineWidth = thicknessRef.current;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.globalAlpha = opacityRef.current / 100;
   }, []);
 
   // Use pointer events + pointer capture for full-area precise drawing
@@ -291,9 +364,44 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
     const canvas = canvasRef.current;
     if (!canvas || !open) return;
 
+    const drawDot = (ctx: CanvasRenderingContext2D, point: RelativePoint) => {
+      ctx.save();
+      applyBrushStyle(ctx);
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, Math.max(thicknessRef.current / 2, 1), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    };
+
+    const drawCurveToPoint = (ctx: CanvasRenderingContext2D, point: RelativePoint) => {
+      const lastPoint = lastPointRef.current;
+      if (!lastPoint) {
+        lastPointRef.current = point;
+        lastMidPointRef.current = point;
+        drawDot(ctx, point);
+        return;
+      }
+
+      const nextMidPoint = getMidpoint(lastPoint, point);
+      const startPoint = lastMidPointRef.current ?? lastPoint;
+
+      ctx.save();
+      applyBrushStyle(ctx);
+      ctx.beginPath();
+      ctx.moveTo(startPoint.x, startPoint.y);
+      ctx.quadraticCurveTo(lastPoint.x, lastPoint.y, nextMidPoint.x, nextMidPoint.y);
+      ctx.stroke();
+      ctx.restore();
+
+      lastPointRef.current = point;
+      lastMidPointRef.current = nextMidPoint;
+    };
+
     const finishStroke = () => {
       if (!isDrawingRef.current) return;
       isDrawingRef.current = false;
+      lastPointRef.current = null;
+      lastMidPointRef.current = null;
 
       const ctx = getCtx();
       if (!ctx || !canvas) return;
@@ -311,6 +419,14 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
       setHistoryIdx(idx + 1);
     };
 
+    const stopPointer = (e: PointerEvent) => {
+      if (activePointerIdRef.current !== e.pointerId) return;
+      e.preventDefault();
+      canvas.releasePointerCapture?.(e.pointerId);
+      activePointerIdRef.current = null;
+      finishStroke();
+    };
+
     const handlePointerDown = (e: PointerEvent) => {
       if (e.pointerType === 'mouse' && e.button !== 0) return;
 
@@ -318,23 +434,15 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
       const ctx = getCtx();
       if (!ctx) return;
 
+      const pos = getPos(e.clientX, e.clientY);
       activePointerIdRef.current = e.pointerId;
       isDrawingRef.current = true;
       hasInteractionRef.current = true;
+      lastPointRef.current = pos;
+      lastMidPointRef.current = pos;
       canvas.setPointerCapture?.(e.pointerId);
 
-      const pos = getPos(e.clientX, e.clientY);
-      ctx.beginPath();
-      ctx.moveTo(pos.x, pos.y);
-      ctx.strokeStyle = colorRef.current;
-      ctx.lineWidth = thicknessRef.current;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.globalAlpha = opacityRef.current / 100;
-      ctx.lineTo(pos.x, pos.y);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(pos.x, pos.y);
+      drawDot(ctx, pos);
     };
 
     const handlePointerMove = (e: PointerEvent) => {
@@ -344,64 +452,45 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
       const ctx = getCtx();
       if (!ctx) return;
 
-      const pos = getPos(e.clientX, e.clientY);
-      ctx.lineTo(pos.x, pos.y);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(pos.x, pos.y);
-    };
-
-    const handlePointerUp = (e: PointerEvent) => {
-      if (activePointerIdRef.current !== e.pointerId) return;
-      e.preventDefault();
-      canvas.releasePointerCapture?.(e.pointerId);
-      activePointerIdRef.current = null;
-      finishStroke();
-    };
-
-    const handlePointerCancel = (e: PointerEvent) => {
-      if (activePointerIdRef.current !== e.pointerId) return;
-      canvas.releasePointerCapture?.(e.pointerId);
-      activePointerIdRef.current = null;
-      finishStroke();
+      drawCurveToPoint(ctx, getPos(e.clientX, e.clientY));
     };
 
     canvas.addEventListener('pointerdown', handlePointerDown);
     window.addEventListener('pointermove', handlePointerMove, { passive: false });
-    window.addEventListener('pointerup', handlePointerUp, { passive: false });
-    window.addEventListener('pointercancel', handlePointerCancel);
+    window.addEventListener('pointerup', stopPointer, { passive: false });
+    window.addEventListener('pointercancel', stopPointer);
 
     return () => {
       canvas.removeEventListener('pointerdown', handlePointerDown);
       window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', handlePointerUp);
-      window.removeEventListener('pointercancel', handlePointerCancel);
+      window.removeEventListener('pointerup', stopPointer);
+      window.removeEventListener('pointercancel', stopPointer);
     };
-  }, [open, getPos]);
+  }, [applyBrushStyle, getPos, open]);
+
+  const restoreSnapshot = useCallback((snapshot: ImageData) => {
+    const ctx = getCtx();
+    const metrics = bitmapMetricsRef.current;
+    if (!ctx || !metrics) return;
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.putImageData(snapshot, 0, 0);
+    ctx.setTransform(metrics.dpr, 0, 0, metrics.dpr, 0, 0);
+  }, []);
 
   const undo = useCallback(() => {
     if (historyIdx <= 0) return;
-    const ctx = getCtx();
-    const canvas = canvasRef.current;
-    if (!ctx || !canvas) return;
     const newIdx = historyIdx - 1;
-    ctx.putImageData(history[newIdx], 0, 0);
-    const dpr = window.devicePixelRatio || 1;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    restoreSnapshot(history[newIdx]);
     setHistoryIdx(newIdx);
-  }, [history, historyIdx]);
+  }, [history, historyIdx, restoreSnapshot]);
 
   const redo = useCallback(() => {
     if (historyIdx >= history.length - 1) return;
-    const ctx = getCtx();
-    const canvas = canvasRef.current;
-    if (!ctx || !canvas) return;
     const newIdx = historyIdx + 1;
-    ctx.putImageData(history[newIdx], 0, 0);
-    const dpr = window.devicePixelRatio || 1;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    restoreSnapshot(history[newIdx]);
     setHistoryIdx(newIdx);
-  }, [history, historyIdx]);
+  }, [history, historyIdx, restoreSnapshot]);
 
   const handleSave = () => {
     const canvas = canvasRef.current;
@@ -433,10 +522,10 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
         </div>
 
         {/* Canvas area — fills all remaining space */}
-        <div ref={containerRef} className="flex-1 min-h-0 bg-white relative overflow-hidden">
+        <div ref={containerRef} className="relative flex-1 min-h-0 overflow-hidden bg-white select-none">
           <canvas
             ref={canvasRef}
-            className="absolute inset-0 touch-none cursor-crosshair"
+            className="absolute inset-0 h-full w-full touch-none cursor-default select-none"
           />
         </div>
 
