@@ -16,17 +16,7 @@ import { ArrowLeft, Copy, Trash2, RefreshCw, Search } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
-interface ErrorLog {
-  id: string;
-  user_id: string | null;
-  error_message: string;
-  error_stack: string;
-  component_name: string;
-  route: string;
-  metadata: Record<string, unknown>;
-  severity: string;
-  created_at: string;
-}
+// ErrorLog type imported from adminService
 
 const AdminLogs = () => {
   const { isAdmin, loading: adminLoading } = useIsAdmin();
