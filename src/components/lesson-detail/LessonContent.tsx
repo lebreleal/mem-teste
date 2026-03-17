@@ -152,7 +152,7 @@ const LessonContent = ({
     enabled: personalExamIds.length > 0,
   });
 
-  const handleImportExam = async (exam: any) => {
+  const handleImportExam = async (exam: TurmaExam) => {
     setImportingExamId(exam.id);
     try {
       await onImportExam(exam);
