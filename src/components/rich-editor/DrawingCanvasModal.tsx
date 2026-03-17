@@ -205,22 +205,30 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
   const [historyIdx, setHistoryIdx] = useState(-1);
   const [showColorPicker, setShowColorPicker] = useState(false);
 
-  // Resize canvas to container
+  // Resize canvas to container — use ResizeObserver to wait for real dimensions
+  const initializedRef = useRef(false);
+
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      initializedRef.current = false;
+      return;
+    }
     const canvas = canvasRef.current;
     const container = containerRef.current;
     if (!canvas || !container) return;
 
-    const resize = () => {
-      const rect = container.getBoundingClientRect();
+    const initCanvas = (rect: DOMRectReadOnly) => {
+      if (rect.width < 10 || rect.height < 10) return; // not ready yet
+      if (initializedRef.current) return;
+      initializedRef.current = true;
+
       const dpr = window.devicePixelRatio || 1;
       canvas.width = rect.width * dpr;
       canvas.height = rect.height * dpr;
       canvas.style.width = `${rect.width}px`;
       canvas.style.height = `${rect.height}px`;
       const ctx = canvas.getContext('2d')!;
-      ctx.scale(dpr, dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, rect.width, rect.height);
       const initial = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -228,8 +236,20 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
       setHistoryIdx(0);
     };
 
-    const t = setTimeout(resize, 50);
-    return () => clearTimeout(t);
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        initCanvas(entry.contentRect);
+      }
+    });
+    ro.observe(container);
+
+    // Also try immediately in case already laid out
+    const rect = container.getBoundingClientRect();
+    if (rect.width > 10 && rect.height > 10) {
+      initCanvas(rect as DOMRectReadOnly);
+    }
+
+    return () => ro.disconnect();
   }, [open]);
 
   const getCtx = () => canvasRef.current?.getContext('2d') ?? null;
