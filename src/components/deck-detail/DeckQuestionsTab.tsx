@@ -2277,14 +2277,7 @@ const EditQuestionDialog = ({
     const timer = setTimeout(async () => {
       setSearchingConcepts(true);
       try {
-        const { data } = await supabase
-          .from('global_concepts' as any)
-          .select('id, name, description')
-          .eq('user_id', user.id)
-          .ilike('name', `%${conceptSearch.trim()}%`)
-          .limit(20);
-        const results = (data ?? []) as any[];
-        // Filter out already-added concepts
+        const results = await searchGlobalConcepts(user.id, conceptSearch);
         const filtered = results.filter(r => !concepts.some(c => conceptSlug(c) === conceptSlug(r.name)));
         setConceptSuggestions(filtered.map(r => ({ name: r.name, description: r.description, id: r.id })));
       } catch { setConceptSuggestions([]); }
