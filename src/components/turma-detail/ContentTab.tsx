@@ -426,10 +426,10 @@ const ContentTab = () => {
     const q = searchQuery.toLowerCase();
     const skipFolderFilter = !!activeTagIds || !!q; // search and tag filter across ALL folders
     return turmaDecks
-      .filter((d: any) => skipFolderFilter ? true : d.subject_id === contentFolderId)
-      .filter((d: any) => isAdmin || d.is_published !== false)
-      .filter((d: any) => !q || (d.deck_name || '').toLowerCase().includes(q))
-      .filter((d: any) => {
+      .filter(d => skipFolderFilter ? true : d.subject_id === contentFolderId)
+      .filter(d => isAdmin || d.is_published !== false)
+      .filter(d => !q || (d.deck_name || '').toLowerCase().includes(q))
+      .filter(d => {
         if (!activeTagIds) return true;
         const tags = deckTagsMap[d.deck_id] as Tag[] | undefined;
         return tags?.some(t => activeTagIds.has(t.id)) ?? false;
