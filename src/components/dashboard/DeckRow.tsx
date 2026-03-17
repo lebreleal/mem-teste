@@ -183,7 +183,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   const classPcts = useMemo(() => aggregateClassification(deck, getSubDecks), [deck, getSubDecks]);
   const totalCards = classPcts.totalCards;
   const aggStats = useMemo(() => getAggregateStats(deck), [deck, getAggregateStats]);
-  const displayName = isErrorDeck ? 'Caderno de Erros' : deck.name;
+  const displayName = isErrorDeck ? 'Baralho de Erros' : deck.name;
   const hasDueCards = aggStats.new_count + aggStats.learning_count + aggStats.review_count > 0;
 
   // A deck is an empty matéria only if it has no children, no cards, and is currently expanded
