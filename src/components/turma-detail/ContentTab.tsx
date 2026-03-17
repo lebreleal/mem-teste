@@ -321,29 +321,7 @@ const ContentTab = () => {
   const [trialDeck, setTrialDeck] = useState<{ deckId: string; deckName: string } | null>(null);
   
 
-  // ── Batch tags for all community decks ──
-  const allDeckIds = useMemo(() => turmaDecks.map(d => d.deck_id), [turmaDecks]);
-  const { data: deckTagsMap = {} } = useDeckTagsBatch(allDeckIds);
-
-  // ── Collect unique tags from community decks for filter chips ──
-  const communityTags = useMemo(() => {
-    const tagMap = new Map<string, Tag>();
-    Object.values(deckTagsMap).forEach((tags: Tag[]) => {
-      tags.forEach(tag => { if (!tagMap.has(tag.id)) tagMap.set(tag.id, tag); });
-    });
-    return Array.from(tagMap.values())
-      .sort((a, b) => {
-        if (a.is_official !== b.is_official) return a.is_official ? -1 : 1;
-        return b.usage_count - a.usage_count;
-      });
-  }, [deckTagsMap]);
-
-  // ── Get descendant tag IDs for inclusive filtering ──
-  const { data: descendantIds = [] } = useTagDescendants(selectedTagId);
-  const activeTagIds = useMemo(() => {
-    if (!selectedTagId) return null;
-    return new Set([selectedTagId, ...descendantIds]);
-  }, [selectedTagId, descendantIds]);
+  // Tags system removed
 
   // ── Subscriber-only validation ──
   const canSetSubscribersOnly = (turma?.subscription_price ?? 0) > 0;
@@ -422,17 +400,12 @@ const ContentTab = () => {
   // ── Current folder's decks (when tag is active, search across ALL folders) ──
   const currentDecks = useMemo(() => {
     const q = searchQuery.toLowerCase();
-    const skipFolderFilter = !!activeTagIds || !!q; // search and tag filter across ALL folders
+    const skipFolderFilter = !!q;
     return turmaDecks
       .filter(d => skipFolderFilter ? true : d.subject_id === contentFolderId)
       .filter(d => isAdmin || d.is_published !== false)
-      .filter(d => !q || (d.deck_name || '').toLowerCase().includes(q))
-      .filter(d => {
-        if (!activeTagIds) return true;
-        const tags = deckTagsMap[d.deck_id] as Tag[] | undefined;
-        return tags?.some(t => activeTagIds.has(t.id)) ?? false;
-      });
-  }, [turmaDecks, contentFolderId, searchQuery, isAdmin, activeTagIds, deckTagsMap]);
+      .filter(d => !q || (d.deck_name || '').toLowerCase().includes(q));
+  }, [turmaDecks, contentFolderId, searchQuery, isAdmin]);
 
   // ── Top decks (most subscribed across the entire community) ──
   const topDecks = useMemo(() => {
@@ -544,27 +517,6 @@ const ContentTab = () => {
         )}
       </div>
 
-      {/* Tag filter chips */}
-      {communityTags.length > 0 && (
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-          <button
-            onClick={() => setSelectedTagId(null)}
-            className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${
-              !selectedTagId
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-muted text-muted-foreground hover:bg-muted/80'
-            }`}
-          >
-            Todos
-          </button>
-          {communityTags.map(tag => (
-            <button
-              key={tag.id}
-              onClick={() => setSelectedTagId(selectedTagId === tag.id ? null : tag.id)}
-              className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${
-                selectedTagId === tag.id
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
               }`}
             >
               {tag.name}
@@ -858,30 +810,6 @@ const ContentTab = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Subscriber Gate Dialog */}
-      <SubscriberGateDialog
-        open={!!gateDeck}
-        onOpenChange={open => !open && setGateDeck(null)}
-        deckName={gateDeck?.deck_name || ''}
-        cardCount={gateDeck?.card_count ?? 0}
-        onTrial={() => {
-          const deck = gateDeck;
-          setGateDeck(null);
-          setTrialDeck({ deckId: deck.deck_id, deckName: deck.deck_name });
-        }}
-        onSubscribe={() => {
-          setGateDeck(null);
-          ctx.handleSubscribe?.();
-        }}
-      />
-
-      {/* Trial Study Modal */}
-      <TrialStudyModal
-        open={!!trialDeck}
-        onOpenChange={open => !open && setTrialDeck(null)}
-        deckId={trialDeck?.deckId || ''}
-        deckName={trialDeck?.deckName || ''}
-      />
 
     </div>
   );

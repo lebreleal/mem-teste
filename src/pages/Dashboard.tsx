@@ -79,22 +79,8 @@ const Dashboard = () => {
 
   planRootIdsRef.current = planRootIds;
   const { isPremium, refreshStatus } = useSubscription();
-  const { missions } = useMissions();
   const { isAdmin } = useIsAdmin();
   const defaultAlgorithm = isPremium ? 'fsrs' : 'sm2';
-  const claimableCount = missions.filter(m => m.isCompleted && !m.isClaimed).length;
-
-  // Error notebook count
-  const { data: errorCount = 0 } = useQuery({
-    queryKey: ['error-notebook-count'],
-    queryFn: async () => {
-      if (!user) return 0;
-      const { getErrorDeckCount } = await import('@/services/errorDeckService');
-      return getErrorDeckCount(user.id);
-    },
-    enabled: !!user,
-    staleTime: 60_000,
-  });
 
   // Salas hook (community bootstrap, leave, publish, detach, share, image)
   const salas = useDashboardSalas({

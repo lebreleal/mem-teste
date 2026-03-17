@@ -98,8 +98,8 @@ interface HandlerDeps {
   deleteCard: AnyMutation;
   // From hooks
   createExam: AnyMutation;
-  addNotification: (n: ExamNotification) => void;
-  updateNotification: (id: string, update: Partial<ExamNotification>) => void;
+  addNotification: (n: { id: string; title: string; examId: string; status: string; message: string }) => void;
+  updateNotification: (id: string, update: Record<string, unknown>) => void;
   // State setters (callbacks)
   setFront: (v: string) => void;
   setBack: (v: string) => void;

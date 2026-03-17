@@ -18,9 +18,7 @@ import { usePendingDecks } from '@/stores/usePendingDecks';
 import * as aiService from '@/services/aiService';
 import * as deckService from '@/services/deckService';
 import * as cardService from '@/services/cardService';
-import * as tagService from '@/services/tagService';
 import { supabase } from '@/integrations/supabase/client';
-import type { Tag } from '@/types/tag';
 import type { Step, GenProgress, LoadProgress, GeneratedCard, DetailLevel, CardFormat, PageItem } from './types';
 
 interface UseAIDeckFlowParams {
@@ -479,26 +477,11 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
   }, [deckName, folderId, genProgress, addPending, onOpenChange, toast]);
 
   // === Save (foreground) — now accepts tags ===
-  const handleSave = useCallback(async (selectedTags?: (Tag | string)[]) => {
+  const handleSave = useCallback(async () => {
     if (!user || cards.length === 0) return;
     setIsSaving(true);
     try {
       const targetDeckId = await saveCardsToDeck(cards, deckName);
-      
-      // Apply deck-level tags
-      if (selectedTags && selectedTags.length > 0 && targetDeckId) {
-        for (const tag of selectedTags) {
-          try {
-            if (typeof tag === 'string') {
-              const created = await tagService.createTag(tag, user.id);
-              await tagService.addDeckTag(targetDeckId, created.id, user.id);
-            } else {
-              await tagService.addDeckTag(targetDeckId, tag.id, user.id);
-            }
-          } catch (e) { console.error('Failed to add deck tag:', e); }
-        }
-        queryClient.invalidateQueries({ queryKey: ['tags'] });
-      }
 
       // Auto-tagging removed — tags are only applied when user explicitly selects them
 

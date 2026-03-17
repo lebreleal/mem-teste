@@ -15,7 +15,7 @@ import {
   useTurmaRole, useTurmaMembers, useTurmaSubjects, useTurmaLessons,
   useTurmaDecks, useTurmaHierarchyMutations,
 } from '@/hooks/useTurmaHierarchy';
-import { useTurmaExams, useTurmaExamMutations } from '@/hooks/useTurmaExams';
+// Turma exams removed
 import { useToast } from '@/hooks/use-toast';
 import type { BreadcrumbItem } from './constants';
 
@@ -71,7 +71,7 @@ interface TurmaDetailContextValue {
 
   // Mutations
   mutations: ReturnType<typeof useTurmaHierarchyMutations>;
-  examMutations: ReturnType<typeof useTurmaExamMutations>;
+  examMutations: any;
   updateTurma: ReturnType<typeof useTurmas>['updateTurma'];
 
   // Dialog states
@@ -149,10 +149,10 @@ export const TurmaDetailProvider = ({ children }: { children: ReactNode }) => {
   const { data: members = [] } = useTurmaMembers(turmaId!);
   const { data: subjects = [] } = useTurmaSubjects(turmaId!);
   const { data: lessons = [] } = useTurmaLessons(turmaId!);
-  const { data: turmaExams = [] } = useTurmaExams(turmaId!);
-  const { data: turmaDecks = [] } = useTurmaDecks(turmaId!);
+  const turmaExams: any[] = [];
+  const turmaDecks = turmaDecksData;
   const mutations = useTurmaHierarchyMutations(turmaId!);
-  const examMutations = useTurmaExamMutations(turmaId!);
+  const examMutations = { createExam: { mutateAsync: async () => ({}) } } as any;
 
   const { data: lessonFiles = [] } = useQuery({
     queryKey: ['turma-lesson-files', turmaId],

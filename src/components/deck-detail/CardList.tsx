@@ -706,20 +706,6 @@ const CardListContent = ({
       )}
     </div>
 
-    {suggestCard && deckId && (
-      <SuggestCorrectionModal
-        open={!!suggestCard}
-        onOpenChange={(v) => { if (!v) setSuggestCard(null); }}
-        card={{
-          id: suggestCard.id,
-          front_content: suggestCard.front_content,
-          back_content: suggestCard.back_content,
-          deck_id: deckId,
-          card_type: suggestCard.card_type ?? 'basic',
-        }}
-        deckId={deckId}
-      />
-    )}
 
     {/* Community warning dialog */}
     <Dialog open={communityWarningOpen} onOpenChange={setCommunityWarningOpen}>

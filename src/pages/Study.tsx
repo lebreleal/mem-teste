@@ -1,10 +1,8 @@
 /**
- * Study.tsx — Slim orchestrator (~380 lines).
+ * Study.tsx — Slim orchestrator.
  * Logic extracted per Lei 2B into:
- *   - useLeechDetection (hook)
- *   - LeechMode (full-screen reinforcement)
  *   - SessionComplete (completion screen)
- *   - StudyDialogs (leech interruption, skip confirm, community info, chat, pro model)
+ *   - StudyDialogs (community info, chat, pro model)
  */
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
@@ -92,8 +90,8 @@ const Study = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Leech detection
-  const leech = useLeechDetection(deckId, folderId);
+  // Leech bypass refs (kept as stubs for StudyDialogs compatibility)
+  const leechBypassOnceRef = useRef(new Set<string>());
 
   useEffect(() => { mainScrollRef.current && (mainScrollRef.current.scrollTop = 0); }, [cardKey]);
 
@@ -175,19 +173,6 @@ const Study = () => {
   useEffect(() => { if (explainInChat && activeStreamingResponse && !chatOpen) setChatOpen(true); }, [explainInChat, activeStreamingResponse, chatOpen]);
   useEffect(() => () => { if (fastWarningTimer.current) clearTimeout(fastWarningTimer.current); }, []);
 
-  // Hydrate leech from DB
-  useEffect(() => { if (currentCard) leech.hydrateLeechCount(currentCard); }, [currentCard, leech.hydrateLeechCount]);
-  useEffect(() => { leech.restoreInterruption(); }, [leech.restoreInterruption]);
-
-  const exitLeechMode = useCallback(() => {
-    if (!leech.leechMode) return;
-    leech.failCountRef.current.delete(getLeechKey(leech.leechMode.leechCard));
-    leech.persistLeechFailCounts();
-    setLocalQueue(prev => prev.map(c => c.id === leech.leechMode!.leechCard.id ? { ...c, learning_step: 0 } : c));
-    leech.leechAdvanceLockRef.current = false;
-    leech.setLeechMode(null);
-    setCardKey(prev => prev + 1); cardShownAt.current = Date.now();
-  }, [leech]);
 
   const submittingRef = useRef<string | null>(null);
 
@@ -229,37 +214,17 @@ const Study = () => {
     submitReview.mutate({ card, rating, elapsedMs: elapsed }, {
       onSuccess: (result) => {
         if (shouldKeep && result.interval_days === 0) { setLocalQueue(prev => prev.map(c => c.id === card.id ? { ...c, state: result.state, stability: result.stability, difficulty: result.difficulty, scheduled_date: result.scheduled_date, learning_step: result.learning_step ?? 0 } : c)); }
-        if (user) { const isCorrect = rating >= 3; getCardConcepts(card.id, user.id).then(concepts => { for (const concept of concepts) { updateConceptMastery(concept.id, isCorrect).catch(() => {}); } }).catch(() => {}); }
       },
     });
   }, [localQueue, reviewCount, cardKey, deckConfig, deckConfigs, getCardDeckConfig, undo, tutor, addSuccessfulCard, submitReview, user]);
 
   const handleRate = useCallback(async (rating: Rating) => {
-    if (!currentCard || isTransitioning || leech.leechMode) return;
+    if (!currentCard || isTransitioning) return;
     if (submittingRef.current === currentCard.id) return;
     submittingRef.current = currentCard.id;
-    const leechKey = getLeechKey(currentCard);
-    const bypassLeechInterruption = leech.leechBypassOnceRef.current.has(leechKey);
-    if (bypassLeechInterruption) leech.leechBypassOnceRef.current.delete(leechKey);
-
-    if (rating === 1) {
-      let previousFails = leech.failCountRef.current.get(leechKey) ?? 0;
-      if (previousFails === 0 && user) { try { const recoveredStreak = await fetchLeechStreak(user.id, currentCard.id, LEECH_THRESHOLD - 1); if (recoveredStreak > 0) { previousFails = recoveredStreak; leech.failCountRef.current.set(leechKey, recoveredStreak); } } catch {} }
-      const count = previousFails + 1; leech.failCountRef.current.set(leechKey, count); leech.persistLeechFailCounts();
-      if (count >= LEECH_THRESHOLD && user && !bypassLeechInterruption) {
-        executeReview(currentCard, rating);
-        const interruption = { cardId: currentCard.id, leechKey, failCount: count, interruptedAt: new Date().toISOString(), cardSnapshot: { ...currentCard } };
-        setTimeout(() => { leech.setLeechInterruption(interruption); leech.setLeechSkipConfirmOpen(false); leech.persistLeechInterruption(interruption); }, 300);
-        return;
-      }
-    } else { leech.failCountRef.current.delete(leechKey); leech.persistLeechFailCounts(); }
     executeReview(currentCard, rating);
-  }, [currentCard, isTransitioning, leech, user, executeReview]);
+  }, [currentCard, isTransitioning, executeReview]);
 
-  // ─── Render: Leech Mode ───
-  if (leech.leechMode) {
-    return <LeechMode leechMode={leech.leechMode} setLeechMode={leech.setLeechMode} exitLeechMode={exitLeechMode} leechAdvanceLockRef={leech.leechAdvanceLockRef} />;
-  }
 
   if (isLoading || (!queueInitialized && isFetching)) {
     return <div className="flex min-h-screen items-center justify-center bg-background"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>;
@@ -319,7 +284,7 @@ const Study = () => {
         <div className="h-full transition-all duration-500 ease-out" style={{ width: `${progressPercent}%`, background: `linear-gradient(90deg, hsl(var(--primary)), hsl(var(--primary) / 0.7))`, borderRadius: '0 4px 4px 0' }} />
       </div>
 
-      <MilestoneToast reviewCount={reviewCount} correctCount={correctCount} />
+      
 
       <main ref={mainScrollRef} className="flex flex-1 min-h-0 items-center justify-center px-2 sm:px-4 py-2 sm:py-4 overflow-y-auto">
         <div key={cardKey} className={`w-full transition-all duration-200 ${isTransitioning ? 'opacity-0 scale-95' : 'animate-fade-in'}`}>
@@ -363,10 +328,6 @@ const Study = () => {
       </main>
 
       <StudyDialogs
-        leechInterruption={leech.leechInterruption} leechSkipConfirmOpen={leech.leechSkipConfirmOpen}
-        setLeechSkipConfirmOpen={leech.setLeechSkipConfirmOpen} clearLeechInterruption={leech.clearLeechInterruption}
-        leechBypassOnceRef={leech.leechBypassOnceRef} onStartLeechMode={leech.startLeechModeForCard}
-        localQueue={localQueue} currentCard={currentCard}
         communityInfoOpen={communityInfoOpen} setCommunityInfoOpen={setCommunityInfoOpen} sourceInfo={sourceInfo}
         pendingPro={pendingPro} confirmPro={confirmPro} cancelPro={cancelPro} baseTutorCost={BASE_TUTOR_COST}
         chatOpen={chatOpen} setChatOpen={setChatOpen}

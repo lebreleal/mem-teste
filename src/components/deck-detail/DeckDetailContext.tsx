@@ -157,9 +157,9 @@ interface DeckDetailContextValue {
   model: string;
   setModel: (v: string) => void;
   getCost: ReturnType<typeof useAIModel>['getCost'];
-  createExam: ReturnType<typeof useExams>['createExam'];
-  addNotification: ReturnType<typeof useExamNotifications>['addNotification'];
-  updateNotification: ReturnType<typeof useExamNotifications>['updateNotification'];
+  createExam: { mutateAsync: (..._args: unknown[]) => Promise<{ id: string }> };
+  addNotification: (n: { id: string; title: string; examId: string; status: string; message: string }) => void;
+  updateNotification: (id: string, update: Record<string, unknown>) => void;
 
   // Handlers
   resetForm: () => void;
@@ -211,10 +211,12 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const { cards, isLoading: cardsLoading, createCard, updateCard, deleteCard } = useCards(deckId, { enableQuery: false });
   const { decks } = useDecks();
   const { toast } = useToast();
-  const { createExam } = useExams();
+  // Exam generation stubs (exams system removed)
+  const createExam = { mutateAsync: async () => ({ id: '' }), isPending: false } as any;
+  const addNotification = (_n: any) => {};
+  const updateNotification = (_id: string, _update: any) => {};
   const { energy, spendEnergy } = useEnergy();
   const { model, setModel, getCost } = useAIModel();
-  const { addNotification, updateNotification } = useExamNotifications();
 
   // ─── State ─────────────────────────────
   const [examTitle, setExamTitle] = useState('');

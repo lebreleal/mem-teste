@@ -63,8 +63,8 @@ const LessonDetail = () => {
   const { data: turmaDecks = [] } = useTurmaDecks(turmaId!);
   const { decks: userDecks } = useDecks();
   const mutations = useTurmaHierarchyMutations(turmaId!);
-  const { data: turmaExams = [] } = useTurmaExams(turmaId!);
-  const examMutations = useTurmaExamMutations(turmaId!);
+  const turmaExams: any[] = [];
+  const examMutations = { createExam: { mutateAsync: async () => ({}) } } as any;
 
   const lesson = lessons.find(l => l.id === lessonId);
   const subject = subjects.find(s => s.id === lesson?.subject_id);
@@ -181,23 +181,9 @@ const LessonDetail = () => {
     toast({ title: 'Prova importada!' });
   };
 
-  // Open exam (import to personal and navigate)
-  const handleOpenExam = async (exam: any) => {
-    try {
-      const { fetchLinkedExam } = await import('@/services/examService');
-      const existing = await fetchLinkedExam(user!.id, exam.id);
-      if (existing) { navigate(`/exam/${existing.id}`); return; }
-
-      const newExamId = await importTurmaExamToPersonal({
-        examId: exam.id,
-        userId: user!.id,
-        title: exam.title,
-        timeLimitSeconds: exam.time_limit_seconds || null,
-      });
-      queryClient.invalidateQueries({ queryKey: ['exams'] });
-      toast({ title: 'Prova importada!' });
-      navigate(`/exam/${newExamId}`);
-    } catch (err: any) { toast({ title: 'Erro ao abrir prova', description: err.message, variant: 'destructive' }); }
+  // Open exam — exam system removed, stub handler
+  const handleOpenExam = async (_exam: any) => {
+    toast({ title: 'Sistema de provas removido', variant: 'destructive' });
   };
 
   const sharerIds = [...new Set(lessonDecks.map(d => d.shared_by))];

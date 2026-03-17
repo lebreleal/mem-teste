@@ -1,29 +1,16 @@
 /**
- * StudyDialogs — Leech interruption, skip confirm, community info, pro model, chat.
- * Extracted from Study.tsx (copy-paste integral).
+ * StudyDialogs — Community info, pro model, chat.
+ * Leech system removed.
  */
 
 import { lazy, Suspense } from 'react';
 import { RefreshCw } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import type { LeechInterruptionState } from '@/hooks/useLeechDetection';
-import { LEECH_THRESHOLD } from '@/hooks/useLeechDetection';
 
 const ProModelConfirmDialog = lazy(() => import('@/components/ProModelConfirmDialog'));
 const StudyChatModal = lazy(() => import('@/components/StudyChatModal'));
 
 interface StudyDialogsProps {
-  // Leech interruption
-  leechInterruption: LeechInterruptionState | null;
-  leechSkipConfirmOpen: boolean;
-  setLeechSkipConfirmOpen: (v: boolean) => void;
-  clearLeechInterruption: () => void;
-  leechBypassOnceRef: React.MutableRefObject<Set<string>>;
-  onStartLeechMode: (card: any) => void;
-  localQueue: any[];
-  currentCard: any;
-
   // Community info
   communityInfoOpen: boolean;
   setCommunityInfoOpen: (v: boolean) => void;
@@ -51,78 +38,6 @@ interface StudyDialogsProps {
 const StudyDialogs = (props: StudyDialogsProps) => {
   return (
     <>
-      <Dialog open={!!props.leechInterruption} onOpenChange={() => {}}>
-        <DialogContent className="max-w-md" onInteractOutside={(e) => e.preventDefault()}>
-          <DialogHeader>
-            <DialogTitle className="text-base">Sessão pausada para reforço</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 text-sm text-muted-foreground">
-            <p>
-              Você errou este card <strong className="text-destructive">{props.leechInterruption?.failCount ?? LEECH_THRESHOLD} vezes</strong> seguidas,
-              então pausamos para evitar consolidar o erro.
-            </p>
-            <p>Se você fechar o app agora, vamos lembrar essa pausa e retomar este aviso quando voltar.</p>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button
-              variant="outline"
-              onClick={() => props.setLeechSkipConfirmOpen(true)}
-            >
-              Continuar sem reforço
-            </Button>
-            <Button
-              onClick={() => {
-                if (!props.leechInterruption) {
-                  props.clearLeechInterruption();
-                  return;
-                }
-                const targetCard = props.leechInterruption.cardSnapshot
-                  ?? props.localQueue.find(c => c.id === props.leechInterruption!.cardId)
-                  ?? props.currentCard;
-                if (!targetCard) {
-                  props.clearLeechInterruption();
-                  return;
-                }
-                props.clearLeechInterruption();
-                void props.onStartLeechMode(targetCard);
-              }}
-            >
-              Fazer mini-reforço
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={props.leechSkipConfirmOpen} onOpenChange={props.setLeechSkipConfirmOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-base">Tem certeza que quer pular?</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 text-sm text-muted-foreground">
-            <p>
-              Pular o reforço pode manter a lacuna de base e aumentar a chance de erro repetido nesse mesmo tema.
-            </p>
-            <p>Se mesmo assim você quiser, liberamos continuar normalmente agora.</p>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button variant="outline" onClick={() => props.setLeechSkipConfirmOpen(false)}>
-              Voltar e revisar
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                if (props.leechInterruption) {
-                  props.leechBypassOnceRef.current.add(props.leechInterruption.leechKey);
-                }
-                props.clearLeechInterruption();
-              }}
-            >
-              Continuar mesmo assim
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       <Suspense fallback={null}>
         <ProModelConfirmDialog open={props.pendingPro} onConfirm={props.confirmPro} onCancel={props.cancelPro} baseCost={props.baseTutorCost} />
         <StudyChatModal
