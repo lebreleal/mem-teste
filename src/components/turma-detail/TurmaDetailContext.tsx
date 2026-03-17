@@ -5,6 +5,7 @@
  */
 
 import { createContext, useContext, useState, useMemo, useEffect, type ReactNode } from 'react';
+import type { Turma, TurmaMember, TurmaSubject, TurmaLesson, TurmaExam, TurmaDeck } from '@/types/turma';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { fetchTurmaPublic, fetchTurmaLessonFiles, fetchActiveSubscription, restoreSubscriptionStatus, processSubscription, importTurmaExam } from '@/services/turmaDetailService';
