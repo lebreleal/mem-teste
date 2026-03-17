@@ -16,6 +16,7 @@ interface OcclusionShape {
   type: 'rect' | 'polygon' | 'freehand';
   x?: number; y?: number; w?: number; h?: number;
   points?: { x: number; y: number }[];
+  color?: string;
 }
 
 interface OcclusionEditorProps {
@@ -100,6 +101,20 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
   const [currentPoints, setCurrentPoints] = useState<{ x: number; y: number }[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null);
+  const [shapeColor, setShapeColor] = useState('rgba(59,130,246,0.6)');
+
+  const COLORS = [
+    { fill: 'rgba(59,130,246,0.6)', border: 'rgba(59,130,246,0.9)', label: 'Azul' },
+    { fill: 'rgba(239,68,68,0.55)', border: 'rgba(239,68,68,0.9)', label: 'Vermelho' },
+    { fill: 'rgba(34,197,94,0.55)', border: 'rgba(34,197,94,0.9)', label: 'Verde' },
+    { fill: 'rgba(234,179,8,0.55)', border: 'rgba(234,179,8,0.9)', label: 'Amarelo' },
+    { fill: 'rgba(168,85,247,0.55)', border: 'rgba(168,85,247,0.9)', label: 'Roxo' },
+    { fill: 'rgba(249,115,22,0.55)', border: 'rgba(249,115,22,0.9)', label: 'Laranja' },
+    { fill: 'rgba(20,184,166,0.55)', border: 'rgba(20,184,166,0.9)', label: 'Teal' },
+    { fill: 'rgba(0,0,0,0.6)', border: 'rgba(0,0,0,0.85)', label: 'Preto' },
+  ];
+
+  const getColorObj = (fill: string) => COLORS.find(c => c.fill === fill) || COLORS[0];
 
   // Parse initial data
   useEffect(() => {
@@ -188,7 +203,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
       if (currentPoints.length >= 3) {
         const first = currentPoints[0];
         if (Math.hypot(pos.x - first.x, pos.y - first.y) < 15 / scale) {
-          setShapes(prev => [...prev, { id: crypto.randomUUID(), type: 'polygon', points: [...currentPoints] }]);
+          setShapes(prev => [...prev, { id: crypto.randomUUID(), type: 'polygon', points: [...currentPoints], color: shapeColor }]);
           setCurrentPoints([]);
           return;
         }
@@ -229,7 +244,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
     setDragOffset(null);
     if (tool === 'rect') {
       if (drawing && currentRect && currentRect.w > 5 && currentRect.h > 5) {
-        const newShape: OcclusionShape = { id: crypto.randomUUID(), type: 'rect', ...currentRect };
+        const newShape: OcclusionShape = { id: crypto.randomUUID(), type: 'rect', ...currentRect, color: shapeColor };
         setShapes(prev => [...prev, newShape]);
         setSelectedId(newShape.id);
       }
@@ -238,7 +253,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
       setCurrentRect(null);
     } else if (tool === 'freehand' && drawing) {
       if (currentPoints.length > 5) {
-        const newShape: OcclusionShape = { id: crypto.randomUUID(), type: 'freehand', points: [...currentPoints] };
+        const newShape: OcclusionShape = { id: crypto.randomUUID(), type: 'freehand', points: [...currentPoints], color: shapeColor };
         setShapes(prev => [...prev, newShape]);
         setSelectedId(newShape.id);
       }
@@ -326,6 +341,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
   /* ─── Shape rendering helpers ─── */
   const renderShape = (s: OcclusionShape, idx: number) => {
     const isSelected = selectedId === s.id;
+    const colorObj = getColorObj(s.color || COLORS[0].fill);
 
     if (s.type === 'rect') {
       return (
@@ -339,8 +355,8 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
             top: s.y! * scale,
             width: s.w! * scale,
             height: s.h! * scale,
-            backgroundColor: isSelected ? 'rgba(59,130,246,0.45)' : 'rgba(59,130,246,0.6)',
-            border: `2px solid ${isSelected ? '#facc15' : 'rgba(59,130,246,0.9)'}`,
+            backgroundColor: colorObj.fill,
+            border: `2px solid ${isSelected ? '#facc15' : colorObj.border}`,
             borderRadius: 4,
           }}
           onClick={(e) => { e.stopPropagation(); setSelectedId(s.id); }}
@@ -359,8 +375,8 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
           {s.type === 'polygon' ? (
             <polygon
               points={pts}
-              fill={isSelected ? 'rgba(59,130,246,0.45)' : 'rgba(59,130,246,0.6)'}
-              stroke={isSelected ? '#facc15' : 'rgba(59,130,246,0.9)'}
+              fill={colorObj.fill}
+              stroke={isSelected ? '#facc15' : colorObj.border}
               strokeWidth="2"
               className="pointer-events-auto cursor-pointer"
               onClick={(e) => { e.stopPropagation(); setSelectedId(s.id); }}
@@ -369,7 +385,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
             <polyline
               points={pts}
               fill="none"
-              stroke={isSelected ? '#facc15' : 'rgba(59,130,246,0.9)'}
+              stroke={isSelected ? '#facc15' : colorObj.border}
               strokeWidth="3"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -429,6 +445,23 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
         <Button variant="ghost" size="sm" onClick={() => { setShapes([]); setSelectedId(null); setCurrentPoints([]); }} className="gap-1 text-xs h-8 ml-auto">
           <IconClear /> Limpar
         </Button>
+      </div>
+
+      {/* Color palette */}
+      <div className="flex items-center gap-1.5 px-1">
+        {COLORS.map(c => (
+          <button
+            key={c.label}
+            className="h-6 w-6 rounded-md border-2 transition-transform hover:scale-110 focus:outline-none"
+            style={{
+              backgroundColor: c.fill,
+              borderColor: shapeColor === c.fill ? 'hsl(var(--primary))' : 'transparent',
+              boxShadow: shapeColor === c.fill ? '0 0 0 2px hsl(var(--primary) / 0.3)' : 'none',
+            }}
+            onClick={() => setShapeColor(c.fill)}
+            title={c.label}
+          />
+        ))}
       </div>
 
       {/* Polygon hint */}
