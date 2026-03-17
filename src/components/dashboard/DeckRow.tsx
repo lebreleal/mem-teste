@@ -19,7 +19,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-const ERROR_DECK_NAME = '📕 Caderno de Erros';
+const ERROR_DECK_NAME = '📕 Baralho de Erros';
 
 /**
 /**
@@ -183,7 +183,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   const classPcts = useMemo(() => aggregateClassification(deck, getSubDecks), [deck, getSubDecks]);
   const totalCards = classPcts.totalCards;
   const aggStats = useMemo(() => getAggregateStats(deck), [deck, getAggregateStats]);
-  const displayName = isErrorDeck ? 'Caderno de Erros' : deck.name;
+  const displayName = isErrorDeck ? 'Baralho de Erros' : deck.name;
   const hasDueCards = aggStats.new_count + aggStats.learning_count + aggStats.review_count > 0;
 
   // A deck is an empty matéria only if it has no children, no cards, and is currently expanded
@@ -278,10 +278,10 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           className={`group flex items-center gap-3 px-4 py-4 cursor-pointer transition-all hover:bg-muted/50 ${dragHandlers ? dragHandlers.className : ''}`}
           onClick={handleClick}
         >
-          <IconDeck className="h-5 w-5 text-muted-foreground shrink-0" />
+          <IconDeck className={`h-5 w-5 shrink-0 ${isErrorDeck ? 'text-destructive' : 'text-muted-foreground'}`} />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <h3 className="font-display font-semibold text-foreground truncate">{displayName}</h3>
+              <h3 className={`font-display font-semibold truncate ${isErrorDeck ? 'text-destructive' : 'text-foreground'}`}>{displayName}</h3>
               {isErrorDeck && (
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowInfoModal(true); }}
@@ -397,7 +397,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
       <Dialog open={showInfoModal} onOpenChange={setShowInfoModal}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>📕 Caderno de Erros</DialogTitle>
+            <DialogTitle>📕 Baralho de Erros</DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground leading-relaxed pt-2">
               Este deck reúne automaticamente os cartões que você errou durante suas sessões de estudo.
               Revise-os aqui para fortalecer os pontos mais fracos e melhorar sua retenção geral.
@@ -416,11 +416,11 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
             </DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground leading-relaxed pt-3 space-y-3">
               <p>
-                O <strong>Caderno de Erros</strong> é uma funcionalidade especial que estamos preparando para você!
+                O <strong>Baralho de Erros</strong> é uma funcionalidade especial que estamos preparando para você!
               </p>
               <p>Veja como vai funcionar:</p>
               <ul className="list-disc pl-4 space-y-1.5 text-left">
-                <li>Quando você errar um cartão (avaliação "De novo"), ele será <strong>automaticamente movido</strong> para o Caderno de Erros.</li>
+                <li>Quando você errar um cartão (avaliação "De novo"), ele será <strong>automaticamente movido</strong> para o Baralho de Erros.</li>
                 <li>Você poderá revisar seus pontos fracos em um só lugar, com foco total na recuperação.</li>
                 <li>Quando dominar o cartão (estado "Dominado"), ele <strong>voltará automaticamente</strong> ao deck original.</li>
                 <li>Questões erradas em simulados também gerarão cartões de revisão aqui.</li>

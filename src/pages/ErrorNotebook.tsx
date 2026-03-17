@@ -171,7 +171,7 @@ const ErrorNotebook = () => {
           <div className="flex-1">
             <h1 className="font-display text-lg font-bold text-foreground flex items-center gap-2">
               <BookX className="h-5 w-5 text-destructive" />
-              Caderno de Erros
+              Baralho de Erros
             </h1>
             <p className="text-xs text-muted-foreground">
               {cards.length} itens · {dueCount} para revisar

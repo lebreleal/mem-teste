@@ -72,7 +72,7 @@ const ErrorDetailSheet = ({ card, open, onOpenChange, errorDeckId, onReturn, onD
                 }}
               >
                 <PlayCircle className="h-4 w-4" />
-                Estudar Caderno de Erros
+                Estudar Baralho de Erros
               </Button>
             )}
 

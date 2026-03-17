@@ -273,7 +273,7 @@ export async function fetchPublicCommunityDecks(turmaId: string) {
       name: nameMap.get(td.deck_id) ?? 'Sem nome',
       cardCount: countMap.get(td.deck_id) ?? 0,
     }))
-    .filter((d: any) => !d.name.includes('Caderno de Erros'));
+    .filter((d: any) => !d.name.includes('Baralho de Erros'));
 }
 
 // ── TurmaDetail helpers ──

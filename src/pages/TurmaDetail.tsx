@@ -34,7 +34,7 @@ function useSalaDecks(turmaId: string) {
       if (!decks || decks.length === 0) return [];
 
       return decks
-        .filter((d: any) => !d.name?.includes('Caderno de Erros'))
+        .filter((d: any) => !d.name?.includes('Baralho de Erros'))
         .map((d: any) => {
           const cc = cardCountMap.get(d.id) ?? { total: 0, mastered: 0, novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
           return {
