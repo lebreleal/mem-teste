@@ -20,18 +20,28 @@ import { useToast } from '@/hooks/use-toast';
 import type { BreadcrumbItem } from './constants';
 
 // ─── Context value shape ────────────────────────────────
+/** Subscription row shape */
+interface ActiveSubscription {
+  id: string;
+  turma_id: string;
+  user_id: string;
+  status: string;
+  started_at: string;
+  expires_at: string;
+}
+
 interface TurmaDetailContextValue {
   // Core data
   turmaId: string;
-  turma: any;
+  turma: Turma | null | undefined;
   myRole: string | null | undefined;
-  members: any[];
-  subjects: any[];
-  lessons: any[];
-  turmaExams: any[];
-  turmaDecks: any[];
+  members: TurmaMember[];
+  subjects: TurmaSubject[];
+  lessons: TurmaLesson[];
+  turmaExams: TurmaExam[];
+  turmaDecks: TurmaDeck[];
   lessonFiles: { id: string; lesson_id: string }[];
-  user: any;
+  user: { id: string } | null;
 
   // Derived permissions
   isMember: boolean;
