@@ -206,13 +206,8 @@ const SalaHero = ({
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuItem onClick={() => {
-                        if (cf) { state.setRenameTarget({ type: 'folder', id: cf.id, name: cf.name }); state.setRenameName(cf.name); }
-                      }}>
-                        <IconEdit className="h-4 w-4 mr-2" /> Renomear sala
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setSalaImageOpen(true)}>
-                        <IconImage className="h-4 w-4 mr-2" /> Mudar imagem
+                      <DropdownMenuItem onClick={() => setOrganizeMode(!organizeMode)}>
+                        <GripVertical className="h-4 w-4 mr-2" /> {organizeMode ? 'Concluir organização' : 'Organizar sala'}
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={async () => {
                         await state.archiveFolder.mutateAsync(state.currentFolderId!);
