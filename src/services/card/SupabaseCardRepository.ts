@@ -71,14 +71,14 @@ export class SupabaseCardRepository implements ICardRepository {
     }));
 
     const BATCH_SIZE = 500;
-    const allData: Array<Record<string, unknown>> = [];
+    const allData: ReturnType<typeof supabase.from<'cards'>>[] = [];
     for (let i = 0; i < rows.length; i += BATCH_SIZE) {
       const batch = rows.slice(i, i + BATCH_SIZE);
       const { data, error } = await supabase.from('cards').insert(batch).select();
       if (error) throw error;
-      if (data) allData.push(...data);
+      if (data) allData.push(...(data as unknown[]));
     }
-    return allData.map(mapCardRow);
+    return (allData as unknown as import('@/types/domain').CardDbRow[]).map(mapCardRow);
   }
 
   async update(id: string, frontContent: string, backContent: string): Promise<Card> {
