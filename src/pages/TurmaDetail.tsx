@@ -103,14 +103,7 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
     return latest || null;
   }, [salaDecks]);
 
-  // Question counts per deck
   const allDeckIds = useMemo(() => salaDecks.map(d => d.id), [salaDecks]);
-  const { data: questionCountMap } = useQuery({
-    queryKey: ['sala-question-counts', turmaId, allDeckIds.join(',')],
-    queryFn: () => fetchSalaQuestionCounts(allDeckIds),
-    enabled: allDeckIds.length > 0,
-    staleTime: 60_000,
-  });
 
   // Aggregated stats
   const totalStats = useMemo(() => {
