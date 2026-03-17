@@ -64,7 +64,7 @@ const Study = () => {
   }, [deckId, folderId, navigate, queryClient]);
   const TUTOR_COST = getCost(BASE_TUTOR_COST);
 
-  const getCardDeckConfig = useCallback((_card: any) => deckConfig ?? {}, [deckConfig]);
+  const getCardDeckConfig = useCallback((_card: StudyCard) => deckConfig, [deckConfig]);
 
   // Local queue state
   const [localQueue, setLocalQueue] = useState<any[]>([]);
