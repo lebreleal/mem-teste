@@ -343,7 +343,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
       if (isCommunityDeck) {
         const cards = await cardService.fetchCards(deckId);
         // Reset state and difficulty so gauge shows 0% progress for the viewer
-        return cards.slice(0, displayLimit).map((c: any) => ({
+        return cards.slice(0, displayLimit).map((c) => ({
           ...c,
           state: 0,
           difficulty: 0,
