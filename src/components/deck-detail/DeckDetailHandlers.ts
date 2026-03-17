@@ -471,7 +471,7 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
     const mcCount = Math.max(0, examTotalQuestions - examWrittenCount);
     const totalCost = examTotalQuestions * 2;
     const notifId = crypto.randomUUID();
-    const eTitle = examTitle.trim() || `Prova - ${(deck as any)?.name || 'Sem nome'}`;
+    const eTitle = examTitle.trim() || `Prova - ${deck?.name || 'Sem nome'}`;
     addNotification({ id: notifId, title: eTitle, examId: '', status: 'generating', message: 'Gerando questões com IA...' });
     toast({ title: '🧠 Gerando prova...', description: 'Você será notificado quando estiver pronta.' });
     setExamModalOpen(false); setExamGenerating(false);
