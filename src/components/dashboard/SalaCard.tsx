@@ -18,7 +18,6 @@ interface SalaCardProps {
   deckCount: number;
   totalCards: number;
   masteredCards: number;
-  questionCount: number;
   dueCount: number;
   isVirtual?: boolean;
   imageUrl?: string | null;
