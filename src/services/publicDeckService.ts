@@ -187,13 +187,13 @@ async function copySingleDeck(params: {
 }) {
   const { sourceDeckId, deckName, userId, parentDeckId, sourceTurmaDeckId, folderId, communityId } = params;
   const { data: srcDeck } = await supabase.from('decks').select('algorithm_mode, daily_new_limit, daily_review_limit').eq('id', sourceDeckId).single();
-  const sd = srcDeck as any;
-  const insertData: any = {
+  interface DeckInsertData { name: string; user_id: string; is_public: boolean; is_live_deck: boolean; folder_id: string | null; parent_deck_id: string | null; algorithm_mode: string; daily_new_limit: number; daily_review_limit: number; source_turma_deck_id?: string; community_id?: string }
+  const insertData: DeckInsertData = {
     name: deckName, user_id: userId, is_public: false, is_live_deck: true,
     folder_id: folderId, parent_deck_id: parentDeckId,
-    algorithm_mode: sd?.algorithm_mode ?? 'fsrs',
-    daily_new_limit: sd?.daily_new_limit ?? 20,
-    daily_review_limit: sd?.daily_review_limit ?? 9999,
+    algorithm_mode: srcDeck?.algorithm_mode ?? 'fsrs',
+    daily_new_limit: srcDeck?.daily_new_limit ?? 20,
+    daily_review_limit: srcDeck?.daily_review_limit ?? 9999,
   };
   if (sourceTurmaDeckId) insertData.source_turma_deck_id = sourceTurmaDeckId;
   if (communityId) insertData.community_id = communityId;
