@@ -486,9 +486,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
                   <DropdownMenu key={t.id} open={imageMenuOpen} onOpenChange={setImageMenuOpen}>
                     <DropdownMenuTrigger asChild>
                       <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Inserir imagem">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
-                          <path fillRule="evenodd" d="M20 7V6H4v5.586L6.586 9a2 2 0 0 1 2.828 0l3.086 3.086L13.586 11a2 2 0 0 1 2.828 0L20 14.586zm2 9.999V5.882C22 4.842 21.147 4 20.095 4H3.905A1.894 1.894 0 0 0 2 5.882v12.236C2 19.158 2.853 20 3.905 20h16.19A1.894 1.894 0 0 0 22 18.118v-1.119m-2 .352-5-4.937-1.086 1.086 1.793 1.793a1 1 0 0 1-1.414 1.414l-2.5-2.5L8 10.414l-4 4V18h16z" clipRule="evenodd" />
-                        </svg>
+                        <IconImage className="h-3.5 w-3.5" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start">
