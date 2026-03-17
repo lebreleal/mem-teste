@@ -394,9 +394,9 @@ const ContentTab = () => {
 
   // ── Count decks recursively in a folder ──
   const countDecksInFolder = (folderId: string): number => {
-    const direct = turmaDecks.filter((d: any) => d.subject_id === folderId && (isAdmin || d.is_published !== false)).length;
-    const childFolders = subjects.filter((s: any) => s.parent_id === folderId);
-    return direct + childFolders.reduce((sum: number, cf: any) => sum + countDecksInFolder(cf.id), 0);
+    const direct = turmaDecks.filter(d => d.subject_id === folderId && (isAdmin || d.is_published !== false)).length;
+    const childFolders = subjects.filter(s => s.parent_id === folderId);
+    return direct + childFolders.reduce((sum, cf) => sum + countDecksInFolder(cf.id), 0);
   };
 
   // ── Count cards recursively in a folder ──
