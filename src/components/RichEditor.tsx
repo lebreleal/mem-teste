@@ -26,7 +26,7 @@ const AICreatorInlineRow = lazy(() => import('@/components/rich-editor/AICreator
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { supabase } from '@/integrations/supabase/client';
+import { uploadImage as uploadToStorage, uploadFile as uploadFileToStorage } from '@/services/storageService';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { compressImage } from '@/lib/imageUtils';
