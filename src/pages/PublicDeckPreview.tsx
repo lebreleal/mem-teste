@@ -940,17 +940,14 @@ const PublicDeckPreview = () => {
 
   // ── File upload for owner ──
   const getOrCreateLesson = async (): Promise<string> => {
-    if (turmaDeck?.lesson_id) return turmaDeck.lesson_id;
-    const { data, error } = await supabase.from('turma_lessons' as any).insert({
-      turma_id: turmaDeck!.turma_id, subject_id: turmaDeck?.subject_id ?? null,
-      name: deck?.name || 'Conteúdo', created_by: user!.id, is_published: true,
-    } as any).select().single();
-    if (error) throw error;
-    // Update turma_deck to reference the new lesson
-    await supabase.from('turma_decks').update({ lesson_id: (data as any).id }).eq('id', turmaDeck!.id);
+    const lessonId = await getOrCreateLessonForDeck({
+      turmaDeck: { id: turmaDeck!.id, turma_id: turmaDeck!.turma_id, lesson_id: turmaDeck?.lesson_id ?? null, subject_id: turmaDeck?.subject_id ?? null },
+      deckName: deck?.name || 'Conteúdo',
+      userId: user!.id,
+    });
     queryClient.invalidateQueries({ queryKey: ['turma-deck-link', deckId] });
     queryClient.invalidateQueries({ queryKey: ['turma-lessons'] });
-    return (data as any).id;
+    return lessonId;
   };
 
   const ALLOWED_FILE_TYPES = [
