@@ -114,16 +114,16 @@ const ManageDeck = () => {
       if (backHasCloze && !frontHasCloze) {
         const { text, images } = extractImages(backRaw);
         setFront(text); setBack(frontVal && frontVal !== '<p></p>' ? frontVal : '');
-        setAttachedImages(images);
+        setFrontAttachedImages(images);
         needsAutoSave = true;
       } else if (frontHasCloze) {
         const { text, images } = extractImages(frontVal);
         setFront(text); setBack(clozeExtra || (backRaw !== currentCard.back_content ? '' : backRaw));
-        setAttachedImages(images);
+        setFrontAttachedImages(images);
       } else {
         const { text, images } = extractImages(frontVal);
         setFront(text); setBack(backRaw);
-        setAttachedImages(images);
+        setFrontAttachedImages(images);
       }
       setOcclusionImageUrl(''); setOcclusionRects([]); setOcclusionCanvasSize(null);
     }
