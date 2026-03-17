@@ -123,7 +123,7 @@ export async function changeAlgorithm(deckId: string, algorithmMode: string, for
 
 /** Create a copy of a deck with a different algorithm as a sub-deck. */
 export async function createAlgorithmCopy(userId: string, deckId: string, algorithmMode: string, algorithmLabel: string) {
-  const { data: currentDeck } = await supabase.from('decks').select('*').eq('id', deckId).single();
+  const { data: currentDeck } = await supabase.from('decks').select('name, folder_id').eq('id', deckId).single();
   if (!currentDeck) throw new Error('Deck not found');
   const { data: newDeck, error } = await supabase
     .from('decks')
