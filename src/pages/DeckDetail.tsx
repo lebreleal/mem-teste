@@ -544,12 +544,6 @@ const LinkedDeckTabs = ({ deckId, resolvedSourceDeckId, isLinkedDeck, activeTab,
     staleTime: 60_000,
   });
 
-  const { data: questionCount = 0 } = useQuery({
-    queryKey: ['deck-questions-count', effectiveDeckId],
-    queryFn: () => countDeckQuestionsRecursive(effectiveDeckId),
-    enabled: !!effectiveDeckId,
-    staleTime: 60_000,
-  });
 
   const totalCards = cardCounts?.total ?? 0;
   const [questionAction, setQuestionAction] = useState<'practice' | 'ai' | null>(null);

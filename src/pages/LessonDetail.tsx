@@ -162,21 +162,6 @@ const LessonDetail = () => {
     },
   });
 
-  // Import personal exam into turma
-  const handleImportExamToTurma = async (exam: any) => {
-    if (!user || !turmaId || !lessonId) return;
-    await importExamToTurma({
-      examId: exam.id,
-      turmaId,
-      userId: user.id,
-      lessonId,
-      subjectId: lesson?.subject_id || null,
-      title: exam.title || 'Prova Importada',
-      timeLimitSeconds: exam.time_limit_seconds || null,
-    });
-    queryClient.invalidateQueries({ queryKey: ['turma-exams', turmaId] });
-    toast({ title: 'Prova importada!' });
-  };
 
   // Open exam — exam system removed, stub handler
   const handleOpenExam = async (_exam: any) => {
