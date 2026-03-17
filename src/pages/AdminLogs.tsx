@@ -68,16 +68,8 @@ ${JSON.stringify(log.metadata, null, 2)}
   };
 
   const handleDeleteOld = async () => {
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
     try {
-      const { error } = await (supabase as any)
-        .from("app_error_logs")
-        .delete()
-        .lt("created_at", thirtyDaysAgo.toISOString());
-
-      if (error) throw error;
+      await deleteOldErrorLogs(30);
       toast({ title: "Logs antigos removidos" });
       fetchLogs();
     } catch (err: any) {
