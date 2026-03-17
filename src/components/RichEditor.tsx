@@ -266,7 +266,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   }, [editor, clozeActive]);
 
   /* ─── Shared image upload helpers ─── */
-  const uploadToStorage = async (file: File): Promise<string | null> => {
+  const handleUploadImage = async (file: File): Promise<string | null> => {
     if (!user) return null;
     if (file.size > 5 * 1024 * 1024) {
       toast({ title: 'Máximo 5MB', variant: 'destructive' }); return null;
