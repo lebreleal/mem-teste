@@ -541,9 +541,9 @@ export async function fetchRetentionOverTime(userId: string, days = 180): Promis
   const { data, error } = await supabase.rpc('get_retention_over_time' as 'get_user_ranking', {
     p_user_id: userId,
     p_days: days,
-  });
+  } as unknown as Record<string, never>);
   if (error) throw error;
-  return (data as RetentionRow[]) ?? [];
+  return (data as unknown as RetentionRow[]) ?? [];
 }
 
 /** Fetch cards added per day. */
