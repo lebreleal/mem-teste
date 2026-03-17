@@ -292,33 +292,10 @@ const DeckSettings = () => {
   }, [sourceTurmaDeckId, sourceListingId, communityId, deckId, decks]);
 
   const handleDetachDeck = async () => {
-    if (!deckId) return;
+    if (!deckId || !user) return;
     setDetaching(true);
     try {
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (!currentUser) throw new Error('Not authenticated');
-
-      const { data: originalDeck } = await supabase.from('decks').select('name').eq('id', deckId).single();
-      if (!originalDeck) throw new Error('Deck not found');
-
-      const { data: newDeck, error } = await supabase.from('decks').insert({
-        name: `${(originalDeck as any).name}`,
-        user_id: currentUser.id,
-        folder_id: null,
-      } as any).select().single();
-      if (error || !newDeck) throw error || new Error('Failed');
-
-      const { data: cards } = await supabase.from('cards').select('front_content, back_content, card_type').eq('deck_id', deckId);
-      if (cards && cards.length > 0) {
-        const newCards = cards.map((c: any) => ({
-          deck_id: (newDeck as any).id,
-          front_content: c.front_content,
-          back_content: c.back_content,
-          card_type: c.card_type ?? 'basic',
-        }));
-        await supabase.from('cards').insert(newCards as any);
-      }
-
+      const newDeck = await deckService.detachCommunityDeck(user.id, deckId);
       queryClient.invalidateQueries({ queryKey: ['decks'] });
       toast({ title: 'Deck copiado!', description: 'Uma cópia pessoal independente foi criada.' });
       setDetachConfirm(false);
