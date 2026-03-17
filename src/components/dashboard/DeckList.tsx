@@ -237,11 +237,15 @@ const DeckList = ({
         );
       })}
 
-      {/* Separator between matérias and loose decks */}
+      {/* Spacer between matérias and loose decks */}
       {(() => {
         const hasMaterias = deckDrag.displayItems.some(d => deckRowProps.getSubDecks(d.id).length > 0);
-        const hasLoose = deckDrag.displayItems.some(d => deckRowProps.getSubDecks(d.id).length === 0 && d.name !== '📕 Caderno de Erros');
-        return hasMaterias && hasLoose ? <div className="border-t border-border/30 mx-4 my-1" /> : null;
+        const hasLoose = deckDrag.displayItems.some(d => {
+          const subs = deckRowProps.getSubDecks(d.id);
+          const isEmptyMateria = subs.length === 0 && d.total_cards === 0 && deckRowProps.expandedDecks.has(d.id);
+          return subs.length === 0 && !isEmptyMateria;
+        });
+        return hasMaterias && hasLoose ? <div className="h-3" /> : null;
       })()}
 
       {/* Loose decks */}

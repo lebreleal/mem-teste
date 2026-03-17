@@ -195,3 +195,12 @@ export const IconEdit = ({ className = 'h-5 w-5' }: IconProps) => (
     <path fill="currentColor" fillRule="evenodd" d="M14.804 4.354a2.5 2.5 0 0 1 3.535 0l1.308 1.307a2.5 2.5 0 0 1 0 3.535L8.942 19.9a2 2 0 0 1-1.132.566l-2.35.335A2 2 0 0 1 3.2 18.54l.335-2.35a2 2 0 0 1 .566-1.132zM16.5 5.5s-1.298 1.284-1.943 1.929l2.014 2.014C17.216 8.798 18.5 7.5 18.5 7.5zm-1.343 5.357-2.014-2.014-7.629 7.628-.335 2.35 2.35-.335z" clipRule="evenodd" />
   </svg>
 );
+
+/* ─── Archive (Caixa) ─── */
+export const IconArchive = ({ className = 'h-5 w-5' }: IconProps) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className={className}>
+    <rect width="18" height="4" x="1" y="-1" stroke="currentColor" strokeWidth="2" rx="1" transform="matrix(1 0 0 -1 2 8)" />
+    <path fill="currentColor" fillRule="evenodd" d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8h-2v11H6V8z" clipRule="evenodd" />
+    <rect width="4" height="2" x="8" y="15" fill="currentColor" rx="1" />
+  </svg>
+);
