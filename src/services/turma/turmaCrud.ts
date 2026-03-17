@@ -377,6 +377,7 @@ export async function createTurmaWithOwner(
   const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
   const { data: newTurma, error } = await supabase
     .from('turmas')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- insert typing
     .insert({
       name,
       description: '',
@@ -384,7 +385,7 @@ export async function createTurmaWithOwner(
       invite_code: inviteCode,
       is_private: options?.isPrivate ?? false,
       cover_image_url: options?.coverImageUrl ?? null,
-    } as Record<string, unknown>)
+    } as any)
     .select('id, share_slug')
     .single();
   if (error || !newTurma) throw error || new Error('Failed to create turma');
