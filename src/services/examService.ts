@@ -15,7 +15,7 @@ const examQuestionsTable = () => supabase.from('exam_questions' as 'exam_questio
 
 /** Fetch all exams for a user, optionally filtered by deck. */
 export async function fetchExams(userId: string, deckId?: string): Promise<Exam[]> {
-  let q = examsTable().select('*').eq('user_id', userId).order('created_at', { ascending: false });
+  let q = examsTable().select(EXAM_COLS).eq('user_id', userId).order('created_at', { ascending: false });
   if (deckId) q = q.eq('deck_id', deckId);
   const { data, error } = await q;
   if (error) throw error;
