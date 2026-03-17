@@ -1057,15 +1057,14 @@ const CreateQuestionDialog = ({
           const shuffledOpts = indices.map((i: number) => opts[i]);
           const newCorrectIdx = indices.indexOf(correctIdx);
 
-          const { data: inserted } = await supabase.from('deck_questions' as any).insert({
-            deck_id: deckId, created_by: user.id,
+          const insertedId = await insertQuestionReturningId(deckId, user.id, {
             question_text: qi.question_text || '',
             question_type: 'multiple_choice',
             options: shuffledOpts,
             correct_indices: [newCorrectIdx],
             explanation: qi.explanation || '',
             concepts: qi.concepts || [],
-          }).select('id').single();
+          });
 
           // Collect for global concept linking
           if (inserted && qi.concepts?.length > 0) {
