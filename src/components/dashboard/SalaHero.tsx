@@ -14,7 +14,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 import { calculateRealStudyTime } from '@/lib/studyUtils';
-import { IconTrash, IconImage, IconInfo, IconDeck, IconArchive, IconEdit } from '@/components/icons';
+import { IconTrash, IconInfo, IconDeck, IconArchive } from '@/components/icons';
 import type { User } from '@supabase/supabase-js';
 import type { Folder } from '@/types/folder';
 import type { DeckWithStats } from '@/types/deck';
