@@ -240,7 +240,8 @@ export async function followDeckWithHierarchy(params: {
 
   if (!turmaDeck) {
     // Non-turma public deck
-    const insertData: any = {
+    interface NonTurmaInsert { name: string; user_id: string; is_public: boolean; is_live_deck: boolean; source_listing_id?: string; community_id?: string }
+    const insertData: NonTurmaInsert = {
       name: deckName, user_id: userId, is_public: false, is_live_deck: true,
     };
     const { data: listing } = await supabase
@@ -254,10 +255,10 @@ export async function followDeckWithHierarchy(params: {
         const { data: ownerMembership } = await supabase
           .from('turma_members')
           .select('turma_id')
-          .eq('user_id', (srcDeck as any).user_id)
+          .eq('user_id', srcDeck.user_id)
           .limit(1)
           .maybeSingle();
-        if (ownerMembership) insertData.community_id = (ownerMembership as any).turma_id;
+        if (ownerMembership) insertData.community_id = ownerMembership.turma_id;
       }
     }
 
