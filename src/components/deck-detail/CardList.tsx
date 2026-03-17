@@ -35,23 +35,7 @@ const useCardTagsBatch = (cardIds: string[]) => {
     queryKey: ['tags', 'card-batch', key],
     queryFn: async () => {
       if (cardIds.length === 0) return {} as Record<string, { id: string; name: string; is_official: boolean }[]>;
-      const BATCH = 300;
-      const map: Record<string, { id: string; name: string; is_official: boolean }[]> = {};
-      for (let i = 0; i < cardIds.length; i += BATCH) {
-        const batch = cardIds.slice(i, i + BATCH);
-        const { data } = await supabase
-          .from('card_tags')
-          .select('card_id, tags(id, name, is_official)')
-          .in('card_id', batch);
-        if (data) {
-          for (const row of data as any[]) {
-            if (!row.tags) continue;
-            if (!map[row.card_id]) map[row.card_id] = [];
-            map[row.card_id].push(row.tags);
-          }
-        }
-      }
-      return map;
+      return fetchCardTagsBatch(cardIds);
     },
     enabled: cardIds.length > 0,
     staleTime: 60_000,

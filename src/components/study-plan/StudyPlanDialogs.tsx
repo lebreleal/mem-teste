@@ -175,26 +175,22 @@ export function CatchUpDialog({ open, onOpenChange, totalReview, avgSecondsPerCa
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 30);
     
-    const { error } = await supabase
-      .from('cards')
-      .update({ state: 0, stability: 0, difficulty: 0, scheduled_date: new Date().toISOString() } as any)
-      .in('deck_id', allDeckIds)
-      .eq('state', 2)
-      .lt('scheduled_date', cutoff.toISOString());
-    
-    setResetting(false);
-    setShowResetConfirm(false);
-    onOpenChange(false);
-    
-    if (error) {
-      toast({ title: 'Erro ao resetar cards', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await resetOverdueCards(allDeckIds, cutoff.toISOString());
+      setResetting(false);
+      setShowResetConfirm(false);
+      onOpenChange(false);
       qc.invalidateQueries({ queryKey: ['plan-metrics'] });
       qc.invalidateQueries({ queryKey: ['per-deck-new-counts'] });
       qc.invalidateQueries({ queryKey: ['study-queue'] });
       qc.invalidateQueries({ queryKey: ['decks'] });
       qc.invalidateQueries({ queryKey: ['deck-stats'] });
       toast({ title: `${overdueCount} cards resetados`, description: 'Eles voltaram ao estado "novo" e serão reapresentados gradualmente.' });
+    } catch (error: any) {
+      setResetting(false);
+      setShowResetConfirm(false);
+      onOpenChange(false);
+      toast({ title: 'Erro ao resetar cards', description: error.message, variant: 'destructive' });
     }
   };
 
