@@ -157,14 +157,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
 
   const handleBury = async () => {
     try {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      tomorrow.setHours(0, 0, 0, 0);
-      const { error } = await supabase
-        .from('cards')
-        .update({ scheduled_date: tomorrow.toISOString() })
-        .eq('id', card.id);
-      if (error) throw error;
+      await burySingleCard(card.id);
       toast({ title: '⛏️ Card enterrado', description: 'Ele voltará amanhã.' });
       setBuryConfirmOpen(false);
       onCardBuried?.();
