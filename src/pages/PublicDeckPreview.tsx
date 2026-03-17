@@ -642,61 +642,7 @@ const CommunitySuggestions = ({ deckId }: { deckId: string }) => {
 
   const { data: suggestions = [], isLoading } = useQuery({
     queryKey: ['deck-suggestions-public', deckId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('deck_suggestions')
-        .select('id, status, rationale, created_at, suggester_user_id, card_id, suggested_content, suggestion_type, suggested_tags, content_status, tags_status')
-        .eq('deck_id', deckId)
-        .order('created_at', { ascending: false })
-        .limit(50);
-      if (error) throw error;
-      if (!data || data.length === 0) return [];
-
-      const userIds = [...new Set(data.map(s => s.suggester_user_id))];
-      const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: userIds });
-      const nameMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
-
-      const cardIds = data.map(s => s.card_id).filter(Boolean) as string[];
-      const { data: cards } = cardIds.length > 0
-        ? await supabase.from('cards').select('id, front_content, back_content').in('id', cardIds)
-        : { data: [] };
-      const cardMap = new Map((cards ?? []).map(c => [c.id, c]));
-
-      // Fetch votes
-      const suggestionIds = data.map(s => s.id);
-      const { data: votes } = await supabase
-        .from('suggestion_votes')
-        .select('suggestion_id, vote, user_id')
-        .in('suggestion_id', suggestionIds);
-      
-      const voteMap = new Map<string, { score: number; userVote: number }>();
-      (votes ?? []).forEach((v: any) => {
-        const existing = voteMap.get(v.suggestion_id) ?? { score: 0, userVote: 0 };
-        existing.score += v.vote;
-        if (v.user_id === user?.id) existing.userVote = v.vote;
-        voteMap.set(v.suggestion_id, existing);
-      });
-
-      // Fetch comment counts
-      const { data: commentCounts } = await supabase
-        .from('suggestion_comments')
-        .select('suggestion_id')
-        .in('suggestion_id', suggestionIds);
-      const commentCountMap = new Map<string, number>();
-      (commentCounts ?? []).forEach((c: any) => {
-        commentCountMap.set(c.suggestion_id, (commentCountMap.get(c.suggestion_id) ?? 0) + 1);
-      });
-
-      return data.map(s => ({
-        ...s,
-        suggester_name: nameMap.get(s.suggester_user_id) ?? 'Usuário',
-        original_front: s.card_id ? cardMap.get(s.card_id)?.front_content ?? null : null,
-        original_back: s.card_id ? cardMap.get(s.card_id)?.back_content ?? null : null,
-        vote_score: voteMap.get(s.id)?.score ?? 0,
-        user_vote: voteMap.get(s.id)?.userVote ?? 0,
-        comment_count: commentCountMap.get(s.id) ?? 0,
-      })) as Suggestion[];
-    },
+    queryFn: () => fetchDeckSuggestions(deckId, user?.id) as Promise<Suggestion[]>,
     enabled: !!deckId,
   });
 
