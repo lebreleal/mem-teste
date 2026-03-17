@@ -1,5 +1,5 @@
 import React from 'react';
-import { List, type RowComponentProps } from 'react-window';
+import { List } from 'react-window';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { Pencil, Trash2, Send, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
