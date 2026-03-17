@@ -33,6 +33,7 @@ import SalaList from '@/components/dashboard/SalaList';
 import SalaHero from '@/components/dashboard/SalaHero';
 import DashboardDialogs from '@/components/dashboard/DashboardDialogs';
 import DashboardModals from '@/components/dashboard/DashboardModals';
+import ShareSalaModal from '@/components/dashboard/ShareSalaModal';
 const PremiumModal = lazy(() => import('@/components/dashboard/PremiumModal'));
 
 const StudyWeightsSheet = lazy(() => import('@/components/dashboard/StudyWeightsSheet'));
