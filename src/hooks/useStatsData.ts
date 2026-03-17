@@ -174,7 +174,7 @@ export function useStatsData() {
 
   const hoursChartData = useMemo(() => {
     const entries = Object.entries(hoursFiltered)
-      .map(([key, val]: [string, any]) => ({ date: key, minutes: Number(val.minutes) || 0 }))
+      .map(([key, val]) => ({ date: key, minutes: Number(val.minutes) || 0 }))
       .sort((a, b) => a.date.localeCompare(b.date));
     if (entries.length > 60) {
       const weeks: Record<string, number> = {};
