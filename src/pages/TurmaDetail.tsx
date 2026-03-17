@@ -184,8 +184,9 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
       queryClient.invalidateQueries({ queryKey: ['folders'] });
       queryClient.invalidateQueries({ queryKey: ['decks'] });
       toast({ title: '✅ Seguindo sala! Ela aparece agora no seu menu Início.' });
-    } catch (e: any) {
-      if (e.code === '23505') {
+    } catch (e: unknown) {
+      const err = e as { code?: string };
+      if (err.code === '23505') {
         toast({ title: 'Você já segue esta sala' });
       } else {
         toast({ title: 'Erro ao seguir', variant: 'destructive' });
