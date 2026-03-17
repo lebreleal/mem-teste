@@ -61,6 +61,12 @@ function editorToCloze(html: string): string {
   return html.replace(/<span[^>]*data-cloze="(\d+)"[^>]*>(.*?)<\/span>/g, '{{c$1::$2}}');
 }
 
+export interface ImageAttachment {
+  url: string;
+  isOcclusion: boolean;
+  hasOcclusionRects: boolean;
+}
+
 interface RichEditorProps {
   content: string;
   onChange: (html: string) => void;
@@ -77,6 +83,14 @@ interface RichEditorProps {
   /** AI Creator — pass callback to show the AI Creator button in toolbar */
   onAICreate?: (templatePrompt: string) => void;
   isAICreating?: boolean;
+  /** Image attachments displayed as thumbnails below text, above toolbar */
+  imageAttachments?: ImageAttachment[];
+  /** Called when user attaches a normal image (instead of inserting inline) */
+  onImageAttached?: (url: string) => void;
+  /** Called when user removes an attachment thumbnail */
+  onRemoveAttachment?: (url: string) => void;
+  /** Called when user clicks an attachment thumbnail */
+  onClickAttachment?: (url: string, isOcclusion: boolean) => void;
 }
 
 const TEXT_COLORS = [
