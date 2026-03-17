@@ -573,7 +573,7 @@ const Study = () => {
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
         tomorrow.setHours(0, 0, 0, 0);
-        supabase.from('cards').update({ scheduled_date: tomorrow.toISOString() } as any).in('id', buriedSiblingIds);
+        buryCards(buriedSiblingIds, tomorrow.toISOString());
       }
     }
 
