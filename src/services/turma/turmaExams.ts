@@ -7,7 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { TurmaExam, TurmaExamQuestion, TurmaExamAttempt } from '@/types/turma';
 
 export async function fetchTurmaExams(turmaId: string): Promise<TurmaExam[]> {
-  const { data, error } = await supabase.from('turma_exams').select('*').eq('turma_id', turmaId).order('created_at', { ascending: false });
+  const { data, error } = await supabase.from('turma_exams').select('id, turma_id, title, description, subject_id, lesson_id, created_by, is_published, is_marketplace, subscribers_only, price, time_limit_seconds, total_questions, sort_order, created_at, updated_at').eq('turma_id', turmaId).order('created_at', { ascending: false });
   if (error) throw error;
   const creatorIds = [...new Set((data ?? []).map((e: any) => e.created_by))];
   const { data: profiles } = await supabase.from('profiles').select('id, name').in('id', creatorIds);
