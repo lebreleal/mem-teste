@@ -362,12 +362,10 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
         toast({ title: 'Máximo 10MB', variant: 'destructive' }); return;
       }
       const ext = file.name.split('.').pop();
-      const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
-      const { error } = await supabase.storage.from('card-images').upload(path, file);
-      if (error) { toast({ title: 'Erro no upload', variant: 'destructive' }); return; }
-      const { data: urlData } = supabase.storage.from('card-images').getPublicUrl(path);
-      editor.chain().focus().insertContent(
-        `<audio controls src="${urlData.publicUrl}"></audio>`
+      try {
+        const publicUrl = await uploadFileToStorage(user.id, file);
+        editor.chain().focus().insertContent(
+          `<audio controls src="${publicUrl}"></audio>`
       ).run();
     };
     input.click();

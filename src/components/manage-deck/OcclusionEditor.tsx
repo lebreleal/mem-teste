@@ -426,10 +426,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
     if (!imageUrl) return;
     setIsDetecting(true);
     try {
-      const { data, error } = await supabase.functions.invoke('detect-occlusion', {
-        body: { imageUrl },
-      });
-      if (error) throw error;
+      const data = await invokeDetectOcclusion(imageUrl);
       if (data?.regions && Array.isArray(data.regions) && data.regions.length > 0) {
         pushHistory();
         const newShapes: OcclusionShape[] = data.regions.map((r: any) => ({
