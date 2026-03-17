@@ -140,7 +140,19 @@ export function mapCardRow(row: CardDbRow): Card {
   };
 }
 
-export function mapStudyStatsRow(row: any): StudySnapshot {
+export interface StudyStatsDbRow {
+  streak?: number;
+  freezes_available?: number;
+  today_minutes?: number;
+  avg_minutes_7d?: number;
+  today_cards?: number;
+  energy?: number;
+  daily_energy_earned?: number;
+  mascot_state?: 'happy' | 'tired' | 'sleeping';
+  last_study_date?: string | null;
+}
+
+export function mapStudyStatsRow(row: StudyStatsDbRow): StudySnapshot {
   return {
     streak: row.streak ?? 0,
     freezesAvailable: row.freezes_available ?? 0,
