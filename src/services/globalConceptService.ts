@@ -328,7 +328,7 @@ export async function linkQuestionsToConcepts(
 export async function fetchGlobalConcepts(userId: string): Promise<GlobalConcept[]> {
   const { data, error } = await supabase
     .from('global_concepts' as any)
-    .select('*')
+    .select(GLOBAL_CONCEPT_COLS)
     .eq('user_id', userId)
     .order('scheduled_date', { ascending: true });
 
