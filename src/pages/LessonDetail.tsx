@@ -285,7 +285,7 @@ const LessonDetail = () => {
       if (!isDeckFreeCheck && !isSubscriber && !isAdmin && !isMod && td.shared_by !== user.id) {
         throw new Error('SUBSCRIBER_ONLY');
       }
-      const { data: freshDecks } = await supabase.from('decks').select('*').eq('user_id', user.id);
+      const { data: freshDecks } = await supabase.from('decks').select('id, name, folder_id, parent_deck_id, source_turma_deck_id, is_archived').eq('user_id', user.id);
       const latestDecks = (freshDecks || []) as any[];
 
       let turmaFolder = folders.find(f => f.name === turma.name && !f.parent_id);
