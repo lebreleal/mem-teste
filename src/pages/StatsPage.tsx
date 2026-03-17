@@ -271,16 +271,7 @@ const StatsPage = () => {
   // Activity data from RPC
   const { data: activityData } = useQuery({
     queryKey: ['activity-full', user?.id],
-    queryFn: async () => {
-      if (!user) return null;
-      const tzOffsetMinutes = -180;
-      const { data } = await supabase.rpc('get_activity_daily_breakdown', {
-        p_user_id: user.id,
-        p_tz_offset_minutes: tzOffsetMinutes,
-        p_days: 365,
-      } as any);
-      return data as any;
-    },
+    queryFn: () => fetchActivityBreakdown(user!.id, 365),
     enabled: !!user,
     staleTime: 60_000,
   });
