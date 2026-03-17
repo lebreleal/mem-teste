@@ -9,7 +9,7 @@ import type { TurmaSemester, TurmaSubject, TurmaLesson, TurmaDeck } from '@/type
 // ── Hierarchy Queries ──
 
 export async function fetchTurmaSemesters(turmaId: string): Promise<TurmaSemester[]> {
-  const { data } = await supabase.from('turma_semesters').select('*').eq('turma_id', turmaId).order('sort_order', { ascending: true });
+  const { data } = await supabase.from('turma_semesters').select('id, turma_id, name, description, sort_order, created_at, created_by').eq('turma_id', turmaId).order('sort_order', { ascending: true });
   return (data ?? []) as TurmaSemester[];
 }
 
