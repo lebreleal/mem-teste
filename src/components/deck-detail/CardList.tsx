@@ -20,7 +20,8 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
+import { List, type RowComponentProps } from 'react-window';
 import { useQuery } from '@tanstack/react-query';
 import { fetchCardTagsBatch } from '@/services/dashboardService';
 import SuggestCorrectionModal from '@/components/SuggestCorrectionModal';
