@@ -19,12 +19,9 @@ import { invalidateStudyQueries } from '@/lib/queryKeys';
 import { useTutorStream } from '@/hooks/useTutorStream';
 import { useStudyUndo } from '@/hooks/useStudyUndo';
 import { useAuth } from '@/hooks/useAuth';
-import { useLeechDetection, getLeechKey, LEECH_THRESHOLD } from '@/hooks/useLeechDetection';
 import AIModelSelector from '@/components/AIModelSelector';
 import FlashCard from '@/components/FlashCard';
 import SessionProgressStrip, { type DeckSessionStats } from '@/components/SessionProgressStrip';
-import MilestoneToast from '@/components/MilestoneToast';
-import LeechMode from '@/components/study/LeechMode';
 import SessionComplete from '@/components/study/SessionComplete';
 import StudyDialogs from '@/components/study/StudyDialogs';
 import { Button } from '@/components/ui/button';
@@ -32,12 +29,11 @@ import { ArrowLeft, Brain, Moon, Sun, Timer, RefreshCw, Info } from 'lucide-reac
 import { useTheme } from '@/hooks/useTheme';
 import StudyCardActions from '@/components/StudyCardActions';
 import { useToast } from '@/hooks/use-toast';
-import { resolveCommunitySource, fetchLeechStreak } from '@/services/studyService';
+import { resolveCommunitySource } from '@/services/studyService';
 import { buryCards } from '@/services/card/cardMutations';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { Rating } from '@/lib/fsrs';
-import { getCardConcepts, updateConceptMastery } from '@/services/globalConceptService';
 
 const FAST_THRESHOLD_MS = 3000;
 const BASE_TUTOR_COST = 2;

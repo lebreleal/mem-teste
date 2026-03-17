@@ -8,7 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useStudyStats } from '@/hooks/useStudyStats';
-import { useExamNotifications } from '@/hooks/useExamNotifications';
+
 import { useEnergy } from '@/hooks/useEnergy';
 import { Button } from '@/components/ui/button';
 import {

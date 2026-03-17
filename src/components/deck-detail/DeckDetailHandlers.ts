@@ -5,7 +5,7 @@
 
 import { useCallback } from 'react';
 import { fetchCardFrontContent } from '@/services/uiQueryService';
-import type { ExamNotification } from '@/hooks/useExamNotifications';
+
 import { getCurrentUserId, invokeEdgeFunction } from '@/services/authService';
 import * as cardService from '@/services/cardService';
 import * as deckService from '@/services/deckService';

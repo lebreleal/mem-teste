@@ -1,7 +1,7 @@
 import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { CardEditorForm } from '@/components/card-editor/CardEditorForm';
-import { CardTagEditor } from './CardTagWidgets';
+
 import type { EditorCardType } from '@/hooks/useManageDeck';
 import OcclusionEditor from '@/components/manage-deck/OcclusionEditor';
 

@@ -7,7 +7,7 @@ import { useState, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
 import { fetchActivityBreakdown, fetchHourlyBreakdown, fetchRetentionOverTime, fetchCardsAddedPerDay } from '@/services/studyService';
-import { useCardStatistics } from '@/hooks/useCardStatistics';
+import { useCardStatistics } from '@/hooks/useCardStatisticsLocal';
 import { useDecks } from '@/hooks/useDecks';
 import { useProfile } from '@/hooks/useProfile';
 import { useRanking, useTogglePublicProfile } from '@/hooks/useRanking';

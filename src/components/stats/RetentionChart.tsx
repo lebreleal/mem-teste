@@ -10,7 +10,7 @@ import {
   AreaChart, Area, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer,
 } from 'recharts';
 import { SectionTitle } from './StatsShared';
-import type { CardStatistics } from '@/hooks/useCardStatistics';
+import type { CardStatistics } from '@/hooks/useCardStatisticsLocal';
 
 interface RetentionChartProps {
   stats: CardStatistics;
