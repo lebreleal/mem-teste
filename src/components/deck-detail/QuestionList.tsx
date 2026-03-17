@@ -147,7 +147,7 @@ const QuestionList = React.memo(({
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="min-w-[140px]">
-                      <DropdownMenuItem onClick={(e: any) => { e.stopPropagation(); onPreview(q); }}>
+                      <DropdownMenuItem onClick={(e: React.MouseEvent) => { e.stopPropagation(); onPreview(q); }}>
                         <Eye className="mr-2 h-4 w-4" /> Ver
                       </DropdownMenuItem>
                       {!isReadOnly && !isCommunity && (
