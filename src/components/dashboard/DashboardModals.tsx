@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { IconInfo, IconDeck, IconFolder, IconImport, IconSparkle } from '@/components/icons';
+import { IconInfo, IconDeck, IconFolder, IconImport, IconAIGradient } from '@/components/icons';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -66,44 +66,44 @@ const DashboardModals = (props: DashboardModalsProps) => {
             </DialogTitle>
             <DialogDescription asChild>
             <div className="text-sm text-muted-foreground leading-relaxed pt-2 space-y-2">
-              {props.addMenuInfoType === 'materia' && (
-                <>
-                  <p>
-                    A <span className="inline-flex items-center gap-0.5 font-semibold"><IconFolder className="inline h-3.5 w-3.5" /> Pasta</span> serve para organizar seus baralhos por temas maiores.
-                  </p>
-                  <p>
-                    Por exemplo, dentro da <span className="inline-flex items-center gap-0.5"><IconFolder className="inline h-3 w-3" /> Pasta</span> <em>"Clínica Médica"</em>, você guarda os baralhos de <em>"Cardiologia"</em> ou <em>"Nefrologia"</em>.
-                  </p>
-                  <p>
-                    Você também pode estudar todos os baralhos dentro da pasta com um clique. Se preferir, nossa <span className="inline-flex items-center gap-0.5"><IconSparkle className="inline h-3 w-3" /> IA</span> lê seu material de estudo e cria esses baralhos direto dentro da <span className="inline-flex items-center gap-0.5"><IconFolder className="inline h-3 w-3" /> pasta</span> para você não ter trabalho nenhum.
-                  </p>
-                </>
-              )}
+               {props.addMenuInfoType === 'materia' && (
+                 <>
+                   <p>
+                     A <span className="inline-flex items-center gap-0.5 font-semibold"><IconFolder className="inline h-3.5 w-3.5" /> Pasta</span> serve para organizar seus <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3.5 w-3.5" /> baralhos</span> por temas maiores.
+                   </p>
+                   <p>
+                     Por exemplo, dentro da <span className="inline-flex items-center gap-0.5 font-semibold"><IconFolder className="inline h-3 w-3" /> Pasta</span> <em>"Clínica Médica"</em>, você guarda os <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> baralhos</span> de <em>"Cardiologia"</em> ou <em>"Nefrologia"</em>.
+                   </p>
+                   <p>
+                     Você também pode estudar todos os <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> baralhos</span> dentro da <span className="inline-flex items-center gap-0.5 font-semibold"><IconFolder className="inline h-3 w-3" /> pasta</span> com um clique. Se preferir, nossa <span className="inline-flex items-center gap-0.5 font-semibold"><IconAIGradient className="inline h-3.5 w-3.5" /> IA</span> lê seu material de estudo e cria esses <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> baralhos</span> direto dentro da <span className="inline-flex items-center gap-0.5 font-semibold"><IconFolder className="inline h-3 w-3" /> pasta</span> para você não ter trabalho nenhum.
+                   </p>
+                 </>
+               )}
                {props.addMenuInfoType === 'deck' && (
                  <>
                    <p>
-                     O baralho organiza seus <span className="inline-flex items-center gap-0.5"><IconDeck className="inline h-3.5 w-3.5" /> cartões</span> por tema. No <span className="inline-flex items-center gap-0.5"><IconDeck className="inline h-3.5 w-3.5" /> baralho</span> de <em>"Antibióticos"</em>, por exemplo, ficam guardados todos os seus cartões sobre esse assunto.
+                     O <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3.5 w-3.5" /> baralho</span> organiza seus cartões por tema. No <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3.5 w-3.5" /> baralho</span> de <em>"Antibióticos"</em>, por exemplo, ficam guardados todos os seus cartões sobre esse assunto.
                    </p>
                    <p>
                      Lá dentro, cada cartão tem <strong>Frente</strong> e <strong>Verso</strong>.
                    </p>
                    <p>
-                     Você pode criar os seus manualmente ou deixar que nossa <span className="inline-flex items-center gap-0.5"><IconSparkle className="inline h-3 w-3" /> IA</span> gere tudo no automático usando seu material de estudo.
+                     Você pode criar os seus manualmente ou deixar que nossa <span className="inline-flex items-center gap-0.5 font-semibold"><IconAIGradient className="inline h-3.5 w-3.5" /> IA</span> gere tudo no automático usando seu material de estudo.
                    </p>
                  </>
                )}
                {props.addMenuInfoType === 'deck-manual' && (
                  <>
-                   <p>Você escolhe o nome do baralho e adiciona os cartões (flashcards) um a um.</p>
+                   <p>Você escolhe o nome do <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> baralho</span> e adiciona os cartões (flashcards) um a um.</p>
                    <p>Ideal quando você quer ter controle total sobre o conteúdo dos seus cartões.</p>
                  </>
                )}
-              {props.addMenuInfoType === 'deck-ia' && (
-                <>
-                  <p>Envie seu material de estudo (PDF, imagem ou texto) e a <span className="inline-flex items-center gap-0.5"><IconSparkle className="inline h-3 w-3" /> IA</span> gera os cartões automaticamente.</p>
-                  <p>Ideal para transformar anotações, slides ou apostilas em flashcards rapidamente.</p>
-                </>
-              )}
+               {props.addMenuInfoType === 'deck-ia' && (
+                 <>
+                   <p>Envie seu material de estudo (PDF, imagem ou texto) e a <span className="inline-flex items-center gap-0.5 font-semibold"><IconAIGradient className="inline h-3.5 w-3.5" /> IA</span> gera os cartões automaticamente.</p>
+                   <p>Ideal para transformar anotações, slides ou apostilas em flashcards rapidamente.</p>
+                 </>
+               )}
             </div>
             </DialogDescription>
           </DialogHeader>
@@ -234,7 +234,7 @@ const DashboardModals = (props: DashboardModalsProps) => {
                 className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
                 onClick={() => { props.setSalaAddMenuOpen(false); setAddMenuStep('main'); props.onCreateDeckAI(); }}
               >
-                <IconSparkle className="h-5 w-5 text-muted-foreground shrink-0" />
+                <IconAIGradient className="h-5 w-5 shrink-0" />
                 <span className="text-sm font-medium text-foreground flex-1">Criar baralho com IA</span>
                 <button
                   onClick={(e) => { e.stopPropagation(); props.setAddMenuInfoType('deck-ia'); }}

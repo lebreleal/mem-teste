@@ -26,8 +26,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
 const MATERIA_COLORS = [
-  '#6366F1', '#F59E0B', '#10B981', '#EF4444',
-  '#8B5CF6', '#EC4899', '#06B6D4', '#F97316',
+  null,           // default (no color — outlined circle)
+  '#C8B6FF',      // light purple
+  '#FFF3BF',      // light yellow
+  '#FFD6E0',      // light pink
+  '#D4FFDA',      // light green
 ];
 
 const COLOR_STORAGE_KEY = 'memo-materia-colors';
@@ -215,12 +218,9 @@ const MateriaDetail: React.FC = () => {
           </DropdownMenu>
         </div>
 
-        {/* Pasta name row */}
-        <div className="flex items-center gap-3 px-4 pb-3">
-          <div className="shrink-0" style={materiaColor ? { color: materiaColor } : undefined}>
-            <IconFolder className="h-5 w-5" />
-          </div>
-          <h1 className="flex-1 text-base font-bold text-foreground truncate">{materia.name}</h1>
+        {/* Pasta name row — centered */}
+        <div className="flex items-center justify-center gap-2 px-4 pb-3">
+          <h1 className="text-base font-bold text-foreground truncate">{materia.name}</h1>
           <button onClick={openEdit} className="shrink-0 text-muted-foreground hover:text-foreground transition-colors">
             <IconEdit className="h-4 w-4" />
           </button>
@@ -311,12 +311,16 @@ const MateriaDetail: React.FC = () => {
             <div>
               <p className="text-xs text-muted-foreground mb-2">Cor do ícone</p>
               <div className="flex flex-wrap gap-2">
-                {MATERIA_COLORS.map(color => (
+                {MATERIA_COLORS.map((color, i) => (
                   <button
-                    key={color}
+                    key={color ?? 'default'}
                     onClick={() => setEditColor(editColor === color ? null : color)}
-                    className={`h-8 w-8 rounded-full border-2 transition-all ${editColor === color ? 'border-foreground scale-110' : 'border-transparent'}`}
-                    style={{ backgroundColor: color }}
+                    className={`h-8 w-8 rounded-full transition-all ${
+                      color === null
+                        ? `border-2 ${editColor === null ? 'border-primary scale-110' : 'border-muted-foreground/40'}`
+                        : `border-2 ${editColor === color ? 'border-foreground scale-110' : 'border-transparent'}`
+                    }`}
+                    style={color ? { backgroundColor: color } : undefined}
                   />
                 ))}
               </div>

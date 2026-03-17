@@ -22,6 +22,13 @@ import {
 
 const ERROR_DECK_NAME = '📕 Baralho de Erros';
 
+function getMateriaColor(deckId: string): string | null {
+  try {
+    const colors = JSON.parse(localStorage.getItem('memo-materia-colors') || '{}');
+    return colors[deckId] ?? null;
+  } catch { return null; }
+}
+
 /**
 /**
  * 5-segment classification bar matching the deck detail gauge:
@@ -167,6 +174,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   const navigate = useNavigate();
   const { isAdmin } = useIsAdmin();
   const isErrorDeck = deck.name === ERROR_DECK_NAME;
+  const folderColor = useMemo(() => getMateriaColor(deck.id), [deck.id]);
   const [showDevModal, setShowDevModal] = useState(false);
   const [showAddDeckMenu, setShowAddDeckMenu] = useState(false);
   const [addDeckInfoType, setAddDeckInfoType] = useState<'manual' | 'ia' | null>(null);
@@ -244,14 +252,14 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
             onDragEnd: dragHandlers.onDragEnd,
           } : {})}
           className={`group flex items-center gap-3 px-4 py-3.5 cursor-pointer transition-all hover:bg-muted/30 border-b border-border/50 ${dragHandlers ? dragHandlers.className : ''}`}
-          onClick={handleClick}
-        >
-          {organizeMode && (
-            <GripVertical className="h-4 w-4 text-muted-foreground/50 shrink-0 cursor-grab active:cursor-grabbing" />
-          )}
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 shrink-0">
-            <IconFolder className="h-5 w-5 text-primary" />
-          </div>
+           onClick={handleClick}
+         >
+           {organizeMode && (
+             <GripVertical className="h-4 w-4 text-muted-foreground/50 shrink-0 cursor-grab active:cursor-grabbing" />
+           )}
+           <span className="shrink-0" style={folderColor ? { color: folderColor } : undefined}>
+             <IconFolder className="h-5 w-5" />
+           </span>
           <div className="flex-1 min-w-0">
             <h3 className="text-[15px] font-semibold text-foreground truncate">{displayName}</h3>
             {isEmptyMateria && !readOnly && (
