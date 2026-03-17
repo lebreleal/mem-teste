@@ -211,7 +211,7 @@ export function useStatsData() {
   // Retention over time chart data
   const retentionChartData = useMemo(() => {
     if (!retentionOverTime || retentionOverTime.length === 0) return [];
-    return retentionOverTime.map((row: any) => ({
+    return retentionOverTime.map((row: { week_start: string; correct: number; total: number }) => ({
       label: format(new Date(row.week_start), 'dd/MM'),
       rate: row.total > 0 ? Math.round((Number(row.correct) / Number(row.total)) * 100) : 0,
       total: Number(row.total),
