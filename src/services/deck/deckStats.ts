@@ -130,17 +130,17 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
       if (turmaDecksIds.length === 0) return { aMap, uMap };
       const { data: turmaDecks } = await supabase.from('turma_decks').select('id, shared_by, deck_id').in('id', turmaDecksIds);
       if (!turmaDecks || turmaDecks.length === 0) return { aMap, uMap };
-      const sharerIds = [...new Set(turmaDecks.map((td: any) => td.shared_by))];
-      const sourceDeckIds = [...new Set(turmaDecks.map((td: any) => td.deck_id))];
+      const sharerIds = [...new Set((turmaDecks as TurmaDeckRow[]).map(td => td.shared_by))];
+      const sourceDeckIds = [...new Set((turmaDecks as TurmaDeckRow[]).map(td => td.deck_id))];
       const [profilesRes, sourceDecksRes] = await Promise.all([
         supabase.from('profiles').select('id, name').in('id', sharerIds),
         supabase.from('decks').select('id, updated_at').in('id', sourceDeckIds),
       ]);
       const profileMap = new Map<string, string>();
-      if (profilesRes.data) for (const p of profilesRes.data as any[]) profileMap.set(p.id, p.name);
+      if (profilesRes.data) for (const p of profilesRes.data as ProfileRow[]) profileMap.set(p.id, p.name);
       const srcMap = new Map<string, string>();
-      if (sourceDecksRes.data) for (const sd of sourceDecksRes.data as any[]) srcMap.set(sd.id, sd.updated_at);
-      for (const td of turmaDecks as any[]) {
+      if (sourceDecksRes.data) for (const sd of sourceDecksRes.data as SourceDeckRow[]) srcMap.set(sd.id, sd.updated_at);
+      for (const td of turmaDecks as TurmaDeckRow[]) {
         aMap.set(td.id, profileMap.get(td.shared_by) || null);
         const ts = srcMap.get(td.deck_id);
         if (ts) uMap.set(td.id, ts);
