@@ -509,4 +509,86 @@ const ManageDeck = () => {
   );
 };
 
+/* ─── Lightweight preview modal for ManageDeck ─── */
+
+function ManageDeckPreview({ cards, initialIndex, open, onClose }: {
+  cards: any[];
+  initialIndex: number;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const virtualCards = useMemo(() => buildVirtualCards(cards), [cards]);
+  const [index, setIndex] = useState(initialIndex);
+  const [revealed, setRevealed] = useState(false);
+
+  useEffect(() => { if (open) { setIndex(initialIndex); setRevealed(false); } }, [open, initialIndex]);
+
+  const safeIndex = virtualCards.length > 0 ? Math.min(index, virtualCards.length - 1) : 0;
+  const vc = virtualCards[safeIndex] ?? null;
+
+  const goPrev = useCallback(() => { if (safeIndex > 0) { setIndex(i => i - 1); setRevealed(false); } }, [safeIndex]);
+  const goNext = useCallback(() => { if (safeIndex < virtualCards.length - 1) { setIndex(i => i + 1); setRevealed(false); } }, [safeIndex, virtualCards.length]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') goPrev();
+      else if (e.key === 'ArrowRight') goNext();
+      else if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); setRevealed(r => !r); }
+      else if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [open, goPrev, goNext, onClose]);
+
+  // Swipe
+  const touchRef = useRef<{ x: number } | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onTS = (e: TouchEvent) => { touchRef.current = { x: e.touches[0].clientX }; };
+    const onTE = (e: TouchEvent) => {
+      if (!touchRef.current) return;
+      const dx = e.changedTouches[0].clientX - touchRef.current.x;
+      if (Math.abs(dx) > 60) { dx > 0 ? goPrev() : goNext(); }
+      touchRef.current = null;
+    };
+    window.addEventListener('touchstart', onTS, { passive: true });
+    window.addEventListener('touchend', onTE, { passive: true });
+    return () => { window.removeEventListener('touchstart', onTS); window.removeEventListener('touchend', onTE); };
+  }, [open, goPrev, goNext]);
+
+  if (!open || !vc) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-background flex flex-col">
+      <header className="flex items-center justify-between px-4 py-3 shrink-0">
+        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full" onClick={onClose}>
+          <X className="h-5 w-5" />
+        </Button>
+        <span className="inline-flex items-center rounded-full border border-border/50 bg-card/80 px-3 py-1 text-xs font-semibold text-foreground shadow-sm tabular-nums">
+          <span className="text-primary">{safeIndex + 1}</span>/{virtualCards.length}
+        </span>
+        <div className="w-9" />
+      </header>
+
+      <div className="flex-1 flex items-center justify-center px-4 pb-6 min-h-0">
+        <div className="w-full max-w-lg">
+          <CardPreviewContent vc={vc} revealed={revealed} onClick={() => setRevealed(r => !r)} />
+        </div>
+      </div>
+
+      {/* Navigation dots */}
+      <div className="shrink-0 flex items-center justify-center gap-3 pb-4">
+        <button onClick={goPrev} disabled={safeIndex === 0} className="h-10 w-10 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors">
+          <ChevronUp className="h-5 w-5 -rotate-90" />
+        </button>
+        <span className="text-xs text-muted-foreground">Toque para revelar</span>
+        <button onClick={goNext} disabled={safeIndex >= virtualCards.length - 1} className="h-10 w-10 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors">
+          <ChevronDown className="h-5 w-5 -rotate-90" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default ManageDeck;
