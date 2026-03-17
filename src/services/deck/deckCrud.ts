@@ -100,6 +100,12 @@ export async function fetchDeck(deckId: string) {
   return data;
 }
 
+/** Update deck fields by ID. */
+export async function updateDeck(deckId: string, updates: Record<string, unknown>) {
+  const { error } = await supabase.from('decks').update(updates as any).eq('id', deckId);
+  if (error) throw error;
+}
+
 /** Change algorithm mode for a deck and optionally reset progress. */
 export async function changeAlgorithm(deckId: string, algorithmMode: string, forceReset = true) {
   const { error: deckErr } = await supabase.from('decks').update({ algorithm_mode: algorithmMode } as any).eq('id', deckId);
