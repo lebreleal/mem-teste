@@ -402,9 +402,13 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
     { id: 'select', icon: <IconMove />, label: 'Mover' },
   ];
 
+  // Count unique colors (each color = 1 card)
+  const uniqueColors = new Set(shapes.map(s => s.color || COLORS[0].fill));
+  const cardCount = uniqueColors.size;
+
   return (
-    <div className="space-y-3">
-      {/* Toolbar */}
+    <div className="space-y-2.5">
+      {/* Toolbar + Colors row */}
       <div className="flex items-center gap-1 flex-wrap rounded-xl border border-border bg-muted/30 p-1.5">
         {tools.map(t => (
           <Button
@@ -419,7 +423,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
           </Button>
         ))}
 
-        <div className="h-5 w-px bg-border mx-1" />
+        <div className="h-5 w-px bg-border mx-0.5" />
 
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setZoom(z => Math.max(0.3, z - 0.25))} title="Reduzir">
           <IconZoomOut />
@@ -429,12 +433,13 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
           <IconZoomIn />
         </Button>
 
-        <div className="h-5 w-px bg-border mx-1" />
-
         {selectedId && (
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={deleteSelected} title="Excluir seleção">
-            <IconTrash />
-          </Button>
+          <>
+            <div className="h-5 w-px bg-border mx-0.5" />
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={deleteSelected} title="Excluir seleção">
+              <IconTrash />
+            </Button>
+          </>
         )}
 
         <Button variant="ghost" size="sm" onClick={() => { setShapes([]); setSelectedId(null); setCurrentPoints([]); }} className="gap-1 text-xs h-8 ml-auto">
@@ -443,15 +448,16 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
       </div>
 
       {/* Color palette */}
-      <div className="flex items-center gap-1.5 px-1">
+      <div className="flex items-center gap-1.5">
         {COLORS.map(c => (
           <button
             key={c.label}
-            className="h-6 w-6 rounded-md border-2 transition-transform hover:scale-110 focus:outline-none"
+            className="h-5.5 w-5.5 rounded-full border-2 transition-transform hover:scale-110 focus:outline-none"
             style={{
               backgroundColor: c.fill,
-              borderColor: shapeColor === c.fill ? 'hsl(var(--primary))' : 'transparent',
-              boxShadow: shapeColor === c.fill ? '0 0 0 2px hsl(var(--primary) / 0.3)' : 'none',
+              borderColor: shapeColor === c.fill ? 'hsl(var(--foreground))' : 'transparent',
+              width: 22, height: 22,
+              transform: shapeColor === c.fill ? 'scale(1.15)' : undefined,
             }}
             onClick={() => setShapeColor(c.fill)}
             title={c.label}
@@ -466,11 +472,11 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
         </p>
       )}
 
-      {/* Image + Shapes overlay (DOM-based, not canvas) */}
+      {/* Image + Shapes overlay */}
       <div
         ref={containerRef}
-        className="relative rounded-xl border border-border overflow-auto bg-muted/20 max-h-[450px]"
-        style={{ touchAction: 'none' }}
+        className="relative rounded-xl border border-border overflow-auto bg-muted/20"
+        style={{ touchAction: 'none', maxHeight: 'min(55dvh, 400px)' }}
       >
         <div
           className="occlusion-img-wrapper relative inline-block"
@@ -492,7 +498,6 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
           }}
           onClick={() => { if (tool !== 'polygon') setSelectedId(null); }}
         >
-          {/* Actual image */}
           <img
             ref={imgRef}
             src={imageUrl}
@@ -504,17 +509,14 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
             draggable={false}
           />
 
-          {/* Loading overlay */}
           {!imgLoaded && (
             <div className="absolute inset-0 flex items-center justify-center bg-muted/50">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
             </div>
           )}
 
-          {/* Existing shapes */}
-          {shapes.map((s, i) => renderShape(s, i))}
+          {shapes.map((s) => renderShape(s))}
 
-          {/* In-progress rect */}
           {currentRect && tool === 'rect' && (
             <div
               className="absolute border-2 border-dashed border-primary/80 pointer-events-none"
@@ -529,7 +531,6 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
             />
           )}
 
-          {/* In-progress polygon/freehand */}
           {currentPoints.length > 0 && (
             <svg className="absolute inset-0 pointer-events-none" style={{ width: displaySize.w, height: displaySize.h }}>
               <polyline
@@ -548,23 +549,28 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
         </div>
       </div>
 
-      {/* Shape count */}
-      <p className="text-xs text-muted-foreground">
-        {shapes.length} área{shapes.length !== 1 ? 's' : ''} marcada{shapes.length !== 1 ? 's' : ''}.
-        {selectedId && <span className="text-primary ml-2 font-medium">Seleção ativa — pressione Delete para remover</span>}
-      </p>
+      {/* Status + info */}
+      <div className="space-y-1.5">
+        <p className="text-xs text-muted-foreground">
+          {shapes.length} área{shapes.length !== 1 ? 's' : ''} marcada{shapes.length !== 1 ? 's' : ''}.
+          {selectedId && <span className="text-primary ml-2 font-medium">Seleção ativa — Delete para remover</span>}
+        </p>
+        <p className="text-[11px] text-muted-foreground/70 leading-snug">
+          💡 Mesma cor = mesmo cartão. Cores diferentes geram cartões separados. No estudo, todas as oclusões aparecem em azul.
+        </p>
+      </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-2 pt-1">
+      <div className="flex items-center gap-2">
         {onRemoveImage && (
-          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive gap-1.5" onClick={onRemoveImage}>
+          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive gap-1.5 text-xs" onClick={onRemoveImage}>
             <IconImageOff /> Remover imagem
           </Button>
         )}
         <div className="flex-1" />
-        <Button variant="outline" className="rounded-xl" onClick={onCancel}>Cancelar</Button>
-        <Button className="rounded-xl" onClick={handleSave} disabled={isSaving || shapes.length === 0}>
-          {isSaving ? 'Salvando...' : `Salvar (${shapes.length})`}
+        <Button variant="outline" size="sm" className="rounded-xl" onClick={onCancel}>Cancelar</Button>
+        <Button size="sm" className="rounded-xl" onClick={handleSave} disabled={isSaving || shapes.length === 0}>
+          {isSaving ? 'Salvando...' : `Salvar (${cardCount})`}
         </Button>
       </div>
     </div>
