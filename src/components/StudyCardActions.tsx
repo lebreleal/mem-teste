@@ -368,11 +368,10 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
         backToSend = JSON.stringify({ options: mcOptions.filter(o => o.trim()), correctIndex: mcCorrectIndex });
       }
 
-      const { data, error } = await supabase.functions.invoke('enhance-card', {
-        body: { front, back: backToSend, cardType: editorType || 'basic', aiModel: model, energyCost: 1 },
+      const data = await enhanceCard({
+        front, back: backToSend, cardType: editorType || 'basic', aiModel: model, energyCost: 1,
       });
 
-      if (error) throw error;
       if (data.error) {
         toast({ title: data.error, variant: 'destructive' });
         return;
