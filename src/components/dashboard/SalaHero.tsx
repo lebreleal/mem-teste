@@ -5,7 +5,7 @@
 
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Archive, ChevronDown, ChevronLeft, Compass, EyeOff, ImageIcon, Info, LogOut, MoreVertical, Pencil, Play, RefreshCw, Share2, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { Archive, ChevronDown, ChevronLeft, Compass, EyeOff, ImageIcon, Info, Layers, LogOut, MoreVertical, Pencil, Play, RefreshCw, Share2, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
