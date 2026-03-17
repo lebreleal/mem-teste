@@ -24,10 +24,7 @@ interface SuggestionRow {
   created_at: string; updated_at: string;
 }
 interface ProfileNameRow { id: string; name: string }
-interface DeckQuestionDeckIdRow { deck_id: string }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- deck_questions not in generated types
-const dqTable = () => (supabase.from as (t: string) => ReturnType<typeof supabase.from>)('deck_questions');
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- turma_decks not in generated types  
 const tdTable = () => (supabase.from as (t: string) => ReturnType<typeof supabase.from>)('turma_decks');
 
