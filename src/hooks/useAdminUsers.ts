@@ -157,9 +157,10 @@ export const useAdminUsers = () => {
   };
 
   const getUserTokenUsageDetailed = async (userId: string, days = 30): Promise<TokenUsageEntry[]> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await supabase.rpc('admin_get_user_token_usage_detailed' as any, { p_user_id: userId, p_days: days });
     if (error) { toast({ title: 'Erro', description: 'Falha ao carregar consumo detalhado.', variant: 'destructive' }); return []; }
-    return (data as any[]) || [];
+    return ((data ?? []) as unknown as TokenUsageEntry[]);
   };
 
   const getUserStudyHistory = async (userId: string, days = 90): Promise<StudyDay[]> => {

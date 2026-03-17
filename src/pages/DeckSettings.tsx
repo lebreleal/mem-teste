@@ -345,9 +345,10 @@ const DeckSettings = () => {
     try {
       const algorithmLabel = algorithmChangeTarget === 'fsrs' ? 'FSRS' : 'Revisão rápida';
       const newDeck = await deckService.createAlgorithmCopy(user.id, deckId, algorithmChangeTarget, algorithmLabel);
-      toast({ title: 'Novo baralho criado!', description: `"${(newDeck as any).name}" foi criado.` });
+      const created = newDeck as { id: string; name: string };
+      toast({ title: 'Novo baralho criado!', description: `"${created.name}" foi criado.` });
       setAlgorithmChangeTarget(null);
-      navigate(`/decks/${(newDeck as any).id}`);
+      navigate(`/decks/${created.id}`);
     } catch {
       toast({ title: 'Erro', variant: 'destructive' });
       setAlgorithmChangeTarget(null);
