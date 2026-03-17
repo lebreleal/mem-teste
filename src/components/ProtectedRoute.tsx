@@ -79,7 +79,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
       window.removeEventListener('open-pomodoro', pomodoroHandler);
       window.removeEventListener('open-add-menu', addMenuHandler);
     };
-  }, [isOnDashboard, isInsideSala, isCommunityFolder, navigate]);
+  }, [isOnDashboard, isOnMateria, isInsideSala, isCommunityFolder, navigate]);
 
   const startPomodoro = (forceIsBreak?: boolean) => {
     // Always clear any existing interval first to prevent stacking
