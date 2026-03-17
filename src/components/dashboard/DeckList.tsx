@@ -173,7 +173,7 @@ const DeckList = ({
   };
 
   return (
-    <div className="divide-y divide-border/50">
+    <div>
       {/* Pending (background generating) decks */}
       {visiblePending.map(pending => {
         const progressPct = pending.progress.total > 0 ? (pending.progress.current / pending.progress.total) * 100 : 0;

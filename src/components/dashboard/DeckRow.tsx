@@ -7,7 +7,8 @@
 
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Info, ChevronDown, Layers, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings, Plus, Minus, Play, Sparkles, BookOpen } from 'lucide-react';
+import { Info, ChevronDown, ChevronRight, Layers, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings, Plus, Minus, Play, Sparkles, BookOpen } from 'lucide-react';
+import { IconFolder } from '@/components/icons';
 import type { DeckWithStats } from '@/hooks/useDecks';
 import type { DragReorderHandlers } from '@/hooks/useDragReorder';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
@@ -219,59 +220,181 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
     navigate(`/decks/${deckId}`, readOnlyNavState ? { state: readOnlyNavState } : undefined);
   };
 
+  // Matéria = section header style
+  const isMateria = hasChildren || isEmptyMateria;
+
   return (
     <>
-      <div
-        {...(dragHandlers ? {
-          draggable: dragHandlers.draggable,
-          onDragStart: dragHandlers.onDragStart,
-          onDragOver: dragHandlers.onDragOver,
-          onDragEnter: dragHandlers.onDragEnter,
-          onDragLeave: dragHandlers.onDragLeave,
-          onDrop: dragHandlers.onDrop,
-          onDragEnd: dragHandlers.onDragEnd,
-        } : {})}
-        className={`group flex items-center gap-3 px-4 py-4 cursor-pointer transition-all hover:bg-muted/50 ${dragHandlers ? dragHandlers.className : ''}`}
-        onClick={handleClick}
-      >
-        {/* Expand/collapse icon for decks with children */}
-        {hasChildren && (
-          isExpanded
-            ? <Minus className="h-4 w-4 text-muted-foreground shrink-0" />
-            : <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
-        )}
+      {/* Wrapper for Matéria: rounded container with subtle bg */}
+      {isMateria && (
+        <div className="mx-3 mt-3 mb-1 rounded-xl border border-border/40 bg-muted/20 overflow-hidden">
+          {/* Matéria header */}
+          <div
+            {...(dragHandlers ? {
+              draggable: dragHandlers.draggable,
+              onDragStart: dragHandlers.onDragStart,
+              onDragOver: dragHandlers.onDragOver,
+              onDragEnter: dragHandlers.onDragEnter,
+              onDragLeave: dragHandlers.onDragLeave,
+              onDrop: dragHandlers.onDrop,
+              onDragEnd: dragHandlers.onDragEnd,
+            } : {})}
+            className={`group flex items-center gap-3 px-4 py-3 cursor-pointer transition-all hover:bg-muted/40 ${dragHandlers ? dragHandlers.className : ''}`}
+            onClick={handleClick}
+          >
+            <IconFolder className="h-5 w-5 text-primary shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className="text-xs font-bold uppercase tracking-wide text-muted-foreground truncate">{displayName}</h3>
+                {hasPendingUpdate && (
+                  <span className="flex h-2 w-2 shrink-0 rounded-full bg-destructive animate-pulse" title="Atualização disponível" />
+                )}
+              </div>
+              {/* Matéria: show only pending count */}
+              {!isEmptyMateria && (
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  {subDecks.length} {subDecks.length === 1 ? 'deck' : 'decks'}
+                  {hasDueCards && (
+                    <span className="text-primary font-semibold ml-1.5">
+                      · {aggStats.new_count + aggStats.learning_count + aggStats.review_count} pendentes
+                    </span>
+                  )}
+                </p>
+              )}
+              {/* Empty matéria: "+ Adicionar Deck" */}
+              {isEmptyMateria && !readOnly && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowAddDeckMenu(true); }}
+                  className="flex items-center gap-1.5 mt-0.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+                >
+                  <Plus className="h-3 w-3" />
+                  <span>Adicionar Deck</span>
+                </button>
+              )}
+            </div>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h3 className="font-display font-semibold text-foreground truncate">{displayName}</h3>
-            {isErrorDeck && (
-              <button
-                onClick={(e) => { e.stopPropagation(); setShowInfoModal(true); }}
-                className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Info className="h-4 w-4" />
-              </button>
+            {/* Actions */}
+            {!deckSelectionMode && !readOnly && (
+              <div className="flex items-center gap-1.5 shrink-0">
+                {!effectiveDisableManagement && (
+                  <DeckMenu deck={deck} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
+                )}
+              </div>
             )}
-            {hasPendingUpdate && (
-              <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-destructive animate-pulse" title="Atualização disponível" />
+
+            {/* Chevron */}
+            {hasChildren && (
+              <ChevronRight className={`h-4 w-4 text-muted-foreground shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
             )}
           </div>
-          {/* Empty matéria: "+ Adicionar Deck" right below title */}
-          {isEmptyMateria && !readOnly && (
-            <button
-              onClick={(e) => { e.stopPropagation(); setShowAddDeckMenu(true); }}
-              className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground hover:text-primary transition-colors"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              <span>Adicionar Deck</span>
-            </button>
+
+          {/* Sub-decks (expanded) inside the container */}
+          {hasChildren && isExpanded && (
+            <>
+              {subDecks.map(sub => {
+                const subStats = getAggregateStats(sub);
+                const subClass = aggregateClassification(sub, getSubDecks);
+                const subHasDue = subStats.new_count + subStats.learning_count + subStats.review_count > 0;
+                return (
+                  <div
+                    key={sub.id}
+                    className="group/sub flex items-center gap-3 pl-10 pr-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors border-t border-border/30"
+                    onClick={() => navigate(`/decks/${sub.id}`, readOnlyNavState ? { state: readOnlyNavState } : undefined)}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-medium text-foreground truncate">{sub.name}</h4>
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[11px] text-muted-foreground">
+                          {sub.total_cards} {sub.total_cards === 1 ? 'cartão' : 'cartões'}
+                        </span>
+                        {questionCountMap && (questionCountMap.get(sub.id) ?? 0) > 0 && (
+                          <span className="text-[11px] text-muted-foreground">
+                            {questionCountMap.get(sub.id)} {(questionCountMap.get(sub.id) ?? 0) === 1 ? 'questão' : 'questões'}
+                          </span>
+                        )}
+                      </div>
+                      {!readOnly && (
+                        <ClassificationBar
+                          facilPct={subClass.facilPct}
+                          bomPct={subClass.bomPct}
+                          dificilPct={subClass.dificilPct}
+                          erreiPct={subClass.erreiPct}
+                          novoPct={subClass.novoPct}
+                          className="mt-1"
+                        />
+                      )}
+                    </div>
+                    {!readOnly && (
+                      <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover/sub:opacity-100 transition-opacity duration-200">
+                        {subHasDue && (
+                          <button
+                            onClick={(e) => handleStudy(e, sub.id)}
+                            className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                            aria-label="Estudar"
+                          >
+                            <Play className="h-3 w-3 fill-current" />
+                          </button>
+                        )}
+                        {!effectiveDisableManagement && (
+                          <DeckMenu deck={sub} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
+                        )}
+                      </div>
+                    )}
+                    <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 -rotate-90 group-hover/sub:hidden" />
+                  </div>
+                );
+              })}
+              {/* Add deck row at bottom */}
+              {!readOnly && !effectiveDisableManagement && (
+                <div className="flex items-center gap-3 pl-10 pr-4 py-3 border-t border-border/30">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowAddDeckMenu(true); }}
+                    className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>Adicionar Deck</span>
+                  </button>
+                </div>
+              )}
+            </>
           )}
-          {!isEmptyMateria && (
+        </div>
+      )}
+
+      {/* Regular deck (non-matéria) — original flat row */}
+      {!isMateria && (
+        <div
+          {...(dragHandlers ? {
+            draggable: dragHandlers.draggable,
+            onDragStart: dragHandlers.onDragStart,
+            onDragOver: dragHandlers.onDragOver,
+            onDragEnter: dragHandlers.onDragEnter,
+            onDragLeave: dragHandlers.onDragLeave,
+            onDrop: dragHandlers.onDrop,
+            onDragEnd: dragHandlers.onDragEnd,
+          } : {})}
+          className={`group flex items-center gap-3 px-4 py-4 cursor-pointer transition-all hover:bg-muted/50 ${dragHandlers ? dragHandlers.className : ''}`}
+          onClick={handleClick}
+        >
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="font-display font-semibold text-foreground truncate">{displayName}</h3>
+              {isErrorDeck && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowInfoModal(true); }}
+                  className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Info className="h-4 w-4" />
+                </button>
+              )}
+              {hasPendingUpdate && (
+                <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-destructive animate-pulse" title="Atualização disponível" />
+              )}
+            </div>
             <div className="flex items-center gap-2 mt-1">
               <p className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
-                {hasChildren && (
-                  <span>{subDecks.length} {subDecks.length === 1 ? 'deck' : 'decks'}</span>
-                )}
                 {totalCards > 0 && (
                   <span>{totalCards} {totalCards === 1 ? 'cartão' : 'cartões'}</span>
                 )}
@@ -291,121 +414,42 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                 })()}
               </p>
             </div>
-          )}
-          {!isErrorDeck && !readOnly && !isEmptyMateria && (
-            <ClassificationBar
-              facilPct={classPcts.facilPct}
-              bomPct={classPcts.bomPct}
-              dificilPct={classPcts.dificilPct}
-              erreiPct={classPcts.erreiPct}
-              novoPct={classPcts.novoPct}
-              className="mt-1.5"
-            />
-          )}
-        </div>
-
-        {/* Actions on hover for loose decks, always when matéria expanded */}
-        {!isErrorDeck && !deckSelectionMode && !readOnly && (
-          <div className={`flex items-center gap-1.5 shrink-0 transition-opacity duration-200 ${
-            hasChildren && isExpanded
-              ? 'opacity-100'
-              : isEmptyMateria ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-          }`}>
-            {hasDueCards && (
-              <button
-                onClick={(e) => handleStudy(e, deck.id)}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                aria-label="Estudar"
-              >
-                <Play className="h-3.5 w-3.5 fill-current" />
-              </button>
-            )}
-            {!effectiveDisableManagement && (
-              <DeckMenu deck={deck} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
+            {!isErrorDeck && !readOnly && (
+              <ClassificationBar
+                facilPct={classPcts.facilPct}
+                bomPct={classPcts.bomPct}
+                dificilPct={classPcts.dificilPct}
+                erreiPct={classPcts.erreiPct}
+                novoPct={classPcts.novoPct}
+                className="mt-1.5"
+              />
             )}
           </div>
-        )}
 
-        {/* Chevron arrow for navigation (loose decks only, hidden on hover) */}
-        {!deckSelectionMode && !isErrorDeck && !hasChildren && !isEmptyMateria && (
-          <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 -rotate-90 group-hover:hidden" />
-        )}
-      </div>
-
-      {/* Sub-decks (expanded) */}
-      {hasChildren && isExpanded && (
-        <div className="bg-muted/30">
-          {subDecks.map(sub => {
-            const subStats = getAggregateStats(sub);
-            const subClass = aggregateClassification(sub, getSubDecks);
-            const subHasDue = subStats.new_count + subStats.learning_count + subStats.review_count > 0;
-            return (
-              <div
-                key={sub.id}
-                className="group/sub flex items-center gap-3 pl-10 pr-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors border-t border-border/30"
-                onClick={() => navigate(`/decks/${sub.id}`, readOnlyNavState ? { state: readOnlyNavState } : undefined)}
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-sm font-medium text-foreground truncate">{sub.name}</h4>
-                  </div>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-[11px] text-muted-foreground">
-                      {sub.total_cards} {sub.total_cards === 1 ? 'cartão' : 'cartões'}
-                    </span>
-                    {questionCountMap && (questionCountMap.get(sub.id) ?? 0) > 0 && (
-                      <span className="text-[11px] text-muted-foreground">
-                        {questionCountMap.get(sub.id)} {(questionCountMap.get(sub.id) ?? 0) === 1 ? 'questão' : 'questões'}
-                      </span>
-                    )}
-                  </div>
-                  {!readOnly && (
-                    <ClassificationBar
-                      facilPct={subClass.facilPct}
-                      bomPct={subClass.bomPct}
-                      dificilPct={subClass.dificilPct}
-                      erreiPct={subClass.erreiPct}
-                      novoPct={subClass.novoPct}
-                      className="mt-1"
-                    />
-                  )}
-                </div>
-                {!readOnly && (
-                  <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover/sub:opacity-100 transition-opacity duration-200">
-                    {subHasDue && (
-                      <button
-                        onClick={(e) => handleStudy(e, sub.id)}
-                        className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                        aria-label="Estudar"
-                      >
-                        <Play className="h-3 w-3 fill-current" />
-                      </button>
-                    )}
-                    {!effectiveDisableManagement && (
-                      <DeckMenu deck={sub} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
-                    )}
-                  </div>
-                )}
-                <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 -rotate-90 group-hover/sub:hidden" />
-              </div>
-            );
-          })}
-          {/* Add deck row at bottom of expanded matéria */}
-          {!readOnly && !effectiveDisableManagement && (
-            <div className="flex items-center gap-3 pl-10 pr-4 py-3 border-t border-border/30">
-              <button
-                onClick={(e) => { e.stopPropagation(); setShowAddDeckMenu(true); }}
-                className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                <span>Adicionar Deck</span>
-              </button>
+          {/* Actions on hover */}
+          {!isErrorDeck && !deckSelectionMode && !readOnly && (
+            <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+              {hasDueCards && (
+                <button
+                  onClick={(e) => handleStudy(e, deck.id)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                  aria-label="Estudar"
+                >
+                  <Play className="h-3.5 w-3.5 fill-current" />
+                </button>
+              )}
+              {!effectiveDisableManagement && (
+                <DeckMenu deck={deck} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
+              )}
             </div>
+          )}
+
+          {/* Chevron for navigation */}
+          {!deckSelectionMode && !isErrorDeck && (
+            <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 -rotate-90 group-hover:hidden" />
           )}
         </div>
       )}
-
-
 
 
       {/* Add deck modal */}
