@@ -38,6 +38,7 @@ const SalaHero = ({
   realStudyMetrics, salaDifficultyStats,
 }: SalaHeroProps) => {
   const navigate = useNavigate();
+  const [infoOpen, setInfoOpen] = useState(false);
 
   const cf = state.folders.find((f: any) => f.id === state.currentFolderId);
   const folderName = cf?.name ?? 'Sala';
