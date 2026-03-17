@@ -341,7 +341,7 @@ export async function fetchDueConcepts(userId: string): Promise<GlobalConcept[]>
   const now = new Date().toISOString();
   const { data, error } = await supabase
     .from('global_concepts' as any)
-    .select('*')
+    .select(GLOBAL_CONCEPT_COLS)
     .eq('user_id', userId)
     .lte('scheduled_date', now)
     .order('scheduled_date', { ascending: true });
