@@ -341,9 +341,13 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
   };
 
   const handlePointerUp = () => {
-    // Hand panning
     if (panning) {
       setPanning(false);
+      return;
+    }
+
+    if (dragging) {
+      setDragging(null);
       return;
     }
 
@@ -354,7 +358,6 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
 
     if (tool === 'rect') {
       if (drawing && currentRect && currentRect.w > 5 && currentRect.h > 5) {
-        // Clamp final rect within image bounds
         const finalX = clamp(currentRect.x, 0, imgSize.w - 10);
         const finalY = clamp(currentRect.y, 0, imgSize.h - 10);
         const finalW = Math.min(currentRect.w, imgSize.w - finalX);
@@ -375,6 +378,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
         setShapes(newShapes);
         autoSwitchColor(newShapes);
       }
+      setSelectedId(null);
       setDrawing(false);
       setCurrentPoints([]);
     }
