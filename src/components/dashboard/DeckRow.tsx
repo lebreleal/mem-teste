@@ -19,8 +19,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-const ERROR_DECK_NAMES = ['📕 Baralho de Erros', '📕 Caderno de Erros'];
-const isErrorDeckName = (name: string) => ERROR_DECK_NAMES.includes(name);
+const ERROR_DECK_NAME = '📕 Baralho de Erros';
 
 /**
 /**
@@ -163,7 +162,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
 }, ref) => {
   const navigate = useNavigate();
   const { isAdmin } = useIsAdmin();
-  const isErrorDeck = isErrorDeckName(deck.name);
+  const isErrorDeck = deck.name === ERROR_DECK_NAME;
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [showDevModal, setShowDevModal] = useState(false);
   const [showAddDeckMenu, setShowAddDeckMenu] = useState(false);
