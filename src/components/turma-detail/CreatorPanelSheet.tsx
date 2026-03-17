@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { CardEditorForm } from '@/components/card-editor/CardEditorForm';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -276,23 +277,16 @@ const CreatorPanelSheet = ({ open, onOpenChange, turmaId }: CreatorPanelSheetPro
       <Dialog open={editMode} onOpenChange={(o) => { if (!o) { setEditMode(false); setSelectedSuggestion(null); } }}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>Editar e Aceitar</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">Frente</label>
-              <Textarea value={editFront} onChange={(e) => setEditFront(e.target.value)} rows={3} />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">Verso</label>
-              <Textarea value={editBack} onChange={(e) => setEditBack(e.target.value)} rows={3} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditMode(false)}>Cancelar</Button>
-            <Button onClick={handleEditAndAccept} disabled={reviewMutation.isPending} className="gap-1.5">
-              {reviewMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-              Aceitar
-            </Button>
-          </DialogFooter>
+          <CardEditorForm
+            front={editFront}
+            onFrontChange={setEditFront}
+            back={editBack}
+            onBackChange={setEditBack}
+            onSave={handleEditAndAccept}
+            onCancel={() => setEditMode(false)}
+            isSaving={reviewMutation.isPending}
+            compact
+          />
         </DialogContent>
       </Dialog>
     </>
