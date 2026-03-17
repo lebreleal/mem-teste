@@ -131,6 +131,31 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       onChange(html);
     },
     editorProps: {
+      handlePaste: (view, event) => {
+        const items = event.clipboardData?.items;
+        if (!items) return false;
+        for (const item of Array.from(items)) {
+          if (item.type.startsWith('image/')) {
+            event.preventDefault();
+            const file = item.getAsFile();
+            if (file) uploadImageFileRef.current?.(file);
+            return true;
+          }
+        }
+        return false;
+      },
+      handleDrop: (view, event) => {
+        const files = event.dataTransfer?.files;
+        if (!files?.length) return false;
+        for (const file of Array.from(files)) {
+          if (file.type.startsWith('image/')) {
+            event.preventDefault();
+            uploadImageFileRef.current?.(file);
+            return true;
+          }
+        }
+        return false;
+      },
       attributes: {
         class: 'prose prose-sm max-w-none min-h-[120px] outline-none p-3 text-card-foreground',
       },
