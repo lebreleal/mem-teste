@@ -96,9 +96,7 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
               </button>
             </PopoverTrigger>
             <PopoverContent side="top" className="text-xs w-56 p-2">
-              {isQMode
-                ? 'Tempo estimado para praticar todas as questões pendentes.'
-                : 'Tempo estimado para revisar todos os cartões pendentes deste baralho, com base na sua velocidade média de estudo.'}
+              {'Tempo estimado para revisar todos os cartões pendentes deste baralho, com base na sua velocidade média de estudo.'}
             </PopoverContent>
           </Popover>
         </div>
