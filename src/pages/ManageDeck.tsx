@@ -397,6 +397,40 @@ const ManageDeck = () => {
                 </div>
               </div>
 
+              {/* Right sidebar - actions */}
+              <div className="flex flex-col items-center justify-center gap-2 shrink-0">
+                <button
+                  onClick={() => setDeleteConfirmOpen(true)}
+                  className="h-9 w-9 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-destructive hover:border-destructive/40 transition-colors"
+                  title="Excluir"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={handleDuplicate}
+                  className="h-9 w-9 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+                  title="Duplicar"
+                >
+                  <Copy className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={handleAddCard}
+                  className="h-9 w-9 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+                  title="Novo cartão"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+                {occlusionImageUrl && (
+                  <button
+                    onClick={() => setOcclusionModalOpen(true)}
+                    className="h-9 w-9 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+                    title="Editar oclusão"
+                  >
+                    <ImageIcon className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-center">
@@ -409,49 +443,13 @@ const ManageDeck = () => {
         </main>
       </div>
 
-      {/* Bottom action bar - always visible */}
-      {currentCard && (
-        <div className="shrink-0 border-t border-border bg-background px-4 py-2">
-          <div className="mx-auto max-w-2xl flex items-center gap-1">
-            <button
-              onClick={() => setDeleteConfirmOpen(true)}
-              className="p-2 text-muted-foreground hover:text-destructive transition-colors"
-              title="Excluir"
-            >
-              <Trash2 className="h-[18px] w-[18px]" />
-            </button>
-            <button
-              onClick={handleDuplicate}
-              className="p-2 text-muted-foreground hover:text-foreground transition-colors"
-              title="Duplicar"
-            >
-              <Copy className="h-[18px] w-[18px]" />
-            </button>
-            <button
-              onClick={handleAddCard}
-              className="p-2 text-muted-foreground hover:text-foreground transition-colors"
-              title="Novo cartão"
-            >
-              <Plus className="h-[18px] w-[18px]" />
-            </button>
-            {occlusionImageUrl && (
-              <button
-                onClick={() => setOcclusionModalOpen(true)}
-                className="p-2 text-muted-foreground hover:text-foreground transition-colors"
-                title="Editar oclusão"
-              >
-                <ImageIcon className="h-[18px] w-[18px]" />
-              </button>
-            )}
-            {isDirty && (
-              <Button onClick={saveCurrentCard} size="sm" className="ml-auto gap-1.5" disabled={updateCard.isPending}>
-                {updateCard.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                Salvar
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
+      {/* Card Preview Modal */}
+      <ManageDeckPreview
+        cards={sortedCards}
+        initialIndex={selectedIndex}
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+      />
 
       {/* Occlusion Editor Dialog (for upload + draw) */}
       <Dialog open={occlusionModalOpen} onOpenChange={setOcclusionModalOpen}>
