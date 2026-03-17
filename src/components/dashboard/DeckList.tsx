@@ -96,8 +96,9 @@ const DeckList = ({
   const q = searchQuery.toLowerCase();
   // Sort: error deck first, then matérias (decks with sub-decks), then loose decks
   const sortedDecks = useMemo(() => {
-    const errorDeck = currentDecks.filter(d => d.name === '📕 Baralho de Erros');
-    const rest = currentDecks.filter(d => d.name !== '📕 Baralho de Erros');
+    const ERROR_NAMES = ['📕 Baralho de Erros', '📕 Caderno de Erros'];
+    const errorDeck = currentDecks.filter(d => ERROR_NAMES.includes(d.name));
+    const rest = currentDecks.filter(d => !ERROR_NAMES.includes(d.name));
     const materias = rest.filter(d => deckRowProps.getSubDecks(d.id).length > 0);
     const loose = rest.filter(d => deckRowProps.getSubDecks(d.id).length === 0);
     return [...errorDeck, ...materias, ...loose];
