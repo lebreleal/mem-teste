@@ -852,7 +852,7 @@ export async function getCardConcepts(
   // 4. Fetch the user's global concepts
   const { data: concepts } = await supabase
     .from('global_concepts' as any)
-    .select('*')
+    .select(GLOBAL_CONCEPT_COLS)
     .eq('user_id', userId)
     .in('id', conceptIds)
     .order('stability', { ascending: true });
