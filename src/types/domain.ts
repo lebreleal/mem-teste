@@ -166,7 +166,25 @@ export function mapStudyStatsRow(row: StudyStatsDbRow): StudySnapshot {
   };
 }
 
-export function mapActivityBreakdown(data: any): ActivitySummary {
+export interface ActivityBreakdownData {
+  dayMap?: Record<string, {
+    date: string;
+    cards?: number;
+    minutes?: number;
+    newCards?: number;
+    learning?: number;
+    review?: number;
+    relearning?: number;
+  }>;
+  streak?: number;
+  bestStreak?: number;
+  totalActiveDays?: number;
+  freezesAvailable?: number;
+  freezesUsed?: number;
+  frozenDays?: string[];
+}
+
+export function mapActivityBreakdown(data: ActivityBreakdownData): ActivitySummary {
   const dayMap: Record<string, DayActivity> = {};
   if (data?.dayMap) {
     for (const [key, val] of Object.entries(data.dayMap as Record<string, any>)) {

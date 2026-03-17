@@ -27,6 +27,18 @@ export interface GlobalConcept {
   updated_at: string;
 }
 
+// Row interfaces for query results
+interface ConceptSlugRow { id: string; slug: string }
+interface ConceptIdRow { id: string }
+interface OfficialTagRow { id: string; name: string; slug: string; description: string; parent_id: string | null }
+interface ConceptSlugOnlyRow { slug: string }
+
+// Helper to access global_concepts table (not in generated types)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const gcTable = () => supabase.from('global_concepts' as 'cards') as ReturnType<typeof supabase.from>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const qcTable = () => supabase.from('question_concepts' as 'cards') as ReturnType<typeof supabase.from>;
+
 // ─── Slug normalization ─────────────────────────
 export function conceptSlug(name: string): string {
   return name.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR');
@@ -52,13 +64,12 @@ export async function ensureGlobalConcepts(
   const slugs = Array.from(uniqueBySlug.keys());
 
   // Fetch existing
-  const { data: existing } = await supabase
-    .from('global_concepts' as any)
+  const { data: existing } = await gcTable()
     .select('id, slug')
     .eq('user_id', userId)
     .in('slug', slugs);
 
-  for (const row of (existing ?? []) as any[]) {
+  for (const row of ((existing ?? []) as unknown as ConceptSlugRow[])) {
     slugMap.set(row.slug, row.id);
   }
 
@@ -79,13 +90,13 @@ export async function ensureGlobalConcepts(
       };
     });
 
-    const { data: inserted, error } = await supabase
-      .from('global_concepts' as any)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: inserted, error } = await gcTable()
       .upsert(rows as any, { onConflict: 'user_id,slug', ignoreDuplicates: true })
       .select('id, slug');
 
     if (!error && inserted) {
-      for (const row of inserted as any[]) {
+      for (const row of (inserted as unknown as ConceptSlugRow[])) {
         slugMap.set(row.slug, row.id);
       }
     }
@@ -93,13 +104,12 @@ export async function ensureGlobalConcepts(
     // If upsert with ignoreDuplicates didn't return existing rows, re-fetch
     for (const s of missingSlugs) {
       if (!slugMap.has(s)) {
-        const { data: refetch } = await supabase
-          .from('global_concepts' as any)
+        const { data: refetch } = await gcTable()
           .select('id')
           .eq('user_id', userId)
           .eq('slug', s)
           .maybeSingle();
-        if (refetch) slugMap.set(s, (refetch as any).id);
+        if (refetch) slugMap.set(s, (refetch as unknown as ConceptIdRow).id);
       }
     }
   }
@@ -109,8 +119,7 @@ export async function ensureGlobalConcepts(
 
 // ─── Fetch all global concepts for a user ───────
 export async function fetchGlobalConcepts(userId: string): Promise<GlobalConcept[]> {
-  const { data, error } = await supabase
-    .from('global_concepts' as any)
+  const { data, error } = await gcTable()
     .select(GLOBAL_CONCEPT_COLS)
     .eq('user_id', userId)
     .order('scheduled_date', { ascending: true });
@@ -124,7 +133,7 @@ export async function updateConceptMeta(
   conceptId: string,
   fields: { name?: string; category?: string | null; subcategory?: string | null; parent_concept_id?: string | null },
 ) {
-  const updates: Record<string, any> = { updated_at: new Date().toISOString() };
+  const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (fields.name !== undefined) {
     updates.name = fields.name.trim();
     updates.slug = conceptSlug(fields.name);
@@ -133,23 +142,21 @@ export async function updateConceptMeta(
   if (fields.subcategory !== undefined) updates.subcategory = fields.subcategory;
   if (fields.parent_concept_id !== undefined) updates.parent_concept_id = fields.parent_concept_id;
 
-  const { error } = await supabase
-    .from('global_concepts' as any)
-    .update(updates as any)
-    .eq('id', conceptId);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await gcTable().update(updates as any).eq('id', conceptId);
   if (error) throw error;
 }
 
 // ─── Delete concept ─────────────────────────────
 export async function deleteConcept(conceptId: string) {
   // Remove question links first
-  await supabase.from('question_concepts' as any).delete().eq('concept_id', conceptId);
-  const { error } = await supabase.from('global_concepts' as any).delete().eq('id', conceptId);
+  await qcTable().delete().eq('concept_id', conceptId);
+  const { error } = await gcTable().delete().eq('id', conceptId);
   if (error) throw error;
 }
 
 // ─── Fetch official concept-tags (is_concept = true, is_official = true) ───
-export async function fetchOfficialConcepts(): Promise<{ id: string; name: string; slug: string; description: string; parent_id: string | null }[]> {
+export async function fetchOfficialConcepts(): Promise<OfficialTagRow[]> {
   const { data, error } = await supabase
     .from('tags')
     .select('id, name, slug, description, parent_id')
@@ -158,12 +165,11 @@ export async function fetchOfficialConcepts(): Promise<{ id: string; name: strin
     .order('name');
 
   if (error) throw error;
-  return (data ?? []) as any[];
+  return (data ?? []) as unknown as OfficialTagRow[];
 }
 
 // ─── Fetch community concepts (official concept tags the user hasn't imported yet) ───
 export async function fetchCommunityConcepts(userId: string): Promise<GlobalConcept[]> {
-  // Get official concept tags
   const { data: officialTags, error: tagErr } = await supabase
     .from('tags')
     .select('id, name, slug, description, parent_id')
@@ -175,16 +181,13 @@ export async function fetchCommunityConcepts(userId: string): Promise<GlobalConc
   if (tagErr) throw tagErr;
   if (!officialTags || officialTags.length === 0) return [];
 
-  // Get user's existing concept slugs to exclude already-imported ones
-  const { data: userConcepts } = await supabase
-    .from('global_concepts' as any)
+  const { data: userConcepts } = await gcTable()
     .select('slug')
     .eq('user_id', userId);
 
-  const existingSlugs = new Set(((userConcepts ?? []) as any[]).map((c: any) => c.slug));
+  const existingSlugs = new Set(((userConcepts ?? []) as unknown as ConceptSlugOnlyRow[]).map(c => c.slug));
 
-  // Return official concepts not yet imported as pseudo-GlobalConcept objects
-  return (officialTags as any[])
+  return (officialTags as unknown as OfficialTagRow[])
     .filter(t => !existingSlugs.has(t.slug))
     .map(t => ({
       id: t.id,
@@ -216,18 +219,16 @@ export async function importConcept(
 ): Promise<string> {
   const slug = conceptSlug(source.name);
 
-  // Check if already exists
-  const { data: existing } = await supabase
-    .from('global_concepts' as any)
+  const { data: existing } = await gcTable()
     .select('id')
     .eq('user_id', userId)
     .eq('slug', slug)
     .maybeSingle();
 
-  if (existing) return (existing as any).id;
+  if (existing) return (existing as unknown as ConceptIdRow).id;
 
-  const { data: inserted, error } = await supabase
-    .from('global_concepts' as any)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: inserted, error } = await gcTable()
     .insert({
       user_id: userId,
       name: source.name.trim(),
@@ -240,7 +241,7 @@ export async function importConcept(
     .single();
 
   if (error) throw error;
-  return (inserted as any).id;
+  return (inserted as unknown as ConceptIdRow).id;
 }
 
 // ─── Import concept with its linked questions and cards ───
@@ -249,28 +250,34 @@ export async function importConceptWithContent(
   sourceConceptId: string,
   sourceConcept: { name: string; category?: string; subcategory?: string; conceptTagId?: string },
 ): Promise<{ conceptId: string; questionCount: number; cardCount: number }> {
-  // 1. Create personal concept
   const conceptId = await importConcept(userId, sourceConcept);
 
-  // 2. Get questions linked to the source concept
-  const { data: links } = await supabase
-    .from('question_concepts' as any)
+  interface QuestionLinkRow { question_id: string }
+  const { data: links } = await qcTable()
     .select('question_id')
     .eq('concept_id', sourceConceptId);
 
   if (!links || links.length === 0) return { conceptId, questionCount: 0, cardCount: 0 };
 
-  const questionIds = (links as any[]).map(l => l.question_id);
+  const questionIds = (links as unknown as QuestionLinkRow[]).map(l => l.question_id);
 
-  // 3. Get the actual questions
-  const { data: questions } = await supabase
-    .from('deck_questions' as any)
+  interface QuestionRow {
+    id: string; deck_id: string; question_text: string; options: unknown;
+    correct_indices: number[] | null; correct_answer: string; explanation: string;
+    concepts: string[] | null; question_type: string;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const dqTable = () => supabase.from('deck_questions' as 'cards') as ReturnType<typeof supabase.from>;
+
+  const { data: questions } = await dqTable()
     .select('id, deck_id, question_text, options, correct_indices, correct_answer, explanation, concepts, question_type')
     .in('id', questionIds);
 
   if (!questions || questions.length === 0) return { conceptId, questionCount: 0, cardCount: 0 };
 
-  // 4. Create a deck for imported content
+  const typedQuestions = questions as unknown as QuestionRow[];
+
   const deckName = `Importado: ${sourceConcept.name}`;
   const { data: deck, error: deckError } = await supabase
     .from('decks')
@@ -280,8 +287,7 @@ export async function importConceptWithContent(
 
   if (deckError || !deck) return { conceptId, questionCount: 0, cardCount: 0 };
 
-  // 5. Copy questions to the new deck
-  const questionRows = (questions as any[]).map((q, i) => ({
+  const questionRows = typedQuestions.map((q, i) => ({
     deck_id: deck.id,
     created_by: userId,
     question_text: q.question_text,
@@ -294,24 +300,22 @@ export async function importConceptWithContent(
     sort_order: i,
   }));
 
-  const { data: insertedQs } = await supabase
-    .from('deck_questions' as any)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: insertedQs } = await dqTable()
     .insert(questionRows as any)
     .select('id');
 
-  // 6. Link new questions to user's concept
   if (insertedQs && insertedQs.length > 0) {
-    const junctionRows = (insertedQs as any[]).map(q => ({
+    const junctionRows = (insertedQs as unknown as ConceptIdRow[]).map(q => ({
       question_id: q.id,
       concept_id: conceptId,
     }));
-    await supabase
-      .from('question_concepts' as any)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await qcTable()
       .upsert(junctionRows as any, { onConflict: 'question_id,concept_id', ignoreDuplicates: true });
   }
 
-  // 7. Create basic review cards
-  const cardRows = (questions as any[]).map(q => ({
+  const cardRows = typedQuestions.map(q => ({
     deck_id: deck.id,
     front_content: sourceConcept.name,
     back_content: q.explanation || q.question_text,
