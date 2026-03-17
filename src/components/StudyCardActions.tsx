@@ -18,7 +18,9 @@ import {
 } from '@/components/ui/alert-dialog';
 import { CardEditorForm } from '@/components/card-editor/CardEditorForm';
 import ImageOcclusion from '@/components/ImageOcclusion';
-import { supabase } from '@/integrations/supabase/client';
+import { freezeCard as freezeCardService, burySingleCard, patchCard } from '@/services/card/cardMutations';
+import { fetchClozeSiblings } from '@/services/card/cardQueries';
+import { enhanceCard } from '@/services/card/cardAI';
 import { useEnergy } from '@/hooks/useEnergy';
 import { useAIModel } from '@/hooks/useAIModel';
 import { useToast } from '@/hooks/use-toast';
