@@ -76,12 +76,7 @@ const PublicCommunity = () => {
   // Fetch turma by slug or ID
   const { data: turma, isLoading: turmaLoading } = useQuery({
     queryKey: ['public-community', slugOrId],
-    queryFn: async () => {
-      const { data: bySlug } = await supabase.from('turmas').select('*').eq('share_slug', slugOrId!).maybeSingle();
-      if (bySlug) return bySlug;
-      const { data: byId } = await supabase.from('turmas').select('*').eq('id', slugOrId!).maybeSingle();
-      return byId;
-    },
+    queryFn: () => fetchTurmaBySlugOrId(slugOrId!),
     enabled: !!slugOrId,
   });
 
