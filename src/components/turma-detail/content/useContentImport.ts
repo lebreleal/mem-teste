@@ -105,7 +105,7 @@ export const useContentImport = () => {
       }
 
       // 2. Copy the deck (flat, no hierarchy)
-      const { data: originalDeck } = await supabase.from('decks').select('*').eq('id', td.deck_id).single();
+      const { data: originalDeck } = await supabase.from('decks').select('name, algorithm_mode, daily_new_limit, daily_review_limit').eq('id', td.deck_id).single();
       if (!originalDeck) throw new Error('Deck não encontrado');
       const od = originalDeck as any;
 
