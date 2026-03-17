@@ -122,12 +122,12 @@ const AdminUsageReport = () => {
   }, [isAdmin, datePreset, customFrom, customTo, fetchData]);
 
   const deleteEntry = async (entryId: string) => {
-    const { error } = await supabase.from('ai_token_usage').delete().eq('id', entryId);
-    if (error) {
-      toast({ title: 'Erro', description: 'Falha ao deletar.', variant: 'destructive' });
-    } else {
+    try {
+      await deleteTokenUsageEntry(entryId);
       setEntries(prev => prev.filter(e => e.id !== entryId));
       toast({ title: 'Registro deletado!' });
+    } catch {
+      toast({ title: 'Erro', description: 'Falha ao deletar.', variant: 'destructive' });
     }
   };
 
