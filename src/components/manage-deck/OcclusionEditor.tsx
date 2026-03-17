@@ -291,10 +291,20 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
 
   const handleSave = () => {
     if (!imageUrl || shapes.length === 0) return;
+    // Group shapes by color — each unique color becomes a separate card
+    const colorGroups = new Map<string, string[]>();
+    shapes.forEach(s => {
+      const color = s.color || COLORS[0].fill;
+      if (!colorGroups.has(color)) colorGroups.set(color, []);
+      colorGroups.get(color)!.push(s.id);
+    });
+    // For now, save all shapes with activeRectIds being all shapes
+    // The card splitting by color is handled at a higher level
     const frontContent = JSON.stringify({
       imageUrl,
       allRects: shapes,
       activeRectIds: shapes.map(s => s.id),
+      colorGroups: Object.fromEntries(colorGroups),
     });
     onSave(frontContent, '');
   };
