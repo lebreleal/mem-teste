@@ -311,12 +311,16 @@ const MateriaDetail: React.FC = () => {
             <div>
               <p className="text-xs text-muted-foreground mb-2">Cor do ícone</p>
               <div className="flex flex-wrap gap-2">
-                {MATERIA_COLORS.map(color => (
+                {MATERIA_COLORS.map((color, i) => (
                   <button
-                    key={color}
+                    key={color ?? 'default'}
                     onClick={() => setEditColor(editColor === color ? null : color)}
-                    className={`h-8 w-8 rounded-full border-2 transition-all ${editColor === color ? 'border-foreground scale-110' : 'border-transparent'}`}
-                    style={{ backgroundColor: color }}
+                    className={`h-8 w-8 rounded-full transition-all ${
+                      color === null
+                        ? `border-2 ${editColor === null ? 'border-primary scale-110' : 'border-muted-foreground/40'}`
+                        : `border-2 ${editColor === color ? 'border-foreground scale-110' : 'border-transparent'}`
+                    }`}
+                    style={color ? { backgroundColor: color } : undefined}
                   />
                 ))}
               </div>
