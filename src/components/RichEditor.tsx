@@ -519,34 +519,45 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       {/* Image attachment thumbnails */}
       {imageAttachments && imageAttachments.length > 0 && (
         <div className="flex flex-wrap items-end gap-2 px-3 py-2">
-          {imageAttachments.map(att => (
-            <div
-              key={att.url}
-              className="relative group cursor-pointer"
-              onClick={() => onClickAttachment?.(att.url, att.isOcclusion)}
-            >
-              <img
-                src={att.url}
-                alt=""
-                className="h-16 w-16 rounded-lg object-cover border border-border/50"
-              />
-              {/* Remove button */}
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onRemoveAttachment?.(att.url); }}
-                className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-muted border border-border flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+          {imageAttachments.map((att) => {
+            const title = att.isOcclusion && att.hasOcclusionRects ? 'Editar oclusão' : 'Abrir imagem';
+
+            return (
+              <div
+                key={att.url}
+                className="group relative cursor-pointer"
+                onClick={() => onClickAttachment?.(att)}
+                title={title}
               >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-3 w-3"><path d="M18 6L6 18M6 6l12 12" /></svg>
-              </button>
-              {/* Type badge */}
-              <div className="absolute bottom-0.5 right-0.5 h-5 w-5 rounded bg-background/80 backdrop-blur-sm flex items-center justify-center border border-border/30">
-                {att.isOcclusion && att.hasOcclusionRects
-                  ? <IconImageOcclusion className="h-3.5 w-3.5 text-muted-foreground" />
-                  : <IconImage className="h-3.5 w-3.5 text-muted-foreground" />
-                }
+                <img
+                  src={att.url}
+                  alt=""
+                  className="h-16 w-16 rounded-lg border border-border/50 object-cover"
+                />
+
+                <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/20 opacity-0 transition-opacity group-hover:opacity-100">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-background/90 text-muted-foreground shadow-sm">
+                    <Search className="h-3.5 w-3.5" />
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onRemoveAttachment?.(att.url); }}
+                  className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-border bg-muted text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-3 w-3"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                </button>
+
+                <div className="absolute bottom-0.5 right-0.5 flex h-5 w-5 items-center justify-center rounded border border-border/30 bg-background/85 backdrop-blur-sm">
+                  {att.isOcclusion && att.hasOcclusionRects
+                    ? <IconImageOcclusion className="h-3.5 w-3.5 text-muted-foreground" />
+                    : <IconImage className="h-3.5 w-3.5 text-muted-foreground" />
+                  }
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
