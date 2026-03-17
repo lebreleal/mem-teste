@@ -69,6 +69,9 @@ interface RichEditorProps {
   hideCloze?: boolean;
   chromeless?: boolean;
   hideToolbarUntilFocus?: boolean;
+  /** AI Creator — pass callback to show the AI Creator button in toolbar */
+  onAICreate?: (templatePrompt: string) => void;
+  isAICreating?: boolean;
 }
 
 const TEXT_COLORS = [
