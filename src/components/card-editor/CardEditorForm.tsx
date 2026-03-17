@@ -342,9 +342,9 @@ export const CardEditorForm = ({
           <div className="flex-shrink-0">
             {isImageMode && occlusionImageUrl ? (
               <button type="button" onClick={onOpenOcclusion} className="relative group inline-block rounded-lg overflow-hidden border border-border">
-                <img src={occlusionImageUrl} alt="Oclusão" className="h-12 w-12 object-cover rounded-lg" />
+                <img src={occlusionImageUrl} alt="Oclusão" className="h-16 w-16 object-cover rounded-lg" />
                 <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center bg-primary/80 py-0.5">
-                  <Image className="h-2.5 w-2.5 text-primary-foreground" />
+                  <IconImage className="h-2.5 w-2.5 text-primary-foreground" />
                 </div>
                 {onRemoveOcclusion && (
                   <button type="button" onClick={(e) => { e.stopPropagation(); onRemoveOcclusion(); }}
@@ -353,7 +353,7 @@ export const CardEditorForm = ({
               </button>
             ) : (
               <button type="button" onClick={onOpenOcclusion} className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-border px-3 py-2 text-xs font-medium text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors">
-                <Upload className="h-3.5 w-3.5" /> Imagem
+                <IconImage className="h-3.5 w-3.5" /> Imagem
               </button>
             )}
           </div>
