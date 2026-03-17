@@ -3,7 +3,7 @@ import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStudySession } from '@/hooks/useStudySession';
 import { useEnergy } from '@/hooks/useEnergy';
-import { getNextReadyIndex, parseStepToMinutes } from '@/lib/studyUtils';
+import { getNextReadyIndex, parseStepToMinutes, extractImageUrls } from '@/lib/studyUtils';
 import { useAIModel } from '@/hooks/useAIModel';
 import { invalidateStudyQueries } from '@/lib/queryKeys';
 import { useTutorStream } from '@/hooks/useTutorStream';
