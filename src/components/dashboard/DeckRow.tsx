@@ -253,15 +253,10 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                   <span className="flex h-2 w-2 shrink-0 rounded-full bg-destructive animate-pulse" title="Atualização disponível" />
                 )}
               </div>
-              {/* Matéria: show only pending count */}
+              {/* Matéria: show deck count only */}
               {!isEmptyMateria && (
                 <p className="text-[11px] text-muted-foreground mt-0.5">
                   {subDecks.length} {subDecks.length === 1 ? 'deck' : 'decks'}
-                  {hasDueCards && (
-                    <span className="text-primary font-semibold ml-1.5">
-                      · {aggStats.new_count + aggStats.learning_count + aggStats.review_count} pendentes
-                    </span>
-                  )}
                 </p>
               )}
               {/* Empty matéria: "+ Adicionar Deck" */}
