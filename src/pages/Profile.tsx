@@ -66,22 +66,24 @@ const Profile = () => {
       return;
     }
     setSavingPassword(true);
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password: currentPassword });
-    if (signInError) {
+    try {
+      await verifyPassword(email, currentPassword);
+    } catch {
       setSavingPassword(false);
       toast({ title: 'Erro', description: 'Senha atual incorreta.', variant: 'destructive' });
       return;
     }
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
-    setSavingPassword(false);
-    if (error) {
-      toast({ title: 'Erro', description: 'Não foi possível alterar a senha.', variant: 'destructive' });
-    } else {
+    try {
+      await updatePassword(newPassword);
       toast({ title: 'Senha alterada com sucesso!' });
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
       setEditPasswordOpen(false);
+    } catch {
+      toast({ title: 'Erro', description: 'Não foi possível alterar a senha.', variant: 'destructive' });
+    } finally {
+      setSavingPassword(false);
     }
   };
 
