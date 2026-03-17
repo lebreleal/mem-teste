@@ -67,7 +67,7 @@ export const useProfile = () => {
         },
         (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
           // Update cache directly with new data (avoid refetch)
-          const newRow = payload.new;
+          const newRow = 'new' in payload ? payload.new : null;
           if (newRow) {
             queryClient.setQueryData(profileQueryKey(user.id), (old: ProfileData | undefined) => {
               if (!old) return old;
