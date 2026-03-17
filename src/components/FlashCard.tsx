@@ -129,7 +129,7 @@ function renderOcclusion(frontContent: string, revealed: boolean, fallbackCanvas
       const stroke = 'rgb(49,120,236)';
       if (shapeType === 'text') return `<g><rect x="${r.x}" y="${r.y}" width="${textW}" height="${textH}" rx="6" fill="${fill}" stroke="${stroke}" stroke-width="2"/></g>`;
       if (shapeType === 'ellipse') return `<ellipse cx="${r.x + r.w/2}" cy="${r.y + r.h/2}" rx="${Math.abs(r.w/2)}" ry="${Math.abs(r.h/2)}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
-      if (shapeType === 'polygon' && r.points) { const pts = (r.points as {x:number,y:number}[]).map((p: any) => `${p.x},${p.y}`).join(' '); return `<polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`; }
+        if (shapeType === 'polygon' && r.points) { const pts = r.points.map(p => `${p.x},${p.y}`).join(' '); return `<polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`; }
       return `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${fill}" stroke="${stroke}" stroke-width="2" rx="4"/>`;
     }).join('');
 
