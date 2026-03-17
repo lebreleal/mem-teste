@@ -3,7 +3,9 @@ import { Toaster } from "@/components/ui/toaster";
 import GlobalLoading from "@/components/GlobalLoading";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
+import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ExamNotificationProvider } from "@/hooks/useExamNotifications";
@@ -70,18 +72,25 @@ const PublicDeckPreview = lazyRetry(() => import("./pages/PublicDeckPreview"));
 const PublicCommunity = lazyRetry(() => import("./pages/PublicCommunity"));
 const NotFound = lazyRetry(() => import("./pages/NotFound"));
 
+const TWENTY_FOUR_HOURS = 1000 * 60 * 60 * 24;
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 30_000,
-      gcTime: 5 * 60_000,
+      gcTime: TWENTY_FOUR_HOURS,
       refetchOnWindowFocus: false,
     },
   },
 });
 
+const persister = createSyncStoragePersister({
+  storage: window.localStorage,
+  key: 'memo-query-cache',
+});
+
 const App = () => (
-  <QueryClientProvider client={queryClient}>
+  <PersistQueryClientProvider client={queryClient} persistOptions={{ persister, maxAge: TWENTY_FOUR_HOURS }}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
@@ -145,7 +154,7 @@ const App = () => (
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
-  </QueryClientProvider>
+  </PersistQueryClientProvider>
 );
 
 export default App;
