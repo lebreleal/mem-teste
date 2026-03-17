@@ -285,7 +285,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return;
-      const url = await uploadToStorage(file);
+      const url = await handleUploadImage(file);
       if (url) onUrl(url);
     };
     input.click();
