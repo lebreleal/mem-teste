@@ -287,7 +287,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                   onClick={(e) => { e.stopPropagation(); setShowInfoModal(true); }}
                   className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  <Info className="h-4 w-4" />
+                  <HelpCircle className="h-4 w-4" />
                 </button>
               )}
               {hasPendingUpdate && (
