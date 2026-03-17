@@ -256,6 +256,8 @@ export const CardEditorForm = ({
           hideCloze={hideCloze}
           onOcclusionPaste={onOpenOcclusion}
           onOcclusionAttach={onOpenOcclusion}
+          onAICreate={onAICreate}
+          isAICreating={isAICreating}
         />
       </div>
 
