@@ -78,18 +78,17 @@ const AdminUsers = () => {
         refresh_token: session.refresh_token,
       }));
       sessionStorage.setItem('impersonated_name', user.name || user.email);
-      const { data, error } = await supabase.functions.invoke('admin-impersonate', {
-        body: { target_user_id: user.id },
-      });
-      if (error || !data?.token) {
+      const result = await adminImpersonate(user.id);
+      if (!result) {
         sessionStorage.removeItem('admin_session');
         sessionStorage.removeItem('impersonated_name');
         toast({ title: 'Erro', description: 'Falha ao impersonar usuário.', variant: 'destructive' });
         setImpersonating(false);
         return;
       }
-      const { error: otpError } = await supabase.auth.verifyOtp({ token_hash: data.token, type: 'magiclink' });
-      if (otpError) {
+      try {
+        await verifyOtp(result.token);
+      } catch {
         sessionStorage.removeItem('admin_session');
         sessionStorage.removeItem('impersonated_name');
         toast({ title: 'Erro', description: 'Falha na autenticação.', variant: 'destructive' });
