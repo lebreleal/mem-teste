@@ -67,7 +67,7 @@ interface TurmaDetailContextValue {
 
   // Calendar
   lessonDates: Date[];
-  lessonDateMap: Map<string, any[]>;
+  lessonDateMap: Map<string, TurmaLesson[]>;
 
   // Mutations
   mutations: ReturnType<typeof useTurmaHierarchyMutations>;
