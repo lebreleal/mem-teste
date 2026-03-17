@@ -218,12 +218,9 @@ const MateriaDetail: React.FC = () => {
           </DropdownMenu>
         </div>
 
-        {/* Pasta name row */}
-        <div className="flex items-center gap-3 px-4 pb-3">
-          <div className="shrink-0" style={materiaColor ? { color: materiaColor } : undefined}>
-            <IconFolder className="h-5 w-5" />
-          </div>
-          <h1 className="flex-1 text-base font-bold text-foreground truncate">{materia.name}</h1>
+        {/* Pasta name row — centered */}
+        <div className="flex items-center justify-center gap-2 px-4 pb-3">
+          <h1 className="text-base font-bold text-foreground truncate">{materia.name}</h1>
           <button onClick={openEdit} className="shrink-0 text-muted-foreground hover:text-foreground transition-colors">
             <IconEdit className="h-4 w-4" />
           </button>
