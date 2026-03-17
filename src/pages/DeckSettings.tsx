@@ -229,7 +229,7 @@ const DeckSettings = () => {
       bury_new_siblings: buryNewSiblings,
       bury_review_siblings: buryReviewSiblings,
       bury_learning_siblings: buryLearningSiblings,
-    } as any);
+    });
     setStudySettingsModal(false);
     setAdvancedModal(false);
   };
