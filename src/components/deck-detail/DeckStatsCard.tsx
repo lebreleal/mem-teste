@@ -77,13 +77,7 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
 
   // Study action
   const handleStudy = () => {
-    if (isQMode) {
-      // Navigate to question practice (the tab handles it via autoStart)
-      // We need a way to trigger practice - use a custom event or state
-      window.dispatchEvent(new CustomEvent('start-question-practice'));
-    } else {
-      navigate(`/study/${deckId}`, { replace: true });
-    }
+    navigate(`/study/${deckId}`, { replace: true });
   };
 
   const canStudy = isQMode
