@@ -61,11 +61,9 @@ const AIAgent = () => {
   }, [user]);
 
   const loadConversations = async () => {
-    const { data } = await supabase
-      .from('ai_conversations')
-      .select('*')
-      .order('updated_at', { ascending: false });
-    if (data) setConversations(data);
+    const { fetchAIConversations } = await import('@/services/adminService');
+    const data = await fetchAIConversations(user!.id);
+    setConversations(data);
   };
 
   const justCreatedRef = useRef(false);
