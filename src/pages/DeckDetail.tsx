@@ -423,7 +423,7 @@ const DeckDetailContent = () => {
   }
 
   const totalCards = cardCounts?.total ?? 0;
-  const deckName = (deck as any)?.name ?? 'Baralho';
+  const deckName = deck?.name ?? 'Baralho';
 
   return (
     <div className="min-h-screen bg-background">
