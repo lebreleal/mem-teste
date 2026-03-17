@@ -239,3 +239,103 @@ export async function fetchCommunityContentStats(turmaId: string) {
     rootLessons: (d.rootLessons ?? []).map((l: any) => ({ id: l.id, name: l.name })),
   };
 }
+
+// ── Dashboard-specific turma helpers ──
+
+/** Fetch the user's own turma (for publish toggle). */
+export async function fetchUserOwnTurma(userId: string): Promise<{ id: string; name: string; is_private: boolean; share_slug: string | null } | null> {
+  const { data } = await supabase
+    .from('turmas')
+    .select('id, name, is_private, share_slug')
+    .eq('owner_id', userId)
+    .limit(1)
+    .maybeSingle();
+  return data as any;
+}
+
+/** Fetch community folder info (owner name, cover, last update). */
+export async function fetchCommunityFolderInfo(turmaId: string) {
+  const [turmaRes, turmaDecksRes] = await Promise.all([
+    supabase.from('turmas').select('id, name, owner_id, cover_image_url').eq('id', turmaId).single(),
+    supabase.from('turma_decks').select('deck_id').eq('turma_id', turmaId).eq('is_published', true),
+  ]);
+  const turma = turmaRes.data as any;
+  if (!turma) return null;
+  const deckIds = (turmaDecksRes.data ?? []).map((td: any) => td.deck_id);
+  const [profilesRes, deckDatesRes] = await Promise.all([
+    supabase.rpc('get_public_profiles' as any, { p_user_ids: [turma.owner_id] }),
+    deckIds.length > 0
+      ? supabase.from('decks').select('updated_at').in('id', deckIds).order('updated_at', { ascending: false }).limit(1)
+      : Promise.resolve({ data: [] as any[] }),
+  ]);
+  const ownerName = (profilesRes.data as any)?.[0]?.name || 'Anônimo';
+  const lastUpdated = (deckDatesRes.data as any)?.[0]?.updated_at ?? '';
+  return { ownerName, lastUpdated, coverUrl: turma.cover_image_url as string | null };
+}
+
+/** Create a turma and add the owner as admin member. Returns turma id + share_slug. */
+export async function createTurmaWithOwner(
+  userId: string,
+  name: string,
+  options?: { isPrivate?: boolean; coverImageUrl?: string | null },
+): Promise<{ id: string; share_slug: string | null }> {
+  const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+  const { data: newTurma, error } = await supabase
+    .from('turmas')
+    .insert({
+      name,
+      description: '',
+      owner_id: userId,
+      invite_code: inviteCode,
+      is_private: options?.isPrivate ?? false,
+      cover_image_url: options?.coverImageUrl ?? null,
+    } as any)
+    .select('id, share_slug')
+    .single();
+  if (error || !newTurma) throw error || new Error('Failed to create turma');
+  await supabase.from('turma_members').insert({ turma_id: (newTurma as any).id, user_id: userId, role: 'admin' } as any);
+  return newTurma as any;
+}
+
+/** Publish folder decks to a turma (sync turma_decks + set is_public). */
+export async function publishDecksToTurma(turmaId: string, userId: string, deckIds: string[]) {
+  if (deckIds.length === 0) return;
+  const { data: existingTurmaDecks } = await supabase
+    .from('turma_decks')
+    .select('deck_id')
+    .eq('turma_id', turmaId);
+  const existingIds = new Set((existingTurmaDecks ?? []).map((td: any) => td.deck_id));
+  const newIds = deckIds.filter(id => !existingIds.has(id));
+  if (newIds.length === 0) return;
+  await supabase.from('turma_decks').insert(
+    newIds.map(id => ({
+      turma_id: turmaId,
+      deck_id: id,
+      shared_by: userId,
+      price: 0,
+      price_type: 'free',
+      allow_download: true,
+      is_published: true,
+    }) as any),
+  );
+  await supabase.from('decks').update({ is_public: true } as any).in('id', newIds);
+}
+
+/** Remove a turma member. */
+export async function removeTurmaMember(turmaId: string, userId: string) {
+  const { error } = await supabase
+    .from('turma_members')
+    .delete()
+    .eq('turma_id', turmaId)
+    .eq('user_id', userId);
+  if (error) throw error;
+}
+
+/** Ensure a turma has a share_slug; generates one if missing. Returns the slug. */
+export async function ensureShareSlug(turmaId: string): Promise<string> {
+  const { data } = await supabase.from('turmas').select('share_slug').eq('id', turmaId).single();
+  if ((data as any)?.share_slug) return (data as any).share_slug;
+  const generated = turmaId.substring(0, 8);
+  await supabase.from('turmas').update({ share_slug: generated } as any).eq('id', turmaId);
+  return generated;
+}

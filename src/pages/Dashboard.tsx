@@ -1,12 +1,11 @@
 // ============= Refactored Dashboard.tsx =============
 
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import {} from 'lucide-react';
+import { Archive, ArchiveRestore, ChevronDown, ChevronLeft, Trash2, Play, SlidersHorizontal, MoreVertical, Pencil, ImageIcon, SquarePlus, RotateCcw, Layers, Clock, Info, User, Compass, EyeOff, Share2, RefreshCw, LogOut, Sparkles } from 'lucide-react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { getNewCardsForDayGlobal } from '@/hooks/useStudyPlan';
-import { Archive, ArchiveRestore, ChevronDown, ChevronLeft, Trash2, Play, SlidersHorizontal, MoreVertical, Pencil, ImageIcon, SquarePlus, RotateCcw, Layers, Clock, Info, User, Compass, EyeOff, Share2, RefreshCw, LogOut, Sparkles } from 'lucide-react';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,7 +20,9 @@ import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading
 import { useSubscription } from '@/hooks/useSubscription';
 import { useStudyPlan } from '@/hooks/useStudyPlan';
 // useDecks removed — state.decks from useDashboardState is the single source of truth
-import { supabase } from '@/integrations/supabase/client';
+import { fetchUserOwnTurma, fetchCommunityFolderInfo, createTurmaWithOwner, updateTurma, publishDecksToTurma, removeTurmaMember, ensureShareSlug } from '@/services/turma/turmaCrud';
+import { clearFolderTurmaLink, deleteFolder, uploadFolderImage } from '@/services/folderService';
+import { detachCommunityDeck } from '@/services/deck/deckCrud';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -108,22 +109,18 @@ const Dashboard = () => {
   const { data: errorCount = 0 } = useQuery({
     queryKey: ['error-notebook-count'],
     queryFn: async () => {
-      const { data: { user: u } } = await supabase.auth.getUser();
-      if (!u) return 0;
+      if (!user) return 0;
       const { getErrorDeckCount } = await import('@/services/errorDeckService');
-      return getErrorDeckCount(u.id);
+      return getErrorDeckCount(user.id);
     },
+    enabled: !!user,
     staleTime: 60_000,
   });
 
   // Fetch user's turma for publish toggle
   const { data: userTurma, refetch: refetchTurma } = useQuery({
     queryKey: ['user-turma', user?.id],
-    queryFn: async () => {
-      if (!user) return null;
-      const { data } = await supabase.from('turmas').select('id, name, is_private, share_slug').eq('owner_id', user.id).limit(1).maybeSingle();
-      return data as { id: string; name: string; is_private: boolean; share_slug: string | null } | null;
-    },
+    queryFn: () => fetchUserOwnTurma(user!.id),
     enabled: !!user,
     staleTime: 60_000,
   });
@@ -136,26 +133,7 @@ const Dashboard = () => {
   // Fetch turma info (owner name, cover) for community folders — lightweight query
   const { data: communityTurmaInfo } = useQuery({
     queryKey: ['community-folder-turma-info', sourceTurmaId],
-    queryFn: async () => {
-      // Fetch turma + turma_decks in parallel
-      const [turmaRes, turmaDecksRes] = await Promise.all([
-        supabase.from('turmas').select('id, name, owner_id, cover_image_url').eq('id', sourceTurmaId!).single(),
-        supabase.from('turma_decks').select('deck_id').eq('turma_id', sourceTurmaId!).eq('is_published', true),
-      ]);
-      const turma = turmaRes.data;
-      if (!turma) return null;
-      const deckIds = (turmaDecksRes.data ?? []).map((td: any) => td.deck_id);
-      // Fetch profiles + deck dates in parallel
-      const [profilesRes, deckDatesRes] = await Promise.all([
-        supabase.rpc('get_public_profiles' as any, { p_user_ids: [(turma as any).owner_id] }),
-        deckIds.length > 0
-          ? supabase.from('decks').select('updated_at').in('id', deckIds).order('updated_at', { ascending: false }).limit(1)
-          : Promise.resolve({ data: [] }),
-      ]);
-      const ownerName = (profilesRes.data as any)?.[0]?.name || 'Anônimo';
-      const lastUpdated = (deckDatesRes.data as any)?.[0]?.updated_at ?? '';
-      return { ownerName, lastUpdated, coverUrl: (turma as any).cover_image_url };
-    },
+    queryFn: () => fetchCommunityFolderInfo(sourceTurmaId!),
     enabled: !!sourceTurmaId,
     staleTime: 60_000,
   });
@@ -210,9 +188,9 @@ const Dashboard = () => {
       const { cleanupFollowerDecks } = await import('@/services/followerBootstrap');
       await cleanupFollowerDecks(user.id, folderId);
       
-      await supabase.from('turma_members').delete().eq('turma_id', turmaId).eq('user_id', user.id);
-      await supabase.from('folders').update({ source_turma_id: null, source_turma_subject_id: null } as any).eq('id', folderId);
-      await supabase.from('folders').delete().eq('id', folderId);
+      await removeTurmaMember(turmaId, user.id);
+      await clearFolderTurmaLink(folderId);
+      await deleteFolder(folderId);
       queryClient.invalidateQueries({ queryKey: ['folders'] });
       queryClient.invalidateQueries({ queryKey: ['turmas'] });
       queryClient.invalidateQueries({ queryKey: ['turma-members'] });
@@ -243,26 +221,11 @@ const Dashboard = () => {
 
       // Auto-create turma if user doesn't have one
       if (!turmaId) {
-        const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-        const { data: newTurma, error: createErr } = await supabase.from('turmas').insert({
-          name: folderName,
-          description: '',
-          owner_id: user.id,
-          invite_code: inviteCode,
-          is_private: false,
-          cover_image_url: folderImage,
-        } as any).select('id').single();
-        if (createErr || !newTurma) throw createErr || new Error('Failed to create turma');
-        turmaId = (newTurma as any).id;
-        // Add owner as admin member
-        await supabase.from('turma_members').insert({
-          turma_id: turmaId,
-          user_id: user.id,
-          role: 'admin',
-        } as any);
+        const newTurma = await createTurmaWithOwner(user.id, folderName, { isPrivate: false, coverImageUrl: folderImage });
+        turmaId = newTurma.id;
       } else {
         const newPrivate = !userTurma!.is_private;
-        await supabase.from('turmas').update({ is_private: newPrivate, name: folderName, cover_image_url: folderImage } as any).eq('id', turmaId);
+        await updateTurma(turmaId, { isPrivate: newPrivate, name: folderName, coverImageUrl: folderImage ?? undefined });
         if (newPrivate) {
           // Unpublishing
           await refetchTurma();
@@ -275,24 +238,7 @@ const Dashboard = () => {
 
       // Publishing: sync folder decks to turma_decks
       const folderDecks = state.decks.filter(d => d.folder_id === state.currentFolderId && !d.is_archived && !d.parent_deck_id);
-      const { data: existingTurmaDecks } = await supabase.from('turma_decks').select('deck_id').eq('turma_id', turmaId!);
-      const existingIds = new Set((existingTurmaDecks ?? []).map((td: any) => td.deck_id));
-
-      const newDecks = folderDecks.filter(d => !existingIds.has(d.id));
-      if (newDecks.length > 0) {
-        await supabase.from('turma_decks').insert(
-          newDecks.map(d => ({
-            turma_id: turmaId,
-            deck_id: d.id,
-            shared_by: user.id,
-            price: 0,
-            price_type: 'free',
-            allow_download: true,
-            is_published: true,
-          }) as any)
-        );
-        await supabase.from('decks').update({ is_public: true } as any).in('id', newDecks.map(d => d.id));
-      }
+      await publishDecksToTurma(turmaId!, user.id, folderDecks.map(d => d.id));
 
       await refetchTurma();
       queryClient.invalidateQueries({ queryKey: ['discover-turmas'] });
@@ -384,32 +330,10 @@ const Dashboard = () => {
   }, [searchParams, refreshStatus, setSearchParams, toast]);
 
   const handleDetachDeck = useCallback(async () => {
-    if (!detachTarget) return;
+    if (!detachTarget || !user) return;
     setDetaching(true);
     try {
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (!currentUser) throw new Error('Not authenticated');
-
-      const { data: originalDeck } = await supabase.from('decks').select('name').eq('id', detachTarget.id).single();
-      if (!originalDeck) throw new Error('Deck not found');
-
-      const { data: newDeck, error } = await supabase.from('decks').insert({
-        name: `${(originalDeck as any).name}`,
-        user_id: currentUser.id,
-      } as any).select().single();
-      if (error || !newDeck) throw error || new Error('Failed to create deck');
-
-      const { data: cards } = await supabase.from('cards').select('front_content, back_content, card_type').eq('deck_id', detachTarget.id);
-      if (cards && cards.length > 0) {
-        const newCards = cards.map((c: any) => ({
-          deck_id: (newDeck as any).id,
-          front_content: c.front_content,
-          back_content: c.back_content,
-          card_type: c.card_type ?? 'basic',
-        }));
-        await supabase.from('cards').insert(newCards as any);
-      }
-
+      await detachCommunityDeck(user.id, detachTarget.id);
       queryClient.invalidateQueries({ queryKey: ['decks'] });
       toast({ title: 'Deck copiado!', description: 'Uma cópia pessoal independente foi criada.' });
     } catch {
@@ -418,7 +342,7 @@ const Dashboard = () => {
       setDetaching(false);
       setDetachTarget(null);
     }
-  }, [detachTarget, queryClient, toast]);
+  }, [detachTarget, user, queryClient, toast]);
 
   const handlePendingClick = useCallback((pending: PendingDeck) => {
     if (pending.status === 'review_ready' && pending.cards) {
@@ -620,22 +544,13 @@ const Dashboard = () => {
                               if (!turmaId) {
                                 const cFolder = state.folders.find(f => f.id === state.currentFolderId);
                                 const fName = cFolder?.name ?? 'Minha Sala';
-                                const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-                                const { data: newTurma } = await supabase.from('turmas').insert({
-                                  name: fName, description: '', owner_id: user!.id,
-                                  invite_code: inviteCode, is_private: true,
-                                } as any).select('id, share_slug').single();
-                                if (newTurma) {
-                                  turmaId = (newTurma as any).id;
-                                  slug = (newTurma as any).share_slug;
-                                  await supabase.from('turma_members').insert({ turma_id: turmaId, user_id: user!.id, role: 'admin' } as any);
-                                  await refetchTurma();
-                                }
+                                const newTurma = await createTurmaWithOwner(user!.id, fName, { isPrivate: true });
+                                turmaId = newTurma.id;
+                                slug = newTurma.share_slug;
+                                await refetchTurma();
                               }
                               if (!slug && turmaId) {
-                                const generated = turmaId.substring(0, 8);
-                                await supabase.from('turmas').update({ share_slug: generated } as any).eq('id', turmaId);
-                                slug = generated;
+                                slug = await ensureShareSlug(turmaId);
                                 await refetchTurma();
                               }
                               setShareSlugEdit(slug || turmaId?.substring(0, 8) || '');
@@ -1084,7 +999,7 @@ const Dashboard = () => {
               state.setImportOpen(false);
 
               try {
-                const { data: { user } } = await (await import('@/integrations/supabase/client')).supabase.auth.getUser();
+                const currentUser = user;
                 const progressCb = (current: number, total: number) => {
                   pendingStore.updatePending(pendingId, { progress: { current, total } });
                 };
@@ -1274,15 +1189,7 @@ const Dashboard = () => {
               onClick={async () => {
                 if (!salaImageFile || !state.currentFolderId) return;
                 try {
-                  const ext = salaImageFile.name.split('.').pop() || 'jpg';
-                  const filePath = `sala-images/${state.currentFolderId}.${ext}`;
-                  const { error: uploadErr } = await supabase.storage
-                    .from('deck-covers')
-                    .upload(filePath, salaImageFile, { upsert: true });
-                  if (uploadErr) throw uploadErr;
-                  const { data: urlData } = supabase.storage.from('deck-covers').getPublicUrl(filePath);
-                  const imageUrl = urlData.publicUrl + '?t=' + Date.now();
-                  await supabase.from('folders').update({ image_url: imageUrl } as any).eq('id', state.currentFolderId);
+                  await uploadFolderImage(state.currentFolderId, salaImageFile);
                   await queryClient.invalidateQueries({ queryKey: ['folders'] });
                   toast({ title: 'Imagem atualizada!' });
                   setSalaImageOpen(false);
@@ -1338,7 +1245,7 @@ const Dashboard = () => {
                   if (!userTurma?.id || !shareSlugEdit) return;
                   setSavingSlug(true);
                   try {
-                    await supabase.from('turmas').update({ share_slug: shareSlugEdit } as any).eq('id', userTurma.id);
+                    await updateTurma(userTurma.id, { shareSlug: shareSlugEdit });
                     await refetchTurma();
                     toast({ title: 'Link atualizado!' });
                     setShareModalOpen(false);

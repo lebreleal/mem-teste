@@ -14,6 +14,12 @@ export {
   fetchDiscoverTurmas,
   fetchCreatorStats,
   fetchCommunityContentStats,
+  fetchUserOwnTurma,
+  fetchCommunityFolderInfo,
+  createTurmaWithOwner,
+  publishDecksToTurma,
+  removeTurmaMember,
+  ensureShareSlug,
 } from './turmaCrud';
 
 // Members & Ranking
