@@ -959,31 +959,28 @@ const CreateQuestionDialog = ({
       if (!questionText.trim()) throw new Error('Enunciado obrigatório');
       if (correctIdx === null) throw new Error('Marque a alternativa correta');
 
-      const { error } = await supabase.from('deck_questions' as any).insert({
-        deck_id: deckId, created_by: user.id, question_text: questionText.trim(),
-        question_type: 'multiple_choice', options: validOptions,
-        correct_indices: [correctIdx], explanation: buildExplanation(),
+      await createQuestion(deckId, user.id, {
+        question_text: questionText.trim(),
+        question_type: 'multiple_choice',
+        options: validOptions,
+        correct_indices: [correctIdx],
+        explanation: buildExplanation(),
       });
-      if (error) throw error;
 
       // Extract concepts via AI (fire and forget)
-      supabase.functions.invoke('ai-tutor', {
-        body: { type: 'question-concepts', question: questionText.trim(), options: validOptions },
-      }).then(async ({ data }) => {
-        if (data?.concepts?.length > 0) {
-          const { data: latest } = await supabase.from('deck_questions' as any)
-            .select('id').eq('deck_id', deckId).eq('created_by', user.id)
-            .order('created_at', { ascending: false }).limit(1);
-          if (latest?.[0]) {
-            await supabase.from('deck_questions' as any).update({ concepts: data.concepts }).eq('id', (latest[0] as any).id);
-            // Link with descriptions if available
-            const conceptDescs = data.conceptsWithDescriptions ?? [];
-            await linkQuestionsToConcepts(user.id, [{
-              questionId: (latest[0] as any).id,
-              conceptNames: data.concepts,
-              conceptDescriptions: conceptDescs,
-            }]);
-            queryClient.invalidateQueries({ queryKey: ['deck-questions', deckId] });
+      invokeAITutor({ type: 'question-concepts', question: questionText.trim(), options: validOptions })
+        .then(async (data) => {
+          if (data?.concepts?.length > 0) {
+            const latestId = await fetchLatestQuestionId(deckId, user.id);
+            if (latestId) {
+              await updateQuestionConcepts(latestId, data.concepts);
+              const conceptDescs = data.conceptsWithDescriptions ?? [];
+              await linkQuestionsToConcepts(user.id, [{
+                questionId: latestId,
+                conceptNames: data.concepts,
+                conceptDescriptions: conceptDescs,
+              }]);
+              queryClient.invalidateQueries({ queryKey: ['deck-questions', deckId] });
           }
         }
       }).catch(() => {});
