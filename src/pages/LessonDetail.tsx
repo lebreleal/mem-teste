@@ -12,6 +12,7 @@ import {
 } from '@/hooks/useTurmaHierarchy';
 import { useDecks } from '@/hooks/useDecks';
 import { useFolders } from '@/hooks/useFolders';
+import { archiveFolder } from '@/services/folderService';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
@@ -42,7 +43,6 @@ import {
   insertCardCopies,
   unarchiveDeck,
   linkDeckToTurmaSource,
-  unarchiveDeck,
 } from '@/services/turmaLessonService';
 
 const LessonDetail = () => {
@@ -163,21 +163,6 @@ const LessonDetail = () => {
     },
   });
 
-  // Import personal exam into turma
-  const handleImportExamToTurma = async (exam: any) => {
-    if (!user || !turmaId || !lessonId) return;
-    await importExamToTurma({
-      examId: exam.id,
-      turmaId,
-      userId: user.id,
-      lessonId,
-      subjectId: lesson?.subject_id || null,
-      title: exam.title || 'Prova Importada',
-      timeLimitSeconds: exam.time_limit_seconds || null,
-    });
-    queryClient.invalidateQueries({ queryKey: ['turma-exams', turmaId] });
-    toast({ title: 'Prova importada!' });
-  };
 
   // Open exam — exam system removed, stub handler
   const handleOpenExam = async (_exam: any) => {
@@ -231,7 +216,7 @@ const LessonDetail = () => {
 
       let turmaFolder = folders.find(f => f.name === turma.name && !f.parent_id);
       if (turmaFolder && turmaFolder.is_archived) {
-        await unarchiveFolder(turmaFolder.id);
+        await archiveFolder(turmaFolder.id);
       }
       if (!turmaFolder) {
         const existingFolderNames = folders.filter(f => !f.parent_id).map(f => f.name);
@@ -266,7 +251,7 @@ const LessonDetail = () => {
           }
         }
         if (turmaFolder && (turmaFolder as any).is_archived) {
-          await unarchiveFolder((turmaFolder as any).id);
+          await archiveFolder((turmaFolder as any).id);
         }
         const sourceCards = await fetchCardsForCopy(td.deck_id);
         const userCards = await fetchCardsForCopy(existingLinked.id);
@@ -464,9 +449,9 @@ const LessonDetail = () => {
           onRenameFolder={(folderId, newName) => renameContentFolderMutation.mutate({ folderId, newName })}
           onDeleteFolder={(folderId) => deleteContentFolderMutation.mutate(folderId)}
           onMoveItem={(itemType, itemId, targetFolderId) => moveItemMutation.mutate({ itemType, itemId, targetFolderId })}
-          onImportExam={handleImportExamToTurma}
-          onDeleteExam={(examId) => examMutations.deleteExam.mutate(examId, { onSuccess: () => toast({ title: 'Prova excluída' }) })}
-          onOpenExam={handleOpenExam}
+           onImportExam={() => {}}
+           onDeleteExam={() => {}}
+           onOpenExam={handleOpenExam}
         />
       </main>
 

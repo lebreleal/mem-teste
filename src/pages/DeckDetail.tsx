@@ -145,19 +145,6 @@ const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: stri
     return collect(parentDeckId);
   }, [parentDeckId, allDecks]);
 
-  const { data: questionCounts } = useQuery({
-    queryKey: ['sub-deck-question-counts', parentDeckId],
-    queryFn: () => fetchQuestionCountsByDeck(allDescendantIds),
-    enabled: allDescendantIds.length > 0,
-    staleTime: 60_000,
-  });
-
-  const getQuestionCount = (deckId: string): number => {
-    let count = questionCounts?.get(deckId) ?? 0;
-    const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
-    for (const child of children) count += getQuestionCount(child.id);
-    return count;
-  };
 
   const sorted = [...subDecks].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name));
 
@@ -303,7 +290,6 @@ const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: stri
         {sorted.map(sub => {
           const mastery = getMastery(sub.id);
           const masteryPct = mastery.total > 0 ? Math.round((mastery.mastered / mastery.total) * 1000) / 10 : 0;
-          const qCount = getQuestionCount(sub.id);
           const allCaughtUp = getDueCount(sub.id) === 0 && mastery.mastered > 0;
 
           return (
@@ -320,12 +306,6 @@ const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: stri
                     <Layers className="h-3 w-3" />
                     {mastery.total}
                   </span>
-                  {qCount > 0 && (
-                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                      <HelpCircle className="h-3 w-3" />
-                      {qCount}
-                    </span>
-                  )}
                   <span className="text-xs text-muted-foreground ml-auto">{masteryPct}%</span>
                 </div>
                 <Progress value={masteryPct} className="h-1 mt-1.5" />
@@ -557,12 +537,6 @@ const LinkedDeckTabs = ({ deckId, resolvedSourceDeckId, isLinkedDeck, activeTab,
     staleTime: 60_000,
   });
 
-  const { data: questionCount = 0 } = useQuery({
-    queryKey: ['deck-questions-count', effectiveDeckId],
-    queryFn: () => countDeckQuestionsRecursive(effectiveDeckId),
-    enabled: !!effectiveDeckId,
-    staleTime: 60_000,
-  });
 
   const totalCards = cardCounts?.total ?? 0;
   const [questionAction, setQuestionAction] = useState<'practice' | 'ai' | null>(null);
