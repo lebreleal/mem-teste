@@ -67,7 +67,7 @@ export const CardEditorDialog = ({
             onFrontChange={setFront}
             back={back}
             onBackChange={setBack}
-            cardType={editorType === 'multiple_choice' ? 'multiple_choice' : undefined}
+            cardType={undefined}
             mcOptions={mcOptions}
             onMcOptionsChange={setMcOptions}
             mcCorrectIndex={mcCorrectIndex}
