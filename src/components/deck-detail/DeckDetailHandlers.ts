@@ -437,13 +437,11 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
         return `Q: ${fr}\nA: ${bk}`;
       }).join('\n\n');
 
-      const { data: aiData, error: fnError } = await supabase.functions.invoke('generate-deck', {
-        body: {
-          textContent, cardCount: examTotalQuestions, detailLevel: 'standard',
-          cardFormats: [...(mcCount > 0 ? ['multiple_choice'] : []), ...(examWrittenCount > 0 ? ['qa'] : [])],
-          customInstructions: `PROVA ACADÊMICA. Gere ${mcCount} questões de múltipla escolha (${examOptionsCount} alternativas cada) e ${examWrittenCount} dissertativas.\nCada questão DEVE ter um ENUNCIADO (caso clínico, situação-problema ou texto-base) na "front", separado da pergunta por "---".\nDissertativas: "front" = enunciado + pergunta, "back" = resposta completa.\nBaseie-se APENAS no material fornecido. Varie a dificuldade.`,
-          aiModel: model, energyCost: totalCost,
-        },
+      const { data: aiData, error: fnError } = await invokeEdgeFunction<{ cards: Array<{ front: string; back: string; type: string; options?: string[]; correctIndex?: number }>; error?: string }>('generate-deck', {
+        textContent, cardCount: examTotalQuestions, detailLevel: 'standard',
+        cardFormats: [...(mcCount > 0 ? ['multiple_choice'] : []), ...(examWrittenCount > 0 ? ['qa'] : [])],
+        customInstructions: `PROVA ACADÊMICA. Gere ${mcCount} questões de múltipla escolha (${examOptionsCount} alternativas cada) e ${examWrittenCount} dissertativas.\nCada questão DEVE ter um ENUNCIADO (caso clínico, situação-problema ou texto-base) na "front", separado da pergunta por "---".\nDissertativas: "front" = enunciado + pergunta, "back" = resposta completa.\nBaseie-se APENAS no material fornecido. Varie a dificuldade.`,
+        aiModel: model, energyCost: totalCost,
       });
       if (fnError || aiData?.error) throw new Error(aiData?.error || 'Erro na geração');
       queryClient.invalidateQueries({ queryKey: ['profile'] });
