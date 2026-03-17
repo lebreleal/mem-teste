@@ -532,11 +532,11 @@ export async function fetchRetentionOverTime(userId: string, days = 180): Promis
 }
 
 /** Fetch cards added per day. */
-export async function fetchCardsAddedPerDay(userId: string, days = 90) {
+export async function fetchCardsAddedPerDay(userId: string, days = 90): Promise<CardsAddedRow[]> {
   const { data, error } = await supabase.rpc('get_cards_added_per_day' as any, {
     p_user_id: userId,
     p_days: days,
   });
   if (error) throw error;
-  return (data as any[]) ?? [];
+  return (data as CardsAddedRow[]) ?? [];
 }
