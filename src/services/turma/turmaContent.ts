@@ -24,7 +24,7 @@ export async function fetchTurmaLessons(turmaId: string): Promise<TurmaLesson[]>
 }
 
 export async function fetchTurmaDecks(turmaId: string): Promise<TurmaDeck[]> {
-  const { data } = await supabase.from('turma_decks').select('*').eq('turma_id', turmaId);
+  const { data } = await supabase.from('turma_decks').select('id, turma_id, deck_id, subject_id, lesson_id, shared_by, sort_order, is_published, price, price_type, allow_download, created_at').eq('turma_id', turmaId);
   if (!data || data.length === 0) return [];
 
   const deckIds = data.map((d: any) => d.deck_id);
