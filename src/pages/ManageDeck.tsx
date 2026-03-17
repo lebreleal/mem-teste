@@ -393,6 +393,8 @@ const ManageDeck = () => {
                     placeholder=""
                     chromeless
                     hideCloze
+                    onAICreate={handleAICreate}
+                    isAICreating={isAICreating}
                   />
                 </div>
               </div>
