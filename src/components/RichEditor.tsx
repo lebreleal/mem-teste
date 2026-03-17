@@ -366,7 +366,8 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
         const publicUrl = await uploadFileToStorage(user.id, file);
         editor.chain().focus().insertContent(
           `<audio controls src="${publicUrl}"></audio>`
-      ).run();
+        ).run();
+      } catch { toast({ title: 'Erro no upload', variant: 'destructive' }); }
     };
     input.click();
   };
