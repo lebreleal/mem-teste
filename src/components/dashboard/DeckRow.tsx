@@ -244,14 +244,12 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
             onDragEnd: dragHandlers.onDragEnd,
           } : {})}
           className={`group flex items-center gap-3 px-4 py-3.5 cursor-pointer transition-all hover:bg-muted/30 border-b border-border/50 ${dragHandlers ? dragHandlers.className : ''}`}
-          onClick={handleClick}
-        >
-          {organizeMode && (
-            <GripVertical className="h-4 w-4 text-muted-foreground/50 shrink-0 cursor-grab active:cursor-grabbing" />
-          )}
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 shrink-0">
-            <IconFolder className="h-5 w-5 text-primary" />
-          </div>
+           onClick={handleClick}
+         >
+           {organizeMode && (
+             <GripVertical className="h-4 w-4 text-muted-foreground/50 shrink-0 cursor-grab active:cursor-grabbing" />
+           )}
+           <IconFolder className="h-5 w-5 text-muted-foreground shrink-0" />
           <div className="flex-1 min-w-0">
             <h3 className="text-[15px] font-semibold text-foreground truncate">{displayName}</h3>
             {isEmptyMateria && !readOnly && (

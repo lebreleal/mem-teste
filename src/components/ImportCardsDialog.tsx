@@ -553,36 +553,30 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
               <DialogDescription>Escolha o formato do arquivo:</DialogDescription>
             </DialogHeader>
             <div className="space-y-2">
-              {/* CSV / TSV / TXT */}
-              <button
-                onClick={handleCsvFormatClick}
-                className="flex w-full items-center gap-4 rounded-xl border border-border p-4 text-left transition-colors hover:bg-muted/50"
-              >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent">
-                  <FileText className="h-5 w-5 text-accent-foreground" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-card-foreground">CSV / TSV / TXT</p>
-                  <p className="text-xs text-muted-foreground">Separado por vírgula, tab ou personalizado</p>
-                </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-              </button>
+               {/* CSV / TSV / TXT */}
+               <button
+                 onClick={handleCsvFormatClick}
+                 className="flex w-full items-center gap-4 rounded-xl border border-border p-4 text-left transition-colors hover:bg-muted/50"
+               >
+                 <div className="flex-1 min-w-0">
+                   <p className="font-semibold text-card-foreground">CSV / TSV / TXT</p>
+                   <p className="text-xs text-muted-foreground">Separado por vírgula, tab ou personalizado</p>
+                 </div>
+                 <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+               </button>
 
-              {/* Anki */}
-              <button
-                onClick={handleAnkiFormatClick}
-                className="flex w-full items-center gap-4 rounded-xl border border-border p-4 text-left transition-colors hover:bg-muted/50"
-              >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent p-1.5">
-                  <Package className="h-6 w-6 text-muted-foreground" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-card-foreground">Anki</p>
-                  <p className="text-xs text-muted-foreground">Formatos .apkg, .colpkg, .ofc</p>
-                </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-              </button>
-            </div>
+               {/* Anki */}
+               <button
+                 onClick={handleAnkiFormatClick}
+                 className="flex w-full items-center gap-4 rounded-xl border border-border p-4 text-left transition-colors hover:bg-muted/50"
+               >
+                 <div className="flex-1 min-w-0">
+                   <p className="font-semibold text-card-foreground">Anki</p>
+                   <p className="text-xs text-muted-foreground">Formatos .apkg, .colpkg, .ofc</p>
+                 </div>
+                 <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+               </button>
+             </div>
           </>
         ) : source === 'anki' ? (
           /* ── Anki import flow ── */
