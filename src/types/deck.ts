@@ -11,6 +11,7 @@ export interface DeckWithStats {
   folder_id: string | null;
   parent_deck_id: string | null;
   is_archived: boolean;
+  sort_order?: number;
   new_count: number;
   learning_count: number;
   review_count: number;
