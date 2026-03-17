@@ -11,8 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Save, Loader2, Bot, ChevronRight, RotateCcw, Users, Settings, Volume2, Play, BarChart3, Tag } from 'lucide-react';
-import { getAuthToken } from '@/services/adminService';
+import { ArrowLeft, Save, Loader2, Bot, ChevronRight, RotateCcw, Users, Settings, BarChart3 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const PLACEHOLDER_MAP: Record<string, string[]> = {
