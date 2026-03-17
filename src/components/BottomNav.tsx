@@ -46,7 +46,8 @@ const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
     window.dispatchEvent(new CustomEvent('open-add-menu'));
   };
 
-  const items = [
+  interface NavItem { icon: typeof Home; label: string; onClick: () => void; active: boolean; accent?: boolean; disabled?: boolean; dimmed?: boolean }
+  const items: NavItem[] = [
     { icon: Home, label: 'Home', onClick: () => navigate('/dashboard'), active: isActive('/dashboard') },
     { icon: Plus, label: 'Adicionar', onClick: handleAdd, active: false, accent: true, disabled: isDisabledAdd, dimmed: isInsideSala && isCommunityFolder },
     { icon: Compass, label: 'Explorar', onClick: handleExplorar, active: isActive('/explorar') || isActive('/turmas') },
