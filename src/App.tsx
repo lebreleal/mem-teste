@@ -62,6 +62,7 @@ const AdminLogs = lazyRetry(() => import("./pages/AdminLogs"));
 const AdminTags = lazyRetry(() => import("./pages/AdminTags"));
 const AdminUsageReport = lazyRetry(() => import("./pages/AdminUsageReport"));
 const ErrorNotebook = lazyRetry(() => import("./pages/ErrorNotebook"));
+const MateriaDetail = lazyRetry(() => import("./pages/MateriaDetail"));
 
 const QuestionBank = lazyRetry(() => import("./pages/QuestionBank"));
 
