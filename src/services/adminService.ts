@@ -120,6 +120,24 @@ export async function deleteAIConversation(convId: string) {
   await supabase.from('ai_conversations').delete().eq('id', convId);
 }
 
+export async function fetchAIConversations(userId: string) {
+  const { data } = await supabase
+    .from('ai_conversations')
+    .select('id, title, updated_at, created_at, user_id')
+    .eq('user_id', userId)
+    .order('updated_at', { ascending: false });
+  return data ?? [];
+}
+
+export async function fetchAIChatMessages(convId: string) {
+  const { data } = await supabase
+    .from('ai_chat_messages')
+    .select('id, role, content, created_at')
+    .eq('conversation_id', convId)
+    .order('created_at', { ascending: true });
+  return data ?? [];
+}
+
 export async function getAuthToken(): Promise<string> {
   const { data: { session } } = await supabase.auth.getSession();
   return session?.access_token || '';
