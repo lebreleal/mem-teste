@@ -1,77 +1,49 @@
 /**
  * MateriaDetail — full-screen view for a "Pasta" (parent deck).
- * Header: "< Sala" back + name + edit icon + 3-dot menu.
- * Lists sub-decks with classification bars.
- * Edit modal: rename + color selector.
- * Add menu: only baralho + importar (no pasta creation inside a pasta).
+ * Matches the Sala layout: hero banner, study bar, DeckRow list, BottomNav.
+ * No pasta creation inside a pasta (hideCreatePasta).
  */
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, lazy, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, Plus, Play, ChevronRight, MoreVertical, GripVertical } from 'lucide-react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { ChevronLeft, Play, MoreVertical, GripVertical, SlidersHorizontal } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useDecks } from '@/hooks/useDecks';
 import { useFolders } from '@/hooks/useFolders';
+import { useStudyPlan } from '@/hooks/useStudyPlan';
 import type { DeckWithStats } from '@/types/deck';
-import { IconFolder, IconEdit, IconDeck, IconArchive, IconTrash } from '@/components/icons';
+import { IconEdit, IconArchive, IconTrash, IconDeck, IconInfo } from '@/components/icons';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import DeckRow from '@/components/dashboard/DeckRow';
+import DashboardModals from '@/components/dashboard/DashboardModals';
+import { calculateRealStudyTime } from '@/lib/studyUtils';
+import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
+
+const StudySettingsSheet = lazy(() => import('@/components/dashboard/StudySettingsSheet'));
 
 const MATERIA_COLORS = [
-  null,           // default (no color — outlined circle)
-  '#C8B6FF',      // light purple
-  '#FFF3BF',      // light yellow
-  '#FFD6E0',      // light pink
-  '#D4FFDA',      // light green
+  null, '#C8B6FF', '#FFF3BF', '#FFD6E0', '#D4FFDA',
 ];
-
 const COLOR_STORAGE_KEY = 'memo-materia-colors';
 
 function getMateriaColors(): Record<string, string> {
-  try {
-    return JSON.parse(localStorage.getItem(COLOR_STORAGE_KEY) || '{}');
-  } catch { return {}; }
+  try { return JSON.parse(localStorage.getItem(COLOR_STORAGE_KEY) || '{}'); }
+  catch { return {}; }
 }
-
 function setMateriaColor(deckId: string, color: string | null) {
   const colors = getMateriaColors();
   if (color) { colors[deckId] = color; } else { delete colors[deckId]; }
   localStorage.setItem(COLOR_STORAGE_KEY, JSON.stringify(colors));
-}
-
-/** 5-segment classification bar */
-const ClassificationBar = ({ facilPct, bomPct, dificilPct, erreiPct, novoPct, className = '' }: {
-  facilPct: number; bomPct: number; dificilPct: number; erreiPct: number; novoPct: number; className?: string;
-}) => (
-  <div className={`relative h-1 w-full overflow-hidden rounded-full bg-muted/30 ${className}`}>
-    <div className="absolute inset-y-0 left-0 flex w-full">
-      {facilPct > 0 && <div className="h-full transition-all duration-500 rounded-l-full" style={{ width: `${facilPct}%`, backgroundColor: 'hsl(var(--info))' }} />}
-      {bomPct > 0 && <div className="h-full transition-all duration-500" style={{ width: `${bomPct}%`, backgroundColor: 'hsl(var(--success))' }} />}
-      {dificilPct > 0 && <div className="h-full transition-all duration-500" style={{ width: `${dificilPct}%`, backgroundColor: 'hsl(var(--warning))' }} />}
-      {erreiPct > 0 && <div className="h-full transition-all duration-500" style={{ width: `${erreiPct}%`, backgroundColor: 'hsl(var(--destructive))' }} />}
-      {novoPct > 0 && <div className="h-full bg-muted transition-all duration-500 rounded-r-full" style={{ width: `${novoPct}%` }} />}
-    </div>
-  </div>
-);
-
-function getClassification(deck: DeckWithStats) {
-  const total = deck.total_cards;
-  if (total === 0) return { facilPct: 0, bomPct: 0, dificilPct: 0, erreiPct: 0, novoPct: 0 };
-  return {
-    facilPct: ((deck.class_facil ?? 0) / total) * 100,
-    bomPct: ((deck.class_bom ?? 0) / total) * 100,
-    dificilPct: ((deck.class_dificil ?? 0) / total) * 100,
-    erreiPct: ((deck.class_errei ?? 0) / total) * 100,
-    novoPct: ((deck.class_novo ?? 0) / total) * 100,
-  };
 }
 
 const MateriaDetail: React.FC = () => {
@@ -79,31 +51,49 @@ const MateriaDetail: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const { decks } = useDecks();
+  const { decks, createDeck } = useDecks();
   const { folders } = useFolders();
+  const { realStudyMetrics } = useStudyPlan();
 
-  // Find the materia and its sub-decks from the cached decks list
   const materia = useMemo(() => decks?.find(d => d.id === id), [decks, id]);
   const subDecks = useMemo(
     () => (decks ?? []).filter(d => d.parent_deck_id === id && !d.is_archived),
-    [decks, id]
+    [decks, id],
   );
 
-  // Find parent sala (folder) name
+  // Parent sala (folder)
   const parentFolder = useMemo(() => {
     if (!materia?.folder_id) return null;
-    return (folders as Array<{ id: string; name: string }>)?.find(f => f.id === materia.folder_id) ?? null;
+    return (folders as Array<{ id: string; name: string; image_url?: string | null }>)?.find(f => f.id === materia.folder_id) ?? null;
   }, [materia, folders]);
   const backLabel = parentFolder?.name ?? 'Sala';
+  const salaImage = (parentFolder as Record<string, unknown>)?.image_url as string | null | undefined;
 
+  // User info
+  const userMeta = user?.user_metadata as Record<string, string> | undefined;
+  const displayName = userMeta?.full_name || userMeta?.name || user?.email?.split('@')[0] || 'Você';
+  const avatarUrl = userMeta?.avatar_url;
+
+  // State
   const [colorVersion, setColorVersion] = useState(0);
   const materiaColor = useMemo(() => id ? getMateriaColors()[id] ?? null : null, [id, colorVersion]);
-
   const [showEdit, setShowEdit] = useState(false);
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState<string | null>(null);
-  const [showAddDeck, setShowAddDeck] = useState(false);
   const [organizeMode, setOrganizeMode] = useState(false);
+  const [studySettingsOpen, setStudySettingsOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
+
+  // Add menu state (reusing DashboardModals)
+  const [salaAddMenuOpen, setSalaAddMenuOpen] = useState(false);
+  const [addMenuInfoType, setAddMenuInfoType] = useState<'deck' | 'materia' | 'deck-manual' | 'deck-ia' | null>(null);
+
+  // Listen for + button from BottomNav
+  useEffect(() => {
+    const handler = () => setSalaAddMenuOpen(true);
+    window.addEventListener('open-pasta-add-menu', handler);
+    return () => window.removeEventListener('open-pasta-add-menu', handler);
+  }, []);
 
   const openEdit = useCallback(() => {
     if (!materia) return;
@@ -112,6 +102,7 @@ const MateriaDetail: React.FC = () => {
     setShowEdit(true);
   }, [materia, materiaColor]);
 
+  // Mutations
   const updateMutation = useMutation({
     mutationFn: async ({ name, color }: { name: string; color: string | null }) => {
       if (!id) throw new Error('No materia id');
@@ -141,9 +132,7 @@ const MateriaDetail: React.FC = () => {
       toast({ title: 'Pasta arquivada' });
       navigate(-1);
     },
-    onError: (err: Error) => {
-      toast({ title: 'Erro ao arquivar', variant: 'destructive' });
-    },
+    onError: () => { toast({ title: 'Erro ao arquivar', variant: 'destructive' }); },
   });
 
   const deleteMutation = useMutation({
@@ -157,22 +146,72 @@ const MateriaDetail: React.FC = () => {
       toast({ title: 'Pasta excluída' });
       navigate(-1);
     },
-    onError: (err: Error) => {
-      toast({ title: 'Erro ao excluir', variant: 'destructive' });
-    },
+    onError: () => { toast({ title: 'Erro ao excluir', variant: 'destructive' }); },
   });
 
-  const { createDeck } = useDecks();
+  // DeckRow helpers
+  const getSubDecks = useCallback(() => [] as DeckWithStats[], []);
+  const getAggregateStats = useCallback((deck: DeckWithStats) => ({
+    new_count: deck.new_count ?? 0,
+    learning_count: deck.learning_count ?? 0,
+    review_count: deck.review_count ?? 0,
+    reviewed_today: deck.reviewed_today ?? 0,
+  }), []);
+  const getCommunityLinkId = useCallback(() => null, []);
+  const noop = useCallback(() => {}, []);
 
-  const handleCreateManual = useCallback((name: string) => {
-    if (!id || !user) return;
-    createDeck.mutate({ name, parentDeckId: id }, {
-      onSuccess: () => {
-        setShowAddDeck(false);
-        toast({ title: 'Baralho criado' });
-      },
-    });
-  }, [id, user, createDeck]);
+  // Study stats scoped to this pasta
+  const studyStats = useMemo(() => {
+    let newCount = 0, learningCount = 0, reviewCount = 0, reviewedToday = 0;
+    for (const d of subDecks) {
+      newCount += d.new_count ?? 0;
+      learningCount += d.learning_count ?? 0;
+      reviewCount += d.review_count ?? 0;
+      reviewedToday += d.reviewed_today ?? 0;
+    }
+    const totalDue = newCount + learningCount + reviewCount;
+    const remainingSeconds = calculateRealStudyTime(newCount, learningCount, reviewCount, realStudyMetrics);
+    const remainingMin = Math.ceil(remainingSeconds / 60);
+    const timeLabel = remainingMin >= 60
+      ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
+      : `${remainingMin}min`;
+    return { totalDue, timeLabel };
+  }, [subDecks, realStudyMetrics]);
+
+  // Deck actions
+  const handleRename = useCallback((deck: DeckWithStats) => {
+    // Simple rename via prompt
+    const newName = window.prompt('Renomear baralho', deck.name);
+    if (newName && newName.trim() !== deck.name) {
+      supabase.from('decks').update({ name: newName.trim() }).eq('id', deck.id)
+        .then(({ error }) => {
+          if (error) { toast({ title: 'Erro ao renomear', variant: 'destructive' }); }
+          else { queryClient.invalidateQueries({ queryKey: ['decks'] }); toast({ title: 'Baralho renomeado' }); }
+        });
+    }
+  }, [queryClient]);
+
+  const handleArchive = useCallback((deckId: string) => {
+    supabase.from('decks').update({ is_archived: true }).eq('id', deckId)
+      .then(({ error }) => {
+        if (error) { toast({ title: 'Erro ao arquivar', variant: 'destructive' }); }
+        else { queryClient.invalidateQueries({ queryKey: ['decks'] }); toast({ title: 'Baralho arquivado' }); }
+      });
+  }, [queryClient]);
+
+  const handleDelete = useCallback((deck: DeckWithStats) => {
+    if (!window.confirm(`Excluir "${deck.name}"? Esta ação não pode ser desfeita.`)) return;
+    supabase.from('decks').delete().eq('id', deck.id)
+      .then(({ error }) => {
+        if (error) { toast({ title: 'Erro ao excluir', variant: 'destructive' }); }
+        else { queryClient.invalidateQueries({ queryKey: ['decks'] }); toast({ title: 'Baralho excluído' }); }
+      });
+  }, [queryClient]);
+
+  const handleMove = useCallback((deck: DeckWithStats) => {
+    // Navigate to dashboard where move dialog is available
+    navigate(`/dashboard?action=move&deckId=${deck.id}`);
+  }, [navigate]);
 
   if (!materia) {
     return (
@@ -184,81 +223,130 @@ const MateriaDetail: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background pb-24">
-      {/* Header — matches sala hero style */}
-      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border/50">
-        <div className="flex items-center justify-between px-4 py-3">
-          <button
-            onClick={() => navigate(-1)}
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            <span>{backLabel}</span>
-          </button>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted/60 transition-colors text-muted-foreground hover:text-foreground">
-                <MoreVertical className="h-4 w-4" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={() => setOrganizeMode(!organizeMode)}>
-                <GripVertical className="h-4 w-4 mr-2" /> {organizeMode ? 'Concluir organização' : 'Organizar pasta'}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => archiveMutation.mutate()}>
-                <IconArchive className="h-4 w-4 mr-2" /> Arquivar pasta
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onClick={() => deleteMutation.mutate()}
-              >
-                <IconTrash className="h-4 w-4 mr-2" /> Excluir pasta
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+      {/* Hero banner — matches SalaHero layout */}
+      <div className="relative bg-muted/50 overflow-hidden">
+        <div className="absolute inset-0">
+          <img src={salaImage || defaultSalaIcon} alt="" className="w-full h-full object-cover opacity-30 blur-sm" />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/60 to-background" />
         </div>
 
-        {/* Pasta name row — centered */}
-        <div className="flex items-center justify-center gap-2 px-4 pb-3">
-          <h1 className="text-base font-bold text-foreground truncate">{materia.name}</h1>
-          <button onClick={openEdit} className="shrink-0 text-muted-foreground hover:text-foreground transition-colors">
-            <IconEdit className="h-4 w-4" />
-          </button>
+        <div className="relative px-4 pt-3 pb-4">
+          {/* Top bar */}
+          <div className="flex items-center justify-between mb-3">
+            <button
+              onClick={() => navigate(-1)}
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              <span>{backLabel}</span>
+            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted/60 transition-colors text-muted-foreground hover:text-foreground">
+                  <MoreVertical className="h-4 w-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={() => setOrganizeMode(!organizeMode)}>
+                  <GripVertical className="h-4 w-4 mr-2" /> {organizeMode ? 'Concluir organização' : 'Organizar pasta'}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => archiveMutation.mutate()}>
+                  <IconArchive className="h-4 w-4 mr-2" /> Arquivar pasta
+                </DropdownMenuItem>
+                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => deleteMutation.mutate()}>
+                  <IconTrash className="h-4 w-4 mr-2" /> Excluir pasta
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          {/* Pasta name + edit */}
+          <div className="flex items-center justify-center gap-2 px-4 pb-1">
+            <h1 className="text-lg font-display font-bold text-foreground truncate">{materia.name}</h1>
+            <button onClick={openEdit} className="shrink-0 text-muted-foreground hover:text-foreground transition-colors">
+              <IconEdit className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          {/* User info */}
+          <div className="flex items-center justify-center gap-1.5 mt-0.5">
+            <span className="text-xs text-muted-foreground">Por</span>
+            <span className="text-xs font-medium text-foreground">{displayName}</span>
+            {avatarUrl && (
+              <div className="h-5 w-5 rounded-full overflow-hidden bg-muted shrink-0">
+                <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Sub-decks list */}
-      <div className="divide-y divide-border/30">
-        {subDecks.map(sub => {
-          const cls = getClassification(sub);
-          const hasDue = sub.new_count + sub.learning_count + sub.review_count > 0;
-          return (
-            <div
-              key={sub.id}
-              className="group flex items-center gap-3 px-4 py-4 cursor-pointer hover:bg-muted/50 transition-colors"
-              onClick={() => !organizeMode && navigate(`/decks/${sub.id}`)}
-            >
-              {organizeMode && (
-                <GripVertical className="h-4 w-4 text-muted-foreground/50 shrink-0 cursor-grab active:cursor-grabbing" />
-              )}
-              <IconDeck className="h-5 w-5 text-muted-foreground shrink-0" />
-              <div className="flex-1 min-w-0">
-                <h3 className="text-[13px] font-medium text-foreground truncate">{sub.name}</h3>
-                <ClassificationBar {...cls} className="mt-1" />
-              </div>
-              {hasDue && !organizeMode && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); navigate(`/decks/${sub.id}`); }}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shrink-0"
-                  aria-label="Estudar"
-                >
-                  <Play className="h-3.5 w-3.5 fill-current" />
+      {/* Study bar — same as SalaHero */}
+      <div className="max-w-md mx-auto md:max-w-lg px-4 py-3 space-y-2">
+        <div className="flex items-center justify-center gap-3">
+          <button
+            onClick={() => setStudySettingsOpen(true)}
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0"
+            aria-label="Configurar estudo"
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+          </button>
+          <Button
+            onClick={() => navigate(`/study/${id}`)}
+            className="h-11 rounded-full text-sm font-bold gap-2 px-8"
+            disabled={studyStats.totalDue === 0}
+          >
+            ESTUDAR
+            <Play className="h-4 w-4 fill-current" />
+          </Button>
+        </div>
+
+        {studyStats.totalDue > 0 && (
+          <div className="flex items-center justify-center gap-1.5 w-full py-1 text-xs text-muted-foreground">
+            <IconDeck className="h-3 w-3" />
+            <span>{studyStats.totalDue}</span>
+            <span>em</span>
+            <span>{studyStats.timeLabel}</span>
+            <Popover open={infoOpen} onOpenChange={setInfoOpen}>
+              <PopoverTrigger asChild>
+                <button type="button" className="ml-0.5 inline-flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors" aria-label="Info">
+                  <IconInfo className="h-3 w-3" />
                 </button>
-              )}
-              {!organizeMode && <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
-            </div>
-          );
-        })}
+              </PopoverTrigger>
+              <PopoverContent side="bottom" align="center" sideOffset={8} className="w-auto max-w-[18rem] rounded-2xl border border-border bg-background px-3 py-2 text-xs text-foreground shadow-md">
+                <p className="leading-relaxed">
+                  Você é rápido! Em <span className="font-semibold">{studyStats.timeLabel}</span> você termina esses{' '}
+                  <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> {studyStats.totalDue} cartões</span>.
+                </p>
+              </PopoverContent>
+            </Popover>
+          </div>
+        )}
+      </div>
+
+      {/* Sub-decks list using DeckRow */}
+      <div className="divide-y divide-border/30">
+        {subDecks.map(sub => (
+          <DeckRow
+            key={sub.id}
+            deck={sub}
+            deckSelectionMode={false}
+            selectedDeckIds={EMPTY_SET}
+            expandedDecks={EMPTY_SET}
+            toggleExpand={noop}
+            toggleDeckSelection={noop}
+            getSubDecks={getSubDecks}
+            getAggregateStats={getAggregateStats}
+            getCommunityLinkId={getCommunityLinkId}
+            navigateToCommunity={noop}
+            onCreateSubDeck={noop}
+            onRename={handleRename}
+            onMove={handleMove}
+            onArchive={handleArchive}
+            onDelete={handleDelete}
+            organizeMode={organizeMode}
+          />
+        ))}
       </div>
 
       {/* Empty state */}
@@ -269,31 +357,40 @@ const MateriaDetail: React.FC = () => {
         </div>
       )}
 
-      {/* Add deck button */}
-      <div className="px-4 pt-4">
-        <button
-          onClick={() => setShowAddDeck(true)}
-          className="w-full flex items-center justify-center gap-2 rounded-xl border border-dashed border-border/60 py-3 text-sm text-muted-foreground hover:text-foreground hover:border-border transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          Adicionar Baralho
-        </button>
-      </div>
-
-      {/* Add deck choice modal */}
-      <Dialog open={showAddDeck} onOpenChange={setShowAddDeck}>
-        <DialogContent className="max-w-xs">
-          <DialogHeader>
-            <DialogTitle>Novo baralho em {materia.name}</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col gap-2 pt-1">
-            <AddDeckNameInput
-              onSubmit={(name) => { handleCreateManual(name); }}
-              loading={createDeck.isPending}
-            />
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Add menu modals (reuse DashboardModals) */}
+      <DashboardModals
+        addMenuInfoType={addMenuInfoType}
+        setAddMenuInfoType={setAddMenuInfoType}
+        detachTarget={null}
+        setDetachTarget={noop}
+        detaching={false}
+        handleDetachDeck={noop}
+        salaImageOpen={false}
+        setSalaImageOpen={noop}
+        onSalaImageCropped={noop}
+        leaveSalaConfirm={null}
+        setLeaveSalaConfirm={noop}
+        handleLeaveSala={noop}
+        salaAddMenuOpen={salaAddMenuOpen}
+        setSalaAddMenuOpen={setSalaAddMenuOpen}
+        onCreateDeckManual={() => {
+          createDeck.mutate({ name: 'Novo baralho', parentDeckId: id }, {
+            onSuccess: (newDeck) => {
+              toast({ title: 'Baralho criado' });
+              if (newDeck?.id) navigate(`/decks/${newDeck.id}`);
+            },
+          });
+        }}
+        onCreateDeckAI={() => {
+          // Navigate to dashboard with AI deck creation in context of this materia
+          navigate(`/dashboard?action=ai-deck`);
+        }}
+        onCreateMateria={noop}
+        onImportCards={() => {
+          navigate(`/dashboard?action=import`);
+        }}
+        hideCreatePasta
+      />
 
       {/* Edit modal */}
       <Dialog open={showEdit} onOpenChange={setShowEdit}>
@@ -311,7 +408,7 @@ const MateriaDetail: React.FC = () => {
             <div>
               <p className="text-xs text-muted-foreground mb-2">Cor do ícone</p>
               <div className="flex flex-wrap gap-2">
-                {MATERIA_COLORS.map((color, i) => (
+                {MATERIA_COLORS.map((color) => (
                   <button
                     key={color ?? 'default'}
                     onClick={() => setEditColor(editColor === color ? null : color)}
@@ -335,21 +432,24 @@ const MateriaDetail: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Study settings */}
+      <Suspense fallback={null}>
+        {studySettingsOpen && (
+          <StudySettingsSheet
+            open={studySettingsOpen}
+            onOpenChange={setStudySettingsOpen}
+            decks={decks ?? []}
+            getSubDecks={getSubDecks}
+            getAggregateStats={getAggregateStats}
+            currentFolderId={materia.folder_id ?? null}
+          />
+        )}
+      </Suspense>
     </div>
   );
 };
 
-/** Simple input to create a deck by name */
-const AddDeckNameInput = ({ onSubmit, loading }: { onSubmit: (name: string) => void; loading: boolean }) => {
-  const [name, setName] = useState('');
-  return (
-    <form onSubmit={(e) => { e.preventDefault(); if (name.trim()) onSubmit(name.trim()); }} className="flex flex-col gap-2">
-      <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome do baralho" autoFocus />
-      <Button type="submit" disabled={!name.trim() || loading} className="w-full">
-        {loading ? 'Criando...' : 'Criar'}
-      </Button>
-    </form>
-  );
-};
+const EMPTY_SET = new Set<string>();
 
 export default MateriaDetail;
