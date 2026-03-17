@@ -1572,8 +1572,7 @@ const DeckQuestionsTab = ({
 
   const deleteMutation = useMutation({
     mutationFn: async (questionId: string) => {
-      const { error } = await supabase.from('deck_questions' as any).delete().eq('id', questionId);
-      if (error) throw error;
+      await deleteQuestion(questionId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deck-questions', effectiveDeckId] });
@@ -1583,10 +1582,7 @@ const DeckQuestionsTab = ({
 
   const bulkDeleteMutation = useMutation({
     mutationFn: async (ids: string[]) => {
-      for (const id of ids) {
-        const { error } = await supabase.from('deck_questions' as any).delete().eq('id', id);
-        if (error) throw error;
-      }
+      await bulkDeleteQuestions(ids);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deck-questions', effectiveDeckId] });
