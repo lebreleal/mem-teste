@@ -548,14 +548,15 @@ export function useStudyPlan(options?: { full?: boolean }) {
   const createPlan = useMutation({
     mutationFn: async (input: { name: string; deck_ids: string[]; target_date: string | null }) => {
       const maxPriority = plans.length > 0 ? Math.max(...plans.map(p => p.priority ?? 0)) + 1 : 0;
-      const { error } = await supabase.from('study_plans' as any).insert({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- study_plans not in generated types
+      const { error } = await (supabase.from as any)('study_plans').insert({
         user_id: userId,
         name: input.name,
         daily_minutes: globalCapacity.dailyMinutes,
         deck_ids: input.deck_ids,
         target_date: input.target_date,
         priority: maxPriority,
-      } as any);
+      });
       if (error) throw error;
     },
     onSuccess: invalidate,
