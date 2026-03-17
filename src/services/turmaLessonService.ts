@@ -4,6 +4,7 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
+import type { Json } from '@/integrations/supabase/types';
 
 // ── Typed table helpers (tables not in generated types) ──
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- turma_lesson_files not in generated types
