@@ -168,7 +168,7 @@ export function useForecastView() {
         .eq('id', userId!)
         .single();
       if (error) throw error;
-      return ((data as any)?.forecast_view as ForecastView) ?? '7d';
+      return ((data as { forecast_view?: string } | null)?.forecast_view as ForecastView) ?? '7d';
     },
     enabled: !!userId,
     staleTime: Infinity,
