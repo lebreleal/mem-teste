@@ -46,13 +46,7 @@ const ActivityView = () => {
 
       const tzOffsetMinutes = TZ_OFFSET_SP;
 
-      const { data, error } = await supabase.rpc('get_activity_daily_breakdown', {
-        p_user_id: user.id,
-        p_tz_offset_minutes: tzOffsetMinutes,
-        p_days: 365,
-      } as any);
-
-      if (error) throw error;
+      const data = await fetchActivityBreakdown(user.id, 365, tzOffsetMinutes);
       const result = data as any;
       if (!result || !result.dayMap || Object.keys(result.dayMap).length === 0) {
         return { dayMap: {} as Record<string, DayData>, streak: 0, bestStreak: 0, totalActiveDays: 0, freezesAvailable: 0, freezesUsed: 0, frozenDays: new Set<string>() };
