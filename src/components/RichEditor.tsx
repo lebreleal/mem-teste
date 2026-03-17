@@ -100,6 +100,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   const [linkUrl, setLinkUrl] = useState('');
   const [drawingOpen, setDrawingOpen] = useState(false);
   const [aiCreatorOpen, setAiCreatorOpen] = useState(false); // toggles inline row
+  const uploadImageFileRef = React.useRef<((file: File) => Promise<void>) | null>(null);
   // Sync toolbar config across all RichEditor instances
   useEffect(() => {
     const handler = () => setToolbarItems(loadToolbarConfig());
@@ -118,7 +119,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ heading: { levels: [2, 3] } }),
-      Image.configure({ inline: true, allowBase64: false }),
+      Image.configure({ inline: true, allowBase64: true }),
       Underline,
       TextStyle,
       Color,
@@ -131,6 +132,31 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       onChange(html);
     },
     editorProps: {
+      handlePaste: (view, event) => {
+        const items = event.clipboardData?.items;
+        if (!items) return false;
+        for (const item of Array.from(items)) {
+          if (item.type.startsWith('image/')) {
+            event.preventDefault();
+            const file = item.getAsFile();
+            if (file) uploadImageFileRef.current?.(file);
+            return true;
+          }
+        }
+        return false;
+      },
+      handleDrop: (view, event) => {
+        const files = event.dataTransfer?.files;
+        if (!files?.length) return false;
+        for (const file of Array.from(files)) {
+          if (file.type.startsWith('image/')) {
+            event.preventDefault();
+            uploadImageFileRef.current?.(file);
+            return true;
+          }
+        }
+        return false;
+      },
       attributes: {
         class: 'prose prose-sm max-w-none min-h-[120px] outline-none p-3 text-card-foreground',
       },
@@ -207,6 +233,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     const { data: urlData } = supabase.storage.from('card-images').getPublicUrl(path);
     editor.chain().focus().setImage({ src: urlData.publicUrl }).run();
   };
+  uploadImageFileRef.current = uploadImageFile;
 
   const handleImageAttach = async () => {
     if (!user || !editor) return;
