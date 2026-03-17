@@ -16,7 +16,7 @@ export async function fetchTurmaExams(turmaId: string): Promise<TurmaExam[]> {
 }
 
 export async function fetchTurmaExamQuestions(examId: string): Promise<TurmaExamQuestion[]> {
-  const { data, error } = await supabase.from('turma_exam_questions').select('*').eq('exam_id', examId).order('sort_order', { ascending: true });
+  const { data, error } = await supabase.from('turma_exam_questions').select('id, exam_id, question_id, question_text, question_type, options, correct_answer, correct_indices, points, sort_order, created_at').eq('exam_id', examId).order('sort_order', { ascending: true });
   if (error) throw error;
   return (data ?? []) as TurmaExamQuestion[];
 }
