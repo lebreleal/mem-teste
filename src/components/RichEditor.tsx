@@ -99,6 +99,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
   const [drawingOpen, setDrawingOpen] = useState(false);
+  const [aiCreatorOpen, setAiCreatorOpen] = useState(false);
   // Sync toolbar config across all RichEditor instances
   useEffect(() => {
     const handler = () => setToolbarItems(loadToolbarConfig());
