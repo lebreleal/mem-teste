@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useQueryClient } from '@tanstack/react-query';
@@ -31,8 +31,6 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const showNav = showNavRoutes.some(r => location.pathname === r || location.pathname.startsWith(r + '/'))
     && !hideNavPatterns.some(p => location.pathname.includes(p));
 
-  // Listen for events from other components
-  import { useEffect } from 'react';
   useEffect(() => {
     const addMenuHandler = () => {
       if (isOnMateria) {
@@ -48,9 +46,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
       }
     };
     window.addEventListener('open-add-menu', addMenuHandler);
-    return () => {
-      window.removeEventListener('open-add-menu', addMenuHandler);
-    };
+    return () => window.removeEventListener('open-add-menu', addMenuHandler);
   }, [isOnDashboard, isOnMateria, isInsideSala, isCommunityFolder, navigate]);
 
   if (loading) {
