@@ -81,7 +81,7 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
   const allStats = statsResult.data;
   const statsMap = new Map<string, { new_count: number; learning_count: number; review_count: number; reviewed_today: number; new_reviewed_today: number; new_graduated_today: number }>();
   if (allStats) {
-    for (const s of allStats as any[]) {
+    for (const s of allStats as unknown as DeckStatsRow[]) {
       statsMap.set(s.deck_id, {
         new_count: s.new_count, learning_count: s.learning_count,
         review_count: s.review_count, reviewed_today: s.reviewed_today ?? 0,
