@@ -103,10 +103,10 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
   }
 
   // ── Author + source resolution (all 3 blocks in parallel) ──
-  const listingIds = (decks || []).map((d: any) => d.source_listing_id).filter(Boolean);
-  const turmaDecksIds = (decks || []).map((d: any) => d.source_turma_deck_id).filter(Boolean);
+  const listingIds = (decks || []).map((d: DeckRow) => d.source_listing_id).filter(Boolean) as string[];
+  const turmaDecksIds = (decks || []).map((d: DeckRow) => d.source_turma_deck_id).filter(Boolean) as string[];
   const orphanLiveDecks = (decks || []).filter(
-    (d: any) => d.is_live_deck && !d.source_turma_deck_id && !d.source_listing_id
+    (d: DeckRow) => d.is_live_deck && !d.source_turma_deck_id && !d.source_listing_id
   );
 
   const [authorMap, turmaAuthorResult, orphanAuthorMap] = await Promise.all([
