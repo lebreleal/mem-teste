@@ -855,16 +855,7 @@ const PublicDeckPreview = () => {
   // Find turma_deck entry to get turma context
   const { data: turmaDeck } = useQuery({
     queryKey: ['turma-deck-link', deckId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('turma_decks')
-        .select('id, turma_id, subject_id, lesson_id, content_folder_id')
-        .eq('deck_id', deckId!)
-        .limit(1)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => fetchTurmaDeckLink(deckId!),
     enabled: !!deckId,
   });
 
