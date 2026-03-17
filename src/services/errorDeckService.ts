@@ -298,7 +298,6 @@ export async function moveConceptCardsToErrorDeck(
   // Strategy 3 (text fallback) REMOVED — too aggressive, caused mass migrations.
 
   if (cardIdsToMove.size === 0) {
-    console.warn('[ErrorDeck] No cards found for concepts:', terms, 'in deck scope:', deckScopeIds);
     return 0;
   }
 
