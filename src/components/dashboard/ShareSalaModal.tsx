@@ -62,7 +62,7 @@ const ShareSalaModal = ({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) setEditingSlug(false); }}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-w-[calc(100vw-2rem)]">
         <DialogHeader>
           <DialogTitle className="text-lg font-bold">Compartilhar sala</DialogTitle>
         </DialogHeader>
@@ -76,10 +76,10 @@ const ShareSalaModal = ({
                 <p className="text-sm font-medium text-foreground">
                   {isPublished ? 'Aberta para todos' : 'Só você tem acesso'}
                 </p>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-[11px] text-muted-foreground leading-snug">
                   {isPublished
-                    ? 'Qualquer pessoa com o link pode entrar'
-                    : 'Ative para outras pessoas entrarem'}
+                    ? 'Sua sala aparece no Explorar e qualquer pessoa com o link pode entrar'
+                    : 'Ative para publicar no Explorar e permitir que outros entrem pelo link'}
                 </p>
               </div>
             </div>

@@ -52,6 +52,9 @@ interface DeckListProps {
 
   // Pending deck click handler
   onPendingClick?: (pending: PendingDeck) => void;
+  
+  // Organize mode
+  organizeMode?: boolean;
 }
 
 const DeckList = ({
@@ -59,6 +62,7 @@ const DeckList = ({
   onRenameDeck, onMoveDeck, onArchiveDeck, onDeleteDeck, onDetachCommunityDeck,
   navigateToCommunity, onReorderDecks,
   decksWithPendingUpdates, onPendingClick,
+  organizeMode = false,
   ...deckRowProps
 }: DeckListProps) => {
   const { user } = useAuth();
@@ -224,6 +228,7 @@ const DeckList = ({
             expandedAccordionId={expandedAccordionId}
             onAccordionToggle={handleAccordionToggle}
             questionCountMap={questionCountMap}
+            organizeMode={organizeMode}
             {...deckRowProps}
           />
         );
@@ -262,6 +267,7 @@ const DeckList = ({
             expandedAccordionId={expandedAccordionId}
             onAccordionToggle={handleAccordionToggle}
             questionCountMap={questionCountMap}
+            organizeMode={organizeMode}
             {...deckRowProps}
           />
         );

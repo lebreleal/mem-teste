@@ -105,6 +105,7 @@ const Dashboard = () => {
   });
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [organizeMode, setOrganizeMode] = useState(false);
   const [studyWeightsOpen, setStudyWeightsOpen] = useState(false);
   const [studySalaSheetOpen, setStudySalaSheetOpen] = useState(false);
   const [studySettingsOpen, setStudySettingsOpen] = useState(false);
@@ -240,6 +241,8 @@ const Dashboard = () => {
             setStudySettingsOpen={setStudySettingsOpen}
             realStudyMetrics={realStudyMetrics}
             salaDifficultyStats={salaDifficultyStats}
+            organizeMode={organizeMode}
+            setOrganizeMode={setOrganizeMode}
           />
         )}
 
@@ -302,6 +305,7 @@ const Dashboard = () => {
             onReorderDecks={salas.isCommunityFolder ? undefined : (reordered) => state.reorderDecks.mutate(reordered.map(d => d.id))}
             onPendingClick={handlePendingClick}
             decksWithPendingUpdates={state.decksWithPendingUpdates}
+            organizeMode={organizeMode}
           />
         )}
 

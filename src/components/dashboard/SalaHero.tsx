@@ -5,7 +5,7 @@
 
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Clock, LogOut, MoreVertical, Play, RefreshCw, Share2, SlidersHorizontal } from 'lucide-react';
+import { ChevronLeft, Clock, GripVertical, LogOut, MoreVertical, Play, RefreshCw, Share2, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -55,6 +55,8 @@ interface SalaHeroProps {
   setStudySettingsOpen: (v: boolean) => void;
   realStudyMetrics: RealStudyMetrics;
   salaDifficultyStats: { novo: number; facil: number; bom: number; dificil: number; errei: number };
+  organizeMode: boolean;
+  setOrganizeMode: (v: boolean) => void;
 }
 
 const SalaHero = ({
@@ -62,6 +64,7 @@ const SalaHero = ({
   userTurma, publishing, handleTogglePublish, openShareModal,
   setSalaImageOpen, setLeaveSalaConfirm, setStudySettingsOpen,
   realStudyMetrics, salaDifficultyStats,
+  organizeMode, setOrganizeMode,
 }: SalaHeroProps) => {
   const navigate = useNavigate();
   const [infoOpen, setInfoOpen] = useState(false);
@@ -203,13 +206,8 @@ const SalaHero = ({
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuItem onClick={() => {
-                        if (cf) { state.setRenameTarget({ type: 'folder', id: cf.id, name: cf.name }); state.setRenameName(cf.name); }
-                      }}>
-                        <IconEdit className="h-4 w-4 mr-2" /> Renomear sala
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setSalaImageOpen(true)}>
-                        <IconImage className="h-4 w-4 mr-2" /> Mudar imagem
+                      <DropdownMenuItem onClick={() => setOrganizeMode(!organizeMode)}>
+                        <GripVertical className="h-4 w-4 mr-2" /> {organizeMode ? 'Concluir organização' : 'Organizar sala'}
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={async () => {
                         await state.archiveFolder.mutateAsync(state.currentFolderId!);
@@ -326,7 +324,7 @@ const SalaHero = ({
             <div className="flex items-center justify-center gap-1.5 w-full py-1 text-xs text-muted-foreground">
               <IconDeck className="h-3 w-3" />
               <span>{salaStudyStats.totalDue}</span>
-              <span>·</span>
+              <span>em</span>
               <span>{salaStudyStats.timeLabel}</span>
 
               <Popover open={infoOpen} onOpenChange={setInfoOpen}>
@@ -346,7 +344,8 @@ const SalaHero = ({
                   className="w-auto max-w-[18rem] rounded-2xl border border-border bg-background px-3 py-2 text-xs text-foreground shadow-md"
                 >
                   <p className="leading-relaxed">
-                    Você é rápido! Em <span className="font-semibold">{salaStudyStats.timeLabel}</span> você termina esses <IconDeck className="inline h-3 w-3 align-text-bottom" /> <span className="font-semibold">{salaStudyStats.totalDue} cartões</span>.
+                    Você é rápido! Em <span className="font-semibold">{salaStudyStats.timeLabel}</span> você termina esses{' '}
+                    <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> {salaStudyStats.totalDue} cartões</span>.
                   </p>
                 </PopoverContent>
               </Popover>

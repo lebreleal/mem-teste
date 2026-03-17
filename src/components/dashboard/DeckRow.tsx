@@ -7,8 +7,9 @@
 
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Info, ChevronDown, ChevronRight, Layers, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings, Plus, Minus, Play, Sparkles, BookOpen } from 'lucide-react';
+import { Info, ChevronDown, ChevronRight, Layers, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings, Plus, Minus, Play, Sparkles, BookOpen, GripVertical } from 'lucide-react';
 import { IconFolder, IconDeck } from '@/components/icons';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { DeckWithStats } from '@/hooks/useDecks';
 import type { DragReorderHandlers } from '@/hooks/useDragReorder';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
@@ -121,6 +122,8 @@ interface DeckRowProps {
   disableManagementActions?: boolean;
   /** Navigation state passed when clicking decks in readOnly mode (e.g. { from: 'community', turmaId }) */
   readOnlyNavState?: Record<string, any>;
+  /** When true, shows drag handles for reordering */
+  organizeMode?: boolean;
 }
 
 /** Aggregate 5-segment classification counts across deck + descendants */
@@ -159,11 +162,11 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   readOnly = false,
   disableManagementActions = false,
   readOnlyNavState,
+  organizeMode = false,
 }, ref) => {
   const navigate = useNavigate();
   const { isAdmin } = useIsAdmin();
   const isErrorDeck = deck.name === ERROR_DECK_NAME;
-  const [showInfoModal, setShowInfoModal] = useState(false);
   const [showDevModal, setShowDevModal] = useState(false);
   const [showAddDeckMenu, setShowAddDeckMenu] = useState(false);
   const [addDeckInfoType, setAddDeckInfoType] = useState<'manual' | 'ia' | null>(null);
@@ -240,14 +243,17 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
             onDrop: dragHandlers.onDrop,
             onDragEnd: dragHandlers.onDragEnd,
           } : {})}
-          className={`group flex items-center gap-3 px-4 py-3.5 cursor-pointer transition-all hover:bg-muted/30 border-b border-border/30 ${dragHandlers ? dragHandlers.className : ''}`}
+          className={`group flex items-center gap-3 px-4 py-3.5 cursor-pointer transition-all hover:bg-muted/30 border-b border-border/50 ${dragHandlers ? dragHandlers.className : ''}`}
           onClick={handleClick}
         >
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 shrink-0">
+          {organizeMode && (
+            <GripVertical className="h-4 w-4 text-muted-foreground/50 shrink-0 cursor-grab active:cursor-grabbing" />
+          )}
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 shrink-0">
             <IconFolder className="h-5 w-5 text-primary" />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-semibold text-foreground truncate">{displayName}</h3>
+            <h3 className="text-[15px] font-semibold text-foreground truncate">{displayName}</h3>
             {isEmptyMateria && !readOnly && (
               <button
                 onClick={(e) => { e.stopPropagation(); setShowAddDeckMenu(true); }}
@@ -278,17 +284,29 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           className={`group flex items-center gap-3 px-4 py-4 cursor-pointer transition-all hover:bg-muted/50 ${dragHandlers ? dragHandlers.className : ''}`}
           onClick={handleClick}
         >
+          {organizeMode && (
+            <GripVertical className="h-4 w-4 text-muted-foreground/50 shrink-0 cursor-grab active:cursor-grabbing" />
+          )}
           <IconDeck solid={isErrorDeck} className={`h-5 w-5 shrink-0 ${isErrorDeck ? 'text-destructive' : 'text-muted-foreground'}`} />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <h3 className={`font-display font-semibold truncate ${isErrorDeck ? 'text-destructive' : 'text-foreground'}`}>{displayName}</h3>
+              <h3 className={`font-display text-[13px] font-semibold truncate text-foreground`}>{displayName}</h3>
               {isErrorDeck && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); setShowInfoModal(true); }}
-                  className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <HelpCircle className="h-4 w-4" />
-                </button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      onClick={(e) => e.stopPropagation()}
+                      className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <HelpCircle className="h-4 w-4" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent side="bottom" align="center" sideOffset={8} className="w-auto max-w-[17rem] rounded-2xl border border-border bg-background px-3 py-2.5 text-xs text-foreground shadow-md" onClick={(e) => e.stopPropagation()}>
+                    <p className="leading-relaxed">
+                      Errou? Vem pra cá! 🧠 Quando você corrige seus erros, o cérebro grava de verdade. Estude esse baralho pra dominar o que te pega e nunca mais esquecer.
+                    </p>
+                  </PopoverContent>
+                </Popover>
               )}
               {hasPendingUpdate && (
                 <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-destructive animate-pulse" title="Atualização disponível" />
@@ -393,18 +411,6 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
         </DialogContent>
       </Dialog>
 
-
-      <Dialog open={showInfoModal} onOpenChange={setShowInfoModal}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Baralho de Erros</DialogTitle>
-            <DialogDescription className="text-sm text-muted-foreground leading-relaxed pt-2">
-              Este deck reúne automaticamente os cartões que você errou durante suas sessões de estudo.
-              Revise-os aqui para fortalecer os pontos mais fracos e melhorar sua retenção geral.
-            </DialogDescription>
-          </DialogHeader>
-        </DialogContent>
-      </Dialog>
 
       {/* Dev modal for non-admin users */}
       <Dialog open={showDevModal} onOpenChange={setShowDevModal}>
