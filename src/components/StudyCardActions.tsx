@@ -16,7 +16,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import LazyRichEditor from '@/components/LazyRichEditor';
+import { CardEditorForm } from '@/components/card-editor/CardEditorForm';
 import ImageOcclusion from '@/components/ImageOcclusion';
 import { supabase } from '@/integrations/supabase/client';
 import { useEnergy } from '@/hooks/useEnergy';
