@@ -54,6 +54,7 @@ interface LessonFile {
   file_size: number;
   price_type?: string;
   folder_id?: string | null;
+  content_folder_id?: string | null;
 }
 
 /** Shape of a user deck row used in this component */
