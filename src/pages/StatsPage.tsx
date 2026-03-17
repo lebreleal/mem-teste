@@ -279,26 +279,14 @@ const StatsPage = () => {
   // Hourly breakdown RPC
   const { data: hourlyData } = useQuery({
     queryKey: ['hourly-breakdown', user?.id],
-    queryFn: async () => {
-      if (!user) return [];
-      const tzOffsetMinutes = -180;
-      const { data, error } = await supabase.rpc('get_hourly_breakdown' as any, { p_user_id: user.id, p_tz_offset_minutes: tzOffsetMinutes, p_days: 30 });
-      if (error) { console.warn('[hourly] RPC error:', error.message); return []; }
-      return (data as any[]) ?? [];
-    },
+    queryFn: () => fetchHourlyBreakdown(user!.id, 30),
     enabled: !!user,
     staleTime: 60_000,
   });
 
-  // Retention over time RPC
   const { data: retentionOverTime } = useQuery({
     queryKey: ['retention-over-time', user?.id],
-    queryFn: async () => {
-      if (!user) return [];
-      const { data, error } = await supabase.rpc('get_retention_over_time' as any, { p_user_id: user.id, p_days: 180 });
-      if (error) { console.warn('[retention-over-time] RPC error:', error.message); return []; }
-      return (data as any[]) ?? [];
-    },
+    queryFn: () => fetchRetentionOverTime(user!.id, 180),
     enabled: !!user,
     staleTime: 120_000,
   });
