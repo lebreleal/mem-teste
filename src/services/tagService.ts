@@ -155,7 +155,7 @@ export async function createTag(name: string, userId: string, parentId?: string)
   
   const { data: existing } = await supabase
     .from('tags')
-    .select('*')
+    .select(TAG_COLS)
     .eq('slug', slug)
     .maybeSingle();
   
