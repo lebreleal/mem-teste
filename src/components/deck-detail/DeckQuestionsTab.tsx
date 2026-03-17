@@ -2038,20 +2038,18 @@ const PasteQuestionsDialog = ({
       const questionConceptPairs: { questionId: string; conceptNames: string[]; prerequisites?: string[]; category?: string; subcategory?: string; conceptDescriptions?: { name: string; description: string }[] }[] = [];
 
       for (const q of toSave) {
-        const { data: inserted } = await supabase.from('deck_questions' as any).insert({
-          deck_id: deckId,
-          created_by: user.id,
+        const insertedId = await insertQuestionReturningId(deckId, user.id, {
           question_text: q.question_text,
           question_type: 'multiple_choice',
           options: q.options,
           correct_indices: q.correct_index >= 0 ? [q.correct_index] : [],
           explanation: q.explanation || '',
           concepts: q.concepts || [],
-        }).select('id').single();
+        });
 
-        if (inserted && q.concepts?.length > 0) {
+        if (insertedId && q.concepts?.length > 0) {
           questionConceptPairs.push({
-            questionId: (inserted as any).id,
+            questionId: insertedId,
             conceptNames: q.concepts,
             category: (q as any).category ?? undefined,
             subcategory: (q as any).subcategory ?? undefined,
