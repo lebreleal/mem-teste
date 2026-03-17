@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useStudyStats } from '@/hooks/useStudyStats';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchWeekReviewDates } from '@/services/dashboardService';
 import { Flame } from 'lucide-react';
 import { startOfDay, subDays, getDay, format } from 'date-fns';
 
