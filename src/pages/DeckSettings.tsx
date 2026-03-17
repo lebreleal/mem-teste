@@ -258,12 +258,12 @@ const DeckSettings = () => {
 
   const handleDelete = async () => {
     if (!deckId) return;
-    const { error } = await supabase.from('decks').delete().eq('id', deckId);
-    if (error) {
-      toast({ title: 'Erro ao excluir', variant: 'destructive' });
-    } else {
+    try {
+      await deckService.deleteDeck(deckId);
       toast({ title: 'Baralho excluído' });
       navigate('/dashboard');
+    } catch {
+      toast({ title: 'Erro ao excluir', variant: 'destructive' });
     }
     setDeleteConfirm(false);
   };
