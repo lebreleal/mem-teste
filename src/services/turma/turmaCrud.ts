@@ -117,7 +117,7 @@ export async function fetchTurma(turmaId: string): Promise<Turma | null> {
 
 export async function leaveTurma(turmaId: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC not in generated types
-  const { error } = await supabase.rpc('leave_turma' as 'get_user_ranking', { _turma_id: turmaId } as Record<string, unknown>);
+  const { error } = await (supabase.rpc as any)('leave_turma', { _turma_id: turmaId });
   if (error) throw error;
 }
 
