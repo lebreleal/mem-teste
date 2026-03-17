@@ -328,7 +328,7 @@ const SalaHero = ({
               </PopoverContent>
             </Popover>
           )}
-          )}
+        </div>
         </div>
       )}
     </>
