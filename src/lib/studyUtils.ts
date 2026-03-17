@@ -3,6 +3,19 @@
  * No React or Supabase dependencies.
  */
 
+const IMG_SRC_RE = /<img[^>]+src="([^"]+)"/g;
+
+/** Extract all image URLs from an HTML string. */
+export function extractImageUrls(html: string): string[] {
+  const urls: string[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = IMG_SRC_RE.exec(html)) !== null) {
+    urls.push(match[1]);
+  }
+  IMG_SRC_RE.lastIndex = 0;
+  return urls;
+}
+
 /** Real study metrics per card state (from user's historical data). */
 export interface RealStudyMetrics {
   avgNewSeconds: number;
