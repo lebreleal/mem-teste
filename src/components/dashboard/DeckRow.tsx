@@ -19,7 +19,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-const ERROR_DECK_NAME = 'Baralho de Erros';
+const ERROR_DECK_NAME = '📕 Baralho de Erros';
 
 /**
 /**
