@@ -315,6 +315,19 @@ const Study = () => {
   }, [cardKey, isTransitioning, queueInitialized]);
   const currentCard = displayedCard ?? nextCard;
 
+  // Prefetch images for next 3 cards in queue
+  useEffect(() => {
+    if (!currentCard || localQueue.length === 0) return;
+    const currentIdx = localQueue.findIndex(c => c.id === currentCard.id);
+    const upcoming = currentIdx >= 0
+      ? localQueue.slice(currentIdx + 1, currentIdx + 4)
+      : localQueue.slice(0, 3);
+    const urls = upcoming.flatMap(c =>
+      extractImageUrls((c.front_content ?? '') + (c.back_content ?? ''))
+    );
+    urls.forEach(url => { const img = new Image(); img.src = url; });
+  }, [currentCard?.id, localQueue]);
+
   // Fetch community deck source info via RPC (SECURITY DEFINER bypasses RLS)
   const currentCardDeckId = currentCard?.deck_id ?? deckId ?? null;
   const { data: sourceInfo } = useQuery({
