@@ -9,7 +9,7 @@ import {
   GraduationCap, ChevronRight, Loader2, Search, CheckCircle2, XCircle,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { useAuth } from '@/hooks/useAuth';
+import { Progress } from '@/components/ui/progress';
 import { Progress } from '@/components/ui/progress';
 import DeckRow from './DeckRow';
 import { usePendingDecks, type PendingDeck } from '@/stores/usePendingDecks';
