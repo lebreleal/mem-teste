@@ -284,7 +284,7 @@ const Study = () => {
         <div className="h-full transition-all duration-500 ease-out" style={{ width: `${progressPercent}%`, background: `linear-gradient(90deg, hsl(var(--primary)), hsl(var(--primary) / 0.7))`, borderRadius: '0 4px 4px 0' }} />
       </div>
 
-      <MilestoneToast reviewCount={reviewCount} correctCount={correctCount} />
+      
 
       <main ref={mainScrollRef} className="flex flex-1 min-h-0 items-center justify-center px-2 sm:px-4 py-2 sm:py-4 overflow-y-auto">
         <div key={cardKey} className={`w-full transition-all duration-200 ${isTransitioning ? 'opacity-0 scale-95' : 'animate-fade-in'}`}>
