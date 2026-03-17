@@ -205,14 +205,17 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
       }
       return;
     }
+    // Matéria with children → navigate to dedicated page
     if (hasChildren) {
-      onAccordionToggle?.(deck.id);
-    } else if (isEmptyMateria) {
-      // do nothing — always expanded, no navigation
+      navigate(`/materia/${deck.id}`);
       return;
-    } else {
-      navigate(`/decks/${deck.id}`, readOnlyNavState ? { state: readOnlyNavState } : undefined);
     }
+    if (isEmptyMateria) {
+      // Empty matéria also navigates to its page
+      navigate(`/materia/${deck.id}`);
+      return;
+    }
+    navigate(`/decks/${deck.id}`, readOnlyNavState ? { state: readOnlyNavState } : undefined);
   };
 
   const handleStudy = (e: React.MouseEvent, deckId: string) => {
