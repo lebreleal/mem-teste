@@ -179,10 +179,10 @@ const SalaHero = ({
                       <DropdownMenuItem onClick={() => {
                         if (cf) { state.setRenameTarget({ type: 'folder', id: cf.id, name: cf.name }); state.setRenameName(cf.name); }
                       }}>
-                        <Pencil className="h-4 w-4 mr-2" /> Renomear sala
+                        <IconEdit className="h-4 w-4 mr-2" /> Renomear sala
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => setSalaImageOpen(true)}>
-                        <ImageIcon className="h-4 w-4 mr-2" /> Mudar imagem
+                        <IconImage className="h-4 w-4 mr-2" /> Mudar imagem
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={handleTogglePublish} disabled={publishing}>
                         {userTurma?.is_private === false ? (
@@ -195,7 +195,7 @@ const SalaHero = ({
                         await state.archiveFolder.mutateAsync(state.currentFolderId!);
                         state.setCurrentFolderId(null);
                       }}>
-                        <Archive className="h-4 w-4 mr-2" /> Arquivar sala
+                        <IconArchive className="h-4 w-4 mr-2" /> Arquivar sala
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         className="text-destructive focus:text-destructive"
@@ -203,7 +203,7 @@ const SalaHero = ({
                           if (cf) state.setDeleteTarget({ type: 'folder', id: cf.id, name: cf.name });
                         }}
                       >
-                        <Trash2 className="h-4 w-4 mr-2" /> Excluir sala
+                        <IconTrash className="h-4 w-4 mr-2" /> Excluir sala
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
