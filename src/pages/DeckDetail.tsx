@@ -693,14 +693,17 @@ const SuggestionsList = ({ deckId }: { deckId: string }) => {
             </span>
           </div>
           <p className="text-sm text-muted-foreground">{s.rationale}</p>
-          {s.suggestion_type === 'card' && s.suggested_content && (
-            <div className="text-xs text-muted-foreground/70">
-              {(s.suggested_content as any)?.front_content && <span className="text-primary">Frente editada</span>}
-              {(s.suggested_content as any)?.front_content && (s.suggested_content as any)?.back_content && ' · '}
-              {(s.suggested_content as any)?.back_content && <span className="text-primary">Verso editado</span>}
-            </div>
-          )}
-          {s.suggestion_type === 'deck' && (s.suggested_content as any)?.new_card && (
+          {s.suggestion_type === 'card' && s.suggested_content && (() => {
+            const sc = s.suggested_content as Record<string, unknown>;
+            return (
+              <div className="text-xs text-muted-foreground/70">
+                {sc.front_content && <span className="text-primary">Frente editada</span>}
+                {sc.front_content && sc.back_content && ' · '}
+                {sc.back_content && <span className="text-primary">Verso editado</span>}
+              </div>
+            );
+          })()}
+          {s.suggestion_type === 'deck' && (s.suggested_content as Record<string, unknown>)?.new_card && (
             <span className="text-xs text-primary">Novo card sugerido</span>
           )}
           {s.suggested_tags && (
