@@ -27,12 +27,10 @@ interface DashboardModalsProps {
   detaching: boolean;
   handleDetachDeck: () => void;
 
-  // Sala image
+  // Sala image (crop dialog)
   salaImageOpen: boolean;
   setSalaImageOpen: (v: boolean) => void;
-  salaImageFile: File | null;
-  setSalaImageFile: (v: File | null) => void;
-  handleSalaImageSave: () => void;
+  onSalaImageCropped: (file: File) => void;
 
   // Leave sala
   leaveSalaConfirm: { folderId: string; turmaId: string } | null;
