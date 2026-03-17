@@ -86,6 +86,16 @@ export async function bulkDeleteCards(ids: string[]) {
   if (error) throw error;
 }
 
+/** Bury cards by pushing their scheduled_date to a given ISO date. */
+export async function buryCards(cardIds: string[], scheduledDate: string) {
+  if (cardIds.length === 0) return;
+  const { error } = await supabase
+    .from('cards')
+    .update({ scheduled_date: scheduledDate })
+    .in('id', cardIds);
+  if (error) throw error;
+}
+
 /** Upload a card image to storage. Returns the public URL. */
 export async function uploadCardImage(userId: string, file: File): Promise<string> {
   if (file.size > 5 * 1024 * 1024) throw new Error('Máximo 5MB');

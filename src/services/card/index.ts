@@ -29,6 +29,7 @@ export {
   moveCard,
   bulkMoveCards,
   bulkDeleteCards,
+  buryCards,
   uploadCardImage,
 } from './cardMutations';
 
