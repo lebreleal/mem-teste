@@ -16,6 +16,7 @@ export const DEFAULT_TOOLBAR_ITEMS: ToolbarItem[] = [
   { id: 'cloze', label: 'Preencha o espaço em branco', icon: 'cloze', visible: true },
   { id: 'clozeNext', label: 'Oclusão de texto (+)', icon: 'clozeNext', visible: true },
   { id: 'occlusion', label: 'Oclusão de imagem', icon: ScanEye, visible: true },
+  { id: 'drawing', label: 'Desenho', icon: ScanEye, visible: true },
   { id: 'link', label: 'Inserir link', icon: Link2, visible: true },
   { id: 'audio', label: 'Texto para voz', icon: Volume2, visible: true },
   { id: 'color', label: 'Destaque e cor', icon: Palette, visible: true },
