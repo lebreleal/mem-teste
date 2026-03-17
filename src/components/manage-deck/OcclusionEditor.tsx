@@ -1,9 +1,10 @@
 /**
  * Occlusion Editor — supports rectangles, polygons, freehand, and touch.
+ * Renders shapes via DOM overlays (not canvas) for better image display & interaction.
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ArrowLeft, Upload, ZoomIn, ZoomOut, RotateCcw, Trash2, Image, Loader2, Square, Pentagon, Pen, Move, ImageOff } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { compressImage } from '@/lib/imageUtils';
@@ -13,9 +14,7 @@ type Tool = 'rect' | 'polygon' | 'freehand' | 'select';
 interface OcclusionShape {
   id: string;
   type: 'rect' | 'polygon' | 'freehand';
-  // rect: x, y, w, h
   x?: number; y?: number; w?: number; h?: number;
-  // polygon / freehand: points
   points?: { x: number; y: number }[];
 }
 
@@ -27,173 +26,129 @@ interface OcclusionEditorProps {
   isSaving: boolean;
 }
 
+/* ─── Custom SVG Icons ─── */
+const IconRect = ({ active }: { active?: boolean }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.5 : 2} className="h-4 w-4">
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+  </svg>
+);
+const IconPolygon = ({ active }: { active?: boolean }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.5 : 2} className="h-4 w-4">
+    <path d="M12 2l9 7-3.5 10h-11L3 9z" />
+  </svg>
+);
+const IconFreehand = ({ active }: { active?: boolean }) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+    <path d="M14.78 10.746 13 11l.254-1.78a1 1 0 0 1 .283-.565l3.65-3.65 1.807 1.809-3.65 3.649a1 1 0 0 1-.565.283M19.704 6.104l-1.808-1.808 1.026-1.026a1 1 0 0 1 1.414 0l.394.394a1 1 0 0 1 0 1.414zM11.873 11.354c-1.267-1.35-2.71-2.42-4.034-2.934-.66-.257-1.366-.405-2.039-.31-.714.1-1.35.473-1.756 1.147-.443.735-.579 1.498-.465 2.241.11.718.441 1.357.833 1.899.746 1.035 1.867 1.93 2.675 2.576l.065.051q.415.33.763.605c.835.659 1.397 1.102 1.771 1.523.217.244.31.42.352.558.026.09.041.2.026.35h-.032c-.343-.006-.892-.137-1.582-.413-1.366-.548-2.897-1.509-3.743-2.354a1 1 0 0 0-1.414 1.415c1.078 1.076 2.855 2.17 4.413 2.795.772.31 1.588.544 2.293.556.353.006.766-.042 1.142-.244.415-.223.716-.598.832-1.083.129-.542.136-1.07-.018-1.59-.152-.511-.437-.939-.774-1.318-.503-.567-1.256-1.16-2.12-1.839q-.322-.253-.66-.523c-.868-.693-1.792-1.436-2.367-2.235-.28-.388-.433-.73-.478-1.03-.042-.275-.004-.567.201-.908.07-.115.152-.175.321-.199.211-.03.556.007 1.037.194.958.372 2.161 1.225 3.3 2.439a1 1 0 1 0 1.458-1.369" />
+  </svg>
+);
+const IconMove = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+    <path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20" />
+  </svg>
+);
+const IconZoomIn = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+    <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3M11 8v6M8 11h6" />
+  </svg>
+);
+const IconZoomOut = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+    <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3M8 11h6" />
+  </svg>
+);
+const IconClear = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" />
+  </svg>
+);
+const IconTrash = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+    <path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+  </svg>
+);
+const IconUpload = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-8 w-8 text-muted-foreground">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" />
+  </svg>
+);
+const IconImageOff = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+    <line x1="2" x2="22" y1="2" y2="22" /><path d="M10.41 10.41a2 2 0 1 1-2.83-2.83" /><line x1="13.5" x2="6" y1="13.5" y2="21" /><path d="M18 12l3-3M21 15V6a2 2 0 0 0-2-2H8" /><path d="M3 16V5a2 2 0 0 1 .59-1.41" />
+  </svg>
+);
+const IconOcclusionHeader = () => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5 text-primary">
+    <path d="M2 18v-1.5h2V18h2v2H4a2 2 0 0 1-2-2M4 4h2v2H4v1.5H2V6a2 2 0 0 1 2-2M3.486 13.5H2v-3h2L6.586 8a2 2 0 0 1 2.828 0L13 11.586l.586-.586a2 2 0 0 1 2.828 0l5.086 5 .5.5V18a2 2 0 0 1-2 2h-2v-2h2v-.586l-5-5-.586.586 1.293 1.293a1 1 0 0 1-1.414 1.414L8 9.414 4.5 13l-.5.5h-.514M10 6V4h4v2zM18 6V4h2a2 2 0 0 1 2 2v1.5h-2V6zM20 10.5h2v3h-2z" />
+    <path d="M14 18v2h-4v-2z" />
+  </svg>
+);
+
 const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSaving }: OcclusionEditorProps) => {
   const [imageUrl, setImageUrl] = useState('');
   const [shapes, setShapes] = useState<OcclusionShape[]>([]);
   const [uploading, setUploading] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [tool, setTool] = useState<Tool>('rect');
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const imgRef = useRef<HTMLImageElement | null>(null);
-  const [imageScale, setImageScale] = useState(1);
+  const [imgSize, setImgSize] = useState({ w: 0, h: 0 });
   const [drawing, setDrawing] = useState(false);
   const [startPos, setStartPos] = useState<{ x: number; y: number } | null>(null);
   const [currentRect, setCurrentRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [currentPoints, setCurrentPoints] = useState<{ x: number; y: number }[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const pendingNaturalShapes = useRef<OcclusionShape[] | null>(null);
+  const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null);
 
-  // Legacy compat: convert old rects to shapes
+  // Parse initial data
   useEffect(() => {
-    if (initialFront) {
-      try {
-        const data = JSON.parse(initialFront);
-        if (data.imageUrl) setImageUrl(data.imageUrl);
-        if (data.allRects) {
-          // Check if they're already shapes (have .type) or legacy rects
-          const converted: OcclusionShape[] = data.allRects.map((r: any) => ({
-            id: r.id || crypto.randomUUID(),
-            type: r.type || 'rect',
-            ...(r.type === 'polygon' || r.type === 'freehand'
-              ? { points: r.points }
-              : { x: r.x, y: r.y, w: r.w, h: r.h }),
-            ...(r.points && !r.type ? {} : {}),
-          }));
-          pendingNaturalShapes.current = converted;
-        }
-      } catch {}
-    }
+    if (!initialFront) return;
+    try {
+      const data = JSON.parse(initialFront);
+      if (data.imageUrl) setImageUrl(data.imageUrl);
+      if (data.allRects) {
+        const converted: OcclusionShape[] = data.allRects.map((r: any) => ({
+          id: r.id || crypto.randomUUID(),
+          type: r.type || 'rect',
+          ...(r.type === 'polygon' || r.type === 'freehand'
+            ? { points: r.points }
+            : { x: r.x, y: r.y, w: r.w, h: r.h }),
+        }));
+        setShapes(converted);
+      }
+    } catch {}
   }, [initialFront]);
 
-  const drawCanvas = useCallback(() => {
-    const canvas = canvasRef.current;
+  // When image loads, set dimensions
+  const handleImgLoad = () => {
     const img = imgRef.current;
-    if (!canvas || !img) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.save();
-    ctx.scale(zoom, zoom);
-    ctx.drawImage(img, 0, 0, img.naturalWidth * imageScale, img.naturalHeight * imageScale);
+    if (!img) return;
+    setImgSize({ w: img.naturalWidth, h: img.naturalHeight });
+    setImgLoaded(true);
+  };
 
-    const drawShape = (s: OcclusionShape, idx: number) => {
-      const isSelected = selectedId === s.id;
-      ctx.fillStyle = isSelected ? 'rgba(59,130,246,0.5)' : 'rgba(59,130,246,0.7)';
-      ctx.strokeStyle = isSelected ? '#facc15' : 'rgba(59,130,246,1)';
-      ctx.lineWidth = isSelected ? 3 : 2;
+  // Calculate display dimensions
+  const getDisplaySize = useCallback(() => {
+    const container = containerRef.current;
+    if (!container || imgSize.w === 0) return { w: 0, h: 0, scale: 1 };
+    const maxW = container.clientWidth;
+    const maxH = 450;
+    const scale = Math.min(maxW / imgSize.w, maxH / imgSize.h, 1) * zoom;
+    return { w: imgSize.w * scale, h: imgSize.h * scale, scale };
+  }, [imgSize, zoom]);
 
-      if (s.type === 'rect' && s.x != null) {
-        ctx.fillRect(s.x, s.y!, s.w!, s.h!);
-        ctx.strokeRect(s.x, s.y!, s.w!, s.h!);
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(`${idx + 1}`, s.x + s.w! / 2, s.y! + s.h! / 2);
-      } else if ((s.type === 'polygon' || s.type === 'freehand') && s.points && s.points.length > 1) {
-        ctx.beginPath();
-        ctx.moveTo(s.points[0].x, s.points[0].y);
-        for (let i = 1; i < s.points.length; i++) ctx.lineTo(s.points[i].x, s.points[i].y);
-        if (s.type === 'polygon') ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        // Label
-        const cx = s.points.reduce((a, p) => a + p.x, 0) / s.points.length;
-        const cy = s.points.reduce((a, p) => a + p.y, 0) / s.points.length;
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(`${idx + 1}`, cx, cy);
-      }
-    };
+  const displaySize = getDisplaySize();
+  const scale = displaySize.scale || 1;
 
-    shapes.forEach((s, i) => drawShape(s, i));
-
-    // Draw in-progress rect
-    if (currentRect && tool === 'rect') {
-      ctx.fillStyle = 'rgba(59,130,246,0.25)';
-      ctx.strokeStyle = 'rgba(59,130,246,0.8)';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([5, 5]);
-      ctx.fillRect(currentRect.x, currentRect.y, currentRect.w, currentRect.h);
-      ctx.strokeRect(currentRect.x, currentRect.y, currentRect.w, currentRect.h);
-      ctx.setLineDash([]);
-    }
-
-    // Draw in-progress polygon/freehand
-    if (currentPoints.length > 0) {
-      ctx.strokeStyle = 'rgba(59,130,246,0.8)';
-      ctx.lineWidth = 2;
-      ctx.setLineDash(tool === 'polygon' ? [5, 5] : []);
-      ctx.beginPath();
-      ctx.moveTo(currentPoints[0].x, currentPoints[0].y);
-      for (let i = 1; i < currentPoints.length; i++) ctx.lineTo(currentPoints[i].x, currentPoints[i].y);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      // Draw points for polygon
-      if (tool === 'polygon') {
-        currentPoints.forEach(p => {
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
-          ctx.fillStyle = '#3b82f6';
-          ctx.fill();
-        });
-      }
-    }
-
-    ctx.restore();
-  }, [shapes, currentRect, currentPoints, imageScale, zoom, selectedId, tool]);
-
-  const loadImage = useCallback((url: string) => {
-    const img = new window.Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      imgRef.current = img;
-      const canvas = canvasRef.current;
-      const container = containerRef.current;
-      if (!canvas || !container) return;
-      const maxW = container.clientWidth;
-      const maxH = 400;
-      const s = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 1);
-      setImageScale(s);
-      canvas.width = Math.round(img.naturalWidth * s * zoom);
-      canvas.height = Math.round(img.naturalHeight * s * zoom);
-      if (pendingNaturalShapes.current) {
-        const scaled = pendingNaturalShapes.current.map(shape => {
-          if (shape.type === 'rect') {
-            return { ...shape, x: shape.x! * s, y: shape.y! * s, w: shape.w! * s, h: shape.h! * s };
-          } else {
-            return { ...shape, points: shape.points?.map(p => ({ x: p.x * s, y: p.y * s })) };
-          }
-        });
-        setShapes(scaled);
-        pendingNaturalShapes.current = null;
-      }
-    };
-    img.src = url;
-  }, [zoom]);
-
-  useEffect(() => { if (imageUrl) loadImage(imageUrl); }, [imageUrl, loadImage]);
-  useEffect(() => { drawCanvas(); }, [drawCanvas]);
-
-  useEffect(() => {
-    const img = imgRef.current;
-    const canvas = canvasRef.current;
-    if (!img || !canvas) return;
-    canvas.width = Math.round(img.naturalWidth * imageScale * zoom);
-    canvas.height = Math.round(img.naturalHeight * imageScale * zoom);
-    drawCanvas();
-  }, [zoom, imageScale, drawCanvas]);
-
-  const toCanvasCoords = (clientX: number, clientY: number) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-    const rect = canvas.getBoundingClientRect();
+  // Convert pointer to image-space coords (normalized to natural image size)
+  const toImgCoords = (clientX: number, clientY: number) => {
+    const el = containerRef.current?.querySelector('.occlusion-img-wrapper');
+    if (!el) return { x: 0, y: 0 };
+    const rect = el.getBoundingClientRect();
     return {
-      x: ((clientX - rect.left) * (canvas.width / rect.width)) / zoom,
-      y: ((clientY - rect.top) * (canvas.height / rect.height)) / zoom,
+      x: (clientX - rect.left) / scale,
+      y: (clientY - rect.top) / scale,
     };
   };
 
@@ -201,7 +156,6 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
     return [...shapes].reverse().find(s => {
       if (s.type === 'rect') return pos.x >= s.x! && pos.x <= s.x! + s.w! && pos.y >= s.y! && pos.y <= s.y! + s.h!;
       if (s.points && s.points.length > 2) {
-        // Simple bounding box test for polygon/freehand
         const xs = s.points.map(p => p.x);
         const ys = s.points.map(p => p.y);
         return pos.x >= Math.min(...xs) && pos.x <= Math.max(...xs) && pos.y >= Math.min(...ys) && pos.y <= Math.max(...ys);
@@ -210,27 +164,30 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
     });
   };
 
-  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    const pos = toCanvasCoords(e.clientX, e.clientY);
+  const handlePointerDown = (e: React.PointerEvent) => {
+    const pos = toImgCoords(e.clientX, e.clientY);
 
     if (tool === 'select') {
       const hit = hitTest(pos);
       setSelectedId(hit?.id ?? null);
+      if (hit) {
+        setDragOffset({ x: pos.x - (hit.x ?? 0), y: pos.y - (hit.y ?? 0) });
+        (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+      }
       return;
     }
 
     if (tool === 'rect') {
       const hit = hitTest(pos);
-      if (hit) { setSelectedId(hit.id); return; }
+      if (hit) { setSelectedId(hit.id); setTool('select'); return; }
       setSelectedId(null);
       setDrawing(true);
       setStartPos(pos);
+      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     } else if (tool === 'polygon') {
-      // Close polygon if clicking near first point
       if (currentPoints.length >= 3) {
         const first = currentPoints[0];
-        const dist = Math.hypot(pos.x - first.x, pos.y - first.y);
-        if (dist < 12) {
+        if (Math.hypot(pos.x - first.x, pos.y - first.y) < 15 / scale) {
           setShapes(prev => [...prev, { id: crypto.randomUUID(), type: 'polygon', points: [...currentPoints] }]);
           setCurrentPoints([]);
           return;
@@ -240,12 +197,24 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
     } else if (tool === 'freehand') {
       setDrawing(true);
       setCurrentPoints([pos]);
+      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     }
   };
 
-  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+  const handlePointerMove = (e: React.PointerEvent) => {
+    const pos = toImgCoords(e.clientX, e.clientY);
+
+    if (tool === 'select' && selectedId && dragOffset) {
+      // Move selected shape
+      setShapes(prev => prev.map(s => {
+        if (s.id !== selectedId) return s;
+        if (s.type === 'rect') return { ...s, x: pos.x - dragOffset.x, y: pos.y - dragOffset.y };
+        return s;
+      }));
+      return;
+    }
+
     if (!drawing) return;
-    const pos = toCanvasCoords(e.clientX, e.clientY);
     if (tool === 'rect' && startPos) {
       setCurrentRect({
         x: Math.min(startPos.x, pos.x), y: Math.min(startPos.y, pos.y),
@@ -257,16 +226,21 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
   };
 
   const handlePointerUp = () => {
+    setDragOffset(null);
     if (tool === 'rect') {
-      if (drawing && currentRect && currentRect.w > 10 && currentRect.h > 10) {
-        setShapes(prev => [...prev, { id: crypto.randomUUID(), type: 'rect', ...currentRect }]);
+      if (drawing && currentRect && currentRect.w > 5 && currentRect.h > 5) {
+        const newShape: OcclusionShape = { id: crypto.randomUUID(), type: 'rect', ...currentRect };
+        setShapes(prev => [...prev, newShape]);
+        setSelectedId(newShape.id);
       }
       setDrawing(false);
       setStartPos(null);
       setCurrentRect(null);
     } else if (tool === 'freehand' && drawing) {
       if (currentPoints.length > 5) {
-        setShapes(prev => [...prev, { id: crypto.randomUUID(), type: 'freehand', points: [...currentPoints] }]);
+        const newShape: OcclusionShape = { id: crypto.randomUUID(), type: 'freehand', points: [...currentPoints] };
+        setShapes(prev => [...prev, newShape]);
+        setSelectedId(newShape.id);
       }
       setDrawing(false);
       setCurrentPoints([]);
@@ -292,6 +266,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
       const { data: urlData } = supabase.storage.from('card-images').getPublicUrl(path);
       setImageUrl(urlData.publicUrl);
       setShapes([]);
+      setImgLoaded(false);
     } catch (err: any) {
       console.error('Upload error:', err);
     } finally {
@@ -301,106 +276,266 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
 
   const handleSave = () => {
     if (!imageUrl || shapes.length === 0) return;
-    const scale = imageScale || 1;
-    const normalizedShapes = shapes.map(s => {
-      if (s.type === 'rect') {
-        return { ...s, x: s.x! / scale, y: s.y! / scale, w: s.w! / scale, h: s.h! / scale };
-      } else {
-        return { ...s, points: s.points?.map(p => ({ x: p.x / scale, y: p.y / scale })) };
-      }
-    });
     const frontContent = JSON.stringify({
       imageUrl,
-      allRects: normalizedShapes,
-      activeRectIds: normalizedShapes.map(s => s.id),
+      allRects: shapes,
+      activeRectIds: shapes.map(s => s.id),
     });
     onSave(frontContent, '');
   };
 
-  const tools: { id: Tool; icon: typeof Square; label: string }[] = [
-    { id: 'rect', icon: Square, label: 'Retângulo' },
-    { id: 'polygon', icon: Pentagon, label: 'Polígono' },
-    { id: 'freehand', icon: Pen, label: 'Livre' },
-    { id: 'select', icon: Move, label: 'Selecionar' },
-  ];
+  // Keyboard: delete selected
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
+        e.preventDefault();
+        deleteSelected();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [selectedId]);
 
+  /* ─── Upload Screen ─── */
   if (!imageUrl) {
     return (
       <div className="space-y-4">
-        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-12 text-center space-y-3">
-          <Upload className="h-8 w-8 text-muted-foreground" />
-          <p className="text-sm font-medium text-foreground">Envie uma imagem</p>
+        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-16 text-center space-y-3">
+          <IconUpload />
+          <p className="text-sm font-semibold text-foreground">Envie uma imagem</p>
           <p className="text-xs text-muted-foreground max-w-xs">Selecione a imagem e depois marque as áreas que serão ocultadas durante o estudo.</p>
           <label className="cursor-pointer">
             <input type="file" accept="image/*" className="hidden" onChange={handleUpload} />
-            <span className="inline-flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/10 transition-colors">
-              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            <span className="inline-flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-5 py-2.5 text-sm font-medium text-primary hover:bg-primary/10 transition-colors">
+              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" />
+                </svg>
+              )}
               {uploading ? 'Enviando...' : 'Escolher imagem'}
             </span>
           </label>
         </div>
-        <div className="flex justify-end"><Button variant="outline" onClick={onCancel}>Cancelar</Button></div>
+        <div className="flex justify-end">
+          <Button variant="outline" onClick={onCancel}>Cancelar</Button>
+        </div>
       </div>
     );
   }
 
+  /* ─── Shape rendering helpers ─── */
+  const renderShape = (s: OcclusionShape, idx: number) => {
+    const isSelected = selectedId === s.id;
+
+    if (s.type === 'rect') {
+      return (
+        <div
+          key={s.id}
+          className={`absolute flex items-center justify-center transition-shadow cursor-pointer ${
+            isSelected ? 'ring-2 ring-yellow-400 shadow-lg' : ''
+          }`}
+          style={{
+            left: s.x! * scale,
+            top: s.y! * scale,
+            width: s.w! * scale,
+            height: s.h! * scale,
+            backgroundColor: isSelected ? 'rgba(59,130,246,0.45)' : 'rgba(59,130,246,0.6)',
+            border: `2px solid ${isSelected ? '#facc15' : 'rgba(59,130,246,0.9)'}`,
+            borderRadius: 4,
+          }}
+          onClick={(e) => { e.stopPropagation(); setSelectedId(s.id); }}
+        >
+          <span className="text-white font-bold text-xs select-none drop-shadow-sm">{idx + 1}</span>
+        </div>
+      );
+    }
+
+    if ((s.type === 'polygon' || s.type === 'freehand') && s.points && s.points.length > 1) {
+      const pts = s.points.map(p => `${p.x * scale},${p.y * scale}`).join(' ');
+      const cx = s.points.reduce((a, p) => a + p.x, 0) / s.points.length * scale;
+      const cy = s.points.reduce((a, p) => a + p.y, 0) / s.points.length * scale;
+      return (
+        <svg key={s.id} className="absolute inset-0 pointer-events-none" style={{ width: displaySize.w, height: displaySize.h }}>
+          {s.type === 'polygon' ? (
+            <polygon
+              points={pts}
+              fill={isSelected ? 'rgba(59,130,246,0.45)' : 'rgba(59,130,246,0.6)'}
+              stroke={isSelected ? '#facc15' : 'rgba(59,130,246,0.9)'}
+              strokeWidth="2"
+              className="pointer-events-auto cursor-pointer"
+              onClick={(e) => { e.stopPropagation(); setSelectedId(s.id); }}
+            />
+          ) : (
+            <polyline
+              points={pts}
+              fill="none"
+              stroke={isSelected ? '#facc15' : 'rgba(59,130,246,0.9)'}
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="pointer-events-auto cursor-pointer"
+              onClick={(e) => { e.stopPropagation(); setSelectedId(s.id); }}
+            />
+          )}
+          <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central" fill="white" fontWeight="bold" fontSize="12">{idx + 1}</text>
+        </svg>
+      );
+    }
+    return null;
+  };
+
+  const tools: { id: Tool; label: string; icon: React.ReactNode }[] = [
+    { id: 'rect', icon: <IconRect active={tool === 'rect'} />, label: 'Retângulo' },
+    { id: 'polygon', icon: <IconPolygon active={tool === 'polygon'} />, label: 'Polígono' },
+    { id: 'freehand', icon: <IconFreehand active={tool === 'freehand'} />, label: 'Livre' },
+    { id: 'select', icon: <IconMove />, label: 'Mover' },
+  ];
+
   return (
     <div className="space-y-3">
       {/* Toolbar */}
-      <div className="flex items-center gap-1 flex-wrap rounded-lg border border-border bg-muted/30 p-1.5">
-        {/* Drawing tools */}
-        {tools.map(t => {
-          const Icon = t.icon;
-          return (
-            <Button
-              key={t.id}
-              variant={tool === t.id ? 'default' : 'ghost'}
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => { setTool(t.id); setSelectedId(null); setCurrentPoints([]); }}
-              title={t.label}
-            >
-              <Icon className="h-4 w-4" />
-            </Button>
-          );
-        })}
+      <div className="flex items-center gap-1 flex-wrap rounded-xl border border-border bg-muted/30 p-1.5">
+        {tools.map(t => (
+          <Button
+            key={t.id}
+            variant={tool === t.id ? 'default' : 'ghost'}
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => { setTool(t.id); setSelectedId(null); setCurrentPoints([]); }}
+            title={t.label}
+          >
+            {t.icon}
+          </Button>
+        ))}
+
         <div className="h-5 w-px bg-border mx-1" />
-        {/* Zoom */}
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setZoom(z => Math.max(0.3, z - 0.25))}><ZoomOut className="h-4 w-4" /></Button>
-        <span className="text-xs text-muted-foreground w-10 text-center select-none">{Math.round(zoom * 100)}%</span>
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setZoom(z => Math.min(3, z + 0.25))}><ZoomIn className="h-4 w-4" /></Button>
+
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setZoom(z => Math.max(0.3, z - 0.25))} title="Reduzir">
+          <IconZoomOut />
+        </Button>
+        <span className="text-xs text-muted-foreground w-10 text-center select-none font-medium">{Math.round(zoom * 100)}%</span>
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setZoom(z => Math.min(3, z + 0.25))} title="Ampliar">
+          <IconZoomIn />
+        </Button>
+
         <div className="h-5 w-px bg-border mx-1" />
-        {selectedId && (<Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={deleteSelected} title="Excluir seleção"><Trash2 className="h-4 w-4" /></Button>)}
-        <Button variant="ghost" size="sm" onClick={() => { setShapes([]); setSelectedId(null); setCurrentPoints([]); }} className="gap-1 text-xs h-8 ml-auto"><RotateCcw className="h-3 w-3" /> Limpar</Button>
+
+        {selectedId && (
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={deleteSelected} title="Excluir seleção">
+            <IconTrash />
+          </Button>
+        )}
+
+        <Button variant="ghost" size="sm" onClick={() => { setShapes([]); setSelectedId(null); setCurrentPoints([]); }} className="gap-1 text-xs h-8 ml-auto">
+          <IconClear /> Limpar
+        </Button>
       </div>
 
-      {/* Polygon helper */}
+      {/* Polygon hint */}
       {tool === 'polygon' && currentPoints.length > 0 && (
-        <p className="text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1">
+        <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-1.5">
           Clique para adicionar vértices. Clique perto do primeiro ponto para fechar o polígono ({currentPoints.length} ponto{currentPoints.length !== 1 ? 's' : ''}).
         </p>
       )}
 
-      {/* Canvas */}
-      <div ref={containerRef} className="relative rounded-lg border border-border overflow-auto bg-muted/30 max-h-[400px] touch-none">
-        <canvas ref={canvasRef} className="block" style={{ cursor: tool === 'select' ? 'default' : 'crosshair', touchAction: 'none' }}
-          onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp}
-          onPointerLeave={() => { if (drawing && tool !== 'polygon') { setDrawing(false); setStartPos(null); setCurrentRect(null); setCurrentPoints([]); } }}
-        />
+      {/* Image + Shapes overlay (DOM-based, not canvas) */}
+      <div
+        ref={containerRef}
+        className="relative rounded-xl border border-border overflow-auto bg-muted/20 max-h-[450px]"
+        style={{ touchAction: 'none' }}
+      >
+        <div
+          className="occlusion-img-wrapper relative inline-block"
+          style={{
+            width: displaySize.w || '100%',
+            height: displaySize.h || 'auto',
+            cursor: tool === 'select' ? 'default' : 'crosshair',
+          }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerLeave={() => {
+            if (drawing && tool !== 'polygon') {
+              setDrawing(false);
+              setStartPos(null);
+              setCurrentRect(null);
+              setCurrentPoints([]);
+            }
+          }}
+          onClick={() => { if (tool !== 'polygon') setSelectedId(null); }}
+        >
+          {/* Actual image */}
+          <img
+            ref={imgRef}
+            src={imageUrl}
+            alt="Oclusão"
+            crossOrigin="anonymous"
+            onLoad={handleImgLoad}
+            className="block select-none pointer-events-none"
+            style={{ width: displaySize.w, height: displaySize.h }}
+            draggable={false}
+          />
+
+          {/* Loading overlay */}
+          {!imgLoaded && (
+            <div className="absolute inset-0 flex items-center justify-center bg-muted/50">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          )}
+
+          {/* Existing shapes */}
+          {shapes.map((s, i) => renderShape(s, i))}
+
+          {/* In-progress rect */}
+          {currentRect && tool === 'rect' && (
+            <div
+              className="absolute border-2 border-dashed border-primary/80 pointer-events-none"
+              style={{
+                left: currentRect.x * scale,
+                top: currentRect.y * scale,
+                width: currentRect.w * scale,
+                height: currentRect.h * scale,
+                backgroundColor: 'rgba(59,130,246,0.15)',
+                borderRadius: 4,
+              }}
+            />
+          )}
+
+          {/* In-progress polygon/freehand */}
+          {currentPoints.length > 0 && (
+            <svg className="absolute inset-0 pointer-events-none" style={{ width: displaySize.w, height: displaySize.h }}>
+              <polyline
+                points={currentPoints.map(p => `${p.x * scale},${p.y * scale}`).join(' ')}
+                fill="none"
+                stroke="rgba(59,130,246,0.8)"
+                strokeWidth="2"
+                strokeDasharray={tool === 'polygon' ? '5 5' : undefined}
+                strokeLinecap="round"
+              />
+              {tool === 'polygon' && currentPoints.map((p, i) => (
+                <circle key={i} cx={p.x * scale} cy={p.y * scale} r="4" fill="#3b82f6" />
+              ))}
+            </svg>
+          )}
+        </div>
       </div>
 
-      <p className="text-xs text-muted-foreground">{shapes.length} área(s) marcada(s).</p>
+      {/* Shape count */}
+      <p className="text-xs text-muted-foreground">
+        {shapes.length} área{shapes.length !== 1 ? 's' : ''} marcada{shapes.length !== 1 ? 's' : ''}.
+        {selectedId && <span className="text-primary ml-2 font-medium">Seleção ativa — pressione Delete para remover</span>}
+      </p>
 
       {/* Actions */}
-      <div className="flex items-center gap-2 pt-2">
+      <div className="flex items-center gap-2 pt-1">
         {onRemoveImage && (
-          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive gap-1" onClick={onRemoveImage}>
-            <ImageOff className="h-3.5 w-3.5" /> Remover imagem
+          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive gap-1.5" onClick={onRemoveImage}>
+            <IconImageOff /> Remover imagem
           </Button>
         )}
         <div className="flex-1" />
-        <Button variant="outline" onClick={onCancel}>Cancelar</Button>
-        <Button onClick={handleSave} disabled={isSaving || shapes.length === 0}>
+        <Button variant="outline" className="rounded-xl" onClick={onCancel}>Cancelar</Button>
+        <Button className="rounded-xl" onClick={handleSave} disabled={isSaving || shapes.length === 0}>
           {isSaving ? 'Salvando...' : `Salvar (${shapes.length})`}
         </Button>
       </div>
