@@ -118,10 +118,8 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
-      const updates = Object.values(settings).map(s =>
-        supabase.from('decks').update({ daily_new_limit: s.dailyNewLimit }).eq('id', s.id)
-      );
-      await Promise.all(updates);
+      const updates = Object.values(settings).map(s => ({ id: s.id, daily_new_limit: s.dailyNewLimit }));
+      await updateDeckDailyLimits(updates);
       queryClient.invalidateQueries({ queryKey: ['decks'] });
       toast({ title: 'Configurações salvas!' });
       onOpenChange(false);

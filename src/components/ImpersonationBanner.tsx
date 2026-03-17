@@ -27,14 +27,8 @@ const ImpersonationBanner = () => {
 
       const adminSession = JSON.parse(stored);
 
-      // Sign out from impersonated session
-      await supabase.auth.signOut();
-
-      // Restore admin session
-      await supabase.auth.setSession({
-        access_token: adminSession.access_token,
-        refresh_token: adminSession.refresh_token,
-      });
+      await signOut();
+      await setSession(adminSession.access_token, adminSession.refresh_token);
 
       sessionStorage.removeItem('admin_session');
       sessionStorage.removeItem('impersonated_name');
