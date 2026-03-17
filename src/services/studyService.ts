@@ -354,12 +354,12 @@ export async function fetchLeechStreak(userId: string, cardId: string, limit: nu
 /** Submit a card review and update scheduling. */
 export async function submitCardReview(
   userId: string,
-  card: any,
+  card: StudyCard,
   rating: Rating,
   algorithmMode: string,
-  deckConfig: any,
+  deckConfig: DeckStudyConfig | undefined,
   elapsedMs?: number,
-) {
+): Promise<CardReviewResult> {
   const cappedMs = elapsedMs
     ? Math.min(Math.max(elapsedMs, 1500), 120000)
     : null;
