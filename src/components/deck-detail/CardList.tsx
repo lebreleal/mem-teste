@@ -386,9 +386,8 @@ const CardListContent = ({
 }: any) => {
   const [suggestCard, setSuggestCard] = useState<any>(null);
   const [communityWarningOpen, setCommunityWarningOpen] = useState(false);
-  // Only show first N cards from already-loaded set
-  const visibleCards = useMemo(() => filteredCards.slice(0, visibleCount), [filteredCards, visibleCount]);
-  const hasMoreVisible = visibleCount < filteredCards.length;
+  // With virtualisation, show all cards — react-window handles DOM efficiency
+  const visibleCards = filteredCards;
 
   // Batch fetch tags only for visible cards
   const visibleCardIds = useMemo(() => visibleCards.map((c: any) => c.id), [visibleCards]);
