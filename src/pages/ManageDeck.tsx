@@ -38,8 +38,10 @@ const ManageDeck = () => {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
 
-  // Image attachments (normal images stored separately from text)
-  const [attachedImages, setAttachedImages] = useState<string[]>([]);
+  // Image attachments stored separately from text
+  const [frontAttachedImages, setFrontAttachedImages] = useState<string[]>([]);
+  const [backAttachedImages, setBackAttachedImages] = useState<string[]>([]);
+  const [previewAttachment, setPreviewAttachment] = useState<{ attachment: ImageAttachment; allowOcclusion: boolean } | null>(null);
 
   // Image occlusion state
   const [occlusionImageUrl, setOcclusionImageUrl] = useState('');
