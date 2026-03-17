@@ -441,7 +441,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
               <Button type="button" variant="ghost" size="icon"
                 className="h-7 w-7 shrink-0"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => setAiCreatorOpen(true)}
+                onClick={() => setAiCreatorOpen(v => !v)}
                 title="Criador de IA"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="h-4 w-4">
