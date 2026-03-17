@@ -146,7 +146,7 @@ const LessonContent = ({
       const { data } = await supabase.from('exam_questions').select('exam_id')
         .in('exam_id', personalExamIds);
       const counts: Record<string, number> = {};
-      (data ?? []).forEach((q: any) => { counts[q.exam_id] = (counts[q.exam_id] || 0) + 1; });
+      (data ?? []).forEach((q: { exam_id: string }) => { counts[q.exam_id] = (counts[q.exam_id] || 0) + 1; });
       return counts;
     },
     enabled: personalExamIds.length > 0,
