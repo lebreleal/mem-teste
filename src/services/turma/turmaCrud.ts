@@ -390,7 +390,8 @@ export async function createTurmaWithOwner(
     .single();
   if (error || !newTurma) throw error || new Error('Failed to create turma');
   const result = newTurma as { id: string; share_slug: string | null };
-  await supabase.from('turma_members').insert({ turma_id: result.id, user_id: userId, role: 'admin' } as Record<string, unknown>);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- insert typing
+  await supabase.from('turma_members').insert({ turma_id: result.id, user_id: userId, role: 'admin' } as any);
   return result;
 }
 
