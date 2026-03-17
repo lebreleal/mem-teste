@@ -14,8 +14,6 @@ import {
 } from '@/components/ui/select';
 import { Globe, Lock } from 'lucide-react';
 import DeckPreviewSheet from '@/components/community/DeckPreviewSheet';
-import { lazy, Suspense } from 'react';
-const PdfCanvasViewer = lazy(() => import('./PdfCanvasViewer'));
 
 interface LessonDialogsProps {
   // Add deck dialog
