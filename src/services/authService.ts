@@ -26,3 +26,12 @@ export async function getCurrentUserId(): Promise<string | null> {
   const { data: { user } } = await supabase.auth.getUser();
   return user?.id ?? null;
 }
+
+/** Invoke a Supabase edge function. */
+export async function invokeEdgeFunction<T = Record<string, unknown>>(
+  functionName: string,
+  body: Record<string, unknown>
+): Promise<{ data: T | null; error: Error | null }> {
+  const { data, error } = await supabase.functions.invoke(functionName, { body });
+  return { data: data as T | null, error };
+}

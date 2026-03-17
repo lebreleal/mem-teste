@@ -5,7 +5,7 @@
 
 import { useCallback } from 'react';
 import { fetchCardFrontContent } from '@/services/uiQueryService';
-import { getAccessToken, getCurrentUserId } from '@/services/authService';
+import { getCurrentUserId, invokeEdgeFunction } from '@/services/authService';
 import * as cardService from '@/services/cardService';
 import * as deckService from '@/services/deckService';
 import { invalidateDeckRelatedQueries } from '@/lib/queryKeys';
