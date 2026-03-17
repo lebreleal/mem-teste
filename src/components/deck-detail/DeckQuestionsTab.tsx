@@ -147,23 +147,7 @@ const ConceptMasterySection = ({
   const searchExistingCards = async (concept: string): Promise<any[]> => {
     setLoadingCards(prev => ({ ...prev, [concept]: true }));
     try {
-      const keywords = concept
-        .replace(/^(Você conseguiu|Você entendeu|Você sabe).*?\??\s*/i, '')
-        .split(/\s+/)
-        .map(k => k.replace(/[%,_]/g, ''))
-        .filter(w => w.length > 3)
-        .slice(0, 4);
-
-      if (keywords.length === 0) return [];
-
-      const { data } = await supabase
-        .from('cards')
-        .select('id, front_content, back_content, card_type')
-        .in('deck_id', deckScopeIds)
-        .or(keywords.map(k => `front_content.ilike.%${k}%,back_content.ilike.%${k}%`).join(','))
-        .limit(5);
-
-      const cards = data || [];
+      const cards = await searchCardsForConcept(deckScopeIds, concept);
       setPreviewCards(prev => ({ ...prev, [concept]: cards }));
       return cards;
     } catch {
