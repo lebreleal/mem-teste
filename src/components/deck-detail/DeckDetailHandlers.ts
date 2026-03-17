@@ -45,13 +45,11 @@ interface CreatedDeck {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyMutation = UseMutationResult<any, unknown, any, any>;
 
-/** Exam notification entry */
-interface ExamNotification {
-  id: string;
-  title: string;
-  examId: string;
-  status: string;
-  message: string;
+/** Subdeck import shape (matches SubdeckNode from deckImport) */
+interface ImportSubdeck {
+  name: string;
+  card_indices: number[];
+  children?: ImportSubdeck[];
 }
 
 /** Subdeck import shape */
