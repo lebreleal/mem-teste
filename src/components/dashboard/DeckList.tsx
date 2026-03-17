@@ -267,6 +267,7 @@ const DeckList = ({
             expandedAccordionId={expandedAccordionId}
             onAccordionToggle={handleAccordionToggle}
             questionCountMap={questionCountMap}
+            organizeMode={organizeMode}
             {...deckRowProps}
           />
         );
