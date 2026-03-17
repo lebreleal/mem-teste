@@ -23,8 +23,11 @@ const ManageDeck = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { cards, isLoading, createCard, updateCard, deleteCard } = useCards(deckId ?? '');
+  const { energy } = useEnergy();
+  const { model } = useAIModel();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [isAICreating, setIsAICreating] = useState(false);
 
   const initialCardId = searchParams.get('cardId');
   const hasAppliedInitialCardRef = useRef(false);
