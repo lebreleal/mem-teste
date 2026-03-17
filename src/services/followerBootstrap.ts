@@ -8,6 +8,11 @@
 
 import { supabase } from '@/integrations/supabase/client';
 
+interface BootstrapResult {
+  decks_created: number;
+  cards_created: number;
+}
+
 /**
  * Bootstrap local deck copies for a follower.
  * Creates mirror decks + copies cards with state=0.
@@ -17,8 +22,8 @@ export async function bootstrapFollowerDecks(
   userId: string,
   turmaId: string,
   folderId: string
-): Promise<{ decks_created: number; cards_created: number }> {
-  const { data, error } = await supabase.rpc('bootstrap_follower_decks' as any, {
+): Promise<BootstrapResult> {
+  const { data, error } = await supabase.rpc('bootstrap_follower_decks', {
     p_user_id: userId,
     p_turma_id: turmaId,
     p_folder_id: folderId,
@@ -26,7 +31,39 @@ export async function bootstrapFollowerDecks(
   if (error) {
     throw error;
   }
-  return (data as any) ?? { decks_created: 0, cards_created: 0 };
+  const result = data as unknown as BootstrapResult | null;
+  return result ?? { decks_created: 0, cards_created: 0 };
+}
+
+interface LocalDeckRow {
+  id: string;
+  source_turma_deck_id: string | null;
+  parent_deck_id: string | null;
+  name: string;
+}
+
+interface TurmaDeckRow {
+  id: string;
+  deck_id: string;
+}
+
+interface SourceSubDeckRow {
+  id: string;
+  name: string;
+  parent_deck_id: string | null;
+}
+
+interface SourceCardRow {
+  id: string;
+  deck_id: string;
+  front_content: string;
+  back_content: string;
+  card_type: string;
+}
+
+interface ExistingCardRow {
+  deck_id: string;
+  origin_deck_id: string | null;
 }
 
 /**
@@ -48,11 +85,11 @@ export async function syncFollowerDecks(userId: string, folderId: string): Promi
   if (!localDecks || localDecks.length === 0) return 0;
 
   // Filter to decks that have a source_turma_deck_id
-  const mirrorDecks = localDecks.filter((d: any) => d.source_turma_deck_id);
+  const mirrorDecks = (localDecks as LocalDeckRow[]).filter(d => d.source_turma_deck_id);
   if (mirrorDecks.length === 0) return 0;
 
   // 2. BATCH: fetch all turma_deck → source deck_id mappings in ONE query
-  const allSourceTurmaDeckIds = mirrorDecks.map((d: any) => d.source_turma_deck_id);
+  const allSourceTurmaDeckIds = mirrorDecks.map(d => d.source_turma_deck_id!);
   const { data: turmaDeckRows } = await supabase
     .from('turma_decks')
     .select('id, deck_id')
@@ -61,7 +98,7 @@ export async function syncFollowerDecks(userId: string, folderId: string): Promi
   if (!turmaDeckRows || turmaDeckRows.length === 0) return 0;
 
   const turmaDeckMap = new Map<string, string>(); // turma_deck_id → source deck_id
-  for (const td of turmaDeckRows as any[]) {
+  for (const td of turmaDeckRows as TurmaDeckRow[]) {
     turmaDeckMap.set(td.id, td.deck_id);
   }
 
@@ -71,7 +108,7 @@ export async function syncFollowerDecks(userId: string, folderId: string): Promi
   const allProcessedDeckIds: string[] = [];
 
   for (const localDeck of mirrorDecks) {
-    const sourceDeckId = turmaDeckMap.get((localDeck as any).source_turma_deck_id);
+    const sourceDeckId = turmaDeckMap.get(localDeck.source_turma_deck_id!);
     if (!sourceDeckId) continue;
 
     syncPairs.push({ localDeckId: localDeck.id, sourceDeckId });
@@ -98,16 +135,17 @@ export async function syncFollowerDecks(userId: string, folderId: string): Promi
       .in('parent_deck_id', localRootIds);
 
     const localSubMap = new Map<string, Map<string, string>>(); // parentId → Map<name, id>
-    for (const ls of (localSubDecks ?? []) as any[]) {
+    for (const ls of (localSubDecks ?? []) as SourceSubDeckRow[]) {
+      if (!ls.parent_deck_id) continue;
       if (!localSubMap.has(ls.parent_deck_id)) localSubMap.set(ls.parent_deck_id, new Map());
       localSubMap.get(ls.parent_deck_id)!.set(ls.name, ls.id);
     }
 
     // Create missing sub-decks and add sync pairs
-    for (const srcSub of sourceSubDecks as any[]) {
+    for (const srcSub of sourceSubDecks as SourceSubDeckRow[]) {
       // Find the local root that mirrors this source parent
       const mirrorDeck = mirrorDecks.find(
-        (m: any) => turmaDeckMap.get(m.source_turma_deck_id) === srcSub.parent_deck_id
+        m => turmaDeckMap.get(m.source_turma_deck_id!) === srcSub.parent_deck_id
       );
       if (!mirrorDeck) continue;
 
@@ -124,10 +162,10 @@ export async function syncFollowerDecks(userId: string, folderId: string): Promi
             parent_deck_id: mirrorDeck.id,
             daily_new_limit: 20,
             daily_review_limit: 9999,
-          } as any)
+          })
           .select('id')
           .single();
-        if (newSub) localSubId = (newSub as any).id;
+        if (newSub) localSubId = newSub.id;
       }
 
       if (localSubId) {
@@ -152,7 +190,8 @@ export async function syncFollowerDecks(userId: string, folderId: string): Promi
         .not('origin_deck_id', 'is', null)
         .range(offset, offset + PAGE - 1);
       if (!existingBatch || existingBatch.length === 0) break;
-      for (const c of existingBatch as any[]) {
+      for (const c of existingBatch as ExistingCardRow[]) {
+        if (!c.origin_deck_id) continue;
         if (!existingOriginsByDeck.has(c.deck_id)) existingOriginsByDeck.set(c.deck_id, new Set());
         existingOriginsByDeck.get(c.deck_id)!.add(c.origin_deck_id);
       }
@@ -163,7 +202,7 @@ export async function syncFollowerDecks(userId: string, folderId: string): Promi
 
   // 5. BATCH: fetch all source cards
   const allSourceIds = [...new Set(syncPairs.map(p => p.sourceDeckId))];
-  const sourceCardsByDeck = new Map<string, any[]>();
+  const sourceCardsByDeck = new Map<string, SourceCardRow[]>();
 
   for (let i = 0; i < allSourceIds.length; i += 200) {
     const batch = allSourceIds.slice(i, i + 200);
@@ -175,7 +214,7 @@ export async function syncFollowerDecks(userId: string, folderId: string): Promi
         .in('deck_id', batch)
         .range(offset, offset + PAGE - 1);
       if (!sourceBatch || sourceBatch.length === 0) break;
-      for (const c of sourceBatch as any[]) {
+      for (const c of sourceBatch as SourceCardRow[]) {
         if (!sourceCardsByDeck.has(c.deck_id)) sourceCardsByDeck.set(c.deck_id, []);
         sourceCardsByDeck.get(c.deck_id)!.push(c);
       }
@@ -186,12 +225,19 @@ export async function syncFollowerDecks(userId: string, folderId: string): Promi
 
   // 6. Compute diffs and insert in batch
   let totalNewCards = 0;
-  const allInserts: any[] = [];
+  interface CardInsert {
+    deck_id: string;
+    front_content: string;
+    back_content: string;
+    card_type: string;
+    origin_deck_id: string;
+  }
+  const allInserts: CardInsert[] = [];
 
   for (const pair of syncPairs) {
     const existingOrigins = existingOriginsByDeck.get(pair.localDeckId) ?? new Set();
     const sourceCards = sourceCardsByDeck.get(pair.sourceDeckId) ?? [];
-    const newCards = sourceCards.filter((c: any) => !existingOrigins.has(c.id));
+    const newCards = sourceCards.filter(c => !existingOrigins.has(c.id));
 
     for (const c of newCards) {
       allInserts.push({
@@ -208,7 +254,7 @@ export async function syncFollowerDecks(userId: string, folderId: string): Promi
   // Insert all new cards in batches
   for (let i = 0; i < allInserts.length; i += 500) {
     const batch = allInserts.slice(i, i + 500);
-    await supabase.from('cards').insert(batch as any);
+    await supabase.from('cards').insert(batch);
   }
 
   // 7. Update synced_at on ALL processed decks
@@ -239,7 +285,7 @@ export async function cleanupFollowerDecks(userId: string, folderId: string): Pr
 
   if (!localDecks || localDecks.length === 0) return;
 
-  const deckIds = localDecks.map((d: any) => d.id);
+  const deckIds = localDecks.map(d => d.id);
 
   const { data: subDecks } = await supabase
     .from('decks')
@@ -247,7 +293,7 @@ export async function cleanupFollowerDecks(userId: string, folderId: string): Pr
     .eq('user_id', userId)
     .in('parent_deck_id', deckIds);
 
-  const allDeckIds = [...deckIds, ...(subDecks ?? []).map((d: any) => d.id)];
+  const allDeckIds = [...deckIds, ...(subDecks ?? []).map(d => d.id)];
 
   for (let i = 0; i < allDeckIds.length; i += 200) {
     const batch = allDeckIds.slice(i, i + 200);
@@ -255,7 +301,7 @@ export async function cleanupFollowerDecks(userId: string, folderId: string): Pr
   }
 
   if (subDecks && subDecks.length > 0) {
-    await supabase.from('decks').delete().in('id', subDecks.map((d: any) => d.id));
+    await supabase.from('decks').delete().in('id', subDecks.map(d => d.id));
   }
   await supabase.from('decks').delete().in('id', deckIds);
 }

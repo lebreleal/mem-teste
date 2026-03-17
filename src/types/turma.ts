@@ -115,7 +115,7 @@ export interface TurmaExamQuestion {
   question_id: string | null;
   question_text: string;
   question_type: string;
-  options: any;
+  options: Record<string, unknown> | unknown[] | null;
   correct_answer: string;
   correct_indices: number[] | null;
   points: number;
