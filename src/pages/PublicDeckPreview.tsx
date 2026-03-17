@@ -412,19 +412,7 @@ const SuggestionComments = ({ suggestionId, commentCount }: { suggestionId: stri
 
   const { data: comments = [] } = useQuery({
     queryKey: ['suggestion-comments', suggestionId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('suggestion_comments')
-        .select('id, content, created_at, user_id')
-        .eq('suggestion_id', suggestionId)
-        .order('created_at', { ascending: true });
-      if (error) throw error;
-      if (!data || data.length === 0) return [];
-      const userIds = [...new Set(data.map(c => c.user_id))];
-      const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: userIds });
-      const nameMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
-      return data.map(c => ({ ...c, user_name: nameMap.get(c.user_id) ?? 'Usuário' }));
-    },
+    queryFn: () => fetchSuggestionComments(suggestionId),
     enabled: expanded,
   });
 
