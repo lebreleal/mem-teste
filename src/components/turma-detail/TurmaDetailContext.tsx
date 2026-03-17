@@ -52,7 +52,7 @@ interface TurmaDetailContextValue {
   // Subscription
   hasSubscription: boolean;
   isSubscriber: boolean;
-  activeSubscription: any;
+  activeSubscription: ActiveSubscription | null | undefined;
   subscriptionPrice: number;
   subscribing: boolean;
   handleSubscribe: () => Promise<void>;
