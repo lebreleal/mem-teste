@@ -52,13 +52,6 @@ const TurmaSubHeader = ({
   const [showRating, setShowRating] = useState(false);
   const [showCreatorPanel, setShowCreatorPanel] = useState(false);
 
-  // Rating
-  const { myRating, submitRating } = useMyTurmaRating(turmaId);
-  const { data: allRatings = [] } = useAllTurmaRatings(turmaId, showRating);
-  const [ratingValue, setRatingValue] = useState(0);
-  const [ratingComment, setRatingComment] = useState('');
-  const [ratingInited, setRatingInited] = useState(false);
-
   const openRatingDialog = () => {
     setRatingValue(myRating?.rating ?? 0);
     setRatingComment(myRating?.comment ?? '');
