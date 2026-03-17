@@ -170,7 +170,7 @@ const FolderItem = ({
   onEdit,
   onDelete,
 }: {
-  folder: any;
+  folder: TurmaSubject;
   deckCount: number;
   cardCount?: number;
   attachmentCount?: number;
