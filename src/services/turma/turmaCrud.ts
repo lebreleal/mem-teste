@@ -54,7 +54,7 @@ export async function fetchUserTurmas(userId: string): Promise<Turma[]> {
 }
 
 export async function fetchTurma(turmaId: string): Promise<Turma | null> {
-  const { data } = await supabase.from('turmas').select('id, name, description, owner_id, is_private, cover_image_url, created_at, updated_at, subscription_price, share_slug, avg_rating, rating_count').eq('id', turmaId).single();
+  const { data } = await supabase.from('turmas').select('id, name, description, owner_id, is_private, cover_image_url, created_at, updated_at, subscription_price, share_slug, avg_rating, rating_count, invite_code').eq('id', turmaId).single();
   return data as Turma | null;
 }
 
