@@ -3,17 +3,17 @@
  * Extracted from Dashboard.tsx (copy-paste integral).
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Archive, ChevronDown, ChevronLeft, Compass, EyeOff, ImageIcon, Info, Layers, LogOut, MoreVertical, Pencil, Play, RefreshCw, Share2, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { ChevronLeft, Compass, EyeOff, LogOut, MoreVertical, Play, RefreshCw, Share2, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 import { calculateRealStudyTime } from '@/lib/studyUtils';
-
+import { IconTrash, IconImage, IconInfo, IconDeck, IconArchive, IconEdit } from '@/components/icons';
 interface SalaHeroProps {
   state: any;
   user: any;
@@ -38,6 +38,7 @@ const SalaHero = ({
   realStudyMetrics, salaDifficultyStats,
 }: SalaHeroProps) => {
   const navigate = useNavigate();
+  const [infoOpen, setInfoOpen] = useState(false);
 
   const cf = state.folders.find((f: any) => f.id === state.currentFolderId);
   const folderName = cf?.name ?? 'Sala';
@@ -178,10 +179,10 @@ const SalaHero = ({
                       <DropdownMenuItem onClick={() => {
                         if (cf) { state.setRenameTarget({ type: 'folder', id: cf.id, name: cf.name }); state.setRenameName(cf.name); }
                       }}>
-                        <Pencil className="h-4 w-4 mr-2" /> Renomear sala
+                        <IconEdit className="h-4 w-4 mr-2" /> Renomear sala
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => setSalaImageOpen(true)}>
-                        <ImageIcon className="h-4 w-4 mr-2" /> Mudar imagem
+                        <IconImage className="h-4 w-4 mr-2" /> Mudar imagem
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={handleTogglePublish} disabled={publishing}>
                         {userTurma?.is_private === false ? (
@@ -194,7 +195,7 @@ const SalaHero = ({
                         await state.archiveFolder.mutateAsync(state.currentFolderId!);
                         state.setCurrentFolderId(null);
                       }}>
-                        <Archive className="h-4 w-4 mr-2" /> Arquivar sala
+                        <IconArchive className="h-4 w-4 mr-2" /> Arquivar sala
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         className="text-destructive focus:text-destructive"
@@ -202,7 +203,7 @@ const SalaHero = ({
                           if (cf) state.setDeleteTarget({ type: 'folder', id: cf.id, name: cf.name });
                         }}
                       >
-                        <Trash2 className="h-4 w-4 mr-2" /> Excluir sala
+                        <IconTrash className="h-4 w-4 mr-2" /> Excluir sala
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -238,7 +239,7 @@ const SalaHero = ({
                   className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-background border border-border shadow-sm text-muted-foreground hover:text-foreground transition-colors"
                   aria-label="Trocar imagem da sala"
                 >
-                  <ImageIcon className="h-3 w-3" />
+                  <IconImage className="h-3 w-3" />
                 </button>
               )}
             </div>
@@ -252,7 +253,7 @@ const SalaHero = ({
                     }}
                     className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    <Pencil className="h-3.5 w-3.5" />
+                    <IconEdit className="h-3.5 w-3.5" />
                   </button>
                 )}
               </div>
@@ -302,32 +303,55 @@ const SalaHero = ({
 
           {/* Time estimate — below, centered, tap to expand */}
           {salaStudyStats.totalDue > 0 && (
-            <Popover>
-              <PopoverTrigger asChild>
-                <button className="flex items-center justify-center gap-1.5 w-full text-xs text-muted-foreground hover:text-foreground transition-colors py-1">
-                  <Layers className="h-3 w-3" />
-                  <span>{salaStudyStats.totalDue} cards</span>
-                  <span className="text-muted-foreground/50">·</span>
-                  <span>~{salaStudyStats.timeLabel}</span>
-                </button>
-              </PopoverTrigger>
-              <PopoverContent side="bottom" className="w-60 p-3">
-                <p className="text-xs font-semibold text-foreground mb-2">Estudo de hoje</p>
-                <div className="space-y-1.5 text-xs text-muted-foreground">
-                  <div className="flex justify-between">
-                    <span>Cards pendentes</span>
-                    <span className="font-medium text-foreground">{salaStudyStats.totalDue}</span>
+            <>
+              <button
+                onClick={() => setInfoOpen(true)}
+                className="flex items-center justify-center gap-1.5 w-full text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
+              >
+                <IconDeck className="h-3 w-3" />
+                <span>{salaStudyStats.totalDue} cartões</span>
+                <span className="text-muted-foreground/50">·</span>
+                <span>{salaStudyStats.timeLabel}</span>
+                <IconInfo className="h-3 w-3 ml-0.5" />
+              </button>
+
+              <Dialog open={infoOpen} onOpenChange={setInfoOpen}>
+                <DialogContent className="max-w-xs">
+                  <DialogHeader>
+                    <DialogTitle className="text-base">Estudo de hoje</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-3 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Novos</span>
+                      <span className="font-medium text-foreground">{salaStudyStats.newCountToday}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Aprendendo</span>
+                      <span className="font-medium text-foreground">{salaStudyStats.learningCount}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Revisão</span>
+                      <span className="font-medium text-foreground">{salaStudyStats.reviewCount}</span>
+                    </div>
+                    <div className="border-t border-border pt-2 flex justify-between">
+                      <span className="text-muted-foreground">Cartões pendentes</span>
+                      <span className="font-semibold text-foreground">{salaStudyStats.totalDue}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Tempo estimado</span>
+                      <span className="font-medium text-foreground">{salaStudyStats.timeLabel}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Revisados hoje</span>
+                      <span className="font-medium text-foreground">{salaStudyStats.reviewedToday}</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span>Tempo estimado</span>
-                    <span className="font-medium text-foreground">~{salaStudyStats.timeLabel}</span>
-                  </div>
-                </div>
-                <p className="mt-2 text-[10px] text-muted-foreground/70">
-                  Baseado na sua velocidade média por card.
-                </p>
-              </PopoverContent>
-            </Popover>
+                  <p className="text-[11px] text-muted-foreground/70 mt-1">
+                    Tempo baseado na sua velocidade média por cartão
+                  </p>
+                </DialogContent>
+              </Dialog>
+            </>
           )}
         </div>
       )}
