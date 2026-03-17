@@ -619,8 +619,8 @@ export function useStudyPlan(options?: { full?: boolean }) {
         ? vars.weeklyNewCards
         : (globalCapacity.weeklyNewCards ?? null);
 
-      // Update profile cache directly (replaces both daily-new-cards-limit and global-capacity)
-      qc.setQueryData(['profile', userId], (prev: any) => {
+      // Update profile cache directly
+      qc.setQueryData(['profile', userId], (prev: Record<string, unknown> | undefined) => {
         if (!prev) return prev;
         return {
           ...prev,
