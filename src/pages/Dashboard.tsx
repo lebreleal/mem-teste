@@ -416,6 +416,9 @@ const Dashboard = () => {
           toast({ title: '🔗 Link copiado!' });
         }}
         ownerName={salas.userTurma?.owner_name}
+        onSlugChange={salas.setShareSlugEdit}
+        onSlugSave={salas.handleSaveSlug}
+        savingSlug={salas.savingSlug}
       />
 
       <Suspense fallback={null}>

@@ -5,7 +5,7 @@
 
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Clock, Compass, EyeOff, LogOut, MoreVertical, Play, RefreshCw, Share2, SlidersHorizontal } from 'lucide-react';
+import { ChevronLeft, Clock, LogOut, MoreVertical, Play, RefreshCw, Share2, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -210,13 +210,6 @@ const SalaHero = ({
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => setSalaImageOpen(true)}>
                         <IconImage className="h-4 w-4 mr-2" /> Mudar imagem
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={handleTogglePublish} disabled={publishing}>
-                        {userTurma?.is_private === false ? (
-                          <><EyeOff className="h-4 w-4 mr-2" /> Despublicar</>
-                        ) : (
-                          <><Compass className="h-4 w-4 mr-2" /> Publicar no Explorar</>
-                        )}
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={async () => {
                         await state.archiveFolder.mutateAsync(state.currentFolderId!);
