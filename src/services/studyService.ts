@@ -326,6 +326,32 @@ export async function fetchStudyQueue(
   return { cards: queue, algorithmMode, deckConfig, isLiveDeck };
 }
 
+/** Resolve community deck source info via RPC. */
+export async function resolveCommunitySource(deckId: string) {
+  const { data } = await supabase.rpc('resolve_community_deck_source', { p_deck_id: deckId });
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+  const obj = data as Record<string, unknown>;
+  return { authorName: (obj.authorName as string) ?? null, updatedAt: (obj.updatedAt as string) ?? null };
+}
+
+/** Fetch recent fail streak for leech detection. */
+export async function fetchLeechStreak(userId: string, cardId: string, limit: number): Promise<number> {
+  const { data, error } = await supabase
+    .from('review_logs')
+    .select('rating')
+    .eq('user_id', userId)
+    .eq('card_id', cardId)
+    .order('reviewed_at', { ascending: false })
+    .limit(limit);
+  if (error || !data?.length) return 0;
+  let streak = 0;
+  for (const row of data) {
+    if (row.rating === 1) streak += 1;
+    else break;
+  }
+  return streak;
+}
+
 
 
 

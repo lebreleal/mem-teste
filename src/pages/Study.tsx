@@ -22,7 +22,8 @@ import {
 import { useTheme } from '@/hooks/useTheme';
 import StudyCardActions from '@/components/StudyCardActions';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { resolveCommunitySource, fetchLeechStreak } from '@/services/studyService';
+import { buryCards } from '@/services/card/cardMutations';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { Rating } from '@/lib/fsrs';
@@ -333,10 +334,7 @@ const Study = () => {
   const { data: sourceInfo } = useQuery({
     queryKey: ['study-source-info', currentCardDeckId],
     queryFn: async () => {
-      const { data } = await supabase.rpc('resolve_community_deck_source', { p_deck_id: currentCardDeckId! });
-      if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
-      const obj = data as Record<string, unknown>;
-      return { authorName: (obj.authorName as string) ?? null, updatedAt: (obj.updatedAt as string) ?? null };
+      return resolveCommunitySource(currentCardDeckId!);
     },
     enabled: !!currentCardDeckId,
     staleTime: 5 * 60_000,
@@ -395,22 +393,8 @@ const Study = () => {
 
     let cancelled = false;
     (async () => {
-      const { data, error } = await supabase
-        .from('review_logs')
-        .select('rating')
-        .eq('user_id', user.id)
-        .eq('card_id', currentCard.id)
-        .order('reviewed_at', { ascending: false })
-        .limit(LEECH_THRESHOLD - 1);
-
-      if (cancelled || error || !data?.length) return;
-
-      let streak = 0;
-      for (const row of data) {
-        if (row.rating === 1) streak += 1;
-        else break;
-      }
-
+      const streak = await fetchLeechStreak(user.id, currentCard.id, LEECH_THRESHOLD - 1);
+      if (cancelled) return;
       if (streak > 0) {
         failCountRef.current.set(leechKey, streak);
         persistLeechFailCounts();
@@ -589,7 +573,7 @@ const Study = () => {
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
         tomorrow.setHours(0, 0, 0, 0);
-        supabase.from('cards').update({ scheduled_date: tomorrow.toISOString() } as any).in('id', buriedSiblingIds);
+        buryCards(buriedSiblingIds, tomorrow.toISOString());
       }
     }
 
@@ -647,20 +631,7 @@ const Study = () => {
       // Extra fallback for resumed sessions: recover previous streak from DB if local count was lost.
       if (previousFails === 0 && user) {
         try {
-          const { data } = await supabase
-            .from('review_logs')
-            .select('rating')
-            .eq('user_id', user.id)
-            .eq('card_id', currentCard.id)
-            .order('reviewed_at', { ascending: false })
-            .limit(LEECH_THRESHOLD - 1);
-
-          let recoveredStreak = 0;
-          for (const row of data ?? []) {
-            if (row.rating === 1) recoveredStreak += 1;
-            else break;
-          }
-
+          const recoveredStreak = await fetchLeechStreak(user.id, currentCard.id, LEECH_THRESHOLD - 1);
           if (recoveredStreak > 0) {
             previousFails = recoveredStreak;
             failCountRef.current.set(leechKey, recoveredStreak);
@@ -1111,9 +1082,7 @@ const Study = () => {
                         const tomorrow = new Date();
                         tomorrow.setDate(tomorrow.getDate() + 1);
                         tomorrow.setHours(0, 0, 0, 0);
-                        sibIds.forEach(sid => {
-                          supabase.from('cards').update({ scheduled_date: tomorrow.toISOString() }).eq('id', sid).then(() => {});
-                        });
+                        buryCards(sibIds, tomorrow.toISOString());
                         filtered = filtered.filter(c => !sibIds.includes(c.id));
                       }
                     }
