@@ -22,6 +22,15 @@ export const getRelativePoint = (
   y: clientY - rect.top,
 });
 
+export const getMidpoint = (start: RelativePoint, end: RelativePoint): RelativePoint => ({
+  x: (start.x + end.x) / 2,
+  y: (start.y + end.y) / 2,
+});
+
+export const clamp = (value: number, min: number, max: number) => (
+  Math.min(max, Math.max(min, value))
+);
+
 export const getCanvasBitmapMetrics = (
   cssWidth: number,
   cssHeight: number,

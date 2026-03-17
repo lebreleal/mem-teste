@@ -522,10 +522,10 @@ export default function DrawingCanvasModal({ open, onClose, onSave }: Props) {
         </div>
 
         {/* Canvas area — fills all remaining space */}
-        <div ref={containerRef} className="flex-1 min-h-0 bg-white relative overflow-hidden">
+        <div ref={containerRef} className="relative flex-1 min-h-0 overflow-hidden bg-white select-none">
           <canvas
             ref={canvasRef}
-            className="absolute inset-0 touch-none cursor-crosshair"
+            className="absolute inset-0 h-full w-full touch-none cursor-default select-none"
           />
         </div>
 
