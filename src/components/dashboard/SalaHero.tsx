@@ -324,8 +324,8 @@ const SalaHero = ({
                 </DialogContent>
               </Dialog>
             </>
-          )}
-          )}
+        </div>
+      )}
         </div>
       )}
     </>
