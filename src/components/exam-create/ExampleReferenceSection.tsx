@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Trash2, Loader2, Image, Type } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { uploadImage } from '@/services/storageService';
 import { compressImage } from '@/lib/imageUtils';
 
 interface ExampleReferenceSectionProps {
