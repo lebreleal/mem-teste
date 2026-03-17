@@ -157,7 +157,7 @@ async function buildAnki2(deckName: string, cards: ExportCard[]): Promise<Uint8A
     },
   };
 
-  const decks: Record<string, any> = {
+  const decks: Record<string, Record<string, unknown>> = {
     '1': { id: 1, name: 'Default', mod: now, usn: -1, lrnToday: [0, 0], revToday: [0, 0], newToday: [0, 0], timeToday: [0, 0], collapsed: false, desc: '', dyn: 0, conf: 1, extendNew: 10, extendRev: 50 },
     [deckId]: { id: deckId, name: deckName, mod: now, usn: -1, lrnToday: [0, 0], revToday: [0, 0], newToday: [0, 0], timeToday: [0, 0], collapsed: false, desc: '', dyn: 0, conf: 1, extendNew: 10, extendRev: 50 },
   };
