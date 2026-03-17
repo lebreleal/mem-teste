@@ -75,10 +75,8 @@ const ManageDeck = () => {
     let needsAutoSave = false;
 
     // Detect image_occlusion by card_type OR by JSON content shape (fallback for mistyped cards)
-    const isOcclusionContent = ct === 'image_occlusion' || (
-      currentCard.front_content.trimStart().startsWith('{"imageUrl"') ||
-      currentCard.front_content.trimStart().startsWith('{"imageUrl"')
-    );
+    const looksLikeOcclusionJson = /^\s*\{.*"imageUrl"\s*:/.test(currentCard.front_content);
+    const isOcclusionContent = ct === 'image_occlusion' || looksLikeOcclusionJson;
 
     if (isOcclusionContent) {
       try {
