@@ -168,8 +168,8 @@ const ConceptMasterySection = ({
     void (async () => {
       await searchExistingCards(concept);
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const userId = await getCurrentUserId();
+      if (!userId) return;
 
       try {
         const moved = await moveConceptCardsToErrorDeck(user.id, [concept], deckId);
