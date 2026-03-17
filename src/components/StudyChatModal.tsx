@@ -222,8 +222,9 @@ const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, is
           } catch {}
         }
       }
-    } catch (e: any) {
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erro desconhecido';
+      toast({ title: 'Erro', description: msg, variant: 'destructive' });
       setMessages(prev => prev.filter(m => !(m.role === 'assistant' && m.content === '')));
     } finally {
       setIsStreaming(false);

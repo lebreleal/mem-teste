@@ -7,6 +7,7 @@ import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { TurmaDeck, TurmaExam } from '@/types/turma';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -44,12 +45,32 @@ interface ContentFolder {
   created_by: string;
 }
 
+/** Shape of a lesson file row */
+interface LessonFile {
+  id: string;
+  file_name: string;
+  file_url: string;
+  file_type: string;
+  file_size: number;
+  price_type?: string;
+  folder_id?: string | null;
+  content_folder_id?: string | null;
+}
+
+/** Shape of a user deck row used in this component */
+interface UserDeckRow {
+  id: string;
+  name: string;
+  is_archived: boolean;
+  source_turma_deck_id?: string | null;
+}
+
 interface LessonContentProps {
-  lessonFiles: any[];
-  lessonDecks: any[];
-  lessonExams: any[];
+  lessonFiles: LessonFile[];
+  lessonDecks: TurmaDeck[];
+  lessonExams: TurmaExam[];
   contentFolders: ContentFolder[];
-  userDecks: any[];
+  userDecks: UserDeckRow[];
   canEdit: boolean;
   isAdmin: boolean;
   isMod: boolean;
@@ -62,10 +83,10 @@ interface LessonContentProps {
   onPreviewPdf: (url: string, restricted: boolean) => void;
   onUpdateFileVisibility?: (fileId: string, priceType: string) => void;
   onShowAddDeck: () => void;
-  onPreviewDeck: (td: any) => void;
-  onAddToCollection: (td: any) => void;
-  onDownloadDeck: (td: any) => void;
-  onEditPricing: (td: any) => void;
+  onPreviewDeck: (td: TurmaDeck) => void;
+  onAddToCollection: (td: TurmaDeck) => void;
+  onDownloadDeck: (td: TurmaDeck) => void;
+  onEditPricing: (td: TurmaDeck) => void;
   onUnshareDeck: (tdId: string) => void;
   isAddingToCollection: boolean;
   isDownloading: boolean;
@@ -78,9 +99,9 @@ interface LessonContentProps {
   onRenameFolder: (folderId: string, newName: string) => void;
   onDeleteFolder: (folderId: string) => void;
   onMoveItem?: (itemType: 'file' | 'deck', itemId: string, targetFolderId: string | null) => void;
-  onImportExam: (exam: any) => void;
+  onImportExam: (exam: TurmaExam) => void;
   onDeleteExam?: (examId: string) => void;
-  onOpenExam?: (exam: any) => void;
+  onOpenExam?: (exam: TurmaExam) => void;
 }
 
 const LessonContent = ({
@@ -94,7 +115,7 @@ const LessonContent = ({
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
-  const [editingFile, setEditingFile] = useState<any>(null);
+  const [editingFile, setEditingFile] = useState<LessonFile | null>(null);
   const [editFileName, setEditFileName] = useState('');
   const [editFilePriceType, setEditFilePriceType] = useState('free');
   const [newFolderName, setNewFolderName] = useState('');
@@ -117,7 +138,7 @@ const LessonContent = ({
     enabled: showImportExam && !!userId,
   });
 
-  const personalExamIds = personalExams.map((e: any) => e.id);
+  const personalExamIds = personalExams.map((e: { id: string }) => e.id);
   const { data: personalQuestionCounts = {} } = useQuery({
     queryKey: ['personal-exam-qcounts', personalExamIds],
     queryFn: async () => {
@@ -125,13 +146,13 @@ const LessonContent = ({
       const { data } = await supabase.from('exam_questions').select('exam_id')
         .in('exam_id', personalExamIds);
       const counts: Record<string, number> = {};
-      (data ?? []).forEach((q: any) => { counts[q.exam_id] = (counts[q.exam_id] || 0) + 1; });
+      (data ?? []).forEach((q: { exam_id: string }) => { counts[q.exam_id] = (counts[q.exam_id] || 0) + 1; });
       return counts;
     },
     enabled: personalExamIds.length > 0,
   });
 
-  const handleImportExam = async (exam: any) => {
+  const handleImportExam = async (exam: TurmaExam) => {
     setImportingExamId(exam.id);
     try {
       await onImportExam(exam);
@@ -143,9 +164,9 @@ const LessonContent = ({
 
   // Helpers
   const userOwnsDeck = (deckId: string) => userDecks.some(d => d.id === deckId);
-  const userHasLinkedDeck = (turmaDeckId: string) => userDecks.some(d => (d as any).source_turma_deck_id === turmaDeckId && !d.is_archived);
-  const isDeckFree = (td: any) => !td.price_type || td.price_type === 'free';
-  const canAccessDeck = (td: any) => {
+  const userHasLinkedDeck = (turmaDeckId: string) => userDecks.some(d => d.source_turma_deck_id === turmaDeckId && !d.is_archived);
+  const isDeckFree = (td: TurmaDeck) => !td.price_type || td.price_type === 'free';
+  const canAccessDeck = (td: TurmaDeck) => {
     if (isDeckFree(td)) return true;
     if (td.shared_by === userId || userOwnsDeck(td.deck_id)) return true;
     if (isAdmin || isMod || isSubscriber) return true;
@@ -175,7 +196,7 @@ const LessonContent = ({
   };
   const breadcrumb = buildBreadcrumb();
 
-  const openEditFile = (file: any) => {
+  const openEditFile = (file: LessonFile) => {
     setEditingFile(file);
     setEditFileName(file.file_name);
     setEditFilePriceType(file.price_type || 'free');
@@ -314,7 +335,7 @@ const LessonContent = ({
           ))}
 
           {/* Files (always above decks) */}
-          {currentFiles.map((file: any) => {
+          {currentFiles.map((file) => {
             const Icon = getFileIcon(file.file_type);
             const isImage = file.file_type?.startsWith('image/');
             const isPdf = file.file_type?.includes('pdf');
@@ -382,14 +403,14 @@ const LessonContent = ({
           })}
 
           {/* Decks (no icon before title) */}
-          {currentDecks.map((td: any) => {
+          {currentDecks.map((td) => {
             const isOwner = td.shared_by === userId;
             const alreadyLinked = userHasLinkedDeck(td.id);
             const alreadyOwns = userOwnsDeck(td.deck_id);
             const subscriberOnly = !isDeckFree(td);
             const canImport = canAccessDeck(td);
             const inCollection = alreadyOwns || alreadyLinked;
-            const linkedDeck = alreadyLinked ? userDecks.find(d => (d as any).source_turma_deck_id === td.id) : null;
+            const linkedDeck = alreadyLinked ? userDecks.find(d => d.source_turma_deck_id === td.id) : null;
             return (
               <div key={td.id} className="group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50">
                 <div className="flex-1 min-w-0">

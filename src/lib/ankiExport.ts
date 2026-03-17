@@ -127,7 +127,8 @@ async function buildAnki2(deckName: string, cards: ExportCard[]): Promise<Uint8A
   const modelId = now * 1000;
   const deckId = now * 1000 + 1;
 
-  const model: Record<string, any> = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Anki collection JSON schema is deeply nested and external
+  const model: Record<string, Record<string, unknown>> = {
     [modelId]: {
       id: modelId,
       name: 'Basic (MemoCards)',
@@ -156,12 +157,12 @@ async function buildAnki2(deckName: string, cards: ExportCard[]): Promise<Uint8A
     },
   };
 
-  const decks: Record<string, any> = {
+  const decks: Record<string, Record<string, unknown>> = {
     '1': { id: 1, name: 'Default', mod: now, usn: -1, lrnToday: [0, 0], revToday: [0, 0], newToday: [0, 0], timeToday: [0, 0], collapsed: false, desc: '', dyn: 0, conf: 1, extendNew: 10, extendRev: 50 },
     [deckId]: { id: deckId, name: deckName, mod: now, usn: -1, lrnToday: [0, 0], revToday: [0, 0], newToday: [0, 0], timeToday: [0, 0], collapsed: false, desc: '', dyn: 0, conf: 1, extendNew: 10, extendRev: 50 },
   };
 
-  const dconf: Record<string, any> = {
+  const dconf: Record<string, Record<string, unknown>> = {
     '1': {
       id: 1, name: 'Default', mod: now, usn: -1, maxTaken: 60, autoplay: true,
       timer: 0, replayq: true,

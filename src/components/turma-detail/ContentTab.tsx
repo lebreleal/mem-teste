@@ -12,6 +12,7 @@ import { useContentMutations } from './content/useContentMutations';
 import { useContentImport } from './content/useContentImport';
 import { useDeckTagsBatch, useTagDescendants } from '@/hooks/useTags';
 import type { Tag } from '@/types/tag';
+import type { TurmaDeck, TurmaSubject, TurmaExam } from '@/types/turma';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -62,7 +63,7 @@ const DeckListItem = ({
   fileCount,
   examCount,
 }: {
-  td: any;
+  td: TurmaDeck;
   onClick: () => void;
   inCollection: boolean;
   subscriberOnly: boolean;
@@ -169,7 +170,7 @@ const FolderItem = ({
   onEdit,
   onDelete,
 }: {
-  folder: any;
+  folder: TurmaSubject;
   deckCount: number;
   cardCount?: number;
   attachmentCount?: number;
@@ -241,7 +242,7 @@ const TopDeckCard = ({
   fileCount,
   examCount,
 }: {
-  td: any;
+  td: TurmaDeck;
   onClick: () => void;
   inCollection: boolean;
   downloads: number;
@@ -314,16 +315,16 @@ const ContentTab = () => {
   const [deckSearchQuery, setDeckSearchQuery] = useState('');
   const [priceType, setPriceType] = useState<'free' | 'money' | 'credits'>('free');
   const [allowDownload, setAllowDownload] = useState(false);
-  const [editingDeck, setEditingDeck] = useState<any>(null);
+  const [editingDeck, setEditingDeck] = useState<TurmaDeck | null>(null);
   const [editPriceType, setEditPriceType] = useState<'free' | 'money' | 'credits'>('free');
   const [editAllowDownload, setEditAllowDownload] = useState(false);
-  const [confirmImportItem, setConfirmImportItem] = useState<{ type: 'deck' | 'exam'; data: any } | null>(null);
-  const [gateDeck, setGateDeck] = useState<any>(null);
+  const [confirmImportItem, setConfirmImportItem] = useState<{ type: 'deck' | 'exam'; data: TurmaDeck | TurmaExam } | null>(null);
+  const [gateDeck, setGateDeck] = useState<TurmaDeck | null>(null);
   const [trialDeck, setTrialDeck] = useState<{ deckId: string; deckName: string } | null>(null);
   
 
   // ── Batch tags for all community decks ──
-  const allDeckIds = useMemo(() => turmaDecks.map((d: any) => d.deck_id), [turmaDecks]);
+  const allDeckIds = useMemo(() => turmaDecks.map(d => d.deck_id), [turmaDecks]);
   const { data: deckTagsMap = {} } = useDeckTagsBatch(allDeckIds);
 
   // ── Collect unique tags from community decks for filter chips ──
@@ -349,18 +350,18 @@ const ContentTab = () => {
   // ── Subscriber-only validation ──
   const canSetSubscribersOnly = (turma?.subscription_price ?? 0) > 0;
 
-  const handleSetDeckPriceType = (newPriceType: string, setter: (v: any) => void) => {
+  const handleSetDeckPriceType = (newPriceType: string, setter: (v: 'free' | 'money' | 'credits') => void) => {
     if (newPriceType === 'members_only' && !canSetSubscribersOnly) {
       toast({ title: 'Defina um preço de assinatura primeiro', description: 'Vá em Configurações → Assinatura para definir o preço.', variant: 'destructive' });
       return;
     }
-    setter(newPriceType);
+    setter(newPriceType as 'free' | 'money' | 'credits');
   };
 
   // ── Count downloads (inscrições) per turma_deck ──
   const { data: downloadCounts = {} } = useQuery({
     queryKey: ['turma-deck-downloads', turmaId],
-    queryFn: () => countTurmaDeckDownloads(turmaDecks.map((td: any) => td.id)),
+    queryFn: () => countTurmaDeckDownloads(turmaDecks.map(td => td.id)),
     enabled: turmaDecks.length > 0,
     staleTime: 5 * 60_000,
   });
@@ -382,42 +383,42 @@ const ContentTab = () => {
   });
 
   // ── Helper: get file/exam count for a turma_deck ──
-  const getDeckFilesCount = (td: any) => td.lesson_id ? (fileCountsByLesson[td.lesson_id] || 0) : 0;
-  const getDeckExamsCount = (td: any) => td.lesson_id ? (examCountsByLesson[td.lesson_id] || 0) : 0;
+  const getDeckFilesCount = (td: TurmaDeck) => td.lesson_id ? (fileCountsByLesson[td.lesson_id] || 0) : 0;
+  const getDeckExamsCount = (td: TurmaDeck) => td.lesson_id ? (examCountsByLesson[td.lesson_id] || 0) : 0;
 
   const currentFolders = useMemo(() => {
     return subjects
-      .filter((s: any) => (s.parent_id ?? null) === contentFolderId)
-      .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+      .filter(s => (s.parent_id ?? null) === contentFolderId)
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
   }, [subjects, contentFolderId]);
 
   // ── Count decks recursively in a folder ──
   const countDecksInFolder = (folderId: string): number => {
-    const direct = turmaDecks.filter((d: any) => d.subject_id === folderId && (isAdmin || d.is_published !== false)).length;
-    const childFolders = subjects.filter((s: any) => s.parent_id === folderId);
-    return direct + childFolders.reduce((sum: number, cf: any) => sum + countDecksInFolder(cf.id), 0);
+    const direct = turmaDecks.filter(d => d.subject_id === folderId && (isAdmin || d.is_published !== false)).length;
+    const childFolders = subjects.filter(s => s.parent_id === folderId);
+    return direct + childFolders.reduce((sum, cf) => sum + countDecksInFolder(cf.id), 0);
   };
 
   // ── Count cards recursively in a folder ──
   const getFolderCardCount = (folderId: string): number => {
     const directCards = turmaDecks
-      .filter((d: any) => d.subject_id === folderId && (isAdmin || d.is_published !== false))
-      .reduce((sum: number, d: any) => sum + (d.card_count || 0), 0);
-    const childFolders = subjects.filter((s: any) => s.parent_id === folderId);
-    return directCards + childFolders.reduce((sum: number, cf: any) => sum + getFolderCardCount(cf.id), 0);
+      .filter(d => d.subject_id === folderId && (isAdmin || d.is_published !== false))
+      .reduce((sum, d) => sum + (d.card_count || 0), 0);
+    const childFolders = subjects.filter(s => s.parent_id === folderId);
+    return directCards + childFolders.reduce((sum, cf) => sum + getFolderCardCount(cf.id), 0);
   };
 
   // ── Count attachments (files + exams) recursively in a folder ──
   const getFolderAttachmentCount = (folderId: string): number => {
-    const folderDecks = turmaDecks.filter((d: any) => d.subject_id === folderId && (isAdmin || d.is_published !== false));
+    const folderDecks = turmaDecks.filter(d => d.subject_id === folderId && (isAdmin || d.is_published !== false));
     let count = 0;
-    folderDecks.forEach((d: any) => {
+    folderDecks.forEach(d => {
       if (d.lesson_id) {
         count += (fileCountsByLesson[d.lesson_id] || 0) + (examCountsByLesson[d.lesson_id] || 0);
       }
     });
-    const childFolders = subjects.filter((s: any) => s.parent_id === folderId);
-    return count + childFolders.reduce((sum: number, cf: any) => sum + getFolderAttachmentCount(cf.id), 0);
+    const childFolders = subjects.filter(s => s.parent_id === folderId);
+    return count + childFolders.reduce((sum, cf) => sum + getFolderAttachmentCount(cf.id), 0);
   };
 
   // ── Current folder's decks (when tag is active, search across ALL folders) ──
@@ -425,10 +426,10 @@ const ContentTab = () => {
     const q = searchQuery.toLowerCase();
     const skipFolderFilter = !!activeTagIds || !!q; // search and tag filter across ALL folders
     return turmaDecks
-      .filter((d: any) => skipFolderFilter ? true : d.subject_id === contentFolderId)
-      .filter((d: any) => isAdmin || d.is_published !== false)
-      .filter((d: any) => !q || (d.deck_name || '').toLowerCase().includes(q))
-      .filter((d: any) => {
+      .filter(d => skipFolderFilter ? true : d.subject_id === contentFolderId)
+      .filter(d => isAdmin || d.is_published !== false)
+      .filter(d => !q || (d.deck_name || '').toLowerCase().includes(q))
+      .filter(d => {
         if (!activeTagIds) return true;
         const tags = deckTagsMap[d.deck_id] as Tag[] | undefined;
         return tags?.some(t => activeTagIds.has(t.id)) ?? false;
@@ -438,8 +439,8 @@ const ContentTab = () => {
   // ── Top decks (most subscribed across the entire community) ──
   const topDecks = useMemo(() => {
     return [...turmaDecks]
-      .filter((d: any) => isAdmin || d.is_published !== false)
-      .sort((a: any, b: any) => (downloadCounts[b.id] || 0) - (downloadCounts[a.id] || 0))
+      .filter(d => isAdmin || d.is_published !== false)
+      .sort((a, b) => (downloadCounts[b.id] || 0) - (downloadCounts[a.id] || 0))
       .slice(0, 8);
   }, [turmaDecks, downloadCounts, isAdmin]);
 
@@ -680,20 +681,20 @@ const ContentTab = () => {
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
             {confirmImportItem?.type === 'deck'
-              ? `O baralho "${confirmImportItem?.data?.deck_name}" será adicionado à sua pasta "${turma?.name}".`
-              : `A prova "${confirmImportItem?.data?.title}" será adicionada à sua coleção de provas.`}
+              ? `O baralho "${(confirmImportItem?.data as TurmaDeck)?.deck_name}" será adicionado à sua pasta "${turma?.name}".`
+              : `A prova "${(confirmImportItem?.data as TurmaExam)?.title}" será adicionada à sua coleção de provas.`}
           </p>
           <div className="flex justify-end gap-2 mt-2">
             <Button variant="outline" size="sm" onClick={() => setConfirmImportItem(null)}>Cancelar</Button>
             <Button size="sm" onClick={() => {
               if (confirmImportItem?.type === 'deck') {
                 importLogic.addToCollection.mutate(
-                  confirmImportItem.data,
-                  { onSuccess: (newDeck: any) => { if (newDeck?.id) navigate(`/decks/${newDeck.id}`, { state: { from: 'community', turmaId } }); } },
+                  confirmImportItem.data as TurmaDeck,
+                  { onSuccess: (newDeck) => { if (newDeck?.id) navigate(`/decks/${newDeck.id}`, { state: { from: 'community', turmaId } }); } },
                 );
               } else if (confirmImportItem?.type === 'exam') {
-                importLogic.addExamToCollection.mutate(confirmImportItem.data, {
-                  onSuccess: (result: any) => { if (result?.examId) navigate(`/exam/${result.examId}`, { state: { from: 'community', turmaId } }); },
+                importLogic.addExamToCollection.mutate(confirmImportItem.data as TurmaExam, {
+                  onSuccess: (result) => { if (result?.examId) navigate(`/exam/${result.examId}`, { state: { from: 'community', turmaId } }); },
                 });
               }
               setConfirmImportItem(null);

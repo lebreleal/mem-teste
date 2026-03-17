@@ -46,11 +46,18 @@ export function percentile(sorted: number[], p: number): number {
   return sorted[Math.max(0, idx)];
 }
 
-export function filterDayMap(dayMap: Record<string, any>, range: { from: Date | null; to: Date | null }) {
+/** Shape of a single day entry from activity breakdown */
+export interface DayEntry {
+  cards: number;
+  minutes: number;
+  newCards?: number;
+}
+
+export function filterDayMap(dayMap: Record<string, DayEntry>, range: { from: Date | null; to: Date | null }) {
   if (!range.from) return dayMap;
   const fromStr = format(range.from, 'yyyy-MM-dd');
   const toStr = range.to ? format(range.to, 'yyyy-MM-dd') : '9999-12-31';
-  const filtered: Record<string, any> = {};
+  const filtered: Record<string, DayEntry> = {};
   for (const [key, val] of Object.entries(dayMap)) {
     if (key >= fromStr && key <= toStr) {
       filtered[key] = val;
@@ -59,11 +66,11 @@ export function filterDayMap(dayMap: Record<string, any>, range: { from: Date | 
   return filtered;
 }
 
-export function computeFilteredStats(filteredMap: Record<string, any>, range: { from: Date | null; to: Date | null; expectedDays?: number }, totalDayMap: Record<string, any>) {
+export function computeFilteredStats(filteredMap: Record<string, DayEntry>, range: { from: Date | null; to: Date | null; expectedDays?: number }, totalDayMap: Record<string, DayEntry>) {
   const entries = Object.values(filteredMap);
-  const totalCards = entries.reduce((s: number, d: any) => s + (Number(d.cards) || 0), 0);
-  const totalMinutes = entries.reduce((s: number, d: any) => s + (Number(d.minutes) || 0), 0);
-  const daysStudied = entries.filter((d: any) => (Number(d.cards) || 0) > 0).length;
+  const totalCards = entries.reduce((s, d) => s + (Number(d.cards) || 0), 0);
+  const totalMinutes = entries.reduce((s, d) => s + (Number(d.minutes) || 0), 0);
+  const daysStudied = entries.filter(d => (Number(d.cards) || 0) > 0).length;
   const totalDays = range.expectedDays || (range.from ? Math.max(1, Math.ceil((range.to!.getTime() - range.from.getTime()) / 86400000) + 1) : Math.max(1, Object.keys(totalDayMap).length));
   const avgCards = daysStudied > 0 ? Math.round(totalCards / daysStudied) : 0;
   const avgMinutes = daysStudied > 0 ? Math.round(totalMinutes / daysStudied) : 0;
@@ -155,7 +162,7 @@ export function useStatsData() {
   });
 
   const todayKey = getToday();
-  const dayMap: Record<string, any> = activityData?.dayMap ?? {};
+  const dayMap: Record<string, DayEntry> = activityData?.dayMap ?? {};
   const currentStreak = activityData?.streak ?? 0;
 
   // Filtered data per section
@@ -167,7 +174,7 @@ export function useStatsData() {
 
   const hoursChartData = useMemo(() => {
     const entries = Object.entries(hoursFiltered)
-      .map(([key, val]: [string, any]) => ({ date: key, minutes: Number(val.minutes) || 0 }))
+      .map(([key, val]) => ({ date: key, minutes: Number(val.minutes) || 0 }))
       .sort((a, b) => a.date.localeCompare(b.date));
     if (entries.length > 60) {
       const weeks: Record<string, number> = {};
@@ -184,7 +191,7 @@ export function useStatsData() {
   const reviewsPerDayFiltered = useMemo(() => filterDayMap(dayMap, reviewsPerDayFilter.range), [dayMap, reviewsPerDayFilter.range]);
   const reviewsPerDayChartData = useMemo(() => {
     const entries = Object.entries(reviewsPerDayFiltered)
-      .map(([key, val]: [string, any]) => ({
+      .map(([key, val]) => ({
         date: key,
         label: format(new Date(key), 'dd/MM'),
         cards: Number(val.cards) || 0,
@@ -204,10 +211,10 @@ export function useStatsData() {
   // Retention over time chart data
   const retentionChartData = useMemo(() => {
     if (!retentionOverTime || retentionOverTime.length === 0) return [];
-    return retentionOverTime.map((row: any) => ({
+    return retentionOverTime.map((row) => ({
       label: format(new Date(row.week_start), 'dd/MM'),
-      rate: row.total > 0 ? Math.round((Number(row.correct) / Number(row.total)) * 100) : 0,
-      total: Number(row.total),
+      rate: row.total_reviews > 0 ? Math.round(row.retention * 100) : 0,
+      total: row.total_reviews,
     }));
   }, [retentionOverTime]);
 
@@ -215,7 +222,7 @@ export function useStatsData() {
   const addedVsReviewedData = useMemo(() => {
     if (!cardsAddedData) return [];
     const addedMap = new Map<string, number>();
-    cardsAddedData.forEach((row: any) => addedMap.set(row.day, Number(row.added) || 0));
+    cardsAddedData.forEach((row) => addedMap.set(row.date, Number(row.count) || 0));
 
     const { from, to } = addedVsReviewedFilter.range;
     const fromDate = from ?? subDays(new Date(), 6);
@@ -273,10 +280,10 @@ export function useStatsData() {
     const hourMap: Record<number, { total: number; correct: number }> = {};
     for (let h = 0; h < 24; h++) hourMap[h] = { total: 0, correct: 0 };
     if (hourlyData && Array.isArray(hourlyData)) {
-      hourlyData.forEach((row: any) => {
+      hourlyData.forEach((row) => {
         const h = Number(row.hour);
         if (h >= 0 && h < 24) {
-          hourMap[h] = { total: Number(row.total) || 0, correct: Number(row.correct) || 0 };
+          hourMap[h] = { total: Number(row.cards) || 0, correct: Number(row.minutes) || 0 };
         }
       });
     }
