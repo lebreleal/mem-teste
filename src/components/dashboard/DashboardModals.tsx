@@ -1,18 +1,20 @@
 /**
  * DashboardModals — Extra modals extracted from Dashboard.tsx.
- * Includes: Info dialog, Detach alert, Sala image dialog, Share modal,
+ * Includes: Info dialog, Detach alert, Sala image crop dialog,
  * Leave sala alert, Add menu sheet.
  */
 
 import { useState } from 'react';
-import { ChevronDown, ChevronLeft, ImageIcon, Info } from 'lucide-react';
+import { ChevronDown, ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { IconInfo } from '@/components/icons';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import SalaImageCropDialog from '@/components/dashboard/SalaImageCropDialog';
 
 interface DashboardModalsProps {
   // Info dialog
