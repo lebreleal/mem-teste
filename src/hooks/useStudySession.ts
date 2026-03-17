@@ -2,9 +2,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import * as studyService from '@/services/studyService';
 import type { Rating } from '@/lib/fsrs';
+import type { StudyQueueResult, StudyCard, DeckStudyConfig } from '@/types/study';
 
-
-export type { StudyQueueResult } from '@/services/studyService';
+export type { StudyQueueResult, StudyCard, DeckStudyConfig } from '@/types/study';
 
 export const useStudySession = (deckId: string, folderId?: string) => {
   const { user } = useAuth();
