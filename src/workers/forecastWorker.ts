@@ -518,8 +518,8 @@ self.onmessage = (e: MessageEvent<WorkerMessage>) => {
     try {
       const result = runSimulation(e.data.input);
       self.postMessage({ type: 'result', result } as WorkerResponse);
-    } catch (err: any) {
-      self.postMessage({ type: 'error', error: err.message || 'Simulation error' } as WorkerResponse);
+    } catch (err: unknown) {
+      self.postMessage({ type: 'error', error: err instanceof Error ? err.message : 'Simulation error' } as WorkerResponse);
     }
   }
 };

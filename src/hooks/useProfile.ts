@@ -87,7 +87,7 @@ export const useProfile = () => {
 };
 
 /** Prefetch profile data — call once after auth to warm the cache. */
-export const prefetchProfile = async (userId: string, queryClient: any) => {
+export const prefetchProfile = async (userId: string, queryClient: QueryClient) => {
   await queryClient.prefetchQuery({
     queryKey: profileQueryKey(userId),
     queryFn: async () => {
