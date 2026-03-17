@@ -452,6 +452,26 @@ const ManageDeck = () => {
         </div>
       )}
 
+      {/* Attachment Preview Modal */}
+      <AttachmentPreviewModal
+        open={!!previewAttachment}
+        imageUrl={previewAttachment?.attachment.url ?? null}
+        canConvertToOcclusion={previewAttachment?.allowOcclusion ?? false}
+        onClose={() => setPreviewAttachment(null)}
+        onAddOcclusion={() => {
+          if (previewAttachment) {
+            const url = previewAttachment.attachment.url;
+            setFrontAttachedImages(prev => prev.filter(u => u !== url));
+            setOcclusionImageUrl(url);
+            setOcclusionRects([]);
+            setOcclusionCanvasSize(null);
+            setPreviewAttachment(null);
+            setOcclusionModalOpen(true);
+            setIsDirty(true);
+          }
+        }}
+      />
+
       {/* Delete confirmation */}
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent>
