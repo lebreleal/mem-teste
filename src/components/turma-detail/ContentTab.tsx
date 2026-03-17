@@ -400,17 +400,12 @@ const ContentTab = () => {
   // ── Current folder's decks (when tag is active, search across ALL folders) ──
   const currentDecks = useMemo(() => {
     const q = searchQuery.toLowerCase();
-    const skipFolderFilter = !!activeTagIds || !!q; // search and tag filter across ALL folders
+    const skipFolderFilter = !!q;
     return turmaDecks
       .filter(d => skipFolderFilter ? true : d.subject_id === contentFolderId)
       .filter(d => isAdmin || d.is_published !== false)
-      .filter(d => !q || (d.deck_name || '').toLowerCase().includes(q))
-      .filter(d => {
-        if (!activeTagIds) return true;
-        const tags = deckTagsMap[d.deck_id] as Tag[] | undefined;
-        return tags?.some(t => activeTagIds.has(t.id)) ?? false;
-      });
-  }, [turmaDecks, contentFolderId, searchQuery, isAdmin, activeTagIds, deckTagsMap]);
+      .filter(d => !q || (d.deck_name || '').toLowerCase().includes(q));
+  }, [turmaDecks, contentFolderId, searchQuery, isAdmin]);
 
   // ── Top decks (most subscribed across the entire community) ──
   const topDecks = useMemo(() => {
