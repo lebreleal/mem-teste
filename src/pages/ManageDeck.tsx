@@ -225,13 +225,17 @@ const ManageDeck = () => {
 
   // Build image attachments array for the thumbnail row
   const frontImageAttachments = useMemo(() => {
-    const atts: Array<{ url: string; isOcclusion: boolean; hasOcclusionRects: boolean }> = [];
-    attachedImages.forEach(url => atts.push({ url, isOcclusion: false, hasOcclusionRects: false }));
+    const atts: ImageAttachment[] = [];
+    frontAttachedImages.forEach(url => atts.push({ url, isOcclusion: false, hasOcclusionRects: false }));
     if (occlusionImageUrl) {
       atts.push({ url: occlusionImageUrl, isOcclusion: true, hasOcclusionRects: occlusionRects.length > 0 });
     }
     return atts;
-  }, [attachedImages, occlusionImageUrl, occlusionRects]);
+  }, [frontAttachedImages, occlusionImageUrl, occlusionRects]);
+
+  const backImageAttachments = useMemo(() => {
+    return backAttachedImages.map(url => ({ url, isOcclusion: false, hasOcclusionRects: false }));
+  }, [backAttachedImages]);
 
   if (isLoading) {
     return (
