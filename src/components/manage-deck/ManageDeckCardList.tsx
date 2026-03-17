@@ -87,7 +87,7 @@ const CardRow = ({ index, style, ...data }: RowComponentProps<CardRowData>) => {
       </div>
     </div>
   );
-});
+};
 CardRow.displayName = 'CardRow';
 
 export const ManageDeckCardList = ({ cards, isLoading, isCommunityDeck, openNew, openEdit, setDeleteId, setSuggestCard }: ManageDeckCardListProps) => {
