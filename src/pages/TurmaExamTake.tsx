@@ -43,13 +43,7 @@ const TurmaExamTake = () => {
 
   const { data: activeSubscription } = useQuery({
     queryKey: ['turma-active-sub', turmaId, user?.id],
-    queryFn: async () => {
-      if (!user || !turmaId) return null;
-      const { data } = await supabase.from('turma_subscriptions').select('*')
-        .eq('turma_id', turmaId).eq('user_id', user.id).gt('expires_at', new Date().toISOString())
-        .order('expires_at', { ascending: false }).limit(1);
-      return data && data.length > 0 ? data[0] : null;
-    },
+    queryFn: () => fetchActiveSubscription(turmaId!, user!.id),
     enabled: !!user && !!turmaId,
   });
 

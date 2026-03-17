@@ -45,33 +45,23 @@ const TurmaExamResults = () => {
   const handleGradeWritten = async (questionId: string, userAnswer: string, correctAnswer: string, questionText: string) => {
     setGradingId(questionId);
     try {
-      const { data, error } = await supabase.functions.invoke('grade-exam', {
-        body: { questionId, userAnswer, correctAnswer, questionText, aiModel: 'flash' },
-      });
-      if (error) throw error;
-      if (data.error) throw new Error(data.error);
+      const data = await gradeExamQuestion(questionId, userAnswer, correctAnswer, questionText);
 
       const question = questions.find(q => q.id === questionId);
       const maxPoints = question?.points ?? 1;
       const scored = (data.score / 100) * maxPoints;
 
-      // Update the answer
       const answer = examAnswers.find(a => a.question_id === questionId);
       if (answer) {
-        await supabase.from('turma_exam_answers')
-          .update({ scored_points: scored, is_graded: true, ai_feedback: data.feedback } as any)
-          .eq('id', answer.id);
+        await updateTurmaExamAnswer(answer.id, scored, data.feedback);
       }
 
-      // Update attempt total
       const newTotal = examAnswers.reduce((sum, a) => {
         if (a.question_id === questionId) return sum + scored;
         return sum + (a.scored_points || 0);
       }, 0);
       if (attempt) {
-        await supabase.from('turma_exam_attempts')
-          .update({ scored_points: newTotal } as any)
-          .eq('id', attempt.id);
+        await updateTurmaExamAttemptScore(attempt.id, newTotal);
       }
 
       toast({
