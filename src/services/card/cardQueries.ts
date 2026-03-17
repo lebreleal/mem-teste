@@ -221,3 +221,14 @@ export async function fetchAggregatedStats(deckIds: string[]) {
   }
   return totals;
 }
+
+/** Fetch card contents for export (CSV / Anki). */
+export async function fetchCardsForExport(deckId: string) {
+  const { data, error } = await supabase
+    .from('cards')
+    .select(CARD_EXPORT_COLS)
+    .eq('deck_id', deckId)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}

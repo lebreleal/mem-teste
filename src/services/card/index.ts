@@ -16,6 +16,7 @@ export {
   fetchDescendantCardCounts,
   fetchDescendantCardsPage,
   fetchAggregatedStats,
+  fetchCardsForExport,
   type CardMeta,
   type DescendantCardCounts,
 } from './cardQueries';

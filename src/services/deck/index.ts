@@ -20,6 +20,7 @@ export {
   bulkArchiveDecks,
   bulkDeleteDecks,
   fetchDeck,
+  updateDeck,
   changeAlgorithm,
   createAlgorithmCopy,
   getTurmaDeckNavInfo,
