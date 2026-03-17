@@ -370,7 +370,7 @@ export async function submitCardReview(
     const isRatingFail = rating === 1;
     const isInErrorDeck = !!card.origin_deck_id;
 
-    const updatePayload: any = {
+    const updatePayload: Pick<CardUpdatePayload, 'state' | 'last_reviewed_at'> = {
       state: newState,
       last_reviewed_at: nowIso,
     };
