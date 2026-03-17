@@ -80,6 +80,7 @@ export interface TurmaDeck {
   subject_id: string | null;
   lesson_id: string | null;
   shared_by: string;
+  shared_by_name?: string;
   price: number;
   price_type: string;
   allow_download: boolean;
@@ -88,6 +89,7 @@ export interface TurmaDeck {
   parent_deck_id?: string | null;
   is_published?: boolean;
   content_folder_id?: string | null;
+  created_at?: string;
 }
 
 export interface TurmaExam {
