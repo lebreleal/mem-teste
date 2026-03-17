@@ -71,7 +71,7 @@ export class SupabaseCardRepository implements ICardRepository {
     }));
 
     const BATCH_SIZE = 500;
-    const allData: any[] = [];
+    const allData: Array<Record<string, unknown>> = [];
     for (let i = 0; i < rows.length; i += BATCH_SIZE) {
       const batch = rows.slice(i, i + BATCH_SIZE);
       const { data, error } = await supabase.from('cards').insert(batch).select();

@@ -127,7 +127,7 @@ export async function invokeTutor(params: TutorParams): Promise<{ hint: string }
 }
 
 /** Invoke generate-deck for exam question generation. */
-export async function invokeGenerateExamQuestions(params: GenerateExamQuestionsParams): Promise<any> {
+export async function invokeGenerateExamQuestions(params: GenerateExamQuestionsParams): Promise<GenerateDeckResult> {
   const { data, error } = await supabase.functions.invoke('generate-deck', {
     body: {
       textContent: params.textContent,

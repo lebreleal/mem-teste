@@ -167,7 +167,7 @@ ${JSON.stringify(log.metadata, null, 2)}
                       {format(new Date(log.created_at), "dd/MM HH:mm:ss")}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={severityColor(log.severity) as any} className="text-xs">
+                      <Badge variant={severityColor(log.severity) as 'destructive' | 'secondary' | 'outline'} className="text-xs">
                         {log.severity}
                       </Badge>
                     </TableCell>

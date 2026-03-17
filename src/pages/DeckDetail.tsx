@@ -1,5 +1,7 @@
 import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import type { DeckWithStats } from '@/types/deck';
+import type { Tables } from '@/integrations/supabase/types';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 import { DeckDetailProvider, useDeckDetail } from '@/components/deck-detail/DeckDetailContext';
 import DeckStatsCard from '@/components/deck-detail/DeckStatsCard';
