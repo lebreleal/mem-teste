@@ -637,7 +637,8 @@ export function useStudyPlan(options?: { full?: boolean }) {
   const reorderObjectives = useMutation({
     mutationFn: async (orderedPlanIds: string[]) => {
       const updates = orderedPlanIds.map((id, i) =>
-        supabase.from('study_plans' as any).update({ priority: i } as any).eq('id', id)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- study_plans not in generated types
+        (supabase.from as any)('study_plans').update({ priority: i }).eq('id', id)
       );
       await Promise.all(updates);
     },
