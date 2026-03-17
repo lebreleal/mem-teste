@@ -112,9 +112,13 @@ export const CardEditorDialog = ({
   resetForm, handleSave, handleImprove, addMcOption, removeMcOption,
 }: CardEditorDialogProps) => {
 
-  // Check if front content has image occlusion data (JSON with imageUrl)
+  // Check if front content has image occlusion data (JSON with occlusion structure)
   const hasOcclusionImage = (() => {
-    try { return !!JSON.parse(front)?.imageUrl; } catch { return false; }
+    try {
+      const d = JSON.parse(front);
+      // Detect occlusion JSON by structure (has rects/allRects), not just imageUrl
+      return d !== null && typeof d === 'object' && ('imageUrl' in d || 'rects' in d || 'allRects' in d);
+    } catch { return false; }
   })();
 
   // Extract text content for cloze detection
