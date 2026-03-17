@@ -582,17 +582,14 @@ const QuestionPractice = ({
     try {
       spendEnergy.mutate(1);
       const isCorrectOpt = q.correct_indices?.includes(optIdx);
-      const { data, error } = await supabase.functions.invoke('ai-tutor', {
-        body: {
-          type: 'explain-option',
-          question: q.question_text,
-          options: q.options,
-          optionIndex: optIdx,
-          isCorrect: isCorrectOpt,
-          correctIndex: q.correct_indices?.[0] ?? 0,
-        },
+      const data = await invokeAITutor({
+        type: 'explain-option',
+        question: q.question_text,
+        options: q.options,
+        optionIndex: optIdx,
+        isCorrect: isCorrectOpt,
+        correctIndex: q.correct_indices?.[0] ?? 0,
       });
-      if (error) throw error;
       setOptionExplanations(prev => ({ ...prev, [optIdx]: data?.response || 'Explicação indisponível.' }));
     } catch { toast({ title: 'Erro ao explicar alternativa', variant: 'destructive' }); }
     finally { setOptionExplainLoading(null); }
