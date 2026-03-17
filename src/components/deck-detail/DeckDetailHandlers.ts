@@ -177,9 +177,9 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
     if (occlusionImageUrl && occlusionRects.length > 0) {
       const allRects = occlusionRects;
       const userBack = back;
-      const groups: Record<string, any[]> = {};
-      const ungrouped: any[] = [];
-      allRects.forEach((r: any) => {
+    const groups: Record<string, OcclusionRect[]> = {};
+      const ungrouped: OcclusionRect[] = [];
+      allRects.forEach((r: OcclusionRect) => {
         if (r.groupId) { if (!groups[r.groupId]) groups[r.groupId] = []; groups[r.groupId].push(r); }
         else ungrouped.push(r);
       });
