@@ -1,5 +1,5 @@
-import React, { useCallback } from 'react';
-import { FixedSizeList, ListChildComponentProps } from 'react-window';
+import React from 'react';
+import { List, type RowComponentProps } from 'react-window';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { Pencil, Trash2, Send, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -34,7 +34,7 @@ interface CardRowData {
   setSuggestCard: (card: any) => void;
 }
 
-const CardRow = React.memo(({ index, style, data }: ListChildComponentProps<CardRowData>) => {
+const CardRow = React.memo(({ index, style, ...data }: RowComponentProps<CardRowData>) => {
   const { cards, isCommunityDeck, openEdit, setDeleteId, setSuggestCard } = data;
   const card = cards[index];
   if (!card) return null;
@@ -45,12 +45,12 @@ const CardRow = React.memo(({ index, style, data }: ListChildComponentProps<Card
         <div className="flex-1 min-w-0">
           {card.card_type === 'image_occlusion' ? (() => {
             try {
-              const data = JSON.parse(card.front_content);
-              const rectCount = data.allRects?.length || 0;
+              const d = JSON.parse(card.front_content);
+              const rectCount = d.allRects?.length || 0;
               return (
                 <div className="flex items-center gap-2 mt-0.5">
                   <div className="h-10 w-14 rounded border border-border/50 bg-muted/50 overflow-hidden shrink-0">
-                    {data.imageUrl && <img src={data.imageUrl} alt="" className="h-full w-full object-cover" />}
+                    {d.imageUrl && <img src={d.imageUrl} alt="" className="h-full w-full object-cover" />}
                   </div>
                   <span className="text-xs text-muted-foreground">{rectCount} área{rectCount !== 1 ? 's' : ''} oculta{rectCount !== 1 ? 's' : ''}</span>
                 </div>
@@ -109,19 +109,17 @@ export const ManageDeckCardList = ({ cards, isLoading, isCommunityDeck, openNew,
     );
   }
 
-  const itemData: CardRowData = { cards, isCommunityDeck, openEdit, setDeleteId, setSuggestCard };
   const listHeight = Math.min(cards.length * ITEM_HEIGHT, 600);
 
   return (
-    <FixedSizeList
+    <List
       height={listHeight}
-      itemCount={cards.length}
-      itemSize={ITEM_HEIGHT}
-      width="100%"
-      itemData={itemData}
+      rowCount={cards.length}
+      rowHeight={ITEM_HEIGHT}
+      style={{ width: '100%' }}
+      rowComponent={CardRow}
+      rowProps={{ cards, isCommunityDeck, openEdit, setDeleteId, setSuggestCard }}
       overscanCount={5}
-    >
-      {CardRow}
-    </FixedSizeList>
+    />
   );
 };
