@@ -248,7 +248,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const [improvePreview, setImprovePreview] = useState<{ front: string; back: string } | null>(null);
   const [improveModalOpen, setImproveModalOpen] = useState(false);
   const [occlusionImageUrl, setOcclusionImageUrl] = useState<string>('');
-  const [occlusionRects, setOcclusionRects] = useState<any[]>([]);
+  const [occlusionRects, setOcclusionRects] = useState<OcclusionRect[]>([]);
   const [occlusionCanvasSize, setOcclusionCanvasSize] = useState<{ w: number; h: number } | null>(null);
   const [occlusionModalOpen, setOcclusionModalOpen] = useState(false);
   const [mcOptions, setMcOptions] = useState<string[]>(['', '', '', '']);
