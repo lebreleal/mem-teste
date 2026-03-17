@@ -485,7 +485,6 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
     for (const c of COLORS) {
       if (usedColorFills.has(c.fill)) visible.push(c);
     }
-    // Always show the next unused color
     for (const c of COLORS) {
       if (!usedColorFills.has(c.fill)) {
         visible.push(c);
@@ -500,17 +499,26 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
     return visible;
   })();
 
-  const cardCount = usedColorFills.size;
+  const selectedShape = selectedId ? shapes.find(s => s.id === selectedId) : null;
+
+  const handleColorPick = (fill: string) => {
+    setShapeColor(fill);
+    if (!selectedId) return;
+    setShapes(prev => prev.map(shape => {
+      if (shape.id !== selectedId || shape.type === 'freehand') return shape;
+      return { ...shape, color: fill };
+    }));
+  };
 
   const getCursorStyle = () => {
     if (tool === 'hand') return panning ? 'grabbing' : 'grab';
-    if (tool === 'select') return 'default';
+    if (dragging) return 'grabbing';
+    if (tool === 'select') return selectedShape?.type === 'rect' ? 'move' : 'default';
     if (tool === 'eraser') return 'pointer';
+    if (hoveredSelectableId) return 'move';
     return 'crosshair';
   };
 
-  // Get selected shape for positioning trash button
-  const selectedShape = selectedId ? shapes.find(s => s.id === selectedId) : null;
   const getShapeBottom = (s: OcclusionShape): { x: number; y: number } => {
     if (s.type === 'rect') {
       return { x: (s.x! + s.w! / 2) * scale, y: (s.y! + s.h!) * scale };
