@@ -10,7 +10,7 @@ import { ChevronDown, ChevronRight, Play, BrainCircuit, Sparkles } from 'lucide-
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import type { GlobalConcept } from '@/services/globalConceptService';
-import { supabase } from '@/integrations/supabase/client';
+import { findConceptLinkedDeck } from '@/services/dashboardService';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 
