@@ -1,8 +1,7 @@
 // ============= Refactored Dashboard.tsx =============
 
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import {} from 'lucide-react';
-import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { Archive, ArchiveRestore, ChevronDown, ChevronLeft, Trash2, Play, SlidersHorizontal, MoreVertical, Pencil, ImageIcon, SquarePlus, RotateCcw, Layers, Clock, Info, User, Compass, EyeOff, Share2, RefreshCw, LogOut, Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { getNewCardsForDayGlobal } from '@/hooks/useStudyPlan';
