@@ -337,3 +337,46 @@ export async function fetchPendingSuggestions(deckId: string) {
   const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
   return data.map((s: any) => ({ ...s, suggester_name: profileMap.get(s.suggester_user_id) ?? 'Anônimo' }));
 }
+
+/** Count pending suggestions for a deck. */
+export async function countPendingSuggestions(deckId: string): Promise<number> {
+  const { count } = await supabase
+    .from('deck_suggestions')
+    .select('id', { count: 'exact', head: true })
+    .eq('deck_id', deckId)
+    .eq('status', 'pending');
+  return count ?? 0;
+}
+
+/** Count questions across a deck and all its descendants. */
+export async function countDeckQuestionsRecursive(deckId: string): Promise<number> {
+  const allIds: string[] = [deckId];
+  let frontier = [deckId];
+  while (frontier.length > 0) {
+    const { data: children } = await supabase.from('decks').select('id').in('parent_deck_id', frontier);
+    if (!children || children.length === 0) break;
+    const childIds = children.map((d: any) => d.id);
+    allIds.push(...childIds);
+    frontier = childIds;
+  }
+  const { count } = await supabase
+    .from('deck_questions' as any)
+    .select('id', { count: 'exact', head: true })
+    .in('deck_id', allIds);
+  return count ?? 0;
+}
+
+/** Fetch question counts grouped by deck_id for a set of deck IDs. */
+export async function fetchQuestionCountsByDeck(deckIds: string[]): Promise<Map<string, number>> {
+  const { data } = await supabase
+    .from('deck_questions')
+    .select('deck_id')
+    .in('deck_id', deckIds);
+  const map = new Map<string, number>();
+  if (data) {
+    for (const q of data as any[]) {
+      map.set(q.deck_id, (map.get(q.deck_id) ?? 0) + 1);
+    }
+  }
+  return map;
+}
