@@ -6,6 +6,9 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { Exam, ExamQuestion } from '@/types/exam';
 
+const EXAM_COLS = 'id, user_id, deck_id, folder_id, title, status, total_points, scored_points, time_limit_seconds, started_at, completed_at, created_at, source_turma_exam_id, synced_at' as const;
+const EXAM_QUESTION_COLS = 'id, exam_id, card_id, question_type, question_text, options, correct_answer, correct_indices, points, user_answer, selected_indices, scored_points, is_graded, ai_feedback, sort_order' as const;
+
 // Helper to get a typed query builder for tables with partial type coverage
 const examsTable = () => supabase.from('exams' as 'exams');
 const examQuestionsTable = () => supabase.from('exam_questions' as 'exam_questions');
