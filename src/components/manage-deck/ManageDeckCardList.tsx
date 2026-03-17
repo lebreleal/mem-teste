@@ -113,10 +113,9 @@ export const ManageDeckCardList = ({ cards, isLoading, isCommunityDeck, openNew,
 
   return (
     <List
-      height={listHeight}
       rowCount={cards.length}
       rowHeight={ITEM_HEIGHT}
-      style={{ width: '100%' }}
+      style={{ width: '100%', height: listHeight }}
       rowComponent={CardRow}
       rowProps={{ cards, isCommunityDeck, openEdit, setDeleteId, setSuggestCard }}
       overscanCount={5}
