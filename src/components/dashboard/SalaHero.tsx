@@ -304,26 +304,30 @@ const SalaHero = ({
 
           {/* Summary line: icon card + count + icon clock + time + ? */}
           {salaStudyStats.totalDue > 0 && (
-            <>
-              <button
-                onClick={() => setInfoOpen(true)}
-                className="flex items-center justify-center gap-1.5 w-full text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
+            <Popover open={infoOpen} onOpenChange={setInfoOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  className="flex items-center justify-center gap-1.5 w-full text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
+                >
+                  <IconDeck className="h-3 w-3" />
+                  <span>{salaStudyStats.totalDue}</span>
+                  <Clock className="h-3 w-3" />
+                  <span>{salaStudyStats.timeLabel}</span>
+                  <IconInfo className="h-3 w-3 ml-0.5" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                side="bottom"
+                align="center"
+                sideOffset={8}
+                className="w-auto max-w-[18rem] rounded-2xl border border-border bg-background px-3 py-2 text-xs text-foreground shadow-md"
               >
-                <IconDeck className="h-3 w-3" />
-                <span>{salaStudyStats.totalDue}</span>
-                <Clock className="h-3 w-3" />
-                <span>{salaStudyStats.timeLabel}</span>
-                <IconInfo className="h-3 w-3 ml-0.5" />
-              </button>
-
-              <Dialog open={infoOpen} onOpenChange={setInfoOpen}>
-                <DialogContent className="max-w-xs p-4 rounded-2xl">
-                  <p className="text-sm text-foreground leading-relaxed">
-                    Você tem <span className="font-semibold">{salaStudyStats.totalDue} cartões</span> pra estudar hoje, com tempo estimado de <span className="font-semibold">{salaStudyStats.timeLabel}</span>, calculado pela sua velocidade média por cartão.
-                  </p>
-                </DialogContent>
-              </Dialog>
-            </>
+                <p className="leading-relaxed">
+                  Hoje você tem <span className="font-semibold">{salaStudyStats.totalDue} cartões</span> para estudar, com tempo estimado de <span className="font-semibold">{salaStudyStats.timeLabel}</span>, calculado pela sua velocidade média por cartão.
+                </p>
+              </PopoverContent>
+            </Popover>
+          )}
           )}
         </div>
       )}

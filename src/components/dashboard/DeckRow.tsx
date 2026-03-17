@@ -162,7 +162,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
 }, ref) => {
   const navigate = useNavigate();
   const { isAdmin } = useIsAdmin();
-  const isErrorDeck = isErrorDeckName(deck.name);
+  const isErrorDeck = deck.name === ERROR_DECK_NAME;
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [showDevModal, setShowDevModal] = useState(false);
   const [showAddDeckMenu, setShowAddDeckMenu] = useState(false);
