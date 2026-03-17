@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Loader2, Undo2 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { uploadImage as uploadToStorage, invokeDetectOcclusion } from '@/services/storageService';
 import { useAuth } from '@/hooks/useAuth';
 import { compressImage } from '@/lib/imageUtils';
 import { useToast } from '@/hooks/use-toast';
