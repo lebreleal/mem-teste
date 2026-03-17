@@ -15,7 +15,8 @@ interface ConceptRow {
 }
 
 // ── Typed table helper for global_concepts (not in generated types) ──
-const gcTable = () => supabase.from('global_concepts' as 'turmas');
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const gcTable = () => supabase.from('global_concepts' as any);
 
 // ─── Medical taxonomy (Estratégia MED / Medway / SanarFlix standard) ───
 export const MEDICAL_CATEGORIES = [
@@ -104,7 +105,7 @@ export async function mapPrerequisitesViaAI(userId: string): Promise<number> {
           user_id: userId,
           name: group.parent_name.trim(),
           slug,
-        } as Record<string, unknown>, { onConflict: 'user_id,slug', ignoreDuplicates: true })
+        }, { onConflict: 'user_id,slug', ignoreDuplicates: true })
         .select('id')
         .maybeSingle();
 
@@ -137,7 +138,7 @@ export async function mapPrerequisitesViaAI(userId: string): Promise<number> {
       if (existing?.parent_concept_id) continue;
 
       await gcTable()
-        .update({ parent_concept_id: parentId, updated_at: new Date().toISOString() } as Record<string, unknown>)
+        .update({ parent_concept_id: parentId, updated_at: new Date().toISOString() })
         .eq('id', childId);
       updated++;
     }
@@ -154,7 +155,7 @@ export async function mapPrerequisitesViaAI(userId: string): Promise<number> {
     if (existing?.parent_concept_id) continue;
 
     await gcTable()
-      .update({ parent_concept_id: prereqId, updated_at: new Date().toISOString() } as Record<string, unknown>)
+      .update({ parent_concept_id: prereqId, updated_at: new Date().toISOString() })
       .eq('id', conceptId);
     updated++;
   }

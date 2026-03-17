@@ -21,9 +21,9 @@ interface CardTagJoinRow {
   tags: Tag | null;
 }
 
-interface TagWithSynonyms extends Tag {
+type TagWithSynonyms = Tag & {
   synonyms?: string[];
-}
+};
 
 // ---- Hierarchy helpers ----
 

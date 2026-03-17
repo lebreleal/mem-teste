@@ -57,12 +57,17 @@ interface PointsRow {
   points: number;
 }
 
-// ── Typed table helper for tables not in generated types ──
-const turmaExamsTable = () => supabase.from('turma_exams' as 'turmas');
-const turmaExamQuestionsTable = () => supabase.from('turma_exam_questions' as 'turmas');
-const turmaExamAttemptsTable = () => supabase.from('turma_exam_attempts' as 'turmas');
-const turmaExamAnswersTable = () => supabase.from('turma_exam_answers' as 'turmas');
-const turmaQuestionsTable = () => supabase.from('turma_questions' as 'turmas');
+// ── Typed table helpers — use `as any` for non-generated tables ──
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const turmaExamsTable = () => supabase.from('turma_exams' as any);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const turmaExamQuestionsTable = () => supabase.from('turma_exam_questions' as any);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const turmaExamAttemptsTable = () => supabase.from('turma_exam_attempts' as any);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const turmaExamAnswersTable = () => supabase.from('turma_exam_answers' as any);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const turmaQuestionsTable = () => supabase.from('turma_questions' as any);
 
 export async function fetchTurmaExams(turmaId: string): Promise<TurmaExam[]> {
   const { data, error } = await turmaExamsTable().select('id, turma_id, title, description, subject_id, lesson_id, created_by, is_published, is_marketplace, subscribers_only, price, time_limit_seconds, total_questions, sort_order, created_at, updated_at').eq('turma_id', turmaId).order('created_at', { ascending: false });
@@ -81,23 +86,19 @@ export async function fetchTurmaExamQuestions(examId: string): Promise<TurmaExam
 }
 
 export async function createTurmaExam(turmaId: string, userId: string, params: { title: string; description?: string; subjectId?: string; lessonId?: string; timeLimitSeconds?: number }) {
-  const insertData = {
+  const { data, error } = await turmaExamsTable().insert({
     turma_id: turmaId, created_by: userId, title: params.title, description: params.description || '',
     subject_id: params.subjectId || null, lesson_id: params.lessonId || null, time_limit_seconds: params.timeLimitSeconds || null,
-  };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- table not in generated types
-  const { data, error } = await turmaExamsTable().insert(insertData as Record<string, unknown>).select().single();
+  }).select().single();
   if (error) throw error; return data;
 }
 
 export async function addQuestionToExam(params: { examId: string; questionText: string; questionType: string; options?: Json; correctAnswer: string; correctIndices?: number[]; points?: number; questionId?: string }) {
-  const insertData = {
+  const { data, error } = await turmaExamQuestionsTable().insert({
     exam_id: params.examId, question_text: params.questionText, question_type: params.questionType,
     options: params.options || null, correct_answer: params.correctAnswer, correct_indices: params.correctIndices || null,
     points: params.points || 1, question_id: params.questionId || null,
-  };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- table not in generated types
-  const { data, error } = await turmaExamQuestionsTable().insert(insertData as Record<string, unknown>).select().single();
+  }).select().single();
   if (error) throw error; return data;
 }
 
@@ -109,8 +110,7 @@ export async function addQuestionsFromBank(examId: string, questionIds: string[]
     exam_id: examId, question_id: q.id, question_text: q.question_text, question_type: q.question_type,
     options: q.options, correct_answer: q.correct_answer, correct_indices: q.correct_indices, points: q.points || 1, sort_order: i,
   }));
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- table not in generated types
-  const { error: insertError } = await turmaExamQuestionsTable().insert(inserts as unknown as Record<string, unknown>[]);
+  const { error: insertError } = await turmaExamQuestionsTable().insert(inserts);
   if (insertError) throw insertError;
 }
 
@@ -121,25 +121,21 @@ export async function addQuestionsFromDeck(examId: string, deckId: string, count
   const inserts = rows.map((c, i) => ({
     exam_id: examId, question_text: c.front_content, question_type: 'written', correct_answer: c.back_content, points: 1, sort_order: i,
   }));
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- table not in generated types
-  const { error: insertError } = await turmaExamQuestionsTable().insert(inserts as unknown as Record<string, unknown>[]);
+  const { error: insertError } = await turmaExamQuestionsTable().insert(inserts);
   if (insertError) throw insertError;
 }
 
 export async function publishTurmaExam(examId: string, params: { isMarketplace?: boolean; price?: number }) {
   const { count } = await turmaExamQuestionsTable().select('*', { count: 'exact', head: true }).eq('exam_id', examId);
-  const updateData = {
+  const { error } = await turmaExamsTable().update({
     is_published: true, is_marketplace: params.isMarketplace ?? false,
     price: params.price ?? 0, total_questions: count ?? 0,
-  };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- table not in generated types
-  const { error } = await turmaExamsTable().update(updateData as Record<string, unknown>).eq('id', examId);
+  }).eq('id', examId);
   if (error) throw error;
 }
 
 export async function toggleExamSubscribersOnly(examId: string, subscribersOnly: boolean) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- table not in generated types
-  const { error } = await turmaExamsTable().update({ subscribers_only: subscribersOnly } as Record<string, unknown>).eq('id', examId);
+  const { error } = await turmaExamsTable().update({ subscribers_only: subscribersOnly }).eq('id', examId);
   if (error) throw error;
 }
 
@@ -155,35 +151,28 @@ export async function startTurmaExamAttempt(examId: string, userId: string, tota
     const { data: questions } = await turmaExamQuestionsTable().select('points').eq('exam_id', examId);
     tp = ((questions ?? []) as unknown as PointsRow[]).reduce((sum, q) => sum + (q.points || 1), 0);
   }
-  const insertData = { exam_id: examId, user_id: userId, total_points: tp };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- table not in generated types
-  const { data, error } = await turmaExamAttemptsTable().insert(insertData as Record<string, unknown>).select().single();
+  const { data, error } = await turmaExamAttemptsTable().insert({ exam_id: examId, user_id: userId, total_points: tp }).select().single();
   if (error) throw error;
   return data as unknown as TurmaExamAttempt;
 }
 
 export async function submitTurmaExamAnswers(attemptId: string, answers: { questionId: string; userAnswer?: string; selectedIndices?: number[] }[]) {
   const inserts = answers.map(a => ({ attempt_id: attemptId, question_id: a.questionId, user_answer: a.userAnswer ?? null, selected_indices: a.selectedIndices ?? null }));
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- table not in generated types
-  const { error } = await turmaExamAnswersTable().insert(inserts as unknown as Record<string, unknown>[]);
+  const { error } = await turmaExamAnswersTable().insert(inserts);
   if (error) throw error;
 }
 
 export async function submitTurmaExamAnswer(params: { attemptId: string; questionId: string; userAnswer?: string; selectedIndices?: number[]; scoredPoints: number }) {
-  const insertData = {
+  const { error } = await turmaExamAnswersTable().insert({
     attempt_id: params.attemptId, question_id: params.questionId,
     user_answer: params.userAnswer ?? null, selected_indices: params.selectedIndices ?? null,
     scored_points: params.scoredPoints, is_graded: true,
-  };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- table not in generated types
-  const { error } = await turmaExamAnswersTable().insert(insertData as Record<string, unknown>);
+  });
   if (error) throw error;
 }
 
 export async function completeTurmaExamAttempt(attemptId: string, scoredPoints: number) {
-  const updateData = { status: 'completed', completed_at: new Date().toISOString(), scored_points: scoredPoints };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- table not in generated types
-  const { error } = await turmaExamAttemptsTable().update(updateData as Record<string, unknown>).eq('id', attemptId);
+  const { error } = await turmaExamAttemptsTable().update({ status: 'completed', completed_at: new Date().toISOString(), scored_points: scoredPoints }).eq('id', attemptId);
   if (error) throw error;
 }
 
