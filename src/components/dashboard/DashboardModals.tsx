@@ -180,7 +180,7 @@ const DashboardModals = (props: DashboardModalsProps) => {
                   onClick={(e) => { e.stopPropagation(); props.setAddMenuInfoType('materia'); }}
                   className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
                 >
-                  <Info className="h-3.5 w-3.5" />
+                  <IconInfo className="h-3.5 w-3.5" />
                 </button>
                 <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 ml-auto shrink-0" />
               </button>
