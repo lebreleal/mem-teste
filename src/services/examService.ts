@@ -24,7 +24,7 @@ export async function fetchExams(userId: string, deckId?: string): Promise<Exam[
 
 /** Fetch a single exam by ID. */
 export async function fetchExam(examId: string): Promise<Exam> {
-  const { data, error } = await examsTable().select('*').eq('id', examId).single();
+  const { data, error } = await examsTable().select(EXAM_COLS).eq('id', examId).single();
   if (error) throw error;
   return data as unknown as Exam;
 }
