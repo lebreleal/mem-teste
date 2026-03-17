@@ -127,7 +127,8 @@ async function buildAnki2(deckName: string, cards: ExportCard[]): Promise<Uint8A
   const modelId = now * 1000;
   const deckId = now * 1000 + 1;
 
-  const model: Record<string, any> = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Anki collection JSON schema is deeply nested and external
+  const model: Record<string, Record<string, unknown>> = {
     [modelId]: {
       id: modelId,
       name: 'Basic (MemoCards)',
