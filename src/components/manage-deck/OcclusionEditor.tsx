@@ -105,6 +105,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
   const [isDetecting, setIsDetecting] = useState(false);
   const [previewOpaque, setPreviewOpaque] = useState(false);
   const [hideAllGuessOne, setHideAllGuessOne] = useState(false);
+  const [colorInfoOpen, setColorInfoOpen] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [imgSize, setImgSize] = useState({ w: 0, h: 0 });
@@ -674,8 +675,8 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
       </div>
 
       {/* ─── Bottom bar ─── */}
-      <div className="shrink-0 border-t border-border/40 px-3 py-2.5 space-y-2.5">
-        {/* Row 1: Eye + Color gradient button with AI detect + info */}
+      <div className="shrink-0 border-t border-border/40 px-3 py-2.5 space-y-2">
+        {/* Row 1: Eye + 2 Colors + Info icon + Detect AI */}
         <div className="flex items-center gap-2">
           {/* Eye toggle */}
           <button
@@ -688,51 +689,83 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
             {previewOpaque ? <IconEyeOpen /> : <IconEyeClosed />}
           </button>
 
-          {/* Color selector + Detect AI button */}
-          <div className="flex-1 flex items-center gap-1.5">
-            {/* Color dots — inline, all visible */}
-            <div className="flex items-center gap-1">
-              {COLORS.map(c => {
-                const isActive = shapeColor === c.fill;
-                return (
-                  <button
-                    key={c.label}
-                    className={`rounded-full transition-all shrink-0 ${isActive ? 'ring-2 ring-offset-1 ring-foreground/40 scale-110' : 'hover:scale-110'}`}
-                    style={{
-                      backgroundColor: c.fill.replace(/[\d.]+\)$/, '1)'),
-                      width: 18,
-                      height: 18,
-                    }}
-                    onClick={() => setShapeColor(c.fill)}
-                    title={c.label}
-                  />
-                );
-              })}
-            </div>
-
-            {/* Spacer */}
-            <div className="w-px h-5 bg-border/60 mx-1" />
-
-            {/* Detect AI */}
+          {/* 2 Color dots + info */}
+          <div className="relative flex items-center gap-1.5">
+            {COLORS.slice(0, 2).map(c => {
+              const isActive = shapeColor === c.fill;
+              return (
+                <button
+                  key={c.label}
+                  className={`rounded-full transition-all shrink-0 ${isActive ? 'ring-2 ring-offset-1 ring-foreground/40 scale-110' : 'hover:scale-110'}`}
+                  style={{
+                    backgroundColor: c.fill.replace(/[\d.]+\)$/, '1)'),
+                    width: 20,
+                    height: 20,
+                  }}
+                  onClick={() => setShapeColor(c.fill)}
+                  title={c.label}
+                />
+              );
+            })}
+            {/* Info icon */}
             <button
-              onClick={handleDetectAI}
-              disabled={isDetecting || !imgLoaded}
-              className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/10 transition-colors disabled:opacity-50 shrink-0"
+              onClick={() => setColorInfoOpen(v => !v)}
+              className="h-5 w-5 shrink-0 flex items-center justify-center text-primary/70 hover:text-primary transition-colors"
+              title="Como funcionam as cores"
             >
-              {isDetecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <IconSparkle />}
-              Detectar com IA
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="h-4.5 w-4.5">
+                <path fill="currentColor" d="M11 17a1 1 0 1 0 2 0 1 1 0 0 0-2 0m1-15a10 10 0 1 0 0 20 10 10 0 0 0 0-20m0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8m0-14a4 4 0 0 0-3.841 2.885c-.174.6.347 1.115.971 1.115.48 0 .854-.407 1.056-.842A2 2 0 0 1 14 10c0 1.77-2.348 1.778-2.89 4.007-.13.537.338.993.89.993s.977-.47 1.217-.968C13.907 12.607 16 12.088 16 10a4 4 0 0 0-4-4" />
+              </svg>
             </button>
+
+            {/* Info popover */}
+            {colorInfoOpen && (
+              <div className="absolute left-0 bottom-full mb-2 z-50 w-72 rounded-xl bg-card border border-border shadow-lg p-3 space-y-2.5">
+                <div className="flex items-start justify-between">
+                  <p className="text-xs text-muted-foreground leading-relaxed pr-2">
+                    Ao aprender, oculte todas as etiquetas, e não apenas a que está sendo testada, para evitar revelar a resposta
+                  </p>
+                  <button onClick={() => setColorInfoOpen(false)} className="shrink-0 h-5 w-5 flex items-center justify-center text-muted-foreground hover:text-foreground">
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" fill="none" /></svg>
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {/* Esconda um */}
+                  <div className="rounded-lg border border-border bg-muted/30 p-2 text-center space-y-1.5">
+                    <p className="text-[10px] font-semibold text-foreground">Esconda um e adivinhe um</p>
+                    <div className="mx-auto w-14 h-8 rounded bg-muted relative flex items-center justify-center">
+                      <div className="w-8 h-2.5 rounded-sm" style={{ backgroundColor: COLORS[0].fill.replace(/[\d.]+\)$/, '1)') }} />
+                    </div>
+                  </div>
+                  {/* Esconda tudo */}
+                  <div className="rounded-lg border border-border bg-muted/30 p-2 text-center space-y-1.5">
+                    <p className="text-[10px] font-semibold text-foreground">Esconda tudo e adivinhe um</p>
+                    <div className="mx-auto w-14 h-8 rounded bg-muted relative flex items-center justify-center gap-0.5">
+                      <div className="w-4 h-2.5 rounded-sm" style={{ backgroundColor: COLORS[0].fill.replace(/[\d.]+\)$/, '1)') }} />
+                      <div className="w-4 h-2.5 rounded-sm" style={{ backgroundColor: COLORS[0].fill.replace(/[\d.]+\)$/, '1)') }} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
+
+          <div className="flex-1" />
+
+          {/* Detect AI */}
+          <button
+            onClick={handleDetectAI}
+            disabled={isDetecting || !imgLoaded}
+            className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/10 transition-colors disabled:opacity-50 shrink-0"
+          >
+            {isDetecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <IconSparkle />}
+            Detectar com IA
+          </button>
         </div>
 
         {/* Row 2: "Esconda tudo e adivinhe um" toggle */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <span className="text-sm font-medium text-foreground">Esconda tudo e adivinhe um</span>
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="h-4 w-4 text-primary/70">
-              <path fill="currentColor" d="M11 17a1 1 0 1 0 2 0 1 1 0 0 0-2 0m1-15a10 10 0 1 0 0 20 10 10 0 0 0 0-20m0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8m0-14a4 4 0 0 0-3.841 2.885c-.174.6.347 1.115.971 1.115.48 0 .854-.407 1.056-.842A2 2 0 0 1 14 10c0 1.77-2.348 1.778-2.89 4.007-.13.537.338.993.89.993s.977-.47 1.217-.968C13.907 12.607 16 12.088 16 10a4 4 0 0 0-4-4" />
-            </svg>
-          </div>
+          <span className="text-[13px] font-medium text-foreground">Esconda tudo e adivinhe um</span>
           <button
             onClick={() => setHideAllGuessOne(v => !v)}
             className="relative shrink-0"
