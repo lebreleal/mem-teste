@@ -65,19 +65,13 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
   const R = 22;
   const C = 2 * Math.PI * R;
 
-  const segments = isQMode
-    ? (qd.total > 0 ? [
-        { pct: qd.correct / qd.total, color: 'hsl(var(--success))', key: 'correct' },
-        { pct: qd.wrong / qd.total, color: 'hsl(var(--destructive))', key: 'wrong' },
-        { pct: qd.unanswered / qd.total, color: 'hsl(var(--muted))', key: 'unanswered' },
-      ] : [])
-    : (serverTotal > 0 ? [
+  const segments = serverTotal > 0 ? [
         { pct: diffCounts.facil / serverTotal, color: 'hsl(var(--info))', key: 'facil' },
         { pct: diffCounts.bom / serverTotal, color: 'hsl(var(--success))', key: 'bom' },
         { pct: diffCounts.dificil / serverTotal, color: 'hsl(var(--warning))', key: 'dificil' },
         { pct: diffCounts.errei / serverTotal, color: 'hsl(var(--destructive))', key: 'errei' },
         { pct: diffCounts.novo / serverTotal, color: 'hsl(var(--muted))', key: 'novo' },
-      ] : []);
+      ] : [];
 
   let offset = 0;
 
