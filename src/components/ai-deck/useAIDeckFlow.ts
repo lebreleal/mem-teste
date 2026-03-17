@@ -249,7 +249,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
 
     try {
       await cardService.createCards(targetDeckId, rows);
-    } catch (cErr: any) {
+    } catch (cErr: unknown) {
       if (!existingDeckId) await deckService.deleteDeck(targetDeckId);
       throw cErr;
     }
