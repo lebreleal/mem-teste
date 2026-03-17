@@ -870,7 +870,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
         )}
 
         {/* Bottom bar — eye + IA */}
-        <div className="shrink-0 flex items-center justify-center gap-2 mt-2 flex-wrap">
+        <div className="shrink-0 flex items-center justify-center gap-2 mt-1 flex-wrap">
           <button
             onClick={() => setPreviewOpaque(v => !v)}
             className={`h-8 w-8 shrink-0 flex items-center justify-center rounded-lg transition-colors ${
