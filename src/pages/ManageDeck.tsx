@@ -313,24 +313,11 @@ const ManageDeck = () => {
             <div className="flex-1 min-w-0 flex flex-col gap-2">
               {/* Front card */}
               <div className="flex-1 min-h-[100px] rounded-xl border border-border/60 bg-card overflow-hidden relative flex flex-col">
-                {(!front || front === '<p></p>') && !occlusionImageUrl ? (
+                {(!front || front === '<p></p>') && !occlusionImageUrl && attachedImages.length === 0 ? (
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <span className="text-muted-foreground/30 text-base font-medium">Frente</span>
                   </div>
                 ) : null}
-
-                {(occlusionImageUrl || hasRegularImage) && (
-                  <button
-                    type="button"
-                    onClick={occlusionImageUrl ? () => setOcclusionModalOpen(true) : undefined}
-                    className={`absolute bottom-2 left-2 z-10 h-8 w-8 rounded-lg border border-border/60 bg-card/90 backdrop-blur-sm flex items-center justify-center shadow-sm transition-all ${
-                      occlusionImageUrl ? 'hover:shadow-md hover:border-primary/40 cursor-pointer' : 'cursor-default'
-                    }`}
-                    title={occlusionImageUrl ? 'Editar oclusão' : 'Imagem anexada'}
-                  >
-                    <img src={occlusionImageUrl ? iconClozeOcclusion : iconAttachImage} alt="" className="h-4.5 w-4.5 object-contain opacity-60" />
-                  </button>
-                )}
 
                 <LazyRichEditor
                   content={front}
@@ -338,6 +325,24 @@ const ManageDeck = () => {
                   placeholder=""
                   chromeless
                   hideCloze={false}
+                  imageAttachments={frontImageAttachments}
+                  onImageAttached={(url) => {
+                    setAttachedImages(prev => [...prev, url]);
+                    setIsDirty(true);
+                  }}
+                  onRemoveAttachment={(url) => {
+                    if (url === occlusionImageUrl) {
+                      setOcclusionImageUrl('');
+                      setOcclusionRects([]);
+                      setOcclusionCanvasSize(null);
+                    } else {
+                      setAttachedImages(prev => prev.filter(u => u !== url));
+                    }
+                    setIsDirty(true);
+                  }}
+                  onClickAttachment={(url, isOcclusion) => {
+                    if (isOcclusion) setOcclusionModalOpen(true);
+                  }}
                   onOcclusionImageReady={(imageUrl) => {
                     setOcclusionImageUrl(imageUrl);
                     setOcclusionRects([]);
