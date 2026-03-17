@@ -39,7 +39,7 @@ export async function addQuestionToExam(params: { examId: string; questionText: 
 }
 
 export async function addQuestionsFromBank(examId: string, questionIds: string[]) {
-  const { data: questions, error } = await supabase.from('turma_questions').select('*').in('id', questionIds);
+  const { data: questions, error } = await supabase.from('turma_questions').select('id, question_text, question_type, options, correct_answer, correct_indices, points').in('id', questionIds);
   if (error) throw error;
   const inserts = (questions ?? []).map((q: any, i: number) => ({
     exam_id: examId, question_id: q.id, question_text: q.question_text, question_type: q.question_type,
