@@ -138,7 +138,8 @@ export async function updateTurma(turmaId: string, updates: { name?: string; des
   if (updates.coverImageUrl !== undefined) data.cover_image_url = updates.coverImageUrl;
   if (updates.subscriptionPrice !== undefined) data.subscription_price = updates.subscriptionPrice;
   if (updates.shareSlug !== undefined) data.share_slug = updates.shareSlug || null;
-  const { error } = await supabase.from('turmas').update(data as Record<string, unknown>).eq('id', turmaId);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- partial update
+  const { error } = await supabase.from('turmas').update(data as any).eq('id', turmaId);
   if (error) throw error;
 }
 
