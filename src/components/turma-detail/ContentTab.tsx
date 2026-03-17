@@ -681,8 +681,8 @@ const ContentTab = () => {
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
             {confirmImportItem?.type === 'deck'
-              ? `O baralho "${confirmImportItem?.data?.deck_name}" será adicionado à sua pasta "${turma?.name}".`
-              : `A prova "${confirmImportItem?.data?.title}" será adicionada à sua coleção de provas.`}
+              ? `O baralho "${(confirmImportItem?.data as TurmaDeck)?.deck_name}" será adicionado à sua pasta "${turma?.name}".`
+              : `A prova "${(confirmImportItem?.data as TurmaExam)?.title}" será adicionada à sua coleção de provas.`}
           </p>
           <div className="flex justify-end gap-2 mt-2">
             <Button variant="outline" size="sm" onClick={() => setConfirmImportItem(null)}>Cancelar</Button>
