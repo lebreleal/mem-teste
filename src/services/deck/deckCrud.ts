@@ -139,8 +139,8 @@ export async function fetchDeck(deckId: string) {
 
 /** Update deck fields by ID. */
 export async function updateDeck(deckId: string, updates: Record<string, unknown>) {
-  // Filter to only known deck columns to avoid type issues
-  const { error } = await supabase.from('decks').update(updates as Parameters<ReturnType<typeof supabase.from>['update']>[0]).eq('id', deckId);
+  type DeckUpdate = Database['public']['Tables']['decks']['Update'];
+  const { error } = await supabase.from('decks').update(updates as DeckUpdate).eq('id', deckId);
   if (error) throw error;
 }
 
