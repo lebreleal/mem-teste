@@ -118,8 +118,8 @@ export function useStudyPlan(options?: { full?: boolean }) {
   const plansQuery = useQuery({
     queryKey: ['study-plans', userId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('study_plans' as any)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- study_plans not in generated types
+      const { data, error } = await (supabase.from as any)('study_plans')
         .select('id, user_id, name, daily_minutes, weekly_minutes, deck_ids, target_date, priority, created_at, updated_at')
         .eq('user_id', userId!)
         .order('priority', { ascending: true });
@@ -145,12 +145,13 @@ export function useStudyPlan(options?: { full?: boolean }) {
   const plans = plansQuery.data ?? [];
 
   // ─── Deck hierarchy from shared cache (avoids duplicate query) ───
-  const cachedDecks = qc.getQueryData<any[]>(['decks', userId]);
+  interface CachedDeckItem { id: string; parent_deck_id: string | null; is_archived?: boolean }
+  const cachedDecks = qc.getQueryData<CachedDeckItem[]>(['decks', userId]);
   const deckHierarchy = useMemo(() => {
-    if (!cachedDecks) return [];
+    if (!cachedDecks) return [] as { id: string; parent_deck_id: string | null }[];
     return cachedDecks
-      .filter((d: any) => !d.is_archived)
-      .map((d: any) => ({ id: d.id as string, parent_deck_id: d.parent_deck_id as string | null }));
+      .filter(d => !d.is_archived)
+      .map(d => ({ id: d.id, parent_deck_id: d.parent_deck_id }));
   }, [cachedDecks]);
 
   const findRoot = useCallback((id: string): string => {
@@ -176,7 +177,8 @@ export function useStudyPlan(options?: { full?: boolean }) {
   const realMetricsQuery = useQuery({
     queryKey: ['real-study-metrics', userId],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_user_real_study_metrics' as any, { p_user_id: userId });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC not in generated types
+      const { data, error } = await (supabase.rpc as any)('get_user_real_study_metrics', { p_user_id: userId });
       if (error) throw error;
       const row = Array.isArray(data) ? data[0] : data;
       if (!row) return DEFAULT_STUDY_METRICS;
@@ -220,7 +222,8 @@ export function useStudyPlan(options?: { full?: boolean }) {
     queryKey: ['plan-metrics', userId, expandedDeckIds],
     queryFn: async () => {
       if (expandedDeckIds.length === 0) return { total_new: 0, total_review: 0, total_learning: 0 };
-      const { data, error } = await supabase.rpc('get_plan_metrics' as any, {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC not in generated types
+      const { data, error } = await (supabase.rpc as any)('get_plan_metrics', {
         p_user_id: userId,
         p_deck_ids: expandedDeckIds,
       });
@@ -240,15 +243,17 @@ export function useStudyPlan(options?: { full?: boolean }) {
     queryFn: async () => {
       if (allDeckIds.length === 0) return {} as Record<string, number>;
       // Try to read from decks cache first (populated by useDecks → fetchDecksWithStats)
-      const cachedDecks = qc.getQueryData<any[]>(['decks', userId]);
+      interface CachedDeck { id: string; new_count?: number }
+      const cachedDecks = qc.getQueryData<CachedDeck[]>(['decks', userId]);
       let rows: { deck_id: string; new_count: number }[];
       if (cachedDecks && cachedDecks.length > 0) {
-        rows = cachedDecks.map((d: any) => ({ deck_id: d.id, new_count: d.new_count ?? 0 }));
+        rows = cachedDecks.map(d => ({ deck_id: d.id, new_count: d.new_count ?? 0 }));
       } else {
         // Fallback: fetch directly (only on cold start before useDecks populates)
-        const { data, error } = await supabase.rpc('get_all_user_deck_stats' as any, { p_user_id: userId });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC not in generated types
+        const { data, error } = await (supabase.rpc as any)('get_all_user_deck_stats', { p_user_id: userId });
         if (error) throw error;
-        rows = (data as any[]) ?? [];
+        rows = (data as { deck_id: string; new_count: number }[]) ?? [];
       }
       const map: Record<string, number> = {};
       const expandedSet = new Set(expandedDeckIds);
@@ -274,7 +279,7 @@ export function useStudyPlan(options?: { full?: boolean }) {
         .in('id', allDeckIds);
       if (error) throw error;
       if (!data || data.length === 0) return 0.9;
-      const sum = data.reduce((acc: number, d: any) => acc + (d.requested_retention ?? 0.9), 0);
+      const sum = data.reduce((acc: number, d: { requested_retention: number }) => acc + (d.requested_retention ?? 0.9), 0);
       return sum / data.length;
     },
     enabled: full && allDeckIds.length > 0,
@@ -543,14 +548,15 @@ export function useStudyPlan(options?: { full?: boolean }) {
   const createPlan = useMutation({
     mutationFn: async (input: { name: string; deck_ids: string[]; target_date: string | null }) => {
       const maxPriority = plans.length > 0 ? Math.max(...plans.map(p => p.priority ?? 0)) + 1 : 0;
-      const { error } = await supabase.from('study_plans' as any).insert({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- study_plans not in generated types
+      const { error } = await (supabase.from as any)('study_plans').insert({
         user_id: userId,
         name: input.name,
         daily_minutes: globalCapacity.dailyMinutes,
         deck_ids: input.deck_ids,
         target_date: input.target_date,
         priority: maxPriority,
-      } as any);
+      });
       if (error) throw error;
     },
     onSuccess: invalidate,
@@ -559,9 +565,9 @@ export function useStudyPlan(options?: { full?: boolean }) {
   const updatePlan = useMutation({
     mutationFn: async (input: { id: string; name?: string; deck_ids?: string[]; target_date?: string | null }) => {
       const { id, ...rest } = input;
-      const { error } = await supabase
-        .from('study_plans' as any)
-        .update(rest as any)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- study_plans not in generated types
+      const { error } = await (supabase.from as any)('study_plans')
+        .update(rest)
         .eq('id', id);
       if (error) throw error;
     },
@@ -570,7 +576,8 @@ export function useStudyPlan(options?: { full?: boolean }) {
 
   const deletePlan = useMutation({
     mutationFn: async (planId: string) => {
-      const { error } = await supabase.from('study_plans' as any).delete().eq('id', planId);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- study_plans not in generated types
+      const { error } = await (supabase.from as any)('study_plans').delete().eq('id', planId);
       if (error) throw error;
     },
     onSuccess: invalidate,
@@ -579,7 +586,7 @@ export function useStudyPlan(options?: { full?: boolean }) {
   // ─── Global capacity mutations (profile-level) ───
   const updateCapacity = useMutation({
     mutationFn: async (input: { daily_study_minutes: number; weekly_study_minutes?: WeeklyMinutes | null; daily_new_cards_limit?: number }) => {
-      const updateData: any = {
+      const updateData: Record<string, unknown> = {
         daily_study_minutes: input.daily_study_minutes,
         weekly_study_minutes: input.weekly_study_minutes ?? null,
       };
@@ -597,7 +604,7 @@ export function useStudyPlan(options?: { full?: boolean }) {
 
   const updateNewCardsLimit = useMutation({
     mutationFn: async (input: { limit: number; weeklyNewCards?: WeeklyNewCards | null }) => {
-      const updateData: any = { daily_new_cards_limit: input.limit };
+      const updateData: Record<string, unknown> = { daily_new_cards_limit: input.limit };
       if (input.weeklyNewCards !== undefined) {
         updateData.weekly_new_cards = input.weeklyNewCards;
       }
@@ -612,8 +619,8 @@ export function useStudyPlan(options?: { full?: boolean }) {
         ? vars.weeklyNewCards
         : (globalCapacity.weeklyNewCards ?? null);
 
-      // Update profile cache directly (replaces both daily-new-cards-limit and global-capacity)
-      qc.setQueryData(['profile', userId], (prev: any) => {
+      // Update profile cache directly
+      qc.setQueryData(['profile', userId], (prev: Record<string, unknown> | undefined) => {
         if (!prev) return prev;
         return {
           ...prev,
@@ -630,7 +637,8 @@ export function useStudyPlan(options?: { full?: boolean }) {
   const reorderObjectives = useMutation({
     mutationFn: async (orderedPlanIds: string[]) => {
       const updates = orderedPlanIds.map((id, i) =>
-        supabase.from('study_plans' as any).update({ priority: i } as any).eq('id', id)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- study_plans not in generated types
+        (supabase.from as any)('study_plans').update({ priority: i }).eq('id', id)
       );
       await Promise.all(updates);
     },
