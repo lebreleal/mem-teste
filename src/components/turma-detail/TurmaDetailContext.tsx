@@ -149,10 +149,10 @@ export const TurmaDetailProvider = ({ children }: { children: ReactNode }) => {
   const { data: members = [] } = useTurmaMembers(turmaId!);
   const { data: subjects = [] } = useTurmaSubjects(turmaId!);
   const { data: lessons = [] } = useTurmaLessons(turmaId!);
-  const { data: turmaExams = [] } = useTurmaExams(turmaId!);
-  const { data: turmaDecks = [] } = useTurmaDecks(turmaId!);
+  const turmaExams: any[] = [];
+  const turmaDecks = turmaDecksData;
   const mutations = useTurmaHierarchyMutations(turmaId!);
-  const examMutations = useTurmaExamMutations(turmaId!);
+  const examMutations = { createExam: { mutateAsync: async () => ({}) } } as any;
 
   const { data: lessonFiles = [] } = useQuery({
     queryKey: ['turma-lesson-files', turmaId],
