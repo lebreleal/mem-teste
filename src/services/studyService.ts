@@ -290,7 +290,7 @@ export async function fetchStudyQueue(
 
   if (buryNew || buryReview || buryLearning) {
     const seenFronts = new Set<string>();
-    const buryFilter = (card: any, shouldBury: boolean) => {
+    const buryFilter = (card: StudyCard, shouldBury: boolean) => {
       if (card.card_type !== 'cloze' || !shouldBury) return true;
       const key = card.front_content;
       if (seenFronts.has(key)) return false;
