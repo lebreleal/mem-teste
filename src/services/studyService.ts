@@ -551,7 +551,7 @@ export async function fetchCardsAddedPerDay(userId: string, days = 90): Promise<
   const { data, error } = await supabase.rpc('get_cards_added_per_day' as 'get_user_ranking', {
     p_user_id: userId,
     p_days: days,
-  });
+  } as unknown as Record<string, never>);
   if (error) throw error;
-  return (data as CardsAddedRow[]) ?? [];
+  return (data as unknown as CardsAddedRow[]) ?? [];
 }
