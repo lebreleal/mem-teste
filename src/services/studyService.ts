@@ -253,10 +253,10 @@ export async function fetchStudyQueue(
   // ─── Round 3: both limits RPCs in parallel ───
   const [hierarchyLimits, globalLimitsResult] = await Promise.all([
     limitCardIds.length > 0
-      ? supabase.rpc('get_study_queue_limits', { p_user_id: userId, p_card_ids: limitCardIds, p_tz_offset_minutes: tzOffsetMinutes } as any)
+      ? supabase.rpc('get_study_queue_limits', { p_user_id: userId, p_card_ids: limitCardIds, p_tz_offset_minutes: tzOffsetMinutes })
       : Promise.resolve({ data: null }),
     globalCardIds.length > 0
-      ? supabase.rpc('get_study_queue_limits', { p_user_id: userId, p_card_ids: globalCardIds, p_tz_offset_minutes: tzOffsetMinutes } as any)
+      ? supabase.rpc('get_study_queue_limits', { p_user_id: userId, p_card_ids: globalCardIds, p_tz_offset_minutes: tzOffsetMinutes })
       : Promise.resolve({ data: null }),
   ]);
 
