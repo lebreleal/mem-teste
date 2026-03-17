@@ -313,8 +313,7 @@ export const CardEditorForm = ({
           onChange={editorOnChange}
           placeholder="Pergunta, texto com lacunas, ou contexto"
           hideCloze={hideCloze}
-          onOcclusionPaste={onOpenOcclusion}
-          onOcclusionAttach={onOpenOcclusion}
+          onOcclusionImageReady={onOcclusionImageReady}
           onAICreate={onAICreate}
           isAICreating={isAICreating}
         />
