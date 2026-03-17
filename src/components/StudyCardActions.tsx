@@ -629,17 +629,6 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
         </DialogContent>
       </Dialog>
 
-      {/* Suggest correction modal for live decks */}
-      {isLiveDeck && (
-        <Suspense fallback={null}>
-          <SuggestCorrectionModal
-            open={suggestOpen}
-            onOpenChange={setSuggestOpen}
-            card={card}
-            deckId={card.deck_id}
-          />
-        </Suspense>
-      )}
     </>
   );
 };
