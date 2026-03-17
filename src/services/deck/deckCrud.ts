@@ -50,7 +50,7 @@ export async function resolveUniqueDeckName(userId: string, baseName: string): P
 
 /** Create a new deck. */
 export async function createDeck(userId: string, name: string, folderId?: string | null, parentDeckId?: string | null, algorithmMode?: string) {
-  const insertData: Parameters<ReturnType<typeof supabase.from>['insert']>[0] = {
+  const insertData: DeckInsert = {
     name,
     user_id: userId,
     folder_id: folderId ?? null,
