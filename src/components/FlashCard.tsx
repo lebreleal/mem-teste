@@ -50,7 +50,7 @@ interface FlashCardProps {
   isSubmitting: boolean;
   quickReview?: boolean;
   algorithmMode?: string;
-  deckConfig?: any;
+  deckConfig?: DeckStudyConfig;
   energy?: number;
   tutorCost?: number;
   onTutorRequest?: (options?: { action?: string; mcOptions?: string[]; correctIndex?: number; selectedIndex?: number }) => void;
