@@ -97,15 +97,15 @@ const MateriaDetail: React.FC = () => {
   const updateMutation = useMutation({
     mutationFn: async ({ name, color }: { name: string; color: string | null }) => {
       if (!id) throw new Error('No materia id');
-      const { error } = await supabase.from('decks').update({
-        name,
-        image_url: color ? `color:${color}` : null,
-      }).eq('id', id);
+      // Save color locally
+      setMateriaColor(id, color);
+      // Update name in DB
+      const { error } = await supabase.from('decks').update({ name }).eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['decks'] });
-      queryClient.invalidateQueries({ queryKey: ['materia-extra', id] });
+      setColorVersion(v => v + 1);
       setShowEdit(false);
       toast({ title: 'Matéria atualizada' });
     },
