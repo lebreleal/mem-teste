@@ -222,30 +222,6 @@ export const CardEditorDialog = ({
         {hasCloze && renderClozePreview()}
         {!hasCloze && <ClozeHelpToggle />}
 
-        {/* Image occlusion area */}
-        {isImageMode ? (
-          <div className="inline-flex">
-            <button type="button" onClick={() => setOcclusionModalOpen(true)} className="relative group inline-block rounded-lg overflow-hidden border border-border">
-              <img src={(() => { try { return JSON.parse(front)?.imageUrl; } catch { return ''; } })()} alt="Oclusão" className="h-14 w-14 object-cover rounded-lg" />
-              <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center bg-primary/80 py-0.5">
-                <Image className="h-3 w-3 text-primary-foreground" />
-              </div>
-              <button type="button" onClick={(e) => {
-                e.stopPropagation();
-                // Remove image but keep frontText
-                try {
-                  const d = JSON.parse(front);
-                  setFront(d.frontText || '');
-                } catch { setFront(''); }
-              }} className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-muted-foreground/80 text-background flex items-center justify-center text-[10px] font-bold hover:bg-destructive transition-colors">×</button>
-            </button>
-          </div>
-        ) : (
-          <button type="button" onClick={() => setOcclusionModalOpen(true)} className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors">
-            <Upload className="h-3.5 w-3.5" /> Enviar imagem para oclusão
-          </button>
-        )}
-
         {/* Back */}
         <div>
           <Label className="mb-1.5 block">Verso (Resposta)</Label>
@@ -264,11 +240,37 @@ export const CardEditorDialog = ({
 
         {editingId && <CardTagEditor cardId={editingId} />}
 
-        {/* Actions */}
-        <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
-          <Button variant="outline" onClick={() => { setEditorOpen(false); resetForm(); }}>Cancelar</Button>
-          {!editingId && <Button variant="secondary" onClick={() => handleSave(true)} disabled={isSaving}>{isSaving ? 'Salvando...' : 'Salvar e Adicionar Outro'}</Button>}
-          <Button onClick={() => handleSave(false)} disabled={isSaving}>{isSaving ? 'Salvando...' : 'Salvar e Fechar'}</Button>
+        {/* Bottom bar: image occlusion (left) + actions (right) */}
+        <div className="flex items-end gap-2 pt-2">
+          {/* Image occlusion – bottom left */}
+          <div className="flex-shrink-0">
+            {isImageMode ? (
+              <button type="button" onClick={() => setOcclusionModalOpen(true)} className="relative group inline-block rounded-lg overflow-hidden border border-border">
+                <img src={(() => { try { return JSON.parse(front)?.imageUrl; } catch { return ''; } })()} alt="Oclusão" className="h-12 w-12 object-cover rounded-lg" />
+                <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center bg-primary/80 py-0.5">
+                  <Image className="h-2.5 w-2.5 text-primary-foreground" />
+                </div>
+                <button type="button" onClick={(e) => {
+                  e.stopPropagation();
+                  try {
+                    const d = JSON.parse(front);
+                    setFront(d.frontText || '');
+                  } catch { setFront(''); }
+                }} className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-muted-foreground/80 text-background flex items-center justify-center text-[10px] font-bold hover:bg-destructive transition-colors">×</button>
+              </button>
+            ) : (
+              <button type="button" onClick={() => setOcclusionModalOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-border px-3 py-2 text-xs font-medium text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors">
+                <Upload className="h-3.5 w-3.5" /> Imagem
+              </button>
+            )}
+          </div>
+
+          {/* Actions – right */}
+          <div className="flex flex-1 justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={() => { setEditorOpen(false); resetForm(); }}>Cancelar</Button>
+            {!editingId && <Button variant="secondary" size="sm" onClick={() => handleSave(true)} disabled={isSaving}>{isSaving ? 'Salvando...' : 'Salvar +'}</Button>}
+            <Button size="sm" onClick={() => handleSave(false)} disabled={isSaving}>{isSaving ? 'Salvando...' : 'Salvar'}</Button>
+          </div>
         </div>
       </div>
     );
