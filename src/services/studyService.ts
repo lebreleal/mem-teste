@@ -92,7 +92,7 @@ export async function fetchStudyQueue(
 
     // Guard: if still no decks after bootstrap, return empty queue
     if (deckIds.length === 0) {
-      return { cards: [], algorithmMode: 'fsrs', deckConfig: undefined as unknown as DeckStudyConfig, isLiveDeck: false };
+      return { cards: [], algorithmMode: 'fsrs', deckConfig: undefined, isLiveDeck: false };
     }
 
     // Mark decks with zero new-card limit (their reviews still participate)
