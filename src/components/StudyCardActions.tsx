@@ -220,8 +220,6 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
         // Fetch all cloze siblings from DB (same front_content as original)
         const allSiblingCards = await fetchClozeSiblings([card.deck_id], originalFrontRef.current);
 
-        const allSiblingCardsResult = allSiblingCards || [];
-
         // Map existing cloze targets to card IDs
         const existingTargets = new Map<number, string>();
         allSiblingCards.forEach(c => {

@@ -271,10 +271,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
     if (!text.trim() || text.length < 10) return;
     setAutoDetecting(true);
     try {
-      const { data, error } = await supabase.functions.invoke('detect-import-format', {
-        body: { sample: text.slice(0, 2000) },
-      });
-      if (error) throw error;
+      const data = await invokeDetectImportFormat(text.slice(0, 2000));
       if (data?.fieldSep) {
         if (data.fieldSep === 'tab') { setFieldSep('tab'); setUseRFC(true); }
         else if (data.fieldSep === 'comma') { setFieldSep('comma'); setUseRFC(true); }
