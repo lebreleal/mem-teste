@@ -47,13 +47,13 @@ export async function resolveUniqueDeckName(userId: string, baseName: string): P
 
 /** Create a new deck. */
 export async function createDeck(userId: string, name: string, folderId?: string | null, parentDeckId?: string | null, algorithmMode?: string) {
-  const insertData: Record<string, unknown> = {
+  const insertData: Parameters<ReturnType<typeof supabase.from>['insert']>[0] = {
     name,
     user_id: userId,
     folder_id: folderId ?? null,
     parent_deck_id: parentDeckId ?? null,
+    ...(algorithmMode ? { algorithm_mode: algorithmMode } : {}),
   };
-  if (algorithmMode) insertData.algorithm_mode = algorithmMode;
 
   const { data, error } = await supabase
     .from('decks')
