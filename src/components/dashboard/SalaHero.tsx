@@ -314,10 +314,20 @@ const SalaHero = ({
               </button>
 
               {infoOpen && (
-                <p className="text-[11px] text-muted-foreground text-center leading-relaxed px-2 animate-fade-in">
-                  Esse tempo é calculado com base na sua velocidade média por cartão.
-                  {salaStudyStats.reviewedToday > 0 && ` Você já estudou ${salaStudyStats.reviewedToday} cartões hoje!`}
-                </p>
+                <div className="mt-2 mx-auto max-w-xs p-3 bg-muted/50 rounded-xl text-xs space-y-2 animate-fade-in">
+                  <p className="font-semibold text-foreground flex items-center gap-1.5">
+                    📚 Pra hoje
+                  </p>
+                  <p className="text-muted-foreground flex items-center gap-1">
+                    Você tem <IconDeck className="h-3 w-3 mx-0.5" /> <span className="font-medium text-foreground">{salaStudyStats.totalDue} cartões</span> pra estudar hoje
+                  </p>
+                  <p className="text-muted-foreground">
+                    Tempo estimado: <span className="font-medium text-foreground">{salaStudyStats.timeLabel}</span>
+                  </p>
+                  <p className="text-[10px] text-muted-foreground/70 pt-1 border-t border-border/30">
+                    Calculado pela sua velocidade média por cartão
+                  </p>
+                </div>
               )}
             </div>
           )}
