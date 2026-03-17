@@ -278,32 +278,10 @@ export const TurmaDetailProvider = ({ children }: { children: ReactNode }) => {
 
   const handleImportExam = async (exam: any) => {
     try {
-      // Check if already imported
-      const { data: existing } = await supabase.from('exams').select('id').eq('user_id', user!.id).eq('source_turma_exam_id', exam.id).limit(1);
-      if (existing && existing.length > 0) {
-        // Already imported, navigate directly
-        navigate(`/exam/${existing[0].id}`);
-        return;
-      }
-
-      const { data: questions, error } = await supabase.from('turma_exam_questions').select('*').eq('exam_id', exam.id).order('sort_order', { ascending: true });
-      if (error) throw error;
-      // Community-imported exams don't need a deck_id
-      const deckId = null;
-      const totalPoints = (questions ?? []).reduce((sum: number, q: any) => sum + (q.points || 1), 0);
-      const { data: newExam, error: examError } = await (supabase.from('exams' as any) as any)
-        .insert({ user_id: user!.id, deck_id: deckId, title: exam.title, status: 'pending', total_points: totalPoints, time_limit_seconds: exam.time_limit_seconds || null, source_turma_exam_id: exam.id })
-        .select().single();
-      if (examError) throw examError;
-      const questionsToInsert = (questions ?? []).map((q: any, idx: number) => ({
-        exam_id: newExam.id, question_type: q.question_type, question_text: q.question_text,
-        options: q.options ?? null, correct_answer: q.correct_answer, correct_indices: q.correct_indices || null, points: q.points, sort_order: idx,
-      }));
-      const { error: qError } = await (supabase.from('exam_questions' as any) as any).insert(questionsToInsert);
-      if (qError) throw qError;
+      const examId = await importTurmaExam(user!.id, exam);
       queryClient.invalidateQueries({ queryKey: ['exams'] });
       toast({ title: 'Prova importada!', description: 'A prova foi adicionada à sua seção de provas.' });
-      navigate(`/exam/${newExam.id}`);
+      navigate(`/exam/${examId}`);
     } catch (err: any) { toast({ title: 'Erro ao importar', description: err.message, variant: 'destructive' }); }
   };
 
