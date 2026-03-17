@@ -70,7 +70,7 @@ export const useAdminUsers = () => {
     if (error) {
       toast({ title: 'Erro', description: 'Falha ao carregar usuários.', variant: 'destructive' });
     } else {
-      setUsers((data as any[]) || []);
+      setUsers(((data as AdminProfile[]) ?? []));
     }
     setLoading(false);
   }, [toast]);
