@@ -101,20 +101,11 @@ const Profile = () => {
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
-    const ext = file.name.split('.').pop();
-    const path = `${user.id}/avatar.${ext}`;
-    const { error: uploadErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
-    if (uploadErr) {
-      toast({ title: 'Erro', description: 'Falha ao enviar imagem.', variant: 'destructive' });
-      return;
-    }
-    const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
-    const publicUrl = urlData.publicUrl + '?t=' + Date.now();
-    const { error: updateErr } = await supabase.auth.updateUser({ data: { avatar_url: publicUrl } });
-    if (updateErr) {
-      toast({ title: 'Erro', description: 'Falha ao atualizar avatar.', variant: 'destructive' });
-    } else {
+    try {
+      await uploadAvatar(user.id, file);
       toast({ title: 'Foto atualizada!' });
+    } catch {
+      toast({ title: 'Erro', description: 'Falha ao atualizar avatar.', variant: 'destructive' });
     }
   };
 
