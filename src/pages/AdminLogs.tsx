@@ -30,22 +30,8 @@ const AdminLogs = () => {
   const fetchLogs = async () => {
     setLoading(true);
     try {
-      let query = (supabase as any)
-        .from("app_error_logs")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(200);
-
-      if (severity !== "all") {
-        query = query.eq("severity", severity);
-      }
-      if (search.trim()) {
-        query = query.ilike("error_message", `%${search.trim()}%`);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      setLogs(data || []);
+      const data = await fetchErrorLogs({ severity, search });
+      setLogs(data);
     } catch (err: any) {
       toast({ title: "Erro ao carregar logs", description: err.message, variant: "destructive" });
     } finally {
