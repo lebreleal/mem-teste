@@ -162,6 +162,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   readOnly = false,
   disableManagementActions = false,
   readOnlyNavState,
+  organizeMode = false,
 }, ref) => {
   const navigate = useNavigate();
   const { isAdmin } = useIsAdmin();
