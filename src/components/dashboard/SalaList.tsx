@@ -82,19 +82,7 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
     return ids;
   };
 
-  // Fetch question counts per deck (batch query)
-  const allDeckIds = useMemo(() => decks.filter(d => !d.is_archived).map(d => d.id), [decks]);
-  const { data: questionCounts } = useQuery({
-    queryKey: ['deck-question-counts', user?.id],
-    queryFn: () => fetchDeckQuestionCounts(allDeckIds),
-    enabled: !!user && allDeckIds.length > 0 && !isLoading,
-    staleTime: 120_000,
-  });
-
-  const getQuestionCount = (deckIds: string[]): number => {
-    if (!questionCounts) return 0;
-    return deckIds.reduce((sum, id) => sum + (questionCounts.get(id) ?? 0), 0);
-  };
+  // Fetch question counts removed
 
   // Identify community-followed folders
   const communityFolderIds = useMemo(() =>
