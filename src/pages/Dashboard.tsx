@@ -1198,15 +1198,7 @@ const Dashboard = () => {
               onClick={async () => {
                 if (!salaImageFile || !state.currentFolderId) return;
                 try {
-                  const ext = salaImageFile.name.split('.').pop() || 'jpg';
-                  const filePath = `sala-images/${state.currentFolderId}.${ext}`;
-                  const { error: uploadErr } = await supabase.storage
-                    .from('deck-covers')
-                    .upload(filePath, salaImageFile, { upsert: true });
-                  if (uploadErr) throw uploadErr;
-                  const { data: urlData } = supabase.storage.from('deck-covers').getPublicUrl(filePath);
-                  const imageUrl = urlData.publicUrl + '?t=' + Date.now();
-                  await supabase.from('folders').update({ image_url: imageUrl } as any).eq('id', state.currentFolderId);
+                  await uploadFolderImage(state.currentFolderId, salaImageFile);
                   await queryClient.invalidateQueries({ queryKey: ['folders'] });
                   toast({ title: 'Imagem atualizada!' });
                   setSalaImageOpen(false);
