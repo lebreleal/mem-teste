@@ -107,7 +107,7 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
 
   // Aggregated stats
   const totalStats = useMemo(() => {
-    let totalCards = 0, mastered = 0, novo = 0, facil = 0, bom = 0, dificil = 0, errei = 0, totalQuestions = 0;
+    let totalCards = 0, mastered = 0, novo = 0, facil = 0, bom = 0, dificil = 0, errei = 0;
     for (const d of salaDecks) {
       totalCards += d.total_cards;
       mastered += d.mastered_cards;
@@ -117,12 +117,9 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
       dificil += d.class_dificil ?? 0;
       errei += d.class_errei ?? 0;
     }
-    if (questionCountMap) {
-      for (const c of questionCountMap.values()) totalQuestions += c;
-    }
     const progressPct = totalCards > 0 ? Math.round(((totalCards - novo) / totalCards) * 100) : 0;
-    return { totalCards, mastered, novo, facil, bom, dificil, errei, totalQuestions, progressPct };
-  }, [salaDecks, questionCountMap]);
+    return { totalCards, mastered, novo, facil, bom, dificil, errei, progressPct };
+  }, [salaDecks]);
 
   // DeckRow helpers
   const rootDecks = useMemo(
