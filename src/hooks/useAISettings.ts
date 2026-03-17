@@ -20,7 +20,7 @@ export const useAISettings = () => {
     if (error) {
       toast({ title: 'Erro', description: 'Falha ao carregar configurações.', variant: 'destructive' });
     } else {
-      setSettings((data as any[]) || []);
+      setSettings((data ?? []) as AISetting[]);
     }
     setLoading(false);
   }, [toast]);
