@@ -262,8 +262,7 @@ const AIAgent = () => {
   };
 
   const handleDeleteConversation = async (convId: string) => {
-    await supabase.from('ai_chat_messages').delete().eq('conversation_id', convId);
-    await supabase.from('ai_conversations').delete().eq('id', convId);
+    await deleteAIConversation(convId);
     setConversations(prev => prev.filter(c => c.id !== convId));
     if (activeConversationId === convId) {
       setActiveConversationId(null);
