@@ -160,3 +160,17 @@ export const IconSwap = ({ className = 'h-4 w-4' }: IconProps) => (
     <path d="M7 16V4m0 0L3 8m4-4 4 4M17 8v12m0 0 4-4m-4 4-4-4" />
   </svg>
 );
+
+/* ─── Trash / Delete ─── */
+export const IconTrash = ({ className = 'h-4 w-4' }: IconProps) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className={className}>
+    <path fill="currentColor" fillRule="evenodd" d="M7 2a1 1 0 0 0 0 2h10a1 1 0 1 0 0-2zm-.585 4a2.5 2.5 0 0 0-2.473 2.87l1.581 10.574A3 3 0 0 0 8.49 22h7.02a3 3 0 0 0 2.967-2.556l1.58-10.574A2.5 2.5 0 0 0 17.586 6zM6 8h12.08C17.827 9.825 16 20 16 20H8S6.232 9.782 6 8" clipRule="evenodd" />
+  </svg>
+);
+
+/* ─── Cursor / Select ─── */
+export const IconCursor = ({ className = 'h-5 w-5' }: IconProps) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+    <path d="M4 2l14 10.5-5.5 1.5L16 21l-3 1-3.5-7L4 18z" />
+  </svg>
+);
