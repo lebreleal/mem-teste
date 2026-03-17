@@ -7,8 +7,9 @@
 
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Info, ChevronDown, ChevronRight, Layers, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings, Plus, Minus, Play, Sparkles, BookOpen } from 'lucide-react';
+import { Info, ChevronDown, ChevronRight, Layers, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings, Plus, Minus, Play, Sparkles, BookOpen, GripVertical } from 'lucide-react';
 import { IconFolder, IconDeck } from '@/components/icons';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { DeckWithStats } from '@/hooks/useDecks';
 import type { DragReorderHandlers } from '@/hooks/useDragReorder';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
