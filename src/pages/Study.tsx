@@ -1082,9 +1082,7 @@ const Study = () => {
                         const tomorrow = new Date();
                         tomorrow.setDate(tomorrow.getDate() + 1);
                         tomorrow.setHours(0, 0, 0, 0);
-                        sibIds.forEach(sid => {
-                          supabase.from('cards').update({ scheduled_date: tomorrow.toISOString() }).eq('id', sid).then(() => {});
-                        });
+                        buryCards(sibIds, tomorrow.toISOString());
                         filtered = filtered.filter(c => !sibIds.includes(c.id));
                       }
                     }
