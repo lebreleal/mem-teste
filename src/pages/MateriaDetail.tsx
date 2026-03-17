@@ -76,7 +76,8 @@ const MateriaDetail: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const { decks, folders } = useDecks();
+  const { decks } = useDecks();
+  const { folders } = useFolders();
 
   // Find the materia and its sub-decks from the cached decks list
   const materia = useMemo(() => decks?.find(d => d.id === id), [decks, id]);
