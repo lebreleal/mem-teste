@@ -383,8 +383,8 @@ const ContentTab = () => {
   });
 
   // ── Helper: get file/exam count for a turma_deck ──
-  const getDeckFilesCount = (td: any) => td.lesson_id ? (fileCountsByLesson[td.lesson_id] || 0) : 0;
-  const getDeckExamsCount = (td: any) => td.lesson_id ? (examCountsByLesson[td.lesson_id] || 0) : 0;
+  const getDeckFilesCount = (td: TurmaDeck) => td.lesson_id ? (fileCountsByLesson[td.lesson_id] || 0) : 0;
+  const getDeckExamsCount = (td: TurmaDeck) => td.lesson_id ? (examCountsByLesson[td.lesson_id] || 0) : 0;
 
   const currentFolders = useMemo(() => {
     return subjects
