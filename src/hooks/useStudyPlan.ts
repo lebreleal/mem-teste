@@ -243,15 +243,17 @@ export function useStudyPlan(options?: { full?: boolean }) {
     queryFn: async () => {
       if (allDeckIds.length === 0) return {} as Record<string, number>;
       // Try to read from decks cache first (populated by useDecks → fetchDecksWithStats)
-      const cachedDecks = qc.getQueryData<any[]>(['decks', userId]);
+      interface CachedDeck { id: string; new_count?: number }
+      const cachedDecks = qc.getQueryData<CachedDeck[]>(['decks', userId]);
       let rows: { deck_id: string; new_count: number }[];
       if (cachedDecks && cachedDecks.length > 0) {
-        rows = cachedDecks.map((d: any) => ({ deck_id: d.id, new_count: d.new_count ?? 0 }));
+        rows = cachedDecks.map(d => ({ deck_id: d.id, new_count: d.new_count ?? 0 }));
       } else {
         // Fallback: fetch directly (only on cold start before useDecks populates)
-        const { data, error } = await supabase.rpc('get_all_user_deck_stats' as any, { p_user_id: userId });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC not in generated types
+        const { data, error } = await (supabase.rpc as any)('get_all_user_deck_stats', { p_user_id: userId });
         if (error) throw error;
-        rows = (data as any[]) ?? [];
+        rows = (data as { deck_id: string; new_count: number }[]) ?? [];
       }
       const map: Record<string, number> = {};
       const expandedSet = new Set(expandedDeckIds);
