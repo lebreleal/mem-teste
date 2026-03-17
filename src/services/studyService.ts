@@ -254,8 +254,8 @@ export async function fetchStudyQueue(
   }
 
   let globalNewReviewedToday = 0;
-  if (globalLimitsResult.data && (globalLimitsResult.data as any[]).length > 0) {
-    globalNewReviewedToday = (globalLimitsResult.data as any[])[0].new_reviewed_today ?? 0;
+  if (globalLimitsResult.data && (globalLimitsResult.data as StudyQueueLimitsRow[]).length > 0) {
+    globalNewReviewedToday = (globalLimitsResult.data as StudyQueueLimitsRow[])[0].new_reviewed_today ?? 0;
   }
 
   // Profile limits
