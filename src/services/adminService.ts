@@ -209,7 +209,7 @@ export async function gradeExamQuestion(questionId: string, userAnswer: string, 
   });
   if (error) throw error;
   if (data.error) throw new Error(data.error);
-  return data as { score: number; feedback: string };
+  return data as { score: number; feedback: string; freeGradingsRemaining?: number };
 }
 
 export async function updateTurmaExamAnswer(answerId: string, scoredPoints: number, feedback: string) {
