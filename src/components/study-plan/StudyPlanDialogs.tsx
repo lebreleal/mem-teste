@@ -104,37 +104,49 @@ export function CatchUpDialog({ open, onOpenChange, totalReview, avgSecondsPerCa
     if (allDeckIds.length === 0) return;
     setDiluting(true);
 
-    const { data: overdueCards, error: fetchErr } = await supabase
-      .from('cards')
-      .select('id')
-      .in('deck_id', allDeckIds)
-      .eq('state', 2)
-      .lte('scheduled_date', new Date().toISOString())
-      .order('scheduled_date', { ascending: true });
+    try {
+      const overdueIds = await fetchOverdueCardIds(allDeckIds);
+      if (overdueIds.length === 0) {
+        setDiluting(false);
+        onOpenChange(false);
+        return;
+      }
 
-    if (fetchErr || !overdueCards || overdueCards.length === 0) {
+      const perDay = Math.ceil(overdueIds.length / days);
+      let hasError = false;
+
+      for (let d = 0; d < days && !hasError; d++) {
+        const batch = overdueIds.slice(d * perDay, (d + 1) * perDay);
+        if (batch.length === 0) break;
+        const targetDate = new Date();
+        targetDate.setDate(targetDate.getDate() + d);
+        targetDate.setHours(0, 0, 0, 0);
+
+        try {
+          await rescheduleCards(batch, targetDate.toISOString());
+        } catch {
+          hasError = true;
+        }
+      }
+
       setDiluting(false);
       onOpenChange(false);
-      if (fetchErr) toast({ title: 'Erro ao buscar cards', variant: 'destructive' });
+
+      if (hasError) {
+        toast({ title: 'Erro ao redistribuir alguns cards', variant: 'destructive' });
+      } else {
+        const perDayFinal = Math.ceil(overdueIds.length / days);
+        const minPerDay = Math.round((perDayFinal * avgSecondsPerCard) / 60);
+        toast({
+          title: `${overdueIds.length} revisões redistribuídas em ${days} dias`,
+          description: `~${perDayFinal} cards/dia · ${formatMinutes(minPerDay)} extra por dia`,
+        });
+      }
+    } catch (fetchErr) {
+      setDiluting(false);
+      onOpenChange(false);
+      toast({ title: 'Erro ao buscar cards', variant: 'destructive' });
       return;
-    }
-
-    const perDay = Math.ceil(overdueCards.length / days);
-    let hasError = false;
-
-    for (let d = 0; d < days && !hasError; d++) {
-      const batch = overdueCards.slice(d * perDay, (d + 1) * perDay);
-      if (batch.length === 0) break;
-      const targetDate = new Date();
-      targetDate.setDate(targetDate.getDate() + d);
-      targetDate.setHours(0, 0, 0, 0);
-
-      const { error: upErr } = await supabase
-        .from('cards')
-        .update({ scheduled_date: targetDate.toISOString() } as any)
-        .in('id', batch.map(c => c.id));
-
-      if (upErr) hasError = true;
     }
 
     setDiluting(false);
