@@ -13,7 +13,7 @@ import {
 } from 'recharts';
 import { SectionTitle, PeriodFilterIcon, StatBadge, MiniBarChart } from './StatsShared';
 import type { usePeriodFilter } from '@/hooks/useStatsData';
-import type { CardStatistics } from '@/components/stats/RetentionChart';
+import type { CardStatistics } from '@/hooks/useCardStatisticsLocal';
 
 interface ReviewChartProps {
   reviewsPerDayFilter: ReturnType<typeof usePeriodFilter>;

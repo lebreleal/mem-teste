@@ -10,21 +10,7 @@ import {
   AreaChart, Area, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer,
 } from 'recharts';
 import { SectionTitle } from './StatsShared';
-/** Card statistics shape used by stats components */
-export interface CardStatistics {
-  totalCards: number;
-  newCards: number;
-  learningCards: number;
-  reviewCards: number;
-  averageDifficulty: number;
-  averageStability: number;
-  retentionRate: number;
-  matureRetentionRate: number;
-  youngRetentionRate: number;
-  intervalDistribution: { label: string; count: number }[];
-  difficultyDistribution: { label: string; count: number }[];
-  stabilityDistribution: { label: string; count: number }[];
-}
+import type { CardStatistics } from '@/hooks/useCardStatisticsLocal';
 
 interface RetentionChartProps {
   stats: CardStatistics;
