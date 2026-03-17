@@ -7,6 +7,11 @@ interface PersonalNotesProps {
   cardId: string;
 }
 
+interface MetadataRow {
+  personal_notes: string | null;
+  updated_at: string | null;
+}
+
 function formatRelativeDate(dateStr: string): string {
   const date = new Date(dateStr);
   const now = new Date();
@@ -20,6 +25,9 @@ function formatRelativeDate(dateStr: string): string {
   if (diffD < 7) return `${diffD}d atrás`;
   return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- user_card_metadata not in generated types
+const metaTable = () => (supabase.from as (t: string) => ReturnType<typeof supabase.from>)('user_card_metadata');
 
 const PersonalNotes = ({ cardId }: PersonalNotesProps) => {
   const { user } = useAuth();
@@ -38,16 +46,16 @@ const PersonalNotes = ({ cardId }: PersonalNotesProps) => {
     setExpanded(false);
 
     (async () => {
-      const { data } = await supabase
-        .from('user_card_metadata' as any)
+      const { data } = await metaTable()
         .select('personal_notes, updated_at')
         .eq('user_id', user.id)
         .eq('card_id', cardId)
         .maybeSingle();
       
       if (lastCardIdRef.current !== cardId) return; // stale
-      const note = (data as any)?.personal_notes || '';
-      const savedAt = (data as any)?.updated_at || null;
+      const row = data as unknown as MetadataRow | null;
+      const note = row?.personal_notes || '';
+      const savedAt = row?.updated_at || null;
       setNotes(note);
       setUpdatedAt(savedAt);
       setLoaded(true);
@@ -58,15 +66,16 @@ const PersonalNotes = ({ cardId }: PersonalNotesProps) => {
   const saveNotes = useCallback(async (value: string) => {
     if (!user) return;
     if (!value.trim()) {
-      await supabase.from('user_card_metadata' as any).delete().eq('user_id', user.id).eq('card_id', cardId);
+      await metaTable().delete().eq('user_id', user.id).eq('card_id', cardId);
       setUpdatedAt(null);
       return;
     }
-    const { data } = await supabase.from('user_card_metadata' as any).upsert(
-      { user_id: user.id, card_id: cardId, personal_notes: value.trim() } as any,
+    const { data } = await metaTable().upsert(
+      { user_id: user.id, card_id: cardId, personal_notes: value.trim() },
       { onConflict: 'user_id,card_id' }
     ).select('updated_at').single();
-    if ((data as any)?.updated_at) setUpdatedAt((data as any).updated_at);
+    const row = data as unknown as { updated_at?: string } | null;
+    if (row?.updated_at) setUpdatedAt(row.updated_at);
     else setUpdatedAt(new Date().toISOString());
   }, [user, cardId]);
 

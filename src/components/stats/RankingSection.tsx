@@ -10,18 +10,20 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { cn } from '@/lib/utils';
 import { Users, Settings2, ChevronRight, Calendar } from 'lucide-react';
 import { SectionTitle, RankMedal, rankingSortOptions } from './StatsShared';
+import type { RankingEntry } from '@/hooks/useRanking';
+import type { UseMutationResult } from '@tanstack/react-query';
 
 interface RankingSectionProps {
-  user: any;
-  sortedRanking: any[];
+  user: { id: string } | null;
+  sortedRanking: RankingEntry[];
   rankingLoading: boolean;
   rankingSort: 'cards' | 'hours' | 'streak';
   setRankingSort: (v: 'cards' | 'hours' | 'streak') => void;
   rankingConfigOpen: boolean;
   setRankingConfigOpen: (v: boolean) => void;
   isPublic: boolean;
-  togglePublic: any;
-  getRankValue: (entry: any) => string;
+  togglePublic: UseMutationResult<void, Error, boolean>;
+  getRankValue: (entry: RankingEntry) => string;
   onNavigateForecast: () => void;
 }
 
