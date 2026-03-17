@@ -414,7 +414,7 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
     toast({ title: 'Melhoria aplicada!' });
   }, [improvePreview, cardType, mcOptions, mcCorrectIndex, toast, setFront, setBack, setMcOptions, setMcCorrectIndex, setImproveModalOpen, setImprovePreview]);
 
-  const handleImportCards = useCallback(async (subDeckName: string, importedCards: { frontContent: string; backContent: string; cardType?: string }[], subdecks?: any[]) => {
+  const handleImportCards = useCallback(async (subDeckName: string, importedCards: { frontContent: string; backContent: string; cardType?: string }[], subdecks?: ImportSubdeck[]) => {
     if (!deckId) return;
     try {
       const userId = await getCurrentUserId();
