@@ -213,7 +213,7 @@ export async function fetchStudyQueue(
       .order('created_at', { ascending: true }),
     fetchAllCardIds(),
     supabase
-      .from('study_plans' as any)
+      .from('study_plans')
       .select('deck_ids, priority')
       .eq('user_id', userId)
       .order('priority', { ascending: true }),
