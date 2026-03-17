@@ -513,93 +513,145 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, onRemoveImage, isSavi
         </p>
       )}
 
-      {/* Image canvas */}
-      <div
-        ref={containerRef}
-        className="relative rounded-xl border border-border overflow-auto bg-muted/10"
-        style={{ touchAction: 'none', maxHeight: 'min(50dvh, 380px)' }}
-      >
+      {/* Polygon hint */}
+      {tool === 'polygon' && currentPoints.length > 0 && (
+        <p className="text-[11px] text-muted-foreground bg-muted/50 rounded-lg px-2.5 py-1">
+          Clique para vértices. Feche no primeiro ponto. ({currentPoints.length} pt{currentPoints.length !== 1 ? 's' : ''})
+        </p>
+      )}
+
+      {/* Canvas + right sidebar */}
+      <div className="flex gap-2">
+        {/* Image canvas */}
         <div
-          className="occlusion-img-wrapper relative inline-block"
-          style={{
-            width: displaySize.w || '100%',
-            height: displaySize.h || 'auto',
-            cursor: tool === 'select' ? 'default' : 'crosshair',
-          }}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerLeave={() => {
-            if (drawing && tool !== 'polygon') {
-              setDrawing(false);
-              setStartPos(null);
-              setCurrentRect(null);
-              setCurrentPoints([]);
-            }
-          }}
-          onClick={() => { if (tool !== 'polygon') setSelectedId(null); }}
+          ref={containerRef}
+          className="relative flex-1 min-w-0 rounded-xl border border-border overflow-auto bg-muted/10"
+          style={{ touchAction: 'none', maxHeight: 'min(50dvh, 380px)' }}
         >
-          <img
-            ref={imgRef}
-            src={imageUrl}
-            alt="Oclusão"
-            crossOrigin="anonymous"
-            onLoad={handleImgLoad}
-            className="block select-none pointer-events-none"
-            style={{ width: displaySize.w, height: displaySize.h }}
-            draggable={false}
-          />
-
-          {!imgLoaded && (
-            <div className="absolute inset-0 flex items-center justify-center bg-muted/50">
-              <Loader2 className="h-6 w-6 animate-spin text-primary" />
-            </div>
-          )}
-
-          {shapes.map((s) => renderShape(s))}
-
-          {currentRect && tool === 'rect' && (
-            <div
-              className="absolute border-2 border-dashed border-primary/80 pointer-events-none"
-              style={{
-                left: currentRect.x * scale,
-                top: currentRect.y * scale,
-                width: currentRect.w * scale,
-                height: currentRect.h * scale,
-                backgroundColor: shapeColor.replace(/[\d.]+\)$/, '0.15)'),
-                borderRadius: 4,
-              }}
+          <div
+            className="occlusion-img-wrapper relative inline-block"
+            style={{
+              width: displaySize.w || '100%',
+              height: displaySize.h || 'auto',
+              cursor: tool === 'select' ? 'default' : 'crosshair',
+            }}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={() => {
+              if (drawing && tool !== 'polygon') {
+                setDrawing(false);
+                setStartPos(null);
+                setCurrentRect(null);
+                setCurrentPoints([]);
+              }
+            }}
+            onClick={() => { if (tool !== 'polygon') setSelectedId(null); }}
+          >
+            <img
+              ref={imgRef}
+              src={imageUrl}
+              alt="Oclusão"
+              crossOrigin="anonymous"
+              onLoad={handleImgLoad}
+              className="block select-none pointer-events-none"
+              style={{ width: displaySize.w, height: displaySize.h }}
+              draggable={false}
             />
-          )}
 
-          {currentPoints.length > 0 && (
-            <svg className="absolute inset-0 pointer-events-none" style={{ width: displaySize.w, height: displaySize.h }}>
-              <polyline
-                points={currentPoints.map(p => `${p.x * scale},${p.y * scale}`).join(' ')}
-                fill="none"
-                stroke="rgba(59,130,246,0.8)"
-                strokeWidth="2"
-                strokeDasharray={tool === 'polygon' ? '5 5' : undefined}
-                strokeLinecap="round"
+            {!imgLoaded && (
+              <div className="absolute inset-0 flex items-center justify-center bg-muted/50">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            )}
+
+            {shapes.map((s) => renderShape(s))}
+
+            {currentRect && tool === 'rect' && (
+              <div
+                className="absolute border-2 border-dashed border-primary/80 pointer-events-none"
+                style={{
+                  left: currentRect.x * scale,
+                  top: currentRect.y * scale,
+                  width: currentRect.w * scale,
+                  height: currentRect.h * scale,
+                  backgroundColor: shapeColor.replace(/[\d.]+\)$/, '0.15)'),
+                  borderRadius: 4,
+                }}
               />
-              {tool === 'polygon' && currentPoints.map((p, i) => (
-                <circle key={i} cx={p.x * scale} cy={p.y * scale} r="4" fill="#3b82f6" />
-              ))}
-            </svg>
+            )}
+
+            {currentPoints.length > 0 && (
+              <svg className="absolute inset-0 pointer-events-none" style={{ width: displaySize.w, height: displaySize.h }}>
+                <polyline
+                  points={currentPoints.map(p => `${p.x * scale},${p.y * scale}`).join(' ')}
+                  fill="none"
+                  stroke="rgba(59,130,246,0.8)"
+                  strokeWidth="2"
+                  strokeDasharray={tool === 'polygon' ? '5 5' : undefined}
+                  strokeLinecap="round"
+                />
+                {tool === 'polygon' && currentPoints.map((p, i) => (
+                  <circle key={i} cx={p.x * scale} cy={p.y * scale} r="4" fill="#3b82f6" />
+                ))}
+              </svg>
+            )}
+          </div>
+        </div>
+
+        {/* Right sidebar — actions */}
+        <div className="flex flex-col items-center justify-center gap-1.5 shrink-0">
+          {selectedId && (
+            <button
+              className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+              onClick={deleteSelected}
+              title="Excluir seleção"
+            >
+              <IconTrash />
+            </button>
           )}
+          {selectedId && (
+            <button
+              className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              onClick={() => {
+                const s = shapes.find(s => s.id === selectedId);
+                if (!s) return;
+                const clone: OcclusionShape = { ...s, id: crypto.randomUUID(), x: s.x != null ? s.x + 15 : undefined, y: s.y != null ? s.y + 15 : undefined, points: s.points?.map(p => ({ x: p.x + 15, y: p.y + 15 })) };
+                setShapes(prev => [...prev, clone]);
+                setSelectedId(clone.id);
+              }}
+              title="Duplicar"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                <rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
+            </button>
+          )}
+          <button
+            className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+            onClick={() => { setTool('rect'); setSelectedId(null); }}
+            title="Adicionar área"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
         </div>
       </div>
 
-      {/* Status line */}
-      <p className="text-[11px] text-muted-foreground leading-snug">
-        {shapes.length} área{shapes.length !== 1 ? 's' : ''} marcada{shapes.length !== 1 ? 's' : ''}.
-        {selectedId && <span className="text-primary font-medium ml-1">· Delete p/ remover</span>}
-      </p>
-
-      {/* Info notice */}
-      <p className="text-[10px] text-muted-foreground/60 leading-snug">
-        💡 Mesma cor = mesmo cartão. Cores diferentes = cartões separados. No estudo, oclusões aparecem em azul.
-      </p>
+      {/* Status + info */}
+      <div className="flex items-center gap-2">
+        <p className="text-[11px] text-muted-foreground leading-snug flex-1">
+          {shapes.length} área{shapes.length !== 1 ? 's' : ''} · {cardCount} cartão{cardCount !== 1 ? 'ões' : ''}
+          {selectedId && <span className="text-primary font-medium ml-1">· selecionado</span>}
+        </p>
+        <button
+          className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+          onClick={() => { setShapes([]); setSelectedId(null); setCurrentPoints([]); }}
+        >
+          Limpar tudo
+        </button>
+      </div>
 
       {/* Bottom actions */}
       <div className="flex items-center gap-2 pt-0.5">
