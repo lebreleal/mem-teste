@@ -280,7 +280,7 @@ export function useStatsData() {
     const hourMap: Record<number, { total: number; correct: number }> = {};
     for (let h = 0; h < 24; h++) hourMap[h] = { total: 0, correct: 0 };
     if (hourlyData && Array.isArray(hourlyData)) {
-      hourlyData.forEach((row: any) => {
+      hourlyData.forEach((row: { hour: number; total: number; correct: number }) => {
         const h = Number(row.hour);
         if (h >= 0 && h < 24) {
           hourMap[h] = { total: Number(row.total) || 0, correct: Number(row.correct) || 0 };

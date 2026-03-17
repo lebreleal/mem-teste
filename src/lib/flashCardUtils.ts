@@ -53,7 +53,7 @@ export function buildPreviewParams(deckConfig: DeckPreviewConfig | null | undefi
 /** Compute preview intervals for a card based on algorithm mode */
 export function getPreviewIntervals(
   algorithmMode: string,
-  deckConfig: any,
+  deckConfig: DeckPreviewConfig | null | undefined,
   card: { stability: number; difficulty: number; state: number; scheduledDate: string; learningStep: number; lastReviewedAt?: string },
 ): Record<Rating, string> {
   const previewParams = buildPreviewParams(deckConfig, algorithmMode);
