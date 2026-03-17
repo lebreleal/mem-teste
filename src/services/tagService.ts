@@ -8,6 +8,23 @@ import type { Tag } from '@/types/tag';
 
 const TAG_COLS = 'id, name, slug, description, parent_id, is_official, usage_count, created_by, created_at, merged_into_id, synonyms' as const;
 
+// ── Row interfaces ──
+
+interface DeckTagJoinRow {
+  deck_id: string;
+  tag_id: string;
+  tags: Tag | null;
+}
+
+interface CardTagJoinRow {
+  tag_id: string;
+  tags: Tag | null;
+}
+
+interface TagWithSynonyms extends Tag {
+  synonyms?: string[];
+}
+
 // ---- Hierarchy helpers ----
 
 export interface TagTreeNode extends Tag {
@@ -116,7 +133,7 @@ export async function searchTags(query: string, limit = 20): Promise<TagTreeNode
   // Match by name or synonyms
   const matched = all.filter(t => {
     if (t.name.toLowerCase().includes(q)) return true;
-    const synonyms = (t as any).synonyms as string[] | undefined;
+    const synonyms = (t as TagWithSynonyms).synonyms;
     if (synonyms && synonyms.some((s: string) => s.toLowerCase().includes(q))) return true;
     return false;
   });
@@ -161,7 +178,7 @@ export async function createTag(name: string, userId: string, parentId?: string)
   
   if (existing) return existing as Tag;
 
-  const insertData: any = { name: name.trim(), slug, created_by: userId };
+  const insertData: { name: string; slug: string; created_by: string; parent_id?: string } = { name: name.trim(), slug, created_by: userId };
   if (parentId) insertData.parent_id = parentId;
 
   const { data, error } = await supabase
@@ -180,7 +197,7 @@ export async function getDeckTags(deckId: string): Promise<Tag[]> {
     .select('tag_id, tags(*)')
     .eq('deck_id', deckId);
   if (error) throw error;
-  return (data ?? []).map((dt: any) => dt.tags).filter(Boolean);
+  return ((data ?? []) as unknown as CardTagJoinRow[]).map(dt => dt.tags).filter((t): t is Tag => !!t);
 }
 
 /** Get tags for a specific card. */
@@ -190,7 +207,7 @@ export async function getCardTags(cardId: string): Promise<Tag[]> {
     .select('tag_id, tags(*)')
     .eq('card_id', cardId);
   if (error) throw error;
-  return (data ?? []).map((ct: any) => ct.tags).filter(Boolean);
+  return ((data ?? []) as unknown as CardTagJoinRow[]).map(ct => ct.tags).filter((t): t is Tag => !!t);
 }
 
 /** Add a tag to a deck. */
@@ -261,9 +278,9 @@ export async function getDeckOnlyTags(limit = 50): Promise<Tag[]> {
   
   // Deduplicate and extract unique tags
   const tagMap = new Map<string, Tag>();
-  (data ?? []).forEach((dt: any) => {
+  ((data ?? []) as unknown as DeckTagJoinRow[]).forEach(dt => {
     if (dt.tags && !dt.tags.merged_into_id && !tagMap.has(dt.tags.id)) {
-      tagMap.set(dt.tags.id, dt.tags as Tag);
+      tagMap.set(dt.tags.id, dt.tags);
     }
   });
   
@@ -286,7 +303,7 @@ export async function getDeckTagsBatch(deckIds: string[]): Promise<Record<string
   if (error) throw error;
   
   const result: Record<string, Tag[]> = {};
-  (data ?? []).forEach((dt: any) => {
+  ((data ?? []) as unknown as DeckTagJoinRow[]).forEach(dt => {
     if (!dt.tags) return;
     if (!result[dt.deck_id]) result[dt.deck_id] = [];
     result[dt.deck_id].push(dt.tags);

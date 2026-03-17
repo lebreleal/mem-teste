@@ -5,6 +5,18 @@
 import { supabase } from '@/integrations/supabase/client';
 import { conceptSlug } from './conceptCrud';
 
+// ── Row interfaces ──
+
+interface ConceptRow {
+  id: string;
+  name: string;
+  slug: string;
+  parent_concept_id: string | null;
+}
+
+// ── Typed table helper for global_concepts (not in generated types) ──
+const gcTable = () => supabase.from('global_concepts' as 'turmas');
+
 // ─── Medical taxonomy (Estratégia MED / Medway / SanarFlix standard) ───
 export const MEDICAL_CATEGORIES = [
   'Clínica Médica',
@@ -50,15 +62,14 @@ export const CATEGORY_SUBCATEGORIES: Record<string, string[]> = {
 
 // ─── Map prerequisites via AI (batch) ───────────
 export async function mapPrerequisitesViaAI(userId: string): Promise<number> {
-  const { data: all } = await supabase
-    .from('global_concepts' as any)
+  const { data: all } = await gcTable()
     .select('id, name, slug, parent_concept_id')
     .eq('user_id', userId);
 
   if (!all || all.length < 2) return 0;
 
-  const concepts = all as any[];
-  const names = concepts.map((c: any) => c.name);
+  const concepts = all as unknown as ConceptRow[];
+  const names = concepts.map(c => c.name);
 
   const { data, error } = await supabase.functions.invoke('map-prerequisites', {
     body: { conceptNames: names },
@@ -88,29 +99,27 @@ export async function mapPrerequisitesViaAI(userId: string): Promise<number> {
     // If parent doesn't exist, create it
     if (!parentId && !group.parent_exists) {
       const slug = conceptSlug(group.parent_name);
-      const { data: inserted } = await supabase
-        .from('global_concepts' as any)
+      const { data: inserted } = await gcTable()
         .upsert({
           user_id: userId,
           name: group.parent_name.trim(),
           slug,
-        } as any, { onConflict: 'user_id,slug', ignoreDuplicates: true })
+        } as Record<string, unknown>, { onConflict: 'user_id,slug', ignoreDuplicates: true })
         .select('id')
         .maybeSingle();
 
       if (inserted) {
-        parentId = (inserted as any).id;
+        parentId = (inserted as unknown as { id: string }).id;
         nameToId.set(group.parent_name.toLowerCase(), parentId!);
       } else {
         // Re-fetch in case of upsert conflict
-        const { data: existing } = await supabase
-          .from('global_concepts' as any)
+        const { data: existing } = await gcTable()
           .select('id')
           .eq('user_id', userId)
           .eq('slug', slug)
           .maybeSingle();
         if (existing) {
-          parentId = (existing as any).id;
+          parentId = (existing as unknown as { id: string }).id;
           nameToId.set(group.parent_name.toLowerCase(), parentId!);
         }
       }
@@ -124,12 +133,11 @@ export async function mapPrerequisitesViaAI(userId: string): Promise<number> {
       if (!childId || childId === parentId) continue;
 
       // Only set if not already set
-      const existing = concepts.find((c: any) => c.id === childId);
+      const existing = concepts.find(c => c.id === childId);
       if (existing?.parent_concept_id) continue;
 
-      await supabase
-        .from('global_concepts' as any)
-        .update({ parent_concept_id: parentId, updated_at: new Date().toISOString() } as any)
+      await gcTable()
+        .update({ parent_concept_id: parentId, updated_at: new Date().toISOString() } as Record<string, unknown>)
         .eq('id', childId);
       updated++;
     }
@@ -142,12 +150,11 @@ export async function mapPrerequisitesViaAI(userId: string): Promise<number> {
     if (!conceptId || !prereqId || conceptId === prereqId) continue;
 
     // Only set if not already set
-    const existing = concepts.find((c: any) => c.id === conceptId);
+    const existing = concepts.find(c => c.id === conceptId);
     if (existing?.parent_concept_id) continue;
 
-    await supabase
-      .from('global_concepts' as any)
-      .update({ parent_concept_id: prereqId, updated_at: new Date().toISOString() } as any)
+    await gcTable()
+      .update({ parent_concept_id: prereqId, updated_at: new Date().toISOString() } as Record<string, unknown>)
       .eq('id', conceptId);
     updated++;
   }
