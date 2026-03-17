@@ -133,7 +133,7 @@ export async function fetchAggregatedCards(deckIds: string[]) {
 export async function fetchClozeSiblings(deckIds: string[], frontContent: string): Promise<CardRow[]> {
   if (deckIds.length === 0) return [];
   if (deckIds.length === 1) {
-    const { data, error } = await supabase.from('cards').select('*').eq('deck_id', deckIds[0]).eq('card_type', 'cloze').eq('front_content', frontContent);
+    const { data, error } = await supabase.from('cards').select(CARD_COLS).eq('deck_id', deckIds[0]).eq('card_type', 'cloze').eq('front_content', frontContent);
     if (error) throw error;
     return (data ?? []) as CardRow[];
   }
