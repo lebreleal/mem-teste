@@ -1026,21 +1026,16 @@ const CreateQuestionDialog = ({
       }, 3000);
 
       try {
-        const { data, error } = await supabase.functions.invoke('generate-questions', {
-          body: {
+        const data = await invokeGenerateQuestions({
             deckId,
             optionsCount: 4,
             aiModel: aiModel === 'pro' ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
             energyCost: aiCost,
             customInstructions: aiCustomInstructions.trim() || undefined,
             sourceContent: sourceContent || undefined,
-          },
         });
 
         clearInterval(stepInterval);
-
-        if (error) throw error;
-        if (data?.error) throw new Error(data.error);
 
         const qs = data?.questions ?? [];
         if (qs.length === 0) throw new Error('Nenhuma questão gerada');
