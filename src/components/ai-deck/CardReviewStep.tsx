@@ -216,68 +216,25 @@ const CardReviewStep = ({
   };
 
   /**
-   * Renders the card editor form inside dialog — mirrors ManageDeck.tsx exactly
+   * Renders the card editor form inside dialog — uses shared CardEditorForm
    */
   const renderCardEditor = () => {
     if (editingIdx === null) return null;
     const card = cards[editingIdx];
     if (!card) return null;
 
-    if (card.type === 'cloze') {
-      return (
-        <div className="space-y-3">
-          <div>
-            <Label className="mb-1.5 block">Frente</Label>
-            <LazyRichEditor
-              content={editFront}
-              onChange={onEditFrontChange}
-              placeholder="A {{c1::mitocôndria}} é responsável pela respiração celular."
-            />
-          </div>
-          <ClozePreview text={editFront} />
-          <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-1">
-            <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Como usar</p>
-            <p className="text-xs text-muted-foreground">
-              Selecione o texto e clique em <code className="text-primary font-mono bg-primary/10 px-1 rounded">{'{ }'}</code> na barra de ferramentas
-            </p>
-            <p className="text-[11px] text-muted-foreground">
-              Mesmo número (c1, c1) = mesma lacuna. Números diferentes (c1, c2) = cards separados vinculados.
-            </p>
-          </div>
-          <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={handleCancelEdit}>Cancelar</Button>
-            <Button onClick={handleSaveEditClick}>Salvar</Button>
-          </div>
-        </div>
-      );
-    }
-
-    // Basic (qa)
     return (
-      <div className="space-y-4">
-        <div>
-          <Label className="mb-1.5 block">Frente</Label>
-          <LazyRichEditor
-            content={editFront}
-            onChange={onEditFrontChange}
-            placeholder="Qual é a capital da França?"
-            hideCloze
-          />
-        </div>
-        <div>
-          <Label className="mb-1.5 block">Verso</Label>
-          <LazyRichEditor
-            content={editBack}
-            onChange={onEditBackChange}
-            placeholder="Paris"
-            hideCloze
-          />
-        </div>
-        <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
-          <Button variant="outline" onClick={handleCancelEdit}>Cancelar</Button>
-          <Button onClick={handleSaveEditClick}>Salvar</Button>
-        </div>
-      </div>
+      <CardEditorForm
+        front={editFront}
+        onFrontChange={onEditFrontChange}
+        back={editBack}
+        onBackChange={onEditBackChange}
+        cardType={card.type === 'cloze' ? 'cloze' : 'basic'}
+        hideCloze={card.type !== 'cloze'}
+        onSave={handleSaveEditClick}
+        onCancel={handleCancelEdit}
+        compact
+      />
     );
   };
 
