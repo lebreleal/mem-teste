@@ -218,12 +218,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
         const uniqueNums = [...new Set(clozeNumMatches.map(m => parseInt(m[1])))].sort((a, b) => a - b);
 
         // Fetch all cloze siblings from DB (same front_content as original)
-        const { data: siblings } = await supabase
-          .from('cards')
-          .select('id, front_content, back_content, card_type')
-          .eq('deck_id', card.deck_id)
-          .eq('card_type', 'cloze')
-          .eq('front_content', originalFrontRef.current);
+        const allSiblingCards = await fetchClozeSiblings([card.deck_id], originalFrontRef.current);
 
         const allSiblingCards = siblings || [];
 
