@@ -186,8 +186,6 @@ const LessonDetail = () => {
   const [editPrice, setEditPrice] = useState('');
   const [editAllowDownload, setEditAllowDownload] = useState(false);
   const [previewDeck, setPreviewDeck] = useState<any>(null);
-  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
-  const [pdfPreviewRestricted, setPdfPreviewRestricted] = useState(false);
 
   const { data: members = [] } = useTurmaMembers(turmaId!);
   const currentMember = members.find(m => m.user_id === user?.id);
@@ -430,7 +428,7 @@ const LessonDetail = () => {
           onFileUpload={handleFileUpload}
           onDeleteFile={(id) => deleteFileMutation.mutate(id)}
           onRenameFile={(fileId, newName) => renameFileMutation.mutate({ fileId, newName })}
-          onPreviewPdf={(url, restricted) => { setPdfPreviewUrl(url); setPdfPreviewRestricted(restricted); }}
+          onPreviewPdf={(url) => { window.open(url, '_blank'); }}
           onUpdateFileVisibility={(fileId, priceType) => updateFileVisibilityMutation.mutate({ fileId, priceType })}
           onShowAddDeck={() => { setShowAddDeck(true); setAllowDownload(false); }}
           onPreviewDeck={setPreviewDeck}
@@ -482,8 +480,6 @@ const LessonDetail = () => {
         onDownloadDeck={(td) => downloadDeck.mutate(td, { onSuccess: () => setPreviewDeck(null) })}
         isAddingToCollection={addToCollection.isPending}
         isDownloading={downloadDeck.isPending}
-        pdfPreviewUrl={pdfPreviewUrl} setPdfPreviewUrl={setPdfPreviewUrl}
-        pdfPreviewRestricted={pdfPreviewRestricted}
       />
     </div>
   );
