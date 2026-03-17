@@ -141,7 +141,7 @@ const DeckList = ({
 
   const getPendingIcon = (pending: PendingDeck) => {
     if (pending.status === 'review_ready') return <CheckCircle2 className="h-5 w-5 text-success animate-in zoom-in-50" />;
-    if (pending.status === 'done') return <TagIcon className="h-5 w-5 text-primary animate-pulse" />;
+    if (pending.status === 'done') return <Loader2 className="h-5 w-5 text-primary animate-pulse" />;
     if (pending.status === 'error') return <XCircle className="h-5 w-5 text-destructive" />;
     return <Loader2 className="h-5 w-5 text-primary animate-spin" />;
   };
