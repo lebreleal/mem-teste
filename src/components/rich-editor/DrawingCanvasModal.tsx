@@ -7,7 +7,15 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { X, Undo2, Redo2 } from 'lucide-react';
-import { canInitializeCanvas, getCanvasBitmapMetrics, getRelativePoint } from '@/components/rich-editor/drawingCanvasUtils';
+import {
+  canInitializeCanvas,
+  clamp,
+  getCanvasBitmapMetrics,
+  getMidpoint,
+  getRelativePoint,
+  type CanvasBitmapMetrics,
+  type RelativePoint,
+} from '@/components/rich-editor/drawingCanvasUtils';
 
 const STROKE_PATH = 'M7.5 18s6.269-1.673 9.5-7c1.601-2.64-6.5-.5-8-3-1.16-2.5 8-3 8-3';
 const THICKNESSES = [1, 2, 4, 6, 8];
