@@ -391,34 +391,4 @@ export async function countPendingSuggestions(deckId: string): Promise<number> {
   return count ?? 0;
 }
 
-/** Count questions across a deck and all its descendants. */
-export async function countDeckQuestionsRecursive(deckId: string): Promise<number> {
-  const allIds: string[] = [deckId];
-  let frontier = [deckId];
-  while (frontier.length > 0) {
-    const { data: children } = await supabase.from('decks').select('id').in('parent_deck_id', frontier);
-    if (!children || children.length === 0) break;
-    const childIds = (children as DeckIdRow[]).map(d => d.id);
-    allIds.push(...childIds);
-    frontier = childIds;
-  }
-  const { count } = await dqTable()
-    .select('id', { count: 'exact', head: true })
-    .in('deck_id', allIds);
-  return count ?? 0;
-}
-
-/** Fetch question counts grouped by deck_id for a set of deck IDs. */
-export async function fetchQuestionCountsByDeck(deckIds: string[]): Promise<Map<string, number>> {
-  const { data } = await supabase
-    .from('deck_questions')
-    .select('deck_id')
-    .in('deck_id', deckIds);
-  const map = new Map<string, number>();
-  if (data) {
-    for (const q of data as DeckQuestionDeckIdRow[]) {
-      map.set(q.deck_id, (map.get(q.deck_id) ?? 0) + 1);
-    }
-  }
-  return map;
-}
+// fetchQuestionCountsByDeck removed

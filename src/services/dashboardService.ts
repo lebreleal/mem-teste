@@ -46,20 +46,7 @@ export async function fetchWeekReviewDates(userId: string, sinceISO: string): Pr
   return (data ?? []).map(l => l.reviewed_at);
 }
 
-// ─── SalaList ───
-
-export async function fetchDeckQuestionCounts(deckIds: string[]): Promise<Map<string, number>> {
-  if (deckIds.length === 0) return new Map();
-  const { data } = await supabase
-    .from('deck_questions')
-    .select('deck_id')
-    .in('deck_id', deckIds);
-  const counts = new Map<string, number>();
-  for (const row of data ?? []) {
-    counts.set(row.deck_id, (counts.get(row.deck_id) ?? 0) + 1);
-  }
-  return counts;
-}
+// fetchDeckQuestionCounts removed
 
 export async function fetchCommunityFolderMeta(turmaIds: string[]): Promise<Map<string, CommunityFolderMeta>> {
   if (turmaIds.length === 0) return new Map();

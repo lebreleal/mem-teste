@@ -40,19 +40,9 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
     };
   }, [serverCardCounts]);
 
-  // === Question stats (always fetch so hooks are stable) ===
-  const { data: questionData } = useQuery({
-    queryKey: ['deck-stats-questions', deckId],
-    queryFn: async () => {
-      const allIds = await fetchDeckHierarchyIds(deckId!);
-      return fetchDeckQuestionStats(allIds, user!.id);
-    },
-    enabled: !!deckId && !!user,
-    staleTime: 30_000,
-  });
+  // Question stats removed
 
-  const isQMode = mode === 'questions';
-  const qd = questionData ?? { total: 0, correct: 0, wrong: 0, unanswered: 0 };
+  const qd = { total: 0, correct: 0, wrong: 0, unanswered: 0 };
 
   // Progress — use server total, not paginated allCards.length
   const serverTotal = serverCardCounts?.total ?? 0;
