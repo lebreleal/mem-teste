@@ -56,7 +56,22 @@ export async function fetchStudyQueue(
   let limitScopeIds: string[] = [];
   let folderLimitDecks: typeof activeDecks = [];
 
-  if (folderId) {
+  // "Study All" mode: no specific deck or folder → use ALL active decks
+  const isStudyAll = !deckId && !folderId;
+
+  if (isStudyAll) {
+    deckIds = activeDecks.map(d => d.id);
+    if (deckIds.length === 0) {
+      return { cards: [], algorithmMode: 'fsrs', deckConfig: undefined, isLiveDeck: false };
+    }
+    deckIds.forEach(buildZeroLimitSet);
+
+    // Use the first root-level deck as deckConfig reference
+    const rootDecks = activeDecks.filter(d => !d.parent_deck_id);
+    folderLimitDecks = rootDecks;
+    deckConfig = (rootDecks[0] as DeckStudyConfig | undefined);
+    limitScopeIds = deckIds;
+  } else if (folderId) {
     const collectRootDeckIds = () => collectFolderDeckIds(activeDecks, foldersData, folderId);
     let rootDeckIds = collectRootDeckIds();
 

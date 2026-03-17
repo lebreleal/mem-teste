@@ -10,10 +10,14 @@ export const useStudySession = (deckId: string, folderId?: string) => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
+  // "study all" mode: no deckId and no folderId → key = 'all'
+  const isStudyAll = !deckId && !folderId;
+  const queryKeySuffix = folderId ? `folder-${folderId}` : (deckId || 'all');
+
   const studyQueue = useQuery<StudyQueueResult>({
-    queryKey: ['study-queue', folderId ? `folder-${folderId}` : deckId],
+    queryKey: ['study-queue', queryKeySuffix],
     queryFn: () => studyService.fetchStudyQueue(user!.id, deckId, folderId),
-    enabled: !!user && !!(deckId || folderId),
+    enabled: !!user && !!(deckId || folderId || isStudyAll),
     staleTime: Infinity,
     refetchOnWindowFocus: false,
   });
