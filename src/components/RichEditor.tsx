@@ -144,6 +144,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       TextStyle,
       Color,
       ClozeMark,
+      Placeholder.configure({ placeholder: placeholder || '' }),
       Link.configure({ openOnClick: false, HTMLAttributes: { class: 'text-primary underline' } }),
     ],
     content: clozeToEditor(content),
