@@ -108,18 +108,24 @@ Deno.serve(async (req) => {
     const MODEL_MAP = await getModelMap(supabase);
     const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gemini-2.5-flash";
     let systemPrompt = promptConfig?.system_prompt || DEFAULT_SYSTEM_PROMPT;
-
-    if (cardType === "multiple_choice") systemPrompt += MC_ADDON;
-    else if (cardType === "cloze") systemPrompt += CLOZE_ADDON;
-    else systemPrompt += BASIC_ADDON;
-
     let userContent = "";
-    if (cardType === "multiple_choice") {
-      userContent = `Tipo: Múltipla Escolha\nPergunta (front): ${front}\nDados do verso (back - JSON): ${back}\n\nMelhore este card aplicando os princípios pedagógicos. Retorne o campo "back" como JSON válido com a mesma estrutura {"options": [...], "correctIndex": N}.`;
-    } else if (cardType === "cloze") {
-      userContent = `Tipo: Cloze\nTexto com lacunas (front): ${front}\nNotas extras (back): ${back || '(vazio)'}\n\nMelhore este card: a lacuna deve testar um conceito-chave, a frase deve ser uma afirmação declarativa completa e autocontida. Preserve a sintaxe {{c1::resposta}}.`;
+
+    if (customPrompt) {
+      // AI Creator mode — user provides a custom template prompt
+      systemPrompt = `Você é um assistente especialista em criar flashcards de alta qualidade. O usuário fornecerá uma instrução (template) e o conteúdo da frente do cartão. Siga a instrução EXATAMENTE para gerar o cartão completo.\n\nRETORNE o resultado usando a função return_improved_card com front e back preenchidos conforme a instrução. Marque "unchanged" como false.`;
+      userContent = `INSTRUÇÃO DO MODELO:\n${customPrompt}\n\nCONTEÚDO ATUAL DA FRENTE:\n${front}\n\nCONTEÚDO ATUAL DO VERSO:\n${back || '(vazio)'}\n\nGere o cartão completo seguindo a instrução acima. Use HTML simples para formatação se necessário.`;
     } else {
-      userContent = `Tipo: Básico (Frente e Verso)\nFrente (Pergunta): ${front}\nVerso (Resposta): ${back}\n\nMelhore este card: a pergunta deve exigir raciocínio (não simples "O que é?"), a resposta deve ser curta e direta. Aplique interrogação elaborativa, conexões e aplicação prática.`;
+      if (cardType === "multiple_choice") systemPrompt += MC_ADDON;
+      else if (cardType === "cloze") systemPrompt += CLOZE_ADDON;
+      else systemPrompt += BASIC_ADDON;
+
+      if (cardType === "multiple_choice") {
+        userContent = `Tipo: Múltipla Escolha\nPergunta (front): ${front}\nDados do verso (back - JSON): ${back}\n\nMelhore este card aplicando os princípios pedagógicos. Retorne o campo "back" como JSON válido com a mesma estrutura {"options": [...], "correctIndex": N}.`;
+      } else if (cardType === "cloze") {
+        userContent = `Tipo: Cloze\nTexto com lacunas (front): ${front}\nNotas extras (back): ${back || '(vazio)'}\n\nMelhore este card: a lacuna deve testar um conceito-chave, a frase deve ser uma afirmação declarativa completa e autocontida. Preserve a sintaxe {{c1::resposta}}.`;
+      } else {
+        userContent = `Tipo: Básico (Frente e Verso)\nFrente (Pergunta): ${front}\nVerso (Resposta): ${back}\n\nMelhore este card: a pergunta deve exigir raciocínio (não simples "O que é?"), a resposta deve ser curta e direta. Aplique interrogação elaborativa, conexões e aplicação prática.`;
+      }
     }
 
     const tools = [{ type: "function", function: { name: "return_improved_card", description: "Return the improved flashcard", parameters: { type: "object", properties: { front: { type: "string", description: "Improved front content" }, back: { type: "string", description: "Improved back content" }, unchanged: { type: "boolean", description: "True if no changes were made" } }, required: ["front", "back", "unchanged"], additionalProperties: false } } }];
