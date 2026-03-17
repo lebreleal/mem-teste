@@ -232,6 +232,26 @@ const ManageDeck = () => {
     setIsDirty(true);
   }, []);
 
+  const handleAICreate = useCallback(async (templatePrompt: string) => {
+    const strippedFront = front.replace(/<[^>]*>/g, '').trim();
+    if (!strippedFront) { toast({ title: 'Escreva algo na frente primeiro', variant: 'destructive' }); return; }
+    if (energy < 1) { toast({ title: 'Créditos insuficientes', variant: 'destructive' }); return; }
+    setIsAICreating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('enhance-card', {
+        body: { front, back, cardType: 'basic', aiModel: model, energyCost: 1, customPrompt: templatePrompt },
+      });
+      if (error) throw error;
+      if (data?.error) { toast({ title: data.error, variant: 'destructive' }); return; }
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      if (data?.front) { setFront(markdownToHtml(data.front)); setIsDirty(true); }
+      if (data?.back) { setBack(markdownToHtml(data.back)); setIsDirty(true); }
+      toast({ title: '✨ Cartão gerado com IA!' });
+    } catch (e: any) {
+      toast({ title: 'Erro ao gerar', description: e.message, variant: 'destructive' });
+    } finally { setIsAICreating(false); }
+  }, [front, back, energy, model, queryClient, toast]);
+
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
