@@ -27,9 +27,10 @@ export async function fetchStudyQueue(
   folderId?: string,
 ): Promise<StudyQueueResult> {
   // ─── Round 1: base data (parallel) ───
+  const isStudyAll = !deckId && !folderId;
   const [decksResult, foldersResult] = await Promise.all([
     supabase.from('decks').select(DECK_SELECT_COLS).eq('user_id', userId),
-    folderId
+    (folderId || isStudyAll)
       ? supabase.from('folders').select('id, parent_id').eq('user_id', userId)
       : Promise.resolve({ data: [] as any[] }),
   ]);
