@@ -164,7 +164,7 @@ const DeckSettings = () => {
 
   useEffect(() => {
     if (!deckId || !user) return;
-    supabase.from('decks').select('*').eq('id', deckId).single().then(({ data, error }) => {
+    supabase.from('decks').select('name, daily_new_limit, daily_review_limit, algorithm_mode, requested_retention, shuffle_cards, learning_steps, easy_bonus, interval_modifier, max_interval, easy_graduating_interval, parent_deck_id, is_public, allow_duplication, source_turma_deck_id, source_listing_id, community_id, bury_new_siblings, bury_review_siblings, bury_learning_siblings').eq('id', deckId).single().then(({ data, error }) => {
       if (error || !data) {
         toast({ title: 'Erro', description: 'Baralho não encontrado.', variant: 'destructive' });
         navigate('/dashboard');
