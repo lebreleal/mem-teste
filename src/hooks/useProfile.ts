@@ -58,7 +58,7 @@ export const useProfile = () => {
     const channel = supabase
       .channel(`profile-${user.id}`)
       .on(
-        'postgres_changes' as any,
+        'postgres_changes' as 'system',
         {
           event: 'UPDATE',
           schema: 'public',
