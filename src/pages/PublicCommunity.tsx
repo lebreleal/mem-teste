@@ -97,10 +97,7 @@ const PublicCommunity = () => {
   // Fetch member count
   const { data: memberCount = 0 } = useQuery({
     queryKey: ['public-community-members', turma?.id],
-    queryFn: async () => {
-      const { count } = await supabase.from('turma_members').select('id', { count: 'exact', head: true }).eq('turma_id', turma!.id);
-      return count ?? 0;
-    },
+    queryFn: () => fetchTurmaMemberCount(turma!.id),
     enabled: !!turma?.id,
   });
 
