@@ -12,7 +12,7 @@ import { deriveAvgSecondsPerCard, calculateRealStudyTime, DEFAULT_STUDY_METRICS 
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useStudyPlan } from '@/hooks/useStudyPlan';
-import { fetchDeckHierarchyIds, fetchDeckQuestionStats } from '@/services/uiQueryService';
+import { fetchDeckHierarchyIds } from '@/services/uiQueryService';
 
 interface DeckStatsCardProps {
   mode?: 'cards' | 'questions';
