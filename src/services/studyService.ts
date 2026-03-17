@@ -247,8 +247,8 @@ export async function fetchStudyQueue(
 
   let newReviewedInHierarchy = 0;
   let reviewReviewedToday = 0;
-  if (hierarchyLimits.data && (hierarchyLimits.data as any[]).length > 0) {
-    const row = (hierarchyLimits.data as any[])[0];
+  if (hierarchyLimits.data && (hierarchyLimits.data as StudyQueueLimitsRow[]).length > 0) {
+    const row = (hierarchyLimits.data as StudyQueueLimitsRow[])[0];
     newReviewedInHierarchy = row.new_reviewed_today ?? 0;
     reviewReviewedToday = row.review_reviewed_today ?? 0;
   }
