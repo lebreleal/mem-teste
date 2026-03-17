@@ -243,14 +243,17 @@ export async function fetchCommunityContentStats(turmaId: string) {
 // ── Dashboard-specific turma helpers ──
 
 /** Fetch the user's own turma (for publish toggle). */
-export async function fetchUserOwnTurma(userId: string): Promise<{ id: string; name: string; is_private: boolean; share_slug: string | null } | null> {
+export async function fetchUserOwnTurma(userId: string): Promise<{ id: string; name: string; is_private: boolean; share_slug: string | null; owner_name: string | null } | null> {
   const { data } = await supabase
     .from('turmas')
-    .select('id, name, is_private, share_slug')
+    .select('id, name, is_private, share_slug, owner_id')
     .eq('owner_id', userId)
     .limit(1)
     .maybeSingle();
-  return data as any;
+  if (!data) return null;
+  // Fetch owner name from profiles
+  const { data: profile } = await supabase.from('profiles').select('name').eq('id', userId).maybeSingle();
+  return { ...(data as any), owner_name: (profile as any)?.name ?? null };
 }
 
 /** Fetch community folder info (owner name, cover, last update). */
