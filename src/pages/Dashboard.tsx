@@ -109,11 +109,11 @@ const Dashboard = () => {
   const { data: errorCount = 0 } = useQuery({
     queryKey: ['error-notebook-count'],
     queryFn: async () => {
-      const { data: { user: u } } = await supabase.auth.getUser();
-      if (!u) return 0;
+      if (!user) return 0;
       const { getErrorDeckCount } = await import('@/services/errorDeckService');
-      return getErrorDeckCount(u.id);
+      return getErrorDeckCount(user.id);
     },
+    enabled: !!user,
     staleTime: 60_000,
   });
 
