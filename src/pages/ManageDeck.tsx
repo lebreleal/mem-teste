@@ -348,6 +348,8 @@ const ManageDeck = () => {
                     hideCloze={false}
                     onOcclusionPaste={handleOcclusionAction}
                     onOcclusionAttach={handleOcclusionAction}
+                    onAICreate={handleAICreate}
+                    isAICreating={isAICreating}
                   />
                 </div>
 
