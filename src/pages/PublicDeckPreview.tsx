@@ -848,13 +848,7 @@ const PublicDeckPreview = () => {
   // Suggestion count for tab badge
   const { data: suggestionCount = 0 } = useQuery({
     queryKey: ['deck-suggestion-count', deckId],
-    queryFn: async () => {
-      const { count } = await supabase
-        .from('deck_suggestions')
-        .select('id', { count: 'exact', head: true })
-        .eq('deck_id', deckId!);
-      return count ?? 0;
-    },
+    queryFn: () => fetchDeckSuggestionCount(deckId!),
     enabled: !!deckId,
   });
 
