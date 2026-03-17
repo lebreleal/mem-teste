@@ -55,9 +55,7 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
   const dueReview = masteredToday;
   const pendingForTime = dueNew + dueLearning + dueReview;
   const studyMetrics = realStudyMetrics ?? DEFAULT_STUDY_METRICS;
-  const remainingSeconds = isQMode
-    ? pendingForTime * deriveAvgSecondsPerCard(studyMetrics)
-    : calculateRealStudyTime(dueNew, dueLearning, dueReview, studyMetrics);
+  const remainingSeconds = calculateRealStudyTime(dueNew, dueLearning, dueReview, studyMetrics);
   const remainingMin = Math.ceil(remainingSeconds / 60);
   const timeLabel = remainingMin >= 60
     ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
