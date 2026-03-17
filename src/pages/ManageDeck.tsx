@@ -4,6 +4,8 @@ import { ArrowLeft, ChevronUp, ChevronDown, Trash2, Copy, Plus, Loader2, Image a
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useCards } from '@/hooks/useCards';
+import { useEnergy } from '@/hooks/useEnergy';
+import { useAIModel } from '@/hooks/useAIModel';
 import { useToast } from '@/hooks/use-toast';
 import LazyRichEditor from '@/components/LazyRichEditor';
 import { Label } from '@/components/ui/label';
@@ -11,6 +13,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useQueryClient } from '@tanstack/react-query';
 import { Skeleton } from '@/components/ui/skeleton';
 import OcclusionEditor from '@/components/manage-deck/OcclusionEditor';
+import { supabase } from '@/integrations/supabase/client';
+import { markdownToHtml } from '@/lib/markdownToHtml';
 
 
 
