@@ -63,8 +63,8 @@ const LessonDetail = () => {
   const { data: turmaDecks = [] } = useTurmaDecks(turmaId!);
   const { decks: userDecks } = useDecks();
   const mutations = useTurmaHierarchyMutations(turmaId!);
-  const { data: turmaExams = [] } = useTurmaExams(turmaId!);
-  const examMutations = useTurmaExamMutations(turmaId!);
+  const turmaExams: any[] = [];
+  const examMutations = { createExam: { mutateAsync: async () => ({}) } } as any;
 
   const lesson = lessons.find(l => l.id === lessonId);
   const subject = subjects.find(s => s.id === lesson?.subject_id);
