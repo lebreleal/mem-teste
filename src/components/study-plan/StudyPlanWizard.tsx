@@ -16,26 +16,29 @@ import {
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { getWeeklyAvgNewCardsGlobal, getWeeklyAvgMinutesGlobal, type StudyPlan as StudyPlanType } from '@/hooks/useStudyPlan';
+import { getWeeklyAvgNewCardsGlobal, getWeeklyAvgMinutesGlobal, type StudyPlan as StudyPlanType, type PlanMetrics } from '@/hooks/useStudyPlan';
 import type { DeckWithStats } from '@/types/deck';
 import { DeckHierarchySelector } from '@/components/study-plan/DeckHierarchySelector';
 import { WhatCanIDoDialog } from '@/components/study-plan/StudyPlanDialogs';
 import BottomNav from '@/components/BottomNav';
+import type {
+  GlobalCapacity, CreatePlanMutation, UpdatePlanMutation, DeletePlanMutation,
+} from '@/types/studyPlan';
 
 type WizardStep = 1 | 2 | 3;
 
 interface StudyPlanWizardProps {
   plans: StudyPlanType[];
   activeDecks: DeckWithStats[];
-  globalCapacity: any;
-  metrics: any;
+  globalCapacity: GlobalCapacity;
+  metrics: PlanMetrics | null;
   avgSecondsPerCard: number;
   isPremium: boolean;
   isEditing: boolean;
   editingPlanId: string | null;
-  createPlan: any;
-  updatePlan: any;
-  deletePlan: any;
+  createPlan: CreatePlanMutation;
+  updatePlan: UpdatePlanMutation;
+  deletePlan: DeletePlanMutation;
   onBack: () => void;
 }
 
