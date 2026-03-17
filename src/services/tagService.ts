@@ -99,7 +99,7 @@ export async function searchTags(query: string, limit = 20): Promise<TagTreeNode
   // Fetch all non-merged tags to support hierarchy + synonym search
   const { data, error } = await supabase
     .from('tags')
-    .select('*')
+    .select(TAG_COLS)
     .is('merged_into_id', null)
     .order('usage_count', { ascending: false })
     .limit(200);
