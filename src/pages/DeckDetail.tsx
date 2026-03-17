@@ -381,13 +381,13 @@ const DeckDetailContent = () => {
   const backInfo = useMemo(() => {
     if (fromDashboardSala && dashboardSalaFolderId) return { label: 'Sala', path: `/dashboard?folder=${dashboardSalaFolderId}` };
     if (fromCommunity && communityTurmaId) return { label: 'Sala', path: `/turmas/${communityTurmaId}` };
-    let folderId = (deck as any)?.folder_id;
-    if (!folderId && (deck as any)?.parent_deck_id && decks) {
-      let current = deck as any;
-      while (current?.parent_deck_id) {
-        current = decks.find((d: any) => d.id === current.parent_deck_id);
+    let folderId = deck?.folder_id ?? null;
+    if (!folderId && deck?.parent_deck_id && decks) {
+      let currentDeck: DeckWithStats | undefined = decks.find(d => d.id === deck.parent_deck_id);
+      while (currentDeck?.parent_deck_id) {
+        currentDeck = decks.find(d => d.id === currentDeck!.parent_deck_id);
       }
-      folderId = current?.folder_id;
+      folderId = currentDeck?.folder_id ?? null;
     }
     if (folderId) return { label: 'Sala', path: `/dashboard?folder=${folderId}` };
     return { label: 'Dashboard', path: '/dashboard' };
