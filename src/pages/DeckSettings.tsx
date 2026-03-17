@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Separator } from '@/components/ui/separator';
+
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
@@ -22,9 +22,9 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   ArrowLeft, ChevronRight, Layers, Zap, Volume2, Palette,
-  Share2, Store, Sparkles, Download, Edit3, FolderInput, Copy,
-  RotateCcw, Archive, Upload, Trash2, Loader2, Plus, X,
-  Shuffle, BookOpen, Mail, Globe, BarChart3, Settings,
+  Share2, Sparkles, Download, Edit3, FolderInput, Copy,
+  RotateCcw, Archive, Upload, Trash2, Loader2, X,
+  BookOpen, Globe, BarChart3, Settings,
 } from 'lucide-react';
 import { DeckStatsTab } from '@/components/deck-detail/DeckStatsTab';
 // anki-logo removed — using Package icon instead
