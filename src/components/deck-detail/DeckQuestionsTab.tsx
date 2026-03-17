@@ -172,7 +172,7 @@ const ConceptMasterySection = ({
       if (!userId) return;
 
       try {
-        const moved = await moveConceptCardsToErrorDeck(user.id, [concept], deckId);
+        const moved = await moveConceptCardsToErrorDeck(userId, [concept], deckId);
         if (moved > 0) {
           queryClient.invalidateQueries({ queryKey: ['error-deck-cards'] });
           queryClient.invalidateQueries({ queryKey: ['error-notebook-count'] });
