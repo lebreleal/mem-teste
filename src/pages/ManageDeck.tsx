@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, lazy, Suspense, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ChevronUp, ChevronDown, Trash2, Copy, Plus, Loader2, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, ChevronUp, ChevronDown, Trash2, Copy, Plus, Loader2, Image as ImageIcon, Check, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { CardContent as CardPreviewContent, buildVirtualCards } from '@/components/deck-detail/CardPreviewSheet';
 import { useCards } from '@/hooks/useCards';
 import { useEnergy } from '@/hooks/useEnergy';
 import { useAIModel } from '@/hooks/useAIModel';
