@@ -145,19 +145,6 @@ const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: stri
     return collect(parentDeckId);
   }, [parentDeckId, allDecks]);
 
-  const { data: questionCounts } = useQuery({
-    queryKey: ['sub-deck-question-counts', parentDeckId],
-    queryFn: () => fetchQuestionCountsByDeck(allDescendantIds),
-    enabled: allDescendantIds.length > 0,
-    staleTime: 60_000,
-  });
-
-  const getQuestionCount = (deckId: string): number => {
-    let count = questionCounts?.get(deckId) ?? 0;
-    const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
-    for (const child of children) count += getQuestionCount(child.id);
-    return count;
-  };
 
   const sorted = [...subDecks].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name));
 
