@@ -291,7 +291,8 @@ export async function followDeckWithHierarchy(params: {
 
     if (childDecks?.length) {
       for (const child of childDecks) {
-        const childTd = (childTurmaDeckRows ?? []).find((r: any) => r.deck_id === child.id);
+        interface TurmaDeckRef { id: string; deck_id: string }
+        const childTd = (childTurmaDeckRows ?? []).find((r: TurmaDeckRef) => r.deck_id === child.id);
         await copySingleDeck({
           sourceDeckId: child.id, deckName: child.name, userId,
           parentDeckId: mainDeck.id, sourceTurmaDeckId: childTd?.id ?? null,
