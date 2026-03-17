@@ -90,10 +90,7 @@ const PublicCommunity = () => {
   // Fetch owner name
   const { data: ownerProfile } = useQuery({
     queryKey: ['public-community-owner', turma?.owner_id],
-    queryFn: async () => {
-      const { data } = await supabase.from('profiles').select('name').eq('id', turma!.owner_id).single();
-      return data;
-    },
+    queryFn: async () => ({ name: await fetchOwnerName(turma!.owner_id) }),
     enabled: !!turma?.owner_id,
   });
 
