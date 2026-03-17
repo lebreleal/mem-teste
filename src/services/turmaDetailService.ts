@@ -44,7 +44,7 @@ export async function importTurmaExam(userId: string, exam: any): Promise<string
     return existing[0].id;
   }
 
-  const { data: questions, error } = await supabase.from('turma_exam_questions').select('*').eq('exam_id', exam.id).order('sort_order', { ascending: true });
+  const { data: questions, error } = await supabase.from('turma_exam_questions').select('id, exam_id, question_type, question_text, options, correct_answer, correct_indices, points, sort_order, question_id, created_at').eq('exam_id', exam.id).order('sort_order', { ascending: true });
   if (error) throw error;
 
   const totalPoints = (questions ?? []).reduce((sum: number, q: any) => sum + (q.points || 1), 0);
