@@ -382,7 +382,8 @@ export async function fetchDeckSuggestions(deckId: string, userId: string | unde
 
   const userIds = [...new Set(data.map(s => s.suggester_user_id))];
   const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: userIds });
-  const nameMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
+  interface ProfileRow2 { id: string; name: string | null }
+  const nameMap = new Map(((profiles ?? []) as unknown as ProfileRow2[]).map(p => [p.id, p.name || 'Anônimo']));
 
   const cardIds = data.map(s => s.card_id).filter(Boolean) as string[];
   const { data: cards } = cardIds.length > 0
