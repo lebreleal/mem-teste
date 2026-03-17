@@ -105,6 +105,7 @@ const Dashboard = () => {
   });
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [organizeMode, setOrganizeMode] = useState(false);
   const [studyWeightsOpen, setStudyWeightsOpen] = useState(false);
   const [studySalaSheetOpen, setStudySalaSheetOpen] = useState(false);
   const [studySettingsOpen, setStudySettingsOpen] = useState(false);
