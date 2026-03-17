@@ -11,58 +11,32 @@ import { AuthProvider } from "@/hooks/useAuth";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import ScrollToTop from "@/components/ScrollToTop";
 
-// Retry wrapper for lazy imports — auto-reloads on stale chunk/module errors
-function lazyRetry(factory: () => Promise<{ default: React.ComponentType<any> }>) {
-  return lazy(() =>
-    factory().catch((err) => {
-      const message = err instanceof Error ? err.message : String(err);
-      const isStaleModuleError = message.includes('does not provide an export named') || message.includes('Failed to fetch dynamically imported module');
-      const key = 'chunk_reload';
-      const hasReloaded = sessionStorage.getItem(key);
-
-      if (isStaleModuleError && !hasReloaded) {
-        sessionStorage.setItem(key, '1');
-        try {
-          window.localStorage.removeItem('memo-query-cache');
-        } catch {
-          // ignore
-        }
-        window.location.reload();
-        return new Promise(() => {});
-      }
-
-      sessionStorage.removeItem(key);
-      throw err;
-    })
-  );
-}
-
 // Lazy-loaded pages
-const Index = lazyRetry(() => import("./pages/Index"));
-const Auth = lazyRetry(() => import("./pages/Auth"));
-const Dashboard = lazyRetry(() => import("./pages/Dashboard"));
-const DeckDetail = lazyRetry(() => import("./pages/DeckDetail"));
-const Study = lazyRetry(() => import("./pages/Study"));
-const ManageDeck = lazyRetry(() => import("./pages/ManageDeck"));
-const DeckSettings = lazyRetry(() => import("./pages/DeckSettings"));
-const Profile = lazyRetry(() => import("./pages/Profile"));
-const Turmas = lazyRetry(() => import("./pages/Turmas"));
-const TurmaDetail = lazyRetry(() => import("./pages/TurmaDetail"));
-const LessonDetail = lazyRetry(() => import("./pages/LessonDetail"));
-const ActivityView = lazyRetry(() => import("./pages/ActivityView"));
-const Performance = lazyRetry(() => import("./pages/Performance"));
-const StudyPlan = lazyRetry(() => import("./pages/StudyPlan"));
-const StatsPage = lazyRetry(() => import("./pages/StatsPage"));
-const AdminIA = lazyRetry(() => import("./pages/AdminIA"));
-const AdminUsers = lazyRetry(() => import("./pages/AdminUsers"));
-const AdminLogs = lazyRetry(() => import("./pages/AdminLogs"));
-const AdminUsageReport = lazyRetry(() => import("./pages/AdminUsageReport"));
-const MateriaDetail = lazyRetry(() => import("./pages/MateriaDetail"));
-const Install = lazyRetry(() => import("./pages/Install"));
-const PrivacyPolicy = lazyRetry(() => import("./pages/PrivacyPolicy"));
-const TermsOfService = lazyRetry(() => import("./pages/TermsOfService"));
-const PublicCommunity = lazyRetry(() => import("./pages/PublicCommunity"));
-const NotFound = lazyRetry(() => import("./pages/NotFound"));
+const Index = lazy(() => import("./pages/Index"));
+const Auth = lazy(() => import("./pages/Auth"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const DeckDetail = lazy(() => import("./pages/DeckDetail"));
+const Study = lazy(() => import("./pages/Study"));
+const ManageDeck = lazy(() => import("./pages/ManageDeck"));
+const DeckSettings = lazy(() => import("./pages/DeckSettings"));
+const Profile = lazy(() => import("./pages/Profile"));
+const Turmas = lazy(() => import("./pages/Turmas"));
+const TurmaDetail = lazy(() => import("./pages/TurmaDetail"));
+const LessonDetail = lazy(() => import("./pages/LessonDetail"));
+const ActivityView = lazy(() => import("./pages/ActivityView"));
+const Performance = lazy(() => import("./pages/Performance"));
+const StudyPlan = lazy(() => import("./pages/StudyPlan"));
+const StatsPage = lazy(() => import("./pages/StatsPage"));
+const AdminIA = lazy(() => import("./pages/AdminIA"));
+const AdminUsers = lazy(() => import("./pages/AdminUsers"));
+const AdminLogs = lazy(() => import("./pages/AdminLogs"));
+const AdminUsageReport = lazy(() => import("./pages/AdminUsageReport"));
+const MateriaDetail = lazy(() => import("./pages/MateriaDetail"));
+const Install = lazy(() => import("./pages/Install"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+const TermsOfService = lazy(() => import("./pages/TermsOfService"));
+const PublicCommunity = lazy(() => import("./pages/PublicCommunity"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 
 const TWENTY_FOUR_HOURS = 1000 * 60 * 60 * 24;
 
