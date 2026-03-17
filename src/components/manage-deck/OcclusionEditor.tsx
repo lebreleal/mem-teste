@@ -393,11 +393,8 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
       const compressed = await compressImage(file);
       const ext = compressed.name.split('.').pop() || 'webp';
       const userId = user?.id || 'anonymous';
-      const path = `${userId}/${crypto.randomUUID()}.${ext}`;
-      const { error } = await supabase.storage.from('card-images').upload(path, compressed);
-      if (error) throw error;
-      const { data: urlData } = supabase.storage.from('card-images').getPublicUrl(path);
-      setImageUrl(urlData.publicUrl);
+      const publicUrl = await uploadToStorage(userId, compressed);
+      setImageUrl(publicUrl);
       setShapes([]);
       setImgLoaded(false);
     } catch (err: any) {
