@@ -50,10 +50,10 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
   const progressPct = serverTotal > 0 ? Math.round(((serverTotal - diffCounts.novo) / serverTotal) * 100) : 0;
 
   // Time estimate — based on today's due cards (capped by daily limits from context)
-  const dueNew = isQMode ? qd.unanswered + qd.wrong : newCountToday;
-  const dueLearning = isQMode ? 0 : ctxLearningCount;
-  const dueReview = isQMode ? 0 : masteredToday;
-  const pendingForTime = isQMode ? (qd.unanswered + qd.wrong) : (dueNew + dueLearning + dueReview);
+  const dueNew = newCountToday;
+  const dueLearning = ctxLearningCount;
+  const dueReview = masteredToday;
+  const pendingForTime = dueNew + dueLearning + dueReview;
   const studyMetrics = realStudyMetrics ?? DEFAULT_STUDY_METRICS;
   const remainingSeconds = isQMode
     ? pendingForTime * deriveAvgSecondsPerCard(studyMetrics)
