@@ -300,7 +300,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
           const blob = await item.getType(imageType);
           const ext = imageType.split('/')[1] || 'png';
           const file = new File([blob], `paste.${ext}`, { type: imageType });
-          const url = await uploadToStorage(file);
+          const url = await handleUploadImage(file);
           if (url) onUrl(url);
           return;
         }
