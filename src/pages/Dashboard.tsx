@@ -133,26 +133,7 @@ const Dashboard = () => {
   // Fetch turma info (owner name, cover) for community folders — lightweight query
   const { data: communityTurmaInfo } = useQuery({
     queryKey: ['community-folder-turma-info', sourceTurmaId],
-    queryFn: async () => {
-      // Fetch turma + turma_decks in parallel
-      const [turmaRes, turmaDecksRes] = await Promise.all([
-        supabase.from('turmas').select('id, name, owner_id, cover_image_url').eq('id', sourceTurmaId!).single(),
-        supabase.from('turma_decks').select('deck_id').eq('turma_id', sourceTurmaId!).eq('is_published', true),
-      ]);
-      const turma = turmaRes.data;
-      if (!turma) return null;
-      const deckIds = (turmaDecksRes.data ?? []).map((td: any) => td.deck_id);
-      // Fetch profiles + deck dates in parallel
-      const [profilesRes, deckDatesRes] = await Promise.all([
-        supabase.rpc('get_public_profiles' as any, { p_user_ids: [(turma as any).owner_id] }),
-        deckIds.length > 0
-          ? supabase.from('decks').select('updated_at').in('id', deckIds).order('updated_at', { ascending: false }).limit(1)
-          : Promise.resolve({ data: [] }),
-      ]);
-      const ownerName = (profilesRes.data as any)?.[0]?.name || 'Anônimo';
-      const lastUpdated = (deckDatesRes.data as any)?.[0]?.updated_at ?? '';
-      return { ownerName, lastUpdated, coverUrl: (turma as any).cover_image_url };
-    },
+    queryFn: () => fetchCommunityFolderInfo(sourceTurmaId!),
     enabled: !!sourceTurmaId,
     staleTime: 60_000,
   });
