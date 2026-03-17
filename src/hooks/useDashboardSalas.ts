@@ -241,22 +241,20 @@ export function useDashboardSalas({ currentFolderId, setCurrentFolderId, folders
     }
   }, [userTurma, shareSlugEdit, refetchTurma, toast]);
 
-  // Sala image
+  // Sala image (crop-based)
   const [salaImageOpen, setSalaImageOpen] = useState(false);
-  const [salaImageFile, setSalaImageFile] = useState<File | null>(null);
-  const handleSalaImageSave = useCallback(async () => {
-    if (!salaImageFile || !currentFolderId) return;
+  const handleSalaImageCropped = useCallback(async (croppedFile: File) => {
+    if (!currentFolderId) return;
     try {
-      await uploadFolderImage(currentFolderId, salaImageFile);
+      await uploadFolderImage(currentFolderId, croppedFile);
       await queryClient.invalidateQueries({ queryKey: ['folders'] });
       toast({ title: 'Imagem atualizada!' });
       setSalaImageOpen(false);
-      setSalaImageFile(null);
     } catch (err) {
       console.error(err);
       toast({ title: 'Erro ao enviar imagem', variant: 'destructive' });
     }
-  }, [salaImageFile, currentFolderId, queryClient, toast]);
+  }, [currentFolderId, queryClient, toast]);
 
   return {
     isCommunityFolder,
@@ -283,7 +281,6 @@ export function useDashboardSalas({ currentFolderId, setCurrentFolderId, folders
 
     // Sala image
     salaImageOpen, setSalaImageOpen,
-    salaImageFile, setSalaImageFile,
-    handleSalaImageSave,
+    handleSalaImageCropped,
   };
 }

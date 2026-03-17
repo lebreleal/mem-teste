@@ -392,8 +392,7 @@ const Dashboard = () => {
         detachTarget={salas.detachTarget} setDetachTarget={salas.setDetachTarget}
         detaching={salas.detaching} handleDetachDeck={salas.handleDetachDeck}
         salaImageOpen={salas.salaImageOpen} setSalaImageOpen={salas.setSalaImageOpen}
-        salaImageFile={salas.salaImageFile} setSalaImageFile={salas.setSalaImageFile}
-        handleSalaImageSave={salas.handleSalaImageSave}
+        onSalaImageCropped={salas.handleSalaImageCropped}
         leaveSalaConfirm={salas.leaveSalaConfirm} setLeaveSalaConfirm={salas.setLeaveSalaConfirm}
         handleLeaveSala={salas.handleLeaveSala}
         salaAddMenuOpen={salaAddMenuOpen} setSalaAddMenuOpen={setSalaAddMenuOpen}

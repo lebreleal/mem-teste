@@ -1,18 +1,20 @@
 /**
  * DashboardModals — Extra modals extracted from Dashboard.tsx.
- * Includes: Info dialog, Detach alert, Sala image dialog, Share modal,
+ * Includes: Info dialog, Detach alert, Sala image crop dialog,
  * Leave sala alert, Add menu sheet.
  */
 
 import { useState } from 'react';
-import { ChevronDown, ChevronLeft, ImageIcon, Info } from 'lucide-react';
+import { ChevronDown, ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { IconInfo } from '@/components/icons';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import SalaImageCropDialog from '@/components/dashboard/SalaImageCropDialog';
 
 interface DashboardModalsProps {
   // Info dialog
@@ -25,12 +27,10 @@ interface DashboardModalsProps {
   detaching: boolean;
   handleDetachDeck: () => void;
 
-  // Sala image
+  // Sala image (crop dialog)
   salaImageOpen: boolean;
   setSalaImageOpen: (v: boolean) => void;
-  salaImageFile: File | null;
-  setSalaImageFile: (v: File | null) => void;
-  handleSalaImageSave: () => void;
+  onSalaImageCropped: (file: File) => void;
 
   // Leave sala
   leaveSalaConfirm: { folderId: string; turmaId: string } | null;
@@ -116,35 +116,12 @@ const DashboardModals = (props: DashboardModalsProps) => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Sala image change dialog */}
-      <Dialog open={props.salaImageOpen} onOpenChange={props.setSalaImageOpen}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Mudar imagem da sala</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 pt-2">
-            <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border rounded-xl p-6 cursor-pointer hover:bg-muted/30 transition-colors">
-              <ImageIcon className="h-8 w-8 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">
-                {props.salaImageFile ? props.salaImageFile.name : 'Selecionar imagem'}
-              </span>
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => props.setSalaImageFile(e.target.files?.[0] ?? null)}
-              />
-            </label>
-            <Button
-              className="w-full"
-              disabled={!props.salaImageFile}
-              onClick={props.handleSalaImageSave}
-            >
-              Salvar
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Sala image crop dialog */}
+      <SalaImageCropDialog
+        open={props.salaImageOpen}
+        onOpenChange={props.setSalaImageOpen}
+        onSave={props.onSalaImageCropped}
+      />
 
 
 
@@ -190,7 +167,7 @@ const DashboardModals = (props: DashboardModalsProps) => {
                   onClick={(e) => { e.stopPropagation(); props.setAddMenuInfoType('deck'); }}
                   className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
                 >
-                  <Info className="h-3.5 w-3.5" />
+                  <IconInfo className="h-3.5 w-3.5" />
                 </button>
                 <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 ml-auto shrink-0" />
               </button>
@@ -203,7 +180,7 @@ const DashboardModals = (props: DashboardModalsProps) => {
                   onClick={(e) => { e.stopPropagation(); props.setAddMenuInfoType('materia'); }}
                   className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
                 >
-                  <Info className="h-3.5 w-3.5" />
+                  <IconInfo className="h-3.5 w-3.5" />
                 </button>
                 <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 ml-auto shrink-0" />
               </button>
@@ -228,7 +205,7 @@ const DashboardModals = (props: DashboardModalsProps) => {
                   onClick={(e) => { e.stopPropagation(); props.setAddMenuInfoType('deck-manual'); }}
                   className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
                 >
-                  <Info className="h-3.5 w-3.5" />
+                  <IconInfo className="h-3.5 w-3.5" />
                 </button>
                 <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 ml-auto shrink-0" />
               </button>
@@ -241,7 +218,7 @@ const DashboardModals = (props: DashboardModalsProps) => {
                   onClick={(e) => { e.stopPropagation(); props.setAddMenuInfoType('deck-ia'); }}
                   className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
                 >
-                  <Info className="h-3.5 w-3.5" />
+                  <IconInfo className="h-3.5 w-3.5" />
                 </button>
                 <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 ml-auto shrink-0" />
               </button>
