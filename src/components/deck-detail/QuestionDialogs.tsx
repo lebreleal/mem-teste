@@ -186,7 +186,7 @@ export const CreateQuestionDialog = ({
       queryClient.invalidateQueries({ queryKey: ['deck-questions', deckId] });
       toast({ title: 'Questão criada!' }); onOpenChange(false); resetForm();
     },
-    onError: (err: any) => toast({ title: err.message || 'Erro ao criar questão', variant: 'destructive' }),
+    onError: (err: Error) => toast({ title: err.message || 'Erro ao criar questão', variant: 'destructive' }),
   });
 
   const [generationStep, setGenerationStep] = useState(0);
