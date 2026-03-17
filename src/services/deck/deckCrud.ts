@@ -5,6 +5,29 @@
 
 import { supabase } from '@/integrations/supabase/client';
 
+// ─── Row interfaces (Lei 3A) ───
+interface DeckNameRow { name: string }
+interface DeckIdRow { id: string }
+interface DeckBasicRow { id: string; name: string; folder_id: string | null }
+interface DeckArchiveRow { is_archived: boolean }
+interface DeckParentRow { id: string; parent_deck_id: string | null }
+interface CardCopyRow { front_content: string; back_content: string; card_type: string }
+interface TurmaDeckNavRow { turma_id: string; lesson_id: string | null }
+interface SuggestionRow {
+  id: string; deck_id: string; card_id: string | null; suggestion_type: string;
+  suggested_content: unknown; suggested_tags: unknown | null; rationale: string;
+  status: string; content_status: string; tags_status: string;
+  suggester_user_id: string; moderator_user_id: string | null;
+  created_at: string; updated_at: string;
+}
+interface ProfileNameRow { id: string; name: string }
+interface DeckQuestionDeckIdRow { deck_id: string }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- deck_questions not in generated types
+const dqTable = () => (supabase.from as (t: string) => ReturnType<typeof supabase.from>)('deck_questions');
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- turma_decks not in generated types  
+const tdTable = () => (supabase.from as (t: string) => ReturnType<typeof supabase.from>)('turma_decks');
+
 const DECK_ALL_COLS = 'id, name, parent_deck_id, folder_id, user_id, daily_new_limit, daily_review_limit, algorithm_mode, learning_steps, requested_retention, max_interval, interval_modifier, easy_bonus, easy_graduating_interval, shuffle_cards, is_live_deck, source_turma_deck_id, source_listing_id, bury_siblings, bury_new_siblings, bury_review_siblings, bury_learning_siblings, is_archived, is_public, is_free_in_community, community_id, sort_order, allow_duplication, synced_at, created_at, updated_at' as const;
 
 /** Resolve a unique deck name by appending (1), (2), etc. if needed. */
@@ -15,7 +38,7 @@ export async function resolveUniqueDeckName(userId: string, baseName: string): P
     .eq('user_id', userId)
     .ilike('name', `${baseName}%`);
   if (!data || data.length === 0) return baseName;
-  const existing = new Set(data.map((d: any) => d.name));
+  const existing = new Set((data as DeckNameRow[]).map(d => d.name));
   if (!existing.has(baseName)) return baseName;
   let i = 1;
   while (existing.has(`${baseName} (${i})`)) i++;
@@ -24,9 +47,17 @@ export async function resolveUniqueDeckName(userId: string, baseName: string): P
 
 /** Create a new deck. */
 export async function createDeck(userId: string, name: string, folderId?: string | null, parentDeckId?: string | null, algorithmMode?: string) {
+  const insertData: Record<string, unknown> = {
+    name,
+    user_id: userId,
+    folder_id: folderId ?? null,
+    parent_deck_id: parentDeckId ?? null,
+  };
+  if (algorithmMode) insertData.algorithm_mode = algorithmMode;
+
   const { data, error } = await supabase
     .from('decks')
-    .insert({ name, user_id: userId, folder_id: folderId ?? null, parent_deck_id: parentDeckId ?? null, ...(algorithmMode ? { algorithm_mode: algorithmMode } : {}) } as any)
+    .insert(insertData)
     .select()
     .single();
   if (error) throw error;
@@ -53,7 +84,7 @@ export async function deleteFolderCascade(folderId: string) {
 
 /** Rename a deck. */
 export async function renameDeck(id: string, name: string) {
-  const { error } = await supabase.from('decks').update({ name } as any).eq('id', id);
+  const { error } = await supabase.from('decks').update({ name }).eq('id', id);
   if (error) throw error;
 }
 
@@ -62,19 +93,19 @@ export async function moveDeck(id: string, folderId: string | null, parentDeckId
   const { error } = await supabase.from('decks').update({
     folder_id: folderId,
     parent_deck_id: parentDeckId ?? null,
-  } as any).eq('id', id);
+  }).eq('id', id);
   if (error) throw error;
 }
 
 /** Bulk move decks to a folder. */
 export async function bulkMoveDecks(ids: string[], folderId: string | null) {
-  const { error } = await supabase.from('decks').update({ folder_id: folderId } as any).in('id', ids);
+  const { error } = await supabase.from('decks').update({ folder_id: folderId }).in('id', ids);
   if (error) throw error;
 }
 
 /** Bulk archive decks. */
 export async function bulkArchiveDecks(ids: string[]) {
-  const { error } = await supabase.from('decks').update({ is_archived: true } as any).in('id', ids);
+  const { error } = await supabase.from('decks').update({ is_archived: true }).in('id', ids);
   if (error) throw error;
 }
 
@@ -82,7 +113,10 @@ export async function bulkArchiveDecks(ids: string[]) {
 export async function bulkDeleteDecks(ids: string[]) {
   // Use bulk RPC if available, fallback to sequential
   try {
-    const { error } = await supabase.rpc('bulk_delete_decks_cascade' as any, { p_deck_ids: ids } as any);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- bulk_delete_decks_cascade RPC not in generated types
+    const { error } = await (supabase.rpc as (fn: string, params: Record<string, unknown>) => ReturnType<typeof supabase.rpc>)(
+      'bulk_delete_decks_cascade', { p_deck_ids: ids }
+    );
     if (error) throw error;
   } catch {
     // Fallback: sequential delete
@@ -102,26 +136,31 @@ export async function fetchDeck(deckId: string) {
 
 /** Update deck fields by ID. */
 export async function updateDeck(deckId: string, updates: Record<string, unknown>) {
-  const { error } = await supabase.from('decks').update(updates as any).eq('id', deckId);
+  // Filter to only known deck columns to avoid type issues
+  const { error } = await supabase.from('decks').update(updates as Parameters<ReturnType<typeof supabase.from>['update']>[0]).eq('id', deckId);
   if (error) throw error;
 }
 
 /** Change algorithm mode for a deck and optionally reset progress. */
 export async function changeAlgorithm(deckId: string, algorithmMode: string, forceReset = true) {
-  const { error: deckErr } = await supabase.from('decks').update({ algorithm_mode: algorithmMode } as any).eq('id', deckId);
+  const { error: deckErr } = await supabase.from('decks').update({ algorithm_mode: algorithmMode }).eq('id', deckId);
   if (deckErr) throw deckErr;
 
   if (forceReset) {
-    const { error: cardErr } = await supabase.from('cards').update({ state: 0, stability: 0, difficulty: 0, scheduled_date: new Date().toISOString() } as any).eq('deck_id', deckId);
+    const { error: cardErr } = await supabase.from('cards').update({
+      state: 0, stability: 0, difficulty: 0, scheduled_date: new Date().toISOString(),
+    }).eq('deck_id', deckId);
     if (cardErr) throw cardErr;
   }
 
   const { data: children } = await supabase.from('decks').select('id').eq('parent_deck_id', deckId);
   if (children && children.length > 0) {
-    const childIds = children.map(c => c.id);
-    await supabase.from('decks').update({ algorithm_mode: algorithmMode } as any).in('id', childIds);
+    const childIds = (children as DeckIdRow[]).map(c => c.id);
+    await supabase.from('decks').update({ algorithm_mode: algorithmMode }).in('id', childIds);
     if (forceReset) {
-      await supabase.from('cards').update({ state: 0, stability: 0, difficulty: 0, scheduled_date: new Date().toISOString() } as any).in('deck_id', childIds);
+      await supabase.from('cards').update({
+        state: 0, stability: 0, difficulty: 0, scheduled_date: new Date().toISOString(),
+      }).in('deck_id', childIds);
     }
   }
   return { childCount: children?.length ?? 0, shouldReset: forceReset };
@@ -131,46 +170,47 @@ export async function changeAlgorithm(deckId: string, algorithmMode: string, for
 export async function createAlgorithmCopy(userId: string, deckId: string, algorithmMode: string, algorithmLabel: string) {
   const { data: currentDeck } = await supabase.from('decks').select('name, folder_id').eq('id', deckId).single();
   if (!currentDeck) throw new Error('Deck not found');
+  const typed = currentDeck as DeckBasicRow & { folder_id: string | null };
   const { data: newDeck, error } = await supabase
     .from('decks')
     .insert({
-      name: `${currentDeck.name} (${algorithmLabel})`,
+      name: `${typed.name} (${algorithmLabel})`,
       user_id: userId,
-      folder_id: currentDeck.folder_id,
+      folder_id: typed.folder_id,
       algorithm_mode: algorithmMode,
       parent_deck_id: deckId,
-    } as any)
+    })
     .select().single();
   if (error || !newDeck) throw error || new Error('Failed to create deck');
+  const newDeckId = (newDeck as DeckIdRow).id;
   const { data: cardsToCopy } = await supabase.from('cards').select('front_content, back_content, card_type').eq('deck_id', deckId);
   if (cardsToCopy && cardsToCopy.length > 0) {
-    await supabase.from('cards').insert(
-      cardsToCopy.map((c: any) => ({
-        deck_id: (newDeck as any).id,
-        front_content: c.front_content,
-        back_content: c.back_content,
-        card_type: c.card_type ?? 'basic',
-      })) as any
-    );
+    const rows = (cardsToCopy as CardCopyRow[]).map(c => ({
+      deck_id: newDeckId,
+      front_content: c.front_content,
+      back_content: c.back_content,
+      card_type: c.card_type ?? 'basic',
+    }));
+    await supabase.from('cards').insert(rows);
   }
   return newDeck;
 }
 
 /** Get turma navigation info for a turma deck. */
-export async function getTurmaDeckNavInfo(turmaDeckId: string): Promise<{ turma_id: string; lesson_id: string | null } | null> {
-  const { data } = await supabase.from('turma_decks').select('turma_id, lesson_id').eq('id', turmaDeckId).single();
-  return data as any ?? null;
+export async function getTurmaDeckNavInfo(turmaDeckId: string): Promise<TurmaDeckNavRow | null> {
+  const { data } = await tdTable().select('turma_id, lesson_id').eq('id', turmaDeckId).single();
+  return (data as unknown as TurmaDeckNavRow) ?? null;
 }
 
 /** Toggle archive status of a deck and propagate to sub-decks. */
 export async function archiveDeck(id: string) {
   const { data: deck } = await supabase.from('decks').select('is_archived').eq('id', id).single();
-  const newArchived = !(deck?.is_archived);
-  const { error } = await supabase.from('decks').update({ is_archived: newArchived } as any).eq('id', id);
+  const newArchived = !(deck as DeckArchiveRow | null)?.is_archived;
+  const { error } = await supabase.from('decks').update({ is_archived: newArchived }).eq('id', id);
   if (error) throw error;
   const { data: children } = await supabase.from('decks').select('id').eq('parent_deck_id', id);
   if (children && children.length > 0) {
-    await supabase.from('decks').update({ is_archived: newArchived } as any).in('id', children.map(c => c.id));
+    await supabase.from('decks').update({ is_archived: newArchived }).in('id', (children as DeckIdRow[]).map(c => c.id));
   }
 }
 
@@ -178,23 +218,25 @@ export async function archiveDeck(id: string) {
 export async function duplicateDeck(userId: string, id: string) {
   const { data: deck } = await supabase.from('decks').select('name, folder_id').eq('id', id).single();
   if (!deck) throw new Error('Deck not found');
+  const typed = deck as { name: string; folder_id: string | null };
 
   const { data: newDeck, error } = await supabase
     .from('decks')
-    .insert({ name: `${(deck as any).name} (cópia)`, user_id: userId, folder_id: (deck as any).folder_id } as any)
+    .insert({ name: `${typed.name} (cópia)`, user_id: userId, folder_id: typed.folder_id })
     .select()
     .single();
   if (error) throw error;
 
+  const newDeckId = (newDeck as DeckIdRow).id;
   const { data: cards } = await supabase.from('cards').select('front_content, back_content, card_type').eq('deck_id', id);
   if (cards && cards.length > 0 && newDeck) {
-    const newCards = cards.map((c: any) => ({
-      deck_id: (newDeck as any).id,
+    const newCards = (cards as CardCopyRow[]).map(c => ({
+      deck_id: newDeckId,
       front_content: c.front_content,
       back_content: c.back_content,
       card_type: c.card_type ?? 'basic',
     }));
-    await supabase.from('cards').insert(newCards as any);
+    await supabase.from('cards').insert(newCards);
   }
   return newDeck;
 }
@@ -206,24 +248,24 @@ export async function detachCommunityDeck(userId: string, sourceDeckId: string) 
 
   const { data: newDeck, error } = await supabase
     .from('decks')
-    .insert({ name: (originalDeck as any).name, user_id: userId } as any)
+    .insert({ name: (originalDeck as DeckNameRow).name, user_id: userId })
     .select()
     .single();
   if (error || !newDeck) throw error || new Error('Failed to create deck');
 
+  const newDeckId = (newDeck as DeckIdRow).id;
   const { data: cards } = await supabase
     .from('cards')
     .select('front_content, back_content, card_type')
     .eq('deck_id', sourceDeckId);
   if (cards && cards.length > 0) {
-    await supabase.from('cards').insert(
-      cards.map((c: any) => ({
-        deck_id: (newDeck as any).id,
-        front_content: c.front_content,
-        back_content: c.back_content,
-        card_type: c.card_type ?? 'basic',
-      })) as any,
-    );
+    const rows = (cards as CardCopyRow[]).map(c => ({
+      deck_id: newDeckId,
+      front_content: c.front_content,
+      back_content: c.back_content,
+      card_type: c.card_type ?? 'basic',
+    }));
+    await supabase.from('cards').insert(rows);
   }
   return newDeck;
 }
@@ -274,13 +316,12 @@ export async function resetDeckProgress(deckId: string) {
 
   const { error } = await supabase
     .from('cards')
-    .update({ state: 0, stability: 0, difficulty: 0, scheduled_date: new Date().toISOString() } as any)
+    .update({ state: 0, stability: 0, difficulty: 0, scheduled_date: new Date().toISOString() })
     .in('deck_id', deckIds);
   if (error) throw error;
 }
 
-/** Resolve the source deck info for a linked (community/marketplace) deck.
- *  Returns sourceDeckId, ownerName, and updatedAt in a single call flow. */
+/** Resolve the source deck info for a linked (community/marketplace) deck. */
 export async function fetchLinkedDeckSource(deck: {
   source_turma_deck_id?: string | null;
   source_listing_id?: string | null;
@@ -291,8 +332,9 @@ export async function fetchLinkedDeckSource(deck: {
   let sourceDeckId: string | null = null;
 
   if (deck.source_turma_deck_id) {
-    const { data: td } = await supabase.from('turma_decks').select('deck_id').eq('id', deck.source_turma_deck_id).maybeSingle();
-    if (td?.deck_id) sourceDeckId = td.deck_id;
+    const { data: td } = await tdTable().select('deck_id').eq('id', deck.source_turma_deck_id).maybeSingle();
+    const tdTyped = td as unknown as { deck_id: string } | null;
+    if (tdTyped?.deck_id) sourceDeckId = tdTyped.deck_id;
   }
 
   if (!sourceDeckId && deck.source_listing_id) {
@@ -332,10 +374,11 @@ export async function fetchPendingSuggestions(deckId: string) {
     .order('created_at', { ascending: false });
   if (!data || data.length === 0) return [];
 
-  const userIds = [...new Set(data.map((s: any) => s.suggester_user_id))];
+  const typedData = data as unknown as SuggestionRow[];
+  const userIds = [...new Set(typedData.map(s => s.suggester_user_id))];
   const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: userIds });
-  const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
-  return data.map((s: any) => ({ ...s, suggester_name: profileMap.get(s.suggester_user_id) ?? 'Anônimo' }));
+  const profileMap = new Map(((profiles ?? []) as unknown as ProfileNameRow[]).map(p => [p.id, p.name || 'Anônimo']));
+  return typedData.map(s => ({ ...s, suggester_name: profileMap.get(s.suggester_user_id) ?? 'Anônimo' }));
 }
 
 /** Count pending suggestions for a deck. */
@@ -355,12 +398,11 @@ export async function countDeckQuestionsRecursive(deckId: string): Promise<numbe
   while (frontier.length > 0) {
     const { data: children } = await supabase.from('decks').select('id').in('parent_deck_id', frontier);
     if (!children || children.length === 0) break;
-    const childIds = children.map((d: any) => d.id);
+    const childIds = (children as DeckIdRow[]).map(d => d.id);
     allIds.push(...childIds);
     frontier = childIds;
   }
-  const { count } = await supabase
-    .from('deck_questions' as any)
+  const { count } = await dqTable()
     .select('id', { count: 'exact', head: true })
     .in('deck_id', allIds);
   return count ?? 0;
@@ -374,7 +416,7 @@ export async function fetchQuestionCountsByDeck(deckIds: string[]): Promise<Map<
     .in('deck_id', deckIds);
   const map = new Map<string, number>();
   if (data) {
-    for (const q of data as any[]) {
+    for (const q of data as DeckQuestionDeckIdRow[]) {
       map.set(q.deck_id, (map.get(q.deck_id) ?? 0) + 1);
     }
   }
