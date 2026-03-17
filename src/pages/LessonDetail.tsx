@@ -385,7 +385,7 @@ const LessonDetail = () => {
   const downloadDeck = useMutation({
     mutationFn: async (td: any) => {
       if (!user || !turma) throw new Error('Not authenticated');
-      const { data: freshDecks } = await supabase.from('decks').select('*').eq('user_id', user.id);
+      const { data: freshDecks } = await supabase.from('decks').select('id, name, folder_id, parent_deck_id, source_turma_deck_id, is_archived').eq('user_id', user.id);
       const latestDecks = (freshDecks || []) as any[];
 
       let turmaFolder = folders.find(f => f.name === turma.name && !f.parent_id);
