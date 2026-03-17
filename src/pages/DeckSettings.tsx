@@ -385,7 +385,7 @@ const DeckSettings = () => {
 
   const handleCopyWithAlgorithm = async () => {
     if (!algorithmChangeTarget || !deckId || !user) return;
-    const { data: currentDeck } = await supabase.from('decks').select('*').eq('id', deckId).single();
+    const { data: currentDeck } = await supabase.from('decks').select('name, folder_id').eq('id', deckId).single();
     if (!currentDeck) return;
     const newName = `${currentDeck.name} (${algorithmChangeTarget === 'fsrs' ? 'FSRS' : 'Revisão rápida'})`;
     const { data: newDeck, error } = await supabase
