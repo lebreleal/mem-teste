@@ -188,7 +188,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
     setPolygonPreviewPoint(null);
     setHoveredSelectableId(shape.id);
 
-    if (shape.type === 'rect' && pointerPos) {
+    if ((shape.type === 'rect' || shape.type === 'polygon') && pointerPos) {
       setDragging({ startX: pointerPos.x, startY: pointerPos.y, origShape: cloneShape(shape) });
     }
   }, []);
