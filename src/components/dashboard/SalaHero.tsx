@@ -69,6 +69,7 @@ const SalaHero = ({
 }: SalaHeroProps) => {
   const navigate = useNavigate();
   const [infoOpen, setInfoOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const cf = state.folders.find((f: Folder) => f.id === state.currentFolderId);
   const folderName = cf?.name ?? 'Sala';
