@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ChevronLeft, ChevronRight, Trash2, Copy, Plus, Loader2, Check, X } from 'lucide-react';
+import { IconAIGradient } from '@/components/icons';
+import AICreateDeckDialog from '@/components/AICreateDeckDialog';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 import { Button } from '@/components/ui/button';
 import { CardContent as CardPreviewContent, buildVirtualCards } from '@/components/deck-detail/CardPreviewSheet';
@@ -27,6 +31,16 @@ const ManageDeck = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isAICreating, setIsAICreating] = useState(false);
+  const [aiDeckDialogOpen, setAIDeckDialogOpen] = useState(false);
+
+  const { data: deckName } = useQuery({
+    queryKey: ['deck-name', deckId],
+    queryFn: async () => {
+      const { data } = await supabase.from('decks').select('name').eq('id', deckId!).single();
+      return data?.name ?? '';
+    },
+    enabled: !!deckId,
+  });
 
   const initialCardId = searchParams.get('cardId');
   const hasAppliedInitialCardRef = useRef(false);
@@ -407,6 +421,9 @@ const ManageDeck = () => {
               <button onClick={handleAddCard} className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors" title="Novo cartão">
                 <Plus className="h-4.5 w-4.5" />
               </button>
+              <button onClick={() => setAIDeckDialogOpen(true)} className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors" title="Gerar com IA">
+                <IconAIGradient className="h-4.5 w-4.5" />
+              </button>
               <button onClick={handleDuplicate} className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors" title="Duplicar">
                 <Copy className="h-4 w-4" />
               </button>
@@ -416,10 +433,13 @@ const ManageDeck = () => {
             </div>
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center h-full text-center px-4">
-            <p className="text-muted-foreground mb-4 text-sm">Nenhum cartão neste baralho</p>
+          <div className="flex flex-col items-center justify-center h-full text-center px-4 gap-3">
+            <p className="text-muted-foreground mb-1 text-sm">Nenhum cartão neste baralho</p>
             <Button onClick={handleAddCard} size="sm" className="gap-1.5 rounded-xl">
               <Plus className="h-4 w-4" /> Adicionar cartão
+            </Button>
+            <Button onClick={() => setAIDeckDialogOpen(true)} size="sm" variant="outline" className="gap-1.5 rounded-xl">
+              <IconAIGradient className="h-4 w-4" /> Gerar com IA
             </Button>
           </div>
         )}
@@ -490,6 +510,14 @@ const ManageDeck = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* AI Create Cards Dialog */}
+      <AICreateDeckDialog
+        open={aiDeckDialogOpen}
+        onOpenChange={setAIDeckDialogOpen}
+        existingDeckId={deckId}
+        existingDeckName={deckName ?? ''}
+      />
     </div>
   );
 };
