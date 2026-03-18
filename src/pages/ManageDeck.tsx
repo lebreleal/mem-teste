@@ -534,6 +534,13 @@ const ManageDeck = () => {
     return atts;
   }, [frontAttachedImages, occlusionImageUrl, occlusionRects]);
 
+  // Compute editor override for preview (shows unsaved changes)
+  const editorOverride = useMemo(() => {
+    if (!currentCard) return undefined;
+    const { frontContent, backContent, cardType } = buildSavePayload();
+    return { cardId: currentCard.id, frontContent, backContent, cardType };
+  }, [currentCard, buildSavePayload]);
+
   const backImageAttachments = useMemo(() => {
     return backAttachedImages.map(url => ({ url, isOcclusion: false, hasOcclusionRects: false }));
   }, [backAttachedImages]);
@@ -572,11 +579,11 @@ const ManageDeck = () => {
           <div className="flex items-center gap-1">
             {totalCards > 0 && (
               <button
-                onClick={() => { if (isDirty) saveCurrentCard(); setPreviewOpen(true); }}
+                onClick={() => setPreviewOpen(true)}
                 className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                 title="Preview"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" fillRule="evenodd" clipRule="evenodd">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" fillRule="evenodd" clipRule="evenodd">
                   <path d="M15 6H9v12h6zM9 4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zM5 8v8a1 1 0 1 1-2 0V8a1 1 0 0 1 2 0M21 8v8a1 1 0 1 1-2 0V8a1 1 0 1 1 2 0" />
                 </svg>
               </button>
@@ -777,7 +784,7 @@ const ManageDeck = () => {
       </div>
 
       {/* Preview Modal */}
-      <ManageDeckPreview cards={sortedCards} initialIndex={selectedIndex} open={previewOpen} onClose={() => setPreviewOpen(false)} />
+      <ManageDeckPreview cards={sortedCards} initialIndex={selectedIndex} open={previewOpen} onClose={() => setPreviewOpen(false)} editorOverride={editorOverride} />
 
       {/* Occlusion Editor — centered modal overlay */}
       {occlusionModalOpen && (
@@ -875,10 +882,30 @@ const ManageDeck = () => {
 };
 
 /* ─── Preview modal ─── */
-function ManageDeckPreview({ cards, initialIndex, open, onClose }: {
+function ManageDeckPreview({ cards, initialIndex, open, onClose, editorOverride }: {
   cards: CardRow[]; initialIndex: number; open: boolean; onClose: () => void;
+  editorOverride?: { cardId: string; frontContent: string; backContent: string; cardType: string };
 }) {
-  const virtualCards = useMemo(() => buildVirtualCards(cards), [cards]);
+  // Apply editor override: replace current card (and its siblings' front) with editor state
+  const effectiveCards = useMemo(() => {
+    if (!editorOverride) return cards;
+    const targetCard = cards.find(c => c.id === editorOverride.cardId);
+    if (!targetCard) return cards;
+    const originalFront = targetCard.front_content;
+    const isSiblingType = (ct: string) => ct === 'cloze' || ct === 'image_occlusion';
+    return cards.map(c => {
+      if (c.id === editorOverride.cardId) {
+        return { ...c, front_content: editorOverride.frontContent, back_content: editorOverride.backContent, card_type: editorOverride.cardType };
+      }
+      // Update siblings' front_content too (they share the same content)
+      if (isSiblingType(c.card_type) && c.front_content === originalFront) {
+        return { ...c, front_content: editorOverride.frontContent, card_type: editorOverride.cardType };
+      }
+      return c;
+    });
+  }, [cards, editorOverride]);
+
+  const virtualCards = useMemo(() => buildVirtualCards(effectiveCards), [effectiveCards]);
   const [index, setIndex] = useState(initialIndex);
   const [revealed, setRevealed] = useState(false);
 

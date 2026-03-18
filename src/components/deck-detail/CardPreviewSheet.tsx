@@ -38,7 +38,7 @@ export function buildVirtualCards(cards: CardRow[]): VirtualCard[] {
   const result: VirtualCard[] = [];
   const processedClozeGroups = new Set<string>();
 
-  const hasClozeContent = (c: CardRow) => c.card_type === 'cloze' || /\{\{c\d+::.+?\}\}/.test(c.front_content);
+  const hasClozeContent = (c: CardRow) => c.card_type === 'cloze' || c.card_type === 'image_occlusion' || /\{\{c\d+::.+?\}\}/.test(c.front_content);
 
   cards.forEach(card => {
     if (hasClozeContent(card)) {
@@ -203,9 +203,19 @@ export function CardContent({
             {frontTextHtml && (
               <div className="mt-4 text-base leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeHtml(frontTextHtml) }} />
             )}
-            {revealed && card.back_content && card.back_content.trim() && (
-              <div className="mt-4 pt-4 border-t border-border/30 text-base leading-relaxed text-muted-foreground" dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.back_content) }} />
-            )}
+            {revealed && (() => {
+              let extraBack = '';
+              try {
+                const parsed = JSON.parse(card.back_content);
+                extraBack = parsed.extra || '';
+              } catch {
+                extraBack = card.back_content || '';
+              }
+              const hasContent = extraBack.replace(/<[^>]*>/g, '').trim() || /<img\s/i.test(extraBack);
+              return hasContent ? (
+                <div className="mt-4 pt-4 border-t border-border/30 text-base leading-relaxed text-muted-foreground" dangerouslySetInnerHTML={{ __html: sanitizeHtml(extraBack) }} />
+              ) : null;
+            })()}
           </div>
         );
       }
