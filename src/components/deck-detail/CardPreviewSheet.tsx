@@ -193,10 +193,7 @@ export function CardContent({
                   const rgb = parseColorRgb(r.color || OCCLUSION_COLORS[0].fill);
 
                   if (!isActive) {
-                    // Non-active: show translucent with real color (context)
-                    if (clozeTarget != null) {
-                      return renderShape(r, `rgba(${rgb.r},${rgb.g},${rgb.b},0.2)`, `rgba(${rgb.r},${rgb.g},${rgb.b},0.4)`);
-                    }
+                    // Non-active: hide completely (only show current card's occlusions)
                     return null;
                   }
 
