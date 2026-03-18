@@ -320,6 +320,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     setCursorInCloze(false);
     if (closePalette) setPaletteOpen(false);
 
+    // Only unset stored marks (to stop next character from getting cloze), don't touch existing content
     isUpdatingClozeRef.current = true;
     try {
       editor.chain().unsetMark('clozeMark').run();
@@ -327,6 +328,59 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       isUpdatingClozeRef.current = false;
     }
   }, [editor]);
+
+  /** Renumber all cloze groups to be sequential (1,2,3...) */
+  const renumberClozes = useCallback(() => {
+    if (!editor) return;
+    const html = editor.getHTML();
+    const usedNums = [...new Set([...html.matchAll(/data-cloze="(\d+)"/g)].map(m => parseInt(m[1])))].sort((a, b) => a - b);
+    if (usedNums.length === 0 || usedNums.every((n, i) => n === i + 1)) return;
+
+    const remap = new Map<number, number>();
+    usedNums.forEach((n, i) => remap.set(n, i + 1));
+
+    // Two-pass replacement to avoid collisions
+    let newHtml = html;
+    remap.forEach((newNum, oldNum) => {
+      if (newNum !== oldNum) {
+        newHtml = newHtml.replaceAll(`data-cloze="${oldNum}"`, `data-cloze="__REMAP_${newNum}__"`);
+      }
+    });
+    remap.forEach((newNum) => {
+      newHtml = newHtml.replaceAll(`data-cloze="__REMAP_${newNum}__"`, `data-cloze="${newNum}"`);
+    });
+
+    isUpdatingClozeRef.current = true;
+    try {
+      editor.commands.setContent(newHtml, { emitUpdate: true });
+    } finally {
+      isUpdatingClozeRef.current = false;
+    }
+  }, [editor]);
+
+  /** Delete cloze mark from current block, then renumber remaining */
+  const handleDeleteCloze = useCallback(() => {
+    const ctx = getSelectionClozeContext();
+    if (!ctx || !editor) return;
+
+    isUpdatingClozeRef.current = true;
+    try {
+      editor.chain()
+        .setTextSelection({ from: ctx.from, to: ctx.to })
+        .unsetMark('clozeMark')
+        .setTextSelection(ctx.from)
+        .run();
+    } finally {
+      isUpdatingClozeRef.current = false;
+    }
+
+    setClozeActive(false);
+    setCursorInCloze(false);
+    setPaletteOpen(false);
+
+    // Renumber after DOM settles
+    setTimeout(() => renumberClozes(), 10);
+  }, [editor, getSelectionClozeContext, renumberClozes]);
 
   useEffect(() => {
     if (!editor) return;
