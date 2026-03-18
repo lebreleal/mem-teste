@@ -112,19 +112,21 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
     setImgLoaded(true);
   };
 
-  const getDisplaySize = useCallback(() => {
+  // Base display size — fit image to container WITHOUT zoom
+  const getBaseDisplaySize = useCallback(() => {
     const container = containerRef.current;
     if (!container || imgSize.w === 0) return { w: 0, h: 0, scale: 1 };
-    const maxW = container.clientWidth - 48; // leave space for zoom controls on right
+    const maxW = container.clientWidth - 48;
     const maxH = container.clientHeight;
-    // Allow scaling up to fill the container when image is small
-    const scale = Math.min(maxW / imgSize.w, maxH / imgSize.h) * zoom;
-    return { w: imgSize.w * scale, h: imgSize.h * scale, scale };
-  }, [imgSize, zoom]);
+    const fitScale = Math.min(maxW / imgSize.w, maxH / imgSize.h);
+    return { w: imgSize.w * fitScale, h: imgSize.h * fitScale, scale: fitScale };
+  }, [imgSize]);
 
-  const displaySize = getDisplaySize();
-  const scale = displaySize.scale || 1;
-
+  const baseDisplay = getBaseDisplaySize();
+  // scale used for shape coordinate mapping — always base (no zoom)
+  const scale = baseDisplay.scale || 1;
+  // displaySize for rendering — always base (zoom is CSS transform)
+  const displaySize = baseDisplay;
   const toImgCoords = (clientX: number, clientY: number) => {
     const el = containerRef.current?.querySelector('.occlusion-img-wrapper');
     if (!el) return { x: 0, y: 0 };
