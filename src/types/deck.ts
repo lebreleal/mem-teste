@@ -44,4 +44,5 @@ export interface DeckWithStats {
 export type { Tables } from '@/integrations/supabase/types';
 
 import type { Tables } from '@/integrations/supabase/types';
-export type CardRow = Tables<'cards'>;
+export type CardRow = Omit<Tables<'cards'>, 'search_vector'>;
+export type DeckRow = Omit<Tables<'decks'>, 'search_vector'>;
