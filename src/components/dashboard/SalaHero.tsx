@@ -363,6 +363,15 @@ const SalaHero = ({
           )}
         </div>
       )}
+
+      {/* Global Search Dialog */}
+      <Suspense fallback={null}>
+        <GlobalSearchDialog
+          open={searchOpen}
+          onOpenChange={setSearchOpen}
+          folderId={state.currentFolderId}
+        />
+      </Suspense>
     </>
   );
 };
