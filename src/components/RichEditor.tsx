@@ -15,9 +15,9 @@ import { Mark, mergeAttributes } from '@tiptap/core';
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough, Heading2,
   List, ListOrdered, Code, Volume2, Palette, ImagePlus, ScanEye,
-  ClipboardPaste, Paperclip, Search, Settings2, Trash2,
+  ClipboardPaste, Paperclip, Search, Settings2,
 } from 'lucide-react';
-import { IconImage, IconImageOcclusion } from '@/components/icons';
+import { IconImage, IconImageOcclusion, IconTrash } from '@/components/icons';
 import { loadToolbarConfig, saveToolbarConfig, type ToolbarItem } from '@/components/rich-editor/toolbarConfig';
 import { lazy, Suspense } from 'react';
 const ToolbarConfigSheet = lazy(() => import('@/components/rich-editor/ToolbarConfigSheet'));
@@ -30,7 +30,7 @@ import { uploadImage as uploadToStorage, uploadFile as uploadFileToStorage } fro
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { compressImage } from '@/lib/imageUtils';
-import { CLOZE_COLORS, getVisibleColorIndices } from '@/lib/occlusionColors';
+import { CLOZE_COLORS } from '@/lib/occlusionColors';
 
 /* ─── Cloze Mark Extension ─── */
 const ClozeMark = Mark.create({
@@ -588,13 +588,6 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     input.click();
   };
 
-  /** Get used cloze number indices from editor content */
-  const getUsedClozeIndices = useCallback((): Set<number> => {
-    if (!editor) return new Set();
-    const html = editor.getHTML();
-    const nums = [...html.matchAll(/data-cloze="(\d+)"/g)].map(m => parseInt(m[1]) - 1);
-    return new Set(nums);
-  }, [editor]);
 
   /** Toggle cloze mode without forcing an exit after the first characters */
   const handleCloze = useCallback(() => {
@@ -602,7 +595,14 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
 
     const currentContext = getSelectionClozeContext();
 
-    // If cursor is already inside a cloze block, just open palette — don't re-apply mark
+    // If cursor is inside a cloze block AND palette is already open → toggle OFF (deactivate)
+    if (currentContext && paletteOpen) {
+      deactivateClozeMode(true);
+      editor.chain().focus().run();
+      return;
+    }
+
+    // If cursor is inside a cloze block but palette not open → open palette
     if (currentContext) {
       setClozeColorIndex(currentContext.num - 1);
       setClozeActive(true);
@@ -630,7 +630,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     setClozeActive(true);
     setCursorInCloze(true);
     setPaletteOpen(true);
-  }, [editor, clozeCounter, getSelectionClozeContext]);
+  }, [editor, clozeCounter, paletteOpen, deactivateClozeMode, getSelectionClozeContext]);
 
   /** Change cloze group/color while keeping the editor active inside the same cloze */
   const handleClozeColorChange = useCallback((colorIdx: number) => {
@@ -816,11 +816,13 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
                 );
               case 'cloze': {
                 if (hideCloze) return null;
-                const usedIndices = getUsedClozeIndices();
-                const visibleIndices = getVisibleColorIndices(usedIndices);
                 return (
                   <Popover key={t.id} open={paletteOpen} onOpenChange={(open) => {
-                    if (!open) setPaletteOpen(false);
+                    if (!open) {
+                      setPaletteOpen(false);
+                      // If palette closes and we're not inside a cloze, deactivate
+                      if (!cursorInCloze) setClozeActive(false);
+                    }
                   }}>
                     <PopoverTrigger asChild>
                       <Button type="button" variant="ghost" size="icon"
@@ -842,8 +844,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
                       onOpenAutoFocus={(e) => e.preventDefault()}
                       onCloseAutoFocus={(e) => e.preventDefault()}
                     >
-                      {visibleIndices.map(idx => {
-                        const c = CLOZE_COLORS[idx % CLOZE_COLORS.length];
+                      {CLOZE_COLORS.map((c, idx) => {
                         const isActive = clozeColorIndex === idx;
                         return (
                           <button
@@ -865,7 +866,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
                             onClick={handleDeleteCloze}
                             title="Remover oclusão"
                           >
-                            <Trash2 className="h-3 w-3" />
+                            <IconTrash className="h-3 w-3" />
                           </button>
                         </>
                       )}
