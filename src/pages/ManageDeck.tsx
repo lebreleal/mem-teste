@@ -534,6 +534,13 @@ const ManageDeck = () => {
     return atts;
   }, [frontAttachedImages, occlusionImageUrl, occlusionRects]);
 
+  // Compute editor override for preview (shows unsaved changes)
+  const editorOverride = useMemo(() => {
+    if (!currentCard) return undefined;
+    const { frontContent, backContent, cardType } = buildSavePayload();
+    return { cardId: currentCard.id, frontContent, backContent, cardType };
+  }, [currentCard, buildSavePayload]);
+
   const backImageAttachments = useMemo(() => {
     return backAttachedImages.map(url => ({ url, isOcclusion: false, hasOcclusionRects: false }));
   }, [backAttachedImages]);
