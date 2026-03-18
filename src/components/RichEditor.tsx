@@ -481,13 +481,37 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
 
     const syncClozeState = () => {
       if (isUpdatingClozeRef.current) return;
-      if (justDeactivatedRef.current) return; // Don't re-open palette right after deactivation
+      if (justDeactivatedRef.current) return;
 
-      const context = getSelectionClozeContext();
-      setCursorInCloze(!!context);
+      // Strict check: only $from.marks() at exact cursor position (not adjacent)
+      // This prevents the palette from re-opening when cursor is just after a cloze
+      const markType = editor.schema.marks.clozeMark;
+      const { $from, empty, from, to } = editor.state.selection;
 
-      if (context) {
-        setClozeColorIndex(context.num - 1);
+      let strictInCloze = false;
+      let contextNum: number | null = null;
+
+      if (empty) {
+        const mark = $from.marks().find((m) => m.type === markType);
+        if (mark) {
+          strictInCloze = true;
+          contextNum = Math.max(1, Number(mark.attrs.num) || 1);
+        }
+      } else {
+        editor.state.doc.nodesBetween(from, to, (node) => {
+          if (contextNum || !node.isText) return;
+          const m = node.marks.find((mk) => mk.type === markType);
+          if (m) {
+            strictInCloze = true;
+            contextNum = Math.max(1, Number(m.attrs.num) || 1);
+          }
+        });
+      }
+
+      setCursorInCloze(strictInCloze);
+
+      if (strictInCloze && contextNum) {
+        setClozeColorIndex(contextNum - 1);
         setPaletteOpen(true);
         return;
       }
