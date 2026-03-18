@@ -733,10 +733,11 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
                 if (hideCloze) return null;
                 const usedIndices = getUsedClozeIndices();
                 const visibleIndices = getVisibleColorIndices(usedIndices);
-                const showPalette = clozeActive || cursorInCloze;
                 const currentClozeColor = CLOZE_COLORS[clozeColorIndex % CLOZE_COLORS.length];
                 return (
-                  <Popover key={t.id} open={showPalette} onOpenChange={() => {}}>
+                  <Popover key={t.id} open={paletteOpen} onOpenChange={(open) => {
+                    if (!open) setPaletteOpen(false);
+                  }}>
                     <PopoverTrigger asChild>
                       <Button type="button" variant="ghost" size="icon"
                         className={`h-7 w-7 relative transition-all ${(clozeActive || cursorInCloze) ? 'bg-primary/15 text-primary ring-1 ring-primary/40' : ''}`}
@@ -747,38 +748,38 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                           <path fillRule="evenodd" d="M3 17.25V19a2 2 0 0 0 2 2h1.75v-2H5v-1.75zm0-3.5h2v-3.5H3zm0-7h2V5h1.75V3H5a2 2 0 0 0-2 2zM10.25 3v2h3.5V3zm7 0v2H19v1.75h2V5a2 2 0 0 0-2-2zM21 10.25h-2v3.5h2zm0 7h-2V19h-1.75v2H19a2 2 0 0 0 2-2zM13.75 21v-2h-3.5v2z" clipRule="evenodd" />
                         </svg>
-                        {/* Color indicator dot */}
-                        <span
-                          className="absolute bottom-0.5 left-1/2 -translate-x-1/2 h-1 w-3.5 rounded-full"
-                          style={{ backgroundColor: currentClozeColor.dot }}
-                        />
+                        {/* Color indicator dot — only when content has clozes */}
+                        {hasAnyCloze && (
+                          <span
+                            className="absolute bottom-0.5 left-1/2 -translate-x-1/2 h-1 w-3.5 rounded-full"
+                            style={{ backgroundColor: currentClozeColor.dot }}
+                          />
+                        )}
                       </Button>
                     </PopoverTrigger>
-                    {showPalette && (
-                      <PopoverContent
-                        side="top"
-                        align="center"
-                        sideOffset={6}
-                        className="w-auto p-1.5 flex items-center gap-1"
-                        onOpenAutoFocus={(e) => e.preventDefault()}
-                        onCloseAutoFocus={(e) => e.preventDefault()}
-                      >
-                        {visibleIndices.map(idx => {
-                          const c = CLOZE_COLORS[idx % CLOZE_COLORS.length];
-                          const isActive = clozeColorIndex === idx;
-                          return (
-                            <button
-                              key={idx}
-                              className={`h-5 w-5 rounded-full transition-all shrink-0 ${isActive ? 'ring-2 ring-offset-1 ring-offset-background ring-foreground/40 scale-110' : 'hover:scale-110'}`}
-                              style={{ backgroundColor: c.dot }}
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => handleClozeColorChange(idx)}
-                              title={`c${idx + 1} — ${c.label}`}
-                            />
-                          );
-                        })}
-                      </PopoverContent>
-                    )}
+                    <PopoverContent
+                      side="top"
+                      align="center"
+                      sideOffset={6}
+                      className="w-auto p-1.5 flex items-center gap-1"
+                      onOpenAutoFocus={(e) => e.preventDefault()}
+                      onCloseAutoFocus={(e) => e.preventDefault()}
+                    >
+                      {visibleIndices.map(idx => {
+                        const c = CLOZE_COLORS[idx % CLOZE_COLORS.length];
+                        const isActive = clozeColorIndex === idx;
+                        return (
+                          <button
+                            key={idx}
+                            className={`h-5 w-5 rounded-full transition-all shrink-0 ${isActive ? 'ring-2 ring-offset-1 ring-offset-background ring-foreground/40 scale-110' : 'hover:scale-110'}`}
+                            style={{ backgroundColor: c.dot }}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => handleClozeColorChange(idx)}
+                            title={`c${idx + 1} — ${c.label}`}
+                          />
+                        );
+                      })}
+                    </PopoverContent>
                   </Popover>
                 );
               }
