@@ -20,8 +20,7 @@ import { useEnergy } from '@/hooks/useEnergy';
 import { useAIModel } from '@/hooks/useAIModel';
 import * as cardService from '@/services/cardService';
 import * as deckService from '@/services/deckService';
-import type { CardRow, DeckWithStats } from '@/types/deck';
-import type { Tables } from '@/integrations/supabase/types';
+import type { CardRow, DeckWithStats, DeckRow } from '@/types/deck';
 import { findRootAncestorId } from '@/lib/studyUtils';
 import { useDeckDetailHandlers, type OcclusionRect } from './DeckDetailHandlers';
 
