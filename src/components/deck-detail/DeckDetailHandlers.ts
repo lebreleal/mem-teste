@@ -34,6 +34,7 @@ export interface OcclusionRect {
   type: 'rect' | 'ellipse' | 'polygon' | 'text';
   text?: string;
   groupId?: string;
+  color?: string;
   points?: { x: number; y: number }[];
 }
 
