@@ -420,14 +420,30 @@ const ManageDeck = () => {
 
   const handleDelete = useCallback(() => {
     if (!currentCard) return;
-    deleteCard.mutate(currentCard.id, {
-      onSuccess: () => {
+    // If the current card belongs to a sibling group, delete ALL siblings
+    const group = siblingMap.get(selectedIndex);
+    if (group && group.length > 1) {
+      const idsToDelete = group.map(idx => sortedCards[idx]?.id).filter(Boolean) as string[];
+      const deletePromises = idsToDelete.map(id => new Promise<void>((resolve, reject) => {
+        deleteCard.mutate(id, { onSuccess: () => resolve(), onError: reject });
+      }));
+      Promise.all(deletePromises).then(() => {
         setDeleteConfirmOpen(false);
-        toast({ title: 'Cartão excluído' });
-        if (selectedIndex >= totalCards - 1 && selectedIndex > 0) setSelectedIndex(selectedIndex - 1);
-      },
-    });
-  }, [currentCard, deleteCard, selectedIndex, totalCards, toast]);
+        toast({ title: `${idsToDelete.length} cartões excluídos` });
+        const newTotal = totalCards - idsToDelete.length;
+        if (selectedIndex >= newTotal && newTotal > 0) setSelectedIndex(newTotal - 1);
+        else if (newTotal === 0) setSelectedIndex(0);
+      });
+    } else {
+      deleteCard.mutate(currentCard.id, {
+        onSuccess: () => {
+          setDeleteConfirmOpen(false);
+          toast({ title: 'Cartão excluído' });
+          if (selectedIndex >= totalCards - 1 && selectedIndex > 0) setSelectedIndex(selectedIndex - 1);
+        },
+      });
+    }
+  }, [currentCard, deleteCard, selectedIndex, totalCards, toast, siblingMap, sortedCards]);
 
   const handleAddCard = useCallback(() => {
     // If selected card belongs to a sibling group, insert after the LAST sibling
