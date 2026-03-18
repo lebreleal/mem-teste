@@ -67,6 +67,32 @@ const ManageDeck = () => {
   const currentCard = sortedCards[selectedIndex] ?? null;
   const totalCards = sortedCards.length;
 
+  // Sibling groups: consecutive cards with same front_content and type cloze/image_occlusion
+  const siblingMap = useMemo(() => {
+    // Maps each card index → array of all sibling indices (including itself)
+    const indexToGroup = new Map<number, number[]>();
+    let i = 0;
+    while (i < sortedCards.length) {
+      const card = sortedCards[i];
+      const isSiblingType = card.card_type === 'cloze' || card.card_type === 'image_occlusion';
+      if (isSiblingType) {
+        const group = [i];
+        let j = i + 1;
+        while (j < sortedCards.length && sortedCards[j].front_content === card.front_content && (sortedCards[j].card_type === 'cloze' || sortedCards[j].card_type === 'image_occlusion')) {
+          group.push(j);
+          j++;
+        }
+        if (group.length > 1) {
+          group.forEach(idx => indexToGroup.set(idx, group));
+        }
+        i = j;
+      } else {
+        i++;
+      }
+    }
+    return indexToGroup;
+  }, [sortedCards]);
+
   // Apply URL card only once
   useEffect(() => {
     if (pendingNewCardId && sortedCards.length > 0) {
@@ -209,17 +235,18 @@ const ManageDeck = () => {
   }, [currentCard, deleteCard, selectedIndex, totalCards, toast]);
 
   const handleAddCard = useCallback(() => {
-    // Calculate created_at to insert below the currently selected card
+    // If selected card belongs to a sibling group, insert after the LAST sibling
+    const group = siblingMap.get(selectedIndex);
+    const insertAfterIndex = group ? group[group.length - 1] : selectedIndex;
+
     let createdAt: string | undefined;
-    if (sortedCards.length > 0 && selectedIndex >= 0) {
-      const currentTime = new Date(sortedCards[selectedIndex].created_at).getTime();
-      const nextCard = sortedCards[selectedIndex + 1];
+    if (sortedCards.length > 0 && insertAfterIndex >= 0) {
+      const currentTime = new Date(sortedCards[insertAfterIndex].created_at).getTime();
+      const nextCard = sortedCards[insertAfterIndex + 1];
       if (nextCard) {
         const nextTime = new Date(nextCard.created_at).getTime();
-        // Midpoint between current and next card
         createdAt = new Date(currentTime + Math.floor((nextTime - currentTime) / 2)).toISOString();
       } else {
-        // After last card — use current + 1ms
         createdAt = new Date(currentTime + 1).toISOString();
       }
     }
@@ -229,7 +256,7 @@ const ManageDeck = () => {
         toast({ title: 'Novo cartão criado' });
       },
     });
-  }, [createCard, toast, sortedCards, selectedIndex]);
+  }, [createCard, toast, sortedCards, selectedIndex, siblingMap]);
 
   const handleDuplicate = useCallback(() => {
     if (!currentCard) return;
@@ -333,20 +360,38 @@ const ManageDeck = () => {
           <div className="mx-auto max-w-2xl flex h-full p-3 sm:p-5 gap-1.5">
 
             {/* Left sidebar — card index numbers (vertical) */}
-            <div className="shrink-0 flex flex-col items-center gap-1 overflow-y-auto no-scrollbar py-1">
-              {sortedCards.map((card, idx) => (
-                <button
-                  key={card.id}
-                  onClick={() => selectCard(idx)}
-                  className={`shrink-0 h-7 w-7 rounded-full text-[12px] font-medium transition-all flex items-center justify-center ${
-                    idx === selectedIndex
-                      ? 'bg-primary text-primary-foreground shadow-sm'
-                      : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-                  }`}
-                >
-                  {idx + 1}
-                </button>
-              ))}
+            <div className="shrink-0 flex flex-col items-center gap-0 overflow-y-auto no-scrollbar py-1">
+              {sortedCards.map((card, idx) => {
+                const group = siblingMap.get(idx);
+                const isInGroup = !!group;
+                const isFirst = isInGroup && group![0] === idx;
+                const isLast = isInGroup && group![group!.length - 1] === idx;
+                const selectedGroup = siblingMap.get(selectedIndex);
+                const isGroupHighlighted = isInGroup && selectedGroup && group![0] === selectedGroup[0];
+
+                return (
+                  <div key={card.id} className="flex items-stretch">
+                    {/* Sibling connector bar */}
+                    <div className="w-1 mr-0.5 flex flex-col items-center">
+                      {isInGroup ? (
+                        <div className={`w-0.5 flex-1 ${isGroupHighlighted ? 'bg-primary/40' : 'bg-border'} ${isFirst ? 'rounded-t-full mt-2' : ''} ${isLast ? 'rounded-b-full mb-2' : ''}`} />
+                      ) : <div className="w-0.5 flex-1" />}
+                    </div>
+                    <button
+                      onClick={() => selectCard(idx)}
+                      className={`shrink-0 h-7 w-7 my-0.5 rounded-full text-[12px] font-medium transition-all flex items-center justify-center ${
+                        idx === selectedIndex
+                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          : isGroupHighlighted
+                            ? 'bg-accent/60 text-foreground'
+                            : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                      }`}
+                    >
+                      {idx + 1}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
 
             {/* Center — card editors */}

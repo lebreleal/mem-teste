@@ -1,45 +1,173 @@
+# Sistema ALEKS — Grafo de Pré-requisitos entre Conceitos
 
+## Implementado
 
-## Agrupamento de Cards Irmãos (Siblings) no ManageDeck
+### 1. Coluna `parent_concept_id` em `global_concepts`
+- `ALTER TABLE global_concepts ADD parent_concept_id uuid REFERENCES global_concepts(id) ON DELETE SET NULL`
+- Índice criado para queries eficientes
 
-### Problema
-Cards de oclusão (texto e imagem) geram múltiplos cards do mesmo conteúdo (ex: `{{c1::...}}` e `{{c2::...}}`). No editor ManageDeck, esses "irmãos" aparecem como cards separados (ex: 7 e 8). Se o usuário inserir um card abaixo do 7, ele fica entre o 7 e o 8, quebrando o agrupamento.
+### 2. `conceptHierarchyService.ts` reescrito para grafo de conceitos
+- `buildHierarchyDiagnostic` navega `parent_concept_id` (ancestors/descendants/siblings) em vez de `parent_deck_id`
+- ConceptNode agora inclui `depth` (profundidade no grafo) e `parent_concept_id`
+- Removidas dependências de deck hierarchy (getAncestorDeckIds, getSiblingDeckIds, etc.)
 
-### Solução
+### 3. Cascade automático no erro (`useGlobalConcepts.ts`)
+- Quando rating = 1 (Again) e conceito tem parent_concept_id, chama `cascadeOnError`
+- `cascadeOnError` caminha ancestrais e reagenda os que estão em state 0/3 ou stability < 5
 
-**1. Identificar siblings**: Cards são irmãos se compartilham o mesmo `front_content` e são do tipo `cloze` ou `image_occlusion`. Criar um helper `getSiblingGroups(sortedCards)` que retorna um Map de `front_content → [indices]`.
+### 4. Fronteira de aprendizagem "Prontos para aprender" (`Concepts.tsx`)
+- `fetchReadyToLearnConcepts`: conceitos em state=0 cujo parent está em state=2 (dominado)
+- Seção visual com badges clicáveis na aba "Meus"
 
-**2. Visual no sidebar**: Siblings recebem uma barra vertical conectora à esquerda dos números, indicando que pertencem ao mesmo grupo. Ao clicar em qualquer um do grupo, todos ficam com highlight suave (fundo accent), mas só o clicado fica com o círculo primário.
+### 5. Auto-linking de pré-requisitos via IA (`generate-questions`)
+- Prompt atualizado para retornar campo `prerequisites` (0-2 Knowledge Components)
+- Tool schema inclui `prerequisites` como campo obrigatório
+- `linkQuestionsToConcepts` agora seta `parent_concept_id` automaticamente com o primeiro pré-requisito
 
-**3. Inserção inteligente (`handleAddCard`)**: Quando o card selecionado faz parte de um grupo de siblings, o novo card é inserido abaixo do **último** sibling do grupo, não abaixo do selecionado individualmente. O `created_at` é calculado entre o último sibling e o card seguinte.
+### 6. ErrorNotebook atualizado para grafo de conceitos
+- Breadcrumb mostra caminho de pré-requisitos (conceitos, não decks)
+- "Lacunas Fundacionais" → "Pré-requisitos Fracos"
+- Suporta múltiplos source concepts
 
-**4. Navegação**: Prev/Next continua card a card (cada sibling tem seu próprio FSRS). Não pula o grupo inteiro.
+### 7. Donut Chart de Progresso por Categoria
+- Gráfico de rosca (Recharts) na aba "Meus" agrupando conceitos por `category`
+- Cada fatia = uma grande área médica, colorida por % de domínio
+- Clicar na fatia filtra a lista por aquela categoria
+- Exibe % total de domínio no centro
 
-### Mudanças por arquivo
+### 8. Fronteira Enforced (Conceitos Bloqueados)
+- Conceitos cujo `parent_concept_id` aponta para conceito com `state !== 2` ficam bloqueados
+- UI: opacity reduzida, ícone de cadeado, tooltip "Domine {prereq} primeiro"
+- Conceitos bloqueados não podem ser estudados diretamente
 
+### 9. Auto-mapeamento de Pré-requisitos via IA
+- Botão "Mapear pré-requisitos com IA" na página de Conceitos
+- Edge function `map-prerequisites` usa Lovable AI (gemini-2.5-flash) com tool calling
+- Analisa todos os conceitos do usuário e retorna pares `{ concept, prerequisite }`
+- Atualiza `parent_concept_id` em batch (não sobrescreve mapeamentos manuais)
+
+### 10. Avaliação Diagnóstica Inicial (Knowledge Check)
+- Botão "Diagnóstico Inicial" na página de Conceitos
+- Seleciona ~20 conceitos distribuídos por profundidade no grafo
+- Para cada conceito, busca uma questão vinculada
+- Se acerta 2x consecutivas → marca conceito como dominado (state=2, stability=10)
+- Se erra → marca como fraco (state=0) para revisão futura
+- Exibe resultado final com contagem de acertos/erros
+
+### 11. Princípios de Neurociência Aplicados (Learning Science)
+
+#### Rating Automático Binário (StudyMode)
+- Removidos botões manuais "Errei/Bom/Fácil"
+- Sistema atribui rating=3 (correto) ou rating=1 (incorreto) automaticamente
+- Base: Dunning-Kruger — alunos são maus autoavaliadores
+
+#### Mastery Threshold (MASTERY_THRESHOLD = 2)
+- Exige 2 acertos consecutivos para confirmar domínio de um conceito
+- Aplicado tanto no StudyMode quanto no DiagnosticMode
+- Base: Bloom 1968 (mastery learning), reduz falso positivo de 25% (chute em 4 alternativas)
+
+#### Interleaved Practice (ErrorNotebook)
+- Botão "Estudar todos (prática intercalada)" embaralha todos os conceitos fracos
+- Fisher-Yates shuffle garante aleatoriedade uniforme
+- Base: Rohrer & Taylor 2007 (+20-40% retenção vs blocked practice)
+
+#### Elaborative Interrogation (StudyMode)
+- Após erro, campo de texto: "Por que a alternativa X está correta?"
+- Aluno tenta explicar antes de ver a explicação da IA
+- Opcional (pode pular), mas ativa encoding profundo
+- Base: Chi et al. 1994, Dunlosky et al. 2013 (+30% retenção)
+
+#### Confidence-Based Assessment (StudyMode)
+- Após acertar, pergunta "Você tinha certeza?"
+- Se "Chutei" → não incrementa streak, exige mais uma questão
+- Impede que chutes sortudos confirmem domínio
+- Base: Hunt 2003, Dunlosky & Rawson 2012 (calibração metacognitiva)
+
+## Correções Arquiteturais — Unificação Cards ↔ Temas
+
+### 12. Card Review → Concept Mastery Sync (Fase 1a)
+- `Study.tsx` → `executeReview()` agora chama `getCardConcepts` + `updateConceptMastery` após cada review
+- Se rating≥3: incrementa correct_count do tema vinculado
+- Se rating=1: incrementa wrong_count do tema vinculado
+- Execução non-blocking (fire-and-forget) para não impactar performance do estudo
+
+### 13. Temas Due → Flashcard Retrieval (Fase 1b)
+- `DashboardDueThemes.tsx` agora navega para `/study/{deckId}` ao clicar em um tema
+- Busca deck vinculado via `question_concepts` → `deck_questions` → `deck_id`
+- Fallback para `/conceitos` se não houver deck vinculado
+- Removido StudyMode inline — temas due sugerem flashcards (recall real > recognition)
+
+### 14. Auto-trigger Diagnóstico Inicial (Fase 2a)
+- Novo componente `DiagnosticBanner.tsx` no Dashboard
+- Aparece automaticamente quando 10+ conceitos existem sem `last_reviewed_at`
+- Botão "Iniciar diagnóstico" abre `DiagnosticMode` inline
+- Dismissível com persistência em localStorage
+
+### 15. Auto-trigger Mapeamento de Pré-requisitos (Fase 2b)
+- Função `tryAutoMapPrerequisites` adicionada em `globalConceptService.ts`
+- Chamada automaticamente após `linkQuestionsToConcepts` (fire-and-forget)
+- Só executa se >80% dos conceitos não têm `parent_concept_id` (first-time scenario)
+- Guard contra execução duplicada via `_autoMapInFlight` Set
+
+### 16. Daily Theme Limit (Fase 3a)
+- Constante `DAILY_NEW_THEME_LIMIT = 5` em `useGlobalConcepts.ts`
+- `newThemeRemaining` calculado com base em temas revisados hoje pela primeira vez
+- Exposto no hook para UI consumir (banners, limites)
+
+## Arquivos Modificados
 | Arquivo | Mudança |
 |---|---|
-| `ManageDeck.tsx` | Adicionar `getSiblingGroups` helper. Modificar `handleAddCard` para detectar grupo e inserir após o último sibling. Modificar sidebar para mostrar barra conectora e highlight de grupo. |
+| Supabase migration | `parent_concept_id` + index |
+| `src/services/conceptHierarchyService.ts` | Reescrito: grafo de conceitos |
+| `src/services/globalConceptService.ts` | `parent_concept_id` no tipo, `cascadeOnError`, `fetchReadyToLearnConcepts`, `linkQuestionsToConcepts` com prerequisites, `mapPrerequisitesViaAI`, `fetchDiagnosticConcepts`, `markConceptMastered`, `markConceptWeak`, `tryAutoMapPrerequisites` |
+| `src/hooks/useGlobalConcepts.ts` | Cascade automático no rating=1, `DAILY_NEW_THEME_LIMIT`, `newThemeRemaining` |
+| `src/pages/Concepts.tsx` | Donut chart, fronteira enforced, botão diagnóstico, botão mapear prereqs |
+| `src/pages/ErrorNotebook.tsx` | Interleaved practice, botão "Estudar todos" com shuffle |
+| `src/components/concepts/StudyMode.tsx` | Rating binário automático, mastery threshold, elaborative interrogation, confidence check |
+| `src/components/concepts/DiagnosticMode.tsx` | Mastery threshold de 2 questões, useEffect fix |
+| `src/components/deck-detail/DeckQuestionsTab.tsx` | Passa prerequisites no linking |
+| `supabase/functions/generate-questions/index.ts` | Campo prerequisites no schema + prompt |
+| `supabase/functions/map-prerequisites/index.ts` | Nova edge function para IA mapear pré-requisitos |
+| `supabase/config.toml` | Adicionada config map-prerequisites |
+| `src/pages/Study.tsx` | Sync card review → concept mastery |
+| `src/components/dashboard/DashboardDueThemes.tsx` | Navega para deck ao invés de StudyMode |
+| `src/components/dashboard/DiagnosticBanner.tsx` | **Novo** — Auto-trigger diagnóstico |
+| `src/pages/Dashboard.tsx` | Adicionado DiagnosticBanner |
 
-### Detalhes técnicos
+### 17. Edição de Conceitos no EditQuestionDialog
+- EditQuestionDialog expandido com: chips de conceitos removíveis, busca debounced em `global_concepts`, criação inline de novos conceitos
+- Clique no chip abre editor inline (nome + descrição) com `updateConceptMeta`
+- Campo de explicação editável
+- Ao salvar, sincroniza `question_concepts` via `linkQuestionsToConcepts`
 
-```typescript
-// Identificar siblings: mesmo front_content + tipo cloze/image_occlusion
-function getSiblingGroups(cards: Card[]): Map<number, number[]> {
-  // Returns Map<groupStartIndex, [idx1, idx2, ...]>
-  // Agrupa cards consecutivos com mesmo front_content
-}
-```
+### 18. Reuso Inteligente de Conceitos pela IA
+- `generate-questions` e `ai-tutor` (type `question-concepts`) agora buscam conceitos do deck via `get_deck_concept_names` RPC
+- Fallback: top 100 conceitos do usuário por uso
+- Lista curta injetada no prompt: "REUTILIZE estes conceitos se aplicável"
+- Custo: ~500 tokens extras (~centavos)
+- RPC `get_deck_concept_names` criada: `question_concepts → deck_questions → global_concepts` filtrado por deck_id e user_id, LIMIT 200
 
-No `handleAddCard`:
-```typescript
-// Se selectedIndex pertence a um grupo, usar lastSiblingIndex em vez de selectedIndex
-const group = siblingGroupOf(selectedIndex);
-const insertAfterIndex = group ? group[group.length - 1] : selectedIndex;
-// Calcular created_at entre sortedCards[insertAfterIndex] e sortedCards[insertAfterIndex + 1]
-```
+### 19. Descrição Contextual por Questão (context_description)
+- **Arquitetura**: `context_description` vive em `question_concepts` (junção), não em `global_concepts`
+  - **Conceito** = Knowledge Component reutilizável entre questões/usuários (nome curto, 2-6 palavras)
+  - **context_description** = como esse conceito se aplica NESTA questão específica (15-30 palavras)
+- Dados limpos: todos os `global_concepts` e `question_concepts` foram deletados para recomeço limpo
+- AI prompts atualizados: IA agora gera descrições contextuais ("Nesta questão, aplicar X permite Y") em vez de definições genéricas
+- UI (`ConceptMasterySection`): busca `context_description` de `question_concepts` em vez de `global_concepts.description`
+- `linkQuestionsToConcepts`: agora insere `context_description` no upsert de `question_concepts`
 
-No sidebar, cada sibling do grupo mostra uma barra vertical fina (`border-l-2 border-primary/30`) conectando-os visualmente, e ao selecionar qualquer um, todos recebem `bg-accent/50`.
+### 20. Modelo de Cópia Local para Salas Seguidas (Explorar)
+- **RPC `bootstrap_follower_decks`**: Ao seguir uma sala, cria cópias locais dos decks (com `source_turma_deck_id`) e copia cards com `state=0`
+- **Auto-bootstrap no Dashboard**: Ao entrar em uma sala seguida sem decks locais, executa bootstrap automaticamente
+- **Sync incremental**: Ao entrar em uma sala com decks locais, sincroniza novos cards do dono
+- **Stats independentes**: Gauge, estudo e configurações usam os decks/cards LOCAIS do seguidor
+- **Dashboard unificado**: Removido `communityTurmaInfo` com rendering separado; salas seguidas usam o mesmo `DeckList`
+- **Cleanup ao sair**: `cleanupFollowerDecks` deleta decks e cards locais; `review_logs` ficam 30 dias
 
-Nenhuma migration. Nenhuma mudança no FSRS ou study queue.
-
+#### Arquivos Modificados
+| Arquivo | Mudança |
+|---|---|
+| `supabase/migrations/` | RPC `bootstrap_follower_decks` |
+| `src/services/followerBootstrap.ts` | **Novo** — bootstrap, sync incremental, cleanup |
+| `src/pages/TurmaDetail.tsx` | `handleFollow` e `handleStudy` chamam bootstrap após criar folder |
+| `src/pages/Dashboard.tsx` | Auto-bootstrap via useEffect, DeckList unificado, cleanup on leave |
