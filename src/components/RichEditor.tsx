@@ -30,6 +30,7 @@ import { uploadImage as uploadToStorage, uploadFile as uploadFileToStorage } fro
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { compressImage } from '@/lib/imageUtils';
+import { CLOZE_COLORS, getVisibleColorIndices } from '@/lib/occlusionColors';
 
 /* ─── Cloze Mark Extension ─── */
 const ClozeMark = Mark.create({
@@ -48,7 +49,12 @@ const ClozeMark = Mark.create({
     return [{ tag: 'span[data-cloze]' }];
   },
   renderHTML({ HTMLAttributes }) {
-    return ['span', mergeAttributes(HTMLAttributes, { class: 'cloze-editor-mark' }), 0];
+    const num = parseInt(HTMLAttributes['data-cloze'] || '1') - 1;
+    const color = CLOZE_COLORS[num % CLOZE_COLORS.length];
+    return ['span', mergeAttributes(HTMLAttributes, {
+      class: 'cloze-editor-mark',
+      style: `--cloze-bg:${color.bg};--cloze-border:${color.border};--cloze-text:${color.text}`,
+    }), 0];
   },
 });
 
