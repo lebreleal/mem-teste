@@ -215,73 +215,184 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     }
   }, [content, editor]);
 
-  // Sync cloze color index from content
+  // Sync persisted cloze metadata from content without forcing the next active color
   useEffect(() => {
     if (!editor) return;
-    const html = editor.getHTML();
-    const matches = [...html.matchAll(/data-cloze="(\d+)"/g)];
-    if (matches.length > 0) {
-      const maxNum = Math.max(...matches.map(m => parseInt(m[1])));
-      setClozeColorIndex(maxNum - 1);
-    } else {
+    const hasCloze = /data-cloze="/.test(editor.getHTML());
+    setHasAnyCloze(hasCloze);
+    if (!hasCloze) {
       setClozeColorIndex(0);
     }
   }, [content, editor]);
 
-  // Guard to prevent infinite loop between syncClozeState and enforceCloze
+  // Guards to prevent recursive cloze updates and stale selection sync
   const isUpdatingClozeRef = useRef(false);
+  const skipNextClozeSyncRef = useRef(false);
 
-  // Track whether cursor is inside an existing cloze (selectionUpdate only)
+  const getSelectionClozeContext = useCallback((): { num: number; from: number; to: number } | null => {
+    if (!editor) return null;
+
+    const markType = editor.schema.marks.clozeMark;
+    const { from, to, empty, $from } = editor.state.selection;
+    const docSize = editor.state.doc.content.size;
+    const safeResolve = (pos: number) => editor.state.doc.resolve(Math.max(0, Math.min(pos, docSize)));
+
+    let currentNum: string | null = null;
+
+    if (empty) {
+      const marksAtCursor = [
+        ...$from.marks(),
+        ...safeResolve(from > 0 ? from - 1 : from).marks(),
+        ...safeResolve(from < docSize ? from + 1 : from).marks(),
+      ];
+      currentNum = marksAtCursor.find((mark) => mark.type === markType)?.attrs.num ?? null;
+    } else {
+      editor.state.doc.nodesBetween(from, to, (node) => {
+        if (currentNum || !node.isText) return;
+        const currentMark = node.marks.find((mark) => mark.type === markType);
+        if (currentMark) {
+          currentNum = String(currentMark.attrs.num ?? '1');
+        }
+      });
+    }
+
+    if (!currentNum) return null;
+
+    const anchorPos = empty ? $from.pos : from;
+    const resolvedPos = editor.state.doc.resolve(anchorPos);
+    const parent = resolvedPos.parent;
+    const parentOffset = resolvedPos.start();
+    let markFrom = anchorPos;
+    let markTo = anchorPos;
+
+    parent.nodesBetween(0, parent.content.size, (node, offset) => {
+      if (!node.isText) return;
+      const nodeFrom = parentOffset + offset;
+      const nodeTo = nodeFrom + node.nodeSize;
+      const hasThisMark = node.marks.some(
+        (mark) => mark.type === markType && String(mark.attrs.num ?? '1') === currentNum,
+      );
+      const touchesSelection = empty
+        ? nodeFrom <= anchorPos && nodeTo >= anchorPos
+        : nodeFrom < to && nodeTo > from;
+
+      if (hasThisMark && touchesSelection) {
+        markFrom = Math.min(markFrom, nodeFrom);
+        markTo = Math.max(markTo, nodeTo);
+      }
+    });
+
+    let expanded = true;
+    while (expanded) {
+      expanded = false;
+      parent.nodesBetween(0, parent.content.size, (node, offset) => {
+        if (!node.isText) return;
+        const nodeFrom = parentOffset + offset;
+        const nodeTo = nodeFrom + node.nodeSize;
+        const hasThisMark = node.marks.some(
+          (mark) => mark.type === markType && String(mark.attrs.num ?? '1') === currentNum,
+        );
+
+        if (hasThisMark && ((nodeFrom <= markTo && nodeTo > markTo) || (nodeTo >= markFrom && nodeFrom < markFrom))) {
+          const nextFrom = Math.min(markFrom, nodeFrom);
+          const nextTo = Math.max(markTo, nodeTo);
+          if (nextFrom !== markFrom || nextTo !== markTo) {
+            markFrom = nextFrom;
+            markTo = nextTo;
+            expanded = true;
+          }
+        }
+      });
+    }
+
+    return {
+      num: Math.max(1, Number(currentNum) || 1),
+      from: markFrom,
+      to: markTo,
+    };
+  }, [editor]);
+
+  const deactivateClozeMode = useCallback((closePalette = true) => {
+    if (!editor) return;
+
+    skipNextClozeSyncRef.current = false;
+    setClozeActive(false);
+    setCursorInCloze(false);
+    if (closePalette) setPaletteOpen(false);
+
+    isUpdatingClozeRef.current = true;
+    try {
+      editor.chain().unsetMark('clozeMark').run();
+    } finally {
+      isUpdatingClozeRef.current = false;
+    }
+  }, [editor]);
+
   useEffect(() => {
     if (!editor) return;
 
     const syncClozeState = () => {
       if (isUpdatingClozeRef.current) return;
-      const inCloze = editor.isActive('clozeMark');
-      setCursorInCloze(inCloze);
 
-      // Update hasAnyCloze
-      const html = editor.getHTML();
-      setHasAnyCloze(/data-cloze="/.test(html));
+      const context = getSelectionClozeContext();
+      setCursorInCloze(!!context);
 
-      // Auto-deactivate cloze mode ONLY on explicit cursor movement (not typing)
-      if (clozeActive && !inCloze) {
-        const { from, to } = editor.state.selection;
-        if (from === to) {
-          setClozeActive(false);
-          setPaletteOpen(false);
-          isUpdatingClozeRef.current = true;
-          try {
-            editor.chain().unsetMark('clozeMark').run();
-          } finally {
-            isUpdatingClozeRef.current = false;
-          }
-        }
-      }
-
-      // Open palette when cursor enters existing cloze
-      if (inCloze && !clozeActive) {
+      if (context) {
+        setClozeColorIndex(context.num - 1);
         setPaletteOpen(true);
+        return;
       }
+
+      if (skipNextClozeSyncRef.current) {
+        skipNextClozeSyncRef.current = false;
+        setPaletteOpen(true);
+        return;
+      }
+
+      if (clozeActive) {
+        deactivateClozeMode();
+        return;
+      }
+
+      setPaletteOpen(false);
+    };
+
+    const syncClozeContent = () => {
+      if (isUpdatingClozeRef.current) return;
+      setHasAnyCloze(/data-cloze="/.test(editor.getHTML()));
+    };
+
+    const handleBlur = () => {
+      if (clozeActive) {
+        deactivateClozeMode();
+        return;
+      }
+
+      setCursorInCloze(false);
+      setPaletteOpen(false);
     };
 
     syncClozeState();
+    syncClozeContent();
     editor.on('selectionUpdate', syncClozeState);
     editor.on('focus', syncClozeState);
+    editor.on('blur', handleBlur);
+    editor.on('transaction', syncClozeContent);
 
     return () => {
       editor.off('selectionUpdate', syncClozeState);
       editor.off('focus', syncClozeState);
+      editor.off('blur', handleBlur);
+      editor.off('transaction', syncClozeContent);
     };
-  }, [editor, clozeActive]);
+  }, [editor, clozeActive, deactivateClozeMode, getSelectionClozeContext]);
 
-  // Re-apply cloze mark on every transaction while clozeActive (separate effect)
+  // Re-apply cloze mark while the mode is active so typing can continue inside the same group
   useEffect(() => {
     if (!editor) return;
 
     const enforceCloze = () => {
-      if (isUpdatingClozeRef.current) return;
-      if (!clozeActive) return;
+      if (isUpdatingClozeRef.current || !clozeActive) return;
       const { from, to } = editor.state.selection;
       if (from !== to) return;
       if (!editor.isActive('clozeMark')) {
@@ -301,18 +412,21 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   // Deactivate cloze mark on Enter or Escape
   useEffect(() => {
     if (!editor) return;
+
     const handleKey = (e: KeyboardEvent) => {
       if ((e.key === 'Enter' || e.key === 'Escape') && clozeActive) {
-        setTimeout(() => {
-          editor.chain().unsetMark('clozeMark').run();
-          setClozeActive(false);
-          setPaletteOpen(false);
-        }, 0);
+        deactivateClozeMode();
+        return;
+      }
+
+      if (e.key === 'Escape' && cursorInCloze) {
+        setPaletteOpen(false);
       }
     };
+
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [editor, clozeActive]);
+  }, [editor, clozeActive, cursorInCloze, deactivateClozeMode]);
 
   /* ─── Shared image upload helpers ─── */
   const handleUploadImage = async (file: File): Promise<string | null> => {
