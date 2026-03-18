@@ -14,7 +14,7 @@ import Placeholder from '@tiptap/extension-placeholder';
 import { Mark, mergeAttributes } from '@tiptap/core';
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough, Heading2,
-  List, ListOrdered, Code, Volume2, Palette, ImagePlus, ScanEye,
+  List, ListOrdered, Code, Volume2, Palette, ImagePlus,
   ClipboardPaste, Paperclip, Search, Settings2,
 } from 'lucide-react';
 import { IconImage, IconImageOcclusion, IconTrash } from '@/components/icons';
