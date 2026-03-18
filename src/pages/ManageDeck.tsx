@@ -295,28 +295,27 @@ const ManageDeck = () => {
           siblingCardIds.push({ id: currentCard.id, clozeTarget: target });
         }
 
-        // Strategy: assign nums to existing cards by position, create/delete as needed
-        // Sort existing siblings by their current clozeTarget for stable assignment
-        const sortedSiblings = [...siblingCardIds].sort((a, b) => a.clozeTarget - b.clozeTarget);
+        // Strategy: preserve existing clozeTarget assignments; only delete/create as needed
+        const numsSet = new Set(uniqueNums);
+        const existingTargetToId = new Map(siblingCardIds.map(s => [s.clozeTarget, s.id]));
 
         const updatePromises: Promise<unknown>[] = [];
         const deleteIds: string[] = [];
 
-        // Assign uniqueNums to existing siblings in order
-        for (let i = 0; i < Math.max(sortedSiblings.length, uniqueNums.length); i++) {
-          if (i < sortedSiblings.length && i < uniqueNums.length) {
-            // Update existing card with (possibly new) clozeTarget
-            const cardId = sortedSiblings[i].id;
-            const backJson = JSON.stringify({ clozeTarget: uniqueNums[i], extra: back });
-            updatePromises.push(cardService.updateCard(cardId, frontContent, backJson));
-          } else if (i >= uniqueNums.length && i < sortedSiblings.length) {
-            // Extra sibling — delete
-            deleteIds.push(sortedSiblings[i].id);
+        // Keep siblings whose target still exists, delete those whose target was removed
+        for (const sibling of siblingCardIds) {
+          if (numsSet.has(sibling.clozeTarget)) {
+            // Update front content (and preserve its existing clozeTarget)
+            const backJson = JSON.stringify({ clozeTarget: sibling.clozeTarget, extra: back });
+            updatePromises.push(cardService.updateCard(sibling.id, frontContent, backJson));
+          } else {
+            // This target no longer exists in content — delete
+            deleteIds.push(sibling.id);
           }
-          // i >= sortedSiblings.length && i < uniqueNums.length → handled below as numsToAdd
         }
 
-        const numsToAdd = uniqueNums.slice(sortedSiblings.length);
+        const existingNums = new Set(siblingCardIds.map(s => s.clozeTarget));
+        const numsToAdd = uniqueNums.filter(n => !existingNums.has(n));
 
         const deletePromises = deleteIds.map(id => cardService.deleteCard(id));
         await Promise.all([...updatePromises, ...deletePromises]);
