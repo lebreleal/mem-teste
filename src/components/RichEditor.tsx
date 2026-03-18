@@ -718,17 +718,16 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     const { from, to } = editor.state.selection;
     const hasSelection = from !== to;
 
-    selectionCreatedClozeRef.current = hasSelection;
-    skipNextClozeSyncRef.current = true;
     isUpdatingClozeRef.current = true;
     try {
       if (hasSelection) {
-        // Apply mark to selection, then place cursor at end of selection (inside the mark)
+        // Apply mark to selection only — no cursor repositioning to avoid trailing space
         editor.chain().focus()
           .setMark('clozeMark', { num: String(nextNum) })
-          .setTextSelection(to)
           .run();
       } else {
+        skipNextClozeSyncRef.current = true;
+        selectionCreatedClozeRef.current = false;
         editor.chain().focus().setMark('clozeMark', { num: String(nextNum) }).run();
       }
     } finally {
@@ -736,9 +735,19 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     }
 
     setClozeColorIndex(nextColorIdx);
-    setClozeActive(!hasSelection);
-    setCursorInCloze(!hasSelection);
-    setPaletteOpen(true);
+
+    if (hasSelection) {
+      // Selection-based cloze: immediately deactivate mode (close palette, allow normal typing)
+      justDeactivatedRef.current = true;
+      setClozeActive(false);
+      setCursorInCloze(false);
+      setPaletteOpen(false);
+      setTimeout(() => { justDeactivatedRef.current = false; }, 200);
+    } else {
+      setClozeActive(true);
+      setCursorInCloze(true);
+      setPaletteOpen(true);
+    }
   }, [editor, clozeActive, paletteOpen, deactivateClozeMode, getSelectionClozeContext]);
 
   /** Change cloze group/color while keeping the editor active inside the same cloze */
