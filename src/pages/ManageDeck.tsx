@@ -526,6 +526,7 @@ const ManageDeck = () => {
                 const isLast = isInGroup && group![group!.length - 1] === idx;
                 const selectedGroup = siblingMap.get(selectedIndex);
                 const isGroupHighlighted = isInGroup && selectedGroup && group![0] === selectedGroup[0];
+                const isHovered = isInGroup && hoveredGroupKey !== null && group![0] === hoveredGroupKey;
 
                 return (
                   <div key={card.id} className="flex items-stretch">
@@ -537,10 +538,14 @@ const ManageDeck = () => {
                     </div>
                     <button
                       onClick={() => selectCard(idx)}
+                      onMouseEnter={() => { if (isInGroup) setHoveredGroupKey(group![0]); }}
+                      onMouseLeave={() => setHoveredGroupKey(null)}
                       className={`shrink-0 h-7 w-7 my-0.5 rounded-full text-[12px] font-medium transition-all flex items-center justify-center ${
                         idx === selectedIndex || isGroupHighlighted
                           ? 'bg-primary text-primary-foreground shadow-sm'
-                          : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                          : isHovered
+                            ? 'bg-accent text-foreground'
+                            : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                       }`}
                     >
                       {idx + 1}
