@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
   try {
     const { front, back, cardType, aiModel, energyCost, customPrompt } = await req.json();
     const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
-    if (!AI_KEY) throw new Error("GOOGLE_AI_KEY is not configured");
+    if (!AI_KEY) throw new Error("AI API key is not configured");
     if (!front || !front.trim()) return jsonResponse({ error: "Escreva algo no card antes de melhorar." }, 400);
 
     const authHeader = req.headers.get("Authorization") || "";
@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
 
     const promptConfig = await fetchPromptConfig(supabase, "enhance_card");
     const MODEL_MAP = await getModelMap(supabase);
-    const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gemini-2.5-flash";
+    const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "google/gemini-2.5-flash";
     let systemPrompt = promptConfig?.system_prompt || DEFAULT_SYSTEM_PROMPT;
     let userContent = "";
 

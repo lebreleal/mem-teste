@@ -142,7 +142,7 @@ async function organizeBatch(
     method: "POST",
     headers: { Authorization: `Bearer ${AI_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "gemini-2.5-pro",
+      model: "google/gemini-2.5-pro",
       messages: [
         { role: "system", content: buildSystemPrompt(deckName) },
         { role: "user", content: userPrompt },
@@ -229,7 +229,7 @@ Deno.serve(async (req) => {
 
     const { cards, deckName } = await req.json();
     const { apiKey: AI_KEY } = getAIConfig();
-    if (!AI_KEY) throw new Error("GOOGLE_AI_KEY is not configured");
+    if (!AI_KEY) throw new Error("AI API key is not configured");
     if (!cards || !Array.isArray(cards) || cards.length === 0) {
       return jsonResponse({ error: "No cards provided" }, 400);
     }
@@ -309,7 +309,7 @@ Deno.serve(async (req) => {
     }
 
     if (userId) {
-      await logTokenUsage(supabase, userId, "organize_import", "gemini-2.5-pro",
+      await logTokenUsage(supabase, userId, "organize_import", "google/gemini-2.5-pro",
         { prompt_tokens: totalPromptTokens, completion_tokens: totalCompletionTokens, total_tokens: totalTokens }, 0);
     }
 

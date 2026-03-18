@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
 
     const { messages, aiModel, energyCost, conversationId } = await req.json();
     const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
-    if (!AI_KEY) return jsonResponse({ error: "GOOGLE_AI_KEY não configurada" }, 500);
+    if (!AI_KEY) return jsonResponse({ error: "AI API key não configurada" }, 500);
 
     const cost = energyCost || 0;
     if (userId && cost > 0) {
