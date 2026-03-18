@@ -856,6 +856,19 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
                           />
                         );
                       })}
+                      {cursorInCloze && (
+                        <>
+                          <div className="mx-0.5 h-4 w-px bg-border shrink-0" />
+                          <button
+                            className="h-5 w-5 rounded-full flex items-center justify-center transition-all shrink-0 hover:bg-destructive/15 text-muted-foreground hover:text-destructive"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={handleDeleteCloze}
+                            title="Remover oclusão"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </>
+                      )}
                     </PopoverContent>
                   </Popover>
                 );
