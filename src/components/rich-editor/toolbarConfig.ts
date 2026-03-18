@@ -7,7 +7,7 @@ import type { LucideIcon } from 'lucide-react';
 export interface ToolbarItem {
   id: string;
   label: string;
-  icon: LucideIcon | 'cloze' | 'clozeNext';
+  icon: LucideIcon | 'cloze';
   visible: boolean;
 }
 
