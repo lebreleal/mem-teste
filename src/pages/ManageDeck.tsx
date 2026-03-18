@@ -65,6 +65,7 @@ const ManageDeck = () => {
   const [occlusionRects, setOcclusionRects] = useState<any[]>([]);
   const [occlusionCanvasSize, setOcclusionCanvasSize] = useState<{ w: number; h: number } | null>(null);
   const [occlusionModalOpen, setOcclusionModalOpen] = useState(false);
+  const prevNumsKeyRef = useRef<string>('');
 
   const sortedCards = useMemo(() => [...(cards ?? [])].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()), [cards]);
   const currentCard = sortedCards[selectedIndex] ?? null;
