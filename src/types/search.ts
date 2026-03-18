@@ -16,3 +16,15 @@ export interface SearchResult {
   back_content: string | null;
   card_type: string | null;
 }
+
+export interface RecentCard {
+  deck_id: string;
+  deck_name: string;
+  parent_deck_name: string | null;
+  folder_name: string | null;
+  card_id: string;
+  front_content: string;
+  back_content: string;
+  card_type: string;
+  updated_at: string;
+}
