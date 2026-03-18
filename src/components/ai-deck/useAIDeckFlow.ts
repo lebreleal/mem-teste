@@ -262,7 +262,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, parentDeckId, existingDe
     queryClient.invalidateQueries({ queryKey: ['decks'] });
     queryClient.invalidateQueries({ queryKey: ['cards', targetDeckId] });
     return targetDeckId;
-  }, [user, existingDeckId, folderId, queryClient]);
+  }, [user, existingDeckId, folderId, parentDeckId, queryClient]);
 
   // === Deduplication helper (Bloco 4) ===
   const deduplicateCards = useCallback((cards: GeneratedCard[]): GeneratedCard[] => {
