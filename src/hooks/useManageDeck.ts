@@ -123,38 +123,55 @@ export function useManageDeck() {
 
     const plainText = frontText.replace(/<[^>]*>/g, '');
     const clozeNumMatches = [...plainText.matchAll(/\{\{c(\d+)::/g)];
-    const uniqueNums = [...new Set(clozeNumMatches.map(m => parseInt(m[1])))].sort((a, b) => a - b);
-    const hasCloze = uniqueNums.length > 0;
+    const textNums = [...new Set(clozeNumMatches.map(m => parseInt(m[1])))];
+
+    // Collect image occlusion color nums
+    const imageNums: number[] = [];
+    if (hasImage) {
+      try {
+        const parsed = JSON.parse(front);
+        const allRects: { color?: string }[] = parsed.allRects || parsed.rects || [];
+        const usedColors = new Set(allRects.map(r => r.color || OCCLUSION_COLORS[0].fill));
+        usedColors.forEach(color => {
+          const idx = OCCLUSION_COLORS.findIndex(c => c.fill === color);
+          if (idx >= 0) imageNums.push(idx + 1);
+        });
+      } catch {}
+    }
+
+    // Merge all unique nums
+    const allNums = [...new Set([...textNums, ...imageNums])].sort((a, b) => a - b);
+    const hasNums = allNums.length > 0;
 
     // Determine card type based on content
-    const detectedType = hasImage ? 'image_occlusion' : hasCloze ? 'cloze' : 'basic';
+    const detectedType = hasImage ? 'image_occlusion' : textNums.length > 0 ? 'cloze' : 'basic';
 
-    if (hasCloze) {
-      // Cloze or Image+Cloze: create one card per cloze number
+    if (hasNums) {
+      // Create one card per unique number (text cloze + image occlusion colors)
       if (editingId) {
-        const backJson = JSON.stringify({ clozeTarget: uniqueNums[0] || 1, extra: back });
+        const backJson = JSON.stringify({ clozeTarget: allNums[0] || 1, extra: back });
         updateCard.mutate({ id: editingId, frontContent: front, backContent: backJson }, {
           onSuccess: onSuccessFn('Cartão atualizado!'),
         });
-      } else if (uniqueNums.length <= 1) {
-        const backJson = JSON.stringify({ clozeTarget: uniqueNums[0] || 1, extra: back });
+      } else if (allNums.length <= 1) {
+        const backJson = JSON.stringify({ clozeTarget: allNums[0] || 1, extra: back });
         createCard.mutate({ frontContent: front, backContent: backJson, cardType: detectedType }, {
           onSuccess: onSuccessFn('Cartão criado!'),
         });
       } else {
-        const cards = uniqueNums.map(n => ({
+        const cards = allNums.map(n => ({
           frontContent: front,
           backContent: JSON.stringify({ clozeTarget: n, extra: back }),
           cardType: detectedType,
         }));
         createCard.mutate({ cards }, {
-          onSuccess: onSuccessFn(`${uniqueNums.length} cartões criados!`),
+          onSuccess: onSuccessFn(`${allNums.length} cartões criados!`),
         });
       }
       return;
     }
 
-    // Basic or Image Occlusion without cloze
+    // Basic card (no cloze, no image occlusion)
     const backContent = back;
     if (editingId) {
       updateCard.mutate({ id: editingId, frontContent: front, backContent }, {
