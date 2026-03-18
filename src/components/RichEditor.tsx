@@ -823,11 +823,13 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
                 );
               case 'cloze': {
                 if (hideCloze) return null;
-                const usedIndices = getUsedClozeIndices();
-                const visibleIndices = getVisibleColorIndices(usedIndices);
                 return (
                   <Popover key={t.id} open={paletteOpen} onOpenChange={(open) => {
-                    if (!open) setPaletteOpen(false);
+                    if (!open) {
+                      setPaletteOpen(false);
+                      // If palette closes and we're not inside a cloze, deactivate
+                      if (!cursorInCloze) setClozeActive(false);
+                    }
                   }}>
                     <PopoverTrigger asChild>
                       <Button type="button" variant="ghost" size="icon"
@@ -849,8 +851,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
                       onOpenAutoFocus={(e) => e.preventDefault()}
                       onCloseAutoFocus={(e) => e.preventDefault()}
                     >
-                      {visibleIndices.map(idx => {
-                        const c = CLOZE_COLORS[idx % CLOZE_COLORS.length];
+                      {CLOZE_COLORS.map((c, idx) => {
                         const isActive = clozeColorIndex === idx;
                         return (
                           <button
@@ -872,7 +873,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
                             onClick={handleDeleteCloze}
                             title="Remover oclusão"
                           >
-                            <Trash2 className="h-3 w-3" />
+                            <IconTrash className="h-3 w-3" />
                           </button>
                         </>
                       )}
