@@ -45,7 +45,7 @@ const GlobalSearchDialog = ({ open, onOpenChange, folderId }: GlobalSearchDialog
   };
 
   return (
-    <CommandDialog open={open} onOpenChange={onOpenChange}>
+    <CommandDialog open={open} onOpenChange={onOpenChange} shouldFilter={false}>
       <CommandInput
         placeholder="Buscar decks e cartões..."
         value={query}
