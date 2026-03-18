@@ -75,6 +75,9 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
   const [panning, setPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
 
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const initialShapeCountRef = useRef(0);
+
   const pushHistory = useCallback(() => {
     setHistory(prev => [...prev.slice(-20), shapes]);
   }, [shapes]);
