@@ -593,16 +593,16 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   const handleCloze = useCallback(() => {
     if (!editor) return;
 
-    const currentContext = getSelectionClozeContext();
-
-    // If cursor is inside a cloze block AND palette is already open → toggle OFF (deactivate)
-    if (currentContext && paletteOpen) {
+    // If cloze mode is already active → toggle OFF (deactivate)
+    if (clozeActive || paletteOpen) {
       deactivateClozeMode(true);
       editor.chain().focus().run();
       return;
     }
 
-    // If cursor is inside a cloze block but palette not open → open palette
+    const currentContext = getSelectionClozeContext();
+
+    // If cursor is inside an existing cloze block → open palette for that cloze
     if (currentContext) {
       setClozeColorIndex(currentContext.num - 1);
       setClozeActive(true);
@@ -630,7 +630,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     setClozeActive(true);
     setCursorInCloze(true);
     setPaletteOpen(true);
-  }, [editor, clozeCounter, paletteOpen, deactivateClozeMode, getSelectionClozeContext]);
+  }, [editor, clozeCounter, clozeActive, paletteOpen, deactivateClozeMode, getSelectionClozeContext]);
 
   /** Change cloze group/color while keeping the editor active inside the same cloze */
   const handleClozeColorChange = useCallback((colorIdx: number) => {
