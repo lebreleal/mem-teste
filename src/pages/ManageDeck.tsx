@@ -433,10 +433,13 @@ const ManageDeck = () => {
             </div>
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center h-full text-center px-4">
-            <p className="text-muted-foreground mb-4 text-sm">Nenhum cartão neste baralho</p>
+          <div className="flex flex-col items-center justify-center h-full text-center px-4 gap-3">
+            <p className="text-muted-foreground mb-1 text-sm">Nenhum cartão neste baralho</p>
             <Button onClick={handleAddCard} size="sm" className="gap-1.5 rounded-xl">
               <Plus className="h-4 w-4" /> Adicionar cartão
+            </Button>
+            <Button onClick={() => setAIDeckDialogOpen(true)} size="sm" variant="outline" className="gap-1.5 rounded-xl">
+              <IconAIGradient className="h-4 w-4" /> Gerar com IA
             </Button>
           </div>
         )}
