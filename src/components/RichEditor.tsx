@@ -733,21 +733,18 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     const { from, to } = editor.state.selection;
     const hasSelection = from !== to;
 
+    selectionCreatedClozeRef.current = hasSelection;
     skipNextClozeSyncRef.current = true;
     isUpdatingClozeRef.current = true;
     try {
-      const chain = editor.chain().focus().setMark('clozeMark', { num: String(nextNum) });
-      if (hasSelection) {
-        chain.setTextSelection(to).setMark('clozeMark', { num: String(nextNum) });
-      }
-      chain.run();
+      editor.chain().focus().setMark('clozeMark', { num: String(nextNum) }).run();
     } finally {
       isUpdatingClozeRef.current = false;
     }
 
     setClozeColorIndex(nextColorIdx);
-    setClozeActive(true);
-    setCursorInCloze(true);
+    setClozeActive(!hasSelection);
+    setCursorInCloze(!hasSelection);
     setPaletteOpen(true);
   }, [editor, clozeActive, paletteOpen, deactivateClozeMode, getSelectionClozeContext]);
 
