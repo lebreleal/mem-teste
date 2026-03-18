@@ -616,25 +616,35 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       return;
     }
 
+    // Determine the next color: find next unused color index
+    const html = editor.getHTML();
+    const usedNums = new Set([...html.matchAll(/data-cloze="(\d+)"/g)].map(m => parseInt(m[1])));
+    let nextColorIdx = 0;
+    for (let i = 0; i < CLOZE_COLORS.length; i++) {
+      if (!usedNums.has(i + 1)) { nextColorIdx = i; break; }
+    }
+    const nextNum = nextColorIdx + 1;
+
     const { from, to } = editor.state.selection;
     const hasSelection = from !== to;
 
     skipNextClozeSyncRef.current = true;
     isUpdatingClozeRef.current = true;
     try {
-      const chain = editor.chain().focus().setMark('clozeMark', { num: String(clozeCounter) });
+      const chain = editor.chain().focus().setMark('clozeMark', { num: String(nextNum) });
       if (hasSelection) {
-        chain.setTextSelection(to).setMark('clozeMark', { num: String(clozeCounter) });
+        chain.setTextSelection(to).setMark('clozeMark', { num: String(nextNum) });
       }
       chain.run();
     } finally {
       isUpdatingClozeRef.current = false;
     }
 
+    setClozeColorIndex(nextColorIdx);
     setClozeActive(true);
     setCursorInCloze(true);
     setPaletteOpen(true);
-  }, [editor, clozeCounter, clozeActive, paletteOpen, deactivateClozeMode, getSelectionClozeContext]);
+  }, [editor, clozeActive, paletteOpen, deactivateClozeMode, getSelectionClozeContext]);
 
   /** Change cloze group/color while keeping the editor active inside the same cloze */
   const handleClozeColorChange = useCallback((colorIdx: number) => {
