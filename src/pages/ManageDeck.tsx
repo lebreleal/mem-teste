@@ -314,7 +314,8 @@ const ManageDeck = () => {
           }
         }
 
-        const numsToAdd = uniqueNums.slice(sortedSiblings.length);
+        const existingNums = new Set(siblingCardIds.map(s => s.clozeTarget));
+        const numsToAdd = uniqueNums.filter(n => !existingNums.has(n));
 
         const deletePromises = deleteIds.map(id => cardService.deleteCard(id));
         await Promise.all([...updatePromises, ...deletePromises]);
