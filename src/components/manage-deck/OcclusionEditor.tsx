@@ -32,6 +32,8 @@ interface OcclusionEditorProps {
   onSave: (front: string, back: string) => void;
   onCancel: () => void;
   isSaving: boolean;
+  /** Color indices used by text clozes (for syncing the dynamic palette) */
+  externalUsedColorIndices?: Set<number>;
 }
 
 // Use shared colors — alias for backward compat within this file
