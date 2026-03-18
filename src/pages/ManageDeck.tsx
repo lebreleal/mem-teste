@@ -1029,7 +1029,7 @@ function ManageDeckPreview({ cards, initialIndex, open, onClose, editorOverride 
               <Copy className="h-4 w-4" />
             </button>
             <button className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="Excluir">
-              <Trash2 className="h-4 w-4" />
+              <IconTrash className="h-4 w-4" />
             </button>
           </div>
         </div>

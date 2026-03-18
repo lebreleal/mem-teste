@@ -30,8 +30,8 @@ export function renderClozePreview(html: string, revealed: boolean, targetNum?: 
     const colorIdx = n - 1;
     const oc = OCCLUSION_COLORS[colorIdx];
     const rgb = oc ? parseOcclusionRgb(oc.fill) : { r: '59', g: '130', b: '246' };
-    if (revealed) return `<span class="cloze-revealed" style="color:rgb(${rgb.r},${rgb.g},${rgb.b})">${answer}</span>`;
-    return `<span class="cloze-blank" style="background:rgba(${rgb.r},${rgb.g},${rgb.b},0.15);border:1px solid rgba(${rgb.r},${rgb.g},${rgb.b},0.4);color:rgb(${rgb.r},${rgb.g},${rgb.b});padding:1px 6px;border-radius:4px">[...]</span>`;
+    if (revealed) return `<span class="cloze-revealed" style="background:rgba(${rgb.r},${rgb.g},${rgb.b},0.15);color:rgb(${rgb.r},${rgb.g},${rgb.b});border-bottom-color:rgba(${rgb.r},${rgb.g},${rgb.b},0.5)">${answer}</span>`;
+    return `<span class="cloze-blank" style="background:rgba(${rgb.r},${rgb.g},${rgb.b},0.15);color:rgb(${rgb.r},${rgb.g},${rgb.b});border-bottom-color:rgba(${rgb.r},${rgb.g},${rgb.b},0.5)">[...]</span>`;
   });
 }
 
