@@ -128,7 +128,7 @@ function editorToCloze(html: string): string {
       unwrapSameClozeDescendants(wrapper, num);
     });
 
-  const mergeAdjacentClozes = (parent: ParentNode) => {
+  const mergeAdjacentClozes = (parent: Node) => {
     Array.from(parent.childNodes).forEach((child) => {
       if (child.nodeType === Node.ELEMENT_NODE) mergeAdjacentClozes(child);
     });
