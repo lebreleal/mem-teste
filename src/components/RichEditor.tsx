@@ -827,11 +827,17 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
                 if (hideCloze) return null;
                 return (
                   <Popover key={t.id} open={paletteOpen} onOpenChange={(open) => {
-                    if (!open) {
-                      setPaletteOpen(false);
-                      // If palette closes and we're not inside a cloze, deactivate
-                      if (!cursorInCloze) setClozeActive(false);
+                    if (open) {
+                      setPaletteOpen(true);
+                      return;
                     }
+
+                    if (clozeActive) {
+                      deactivateClozeMode(true);
+                      return;
+                    }
+
+                    setPaletteOpen(false);
                   }}>
                     <PopoverTrigger asChild>
                       <Button type="button" variant="ghost" size="icon"
