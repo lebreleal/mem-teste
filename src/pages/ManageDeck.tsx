@@ -370,8 +370,10 @@ const ManageDeck = () => {
   const selectCard = useCallback((idx: number) => {
     if (idx < 0 || idx >= totalCards) return;
     if (isDirty) saveCurrentCard();
-    setSelectedIndex(idx);
-  }, [isDirty, saveCurrentCard, totalCards]);
+    // If clicking on a sibling, snap to the first card of the group
+    const group = siblingMap.get(idx);
+    setSelectedIndex(group ? group[0] : idx);
+  }, [isDirty, saveCurrentCard, totalCards, siblingMap]);
 
   const handleBack = useCallback(() => {
     if (isDirty) saveCurrentCard();
