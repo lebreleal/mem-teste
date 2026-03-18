@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import * as cardService from '@/services/cardService';
 import { invalidateDeckRelatedQueries } from '@/lib/queryKeys';
+import { OCCLUSION_COLORS } from '@/lib/occlusionColors';
 
 import { Button } from '@/components/ui/button';
 import { CardContent as CardPreviewContent, buildVirtualCards } from '@/components/deck-detail/CardPreviewSheet';
@@ -186,6 +187,24 @@ const ManageDeck = () => {
     return 'basic';
   }, [front, occlusionImageUrl]);
 
+  /** Collect all unique card nums from text clozes AND image occlusion colors */
+  const collectAllNums = useCallback(() => {
+    const nums = new Set<number>();
+    // From text cloze
+    const plainText = front.replace(/<[^>]*>/g, '');
+    const clozeMatches = [...plainText.matchAll(/\{\{c(\d+)::/g)];
+    clozeMatches.forEach(m => nums.add(parseInt(m[1])));
+    // From image occlusion colors
+    if (occlusionRects.length > 0) {
+      const usedColors = new Set(occlusionRects.map((r: { color?: string }) => r.color || OCCLUSION_COLORS[0].fill));
+      usedColors.forEach(color => {
+        const idx = OCCLUSION_COLORS.findIndex(c => c.fill === color);
+        if (idx >= 0) nums.add(idx + 1);
+      });
+    }
+    return [...nums].sort((a, b) => a - b);
+  }, [front, occlusionRects]);
+
   const buildSavePayload = useCallback(() => {
     const detectedType = detectCardType();
     // Merge attached images back as <img> tags
@@ -195,29 +214,35 @@ const ManageDeck = () => {
     let frontContent = frontWithImages;
     let backContent = back + backImgTags;
     if (detectedType === 'image_occlusion') {
+      // Reconstruct colorGroups from rects
+      const colorGroups: Record<string, string[]> = {};
+      occlusionRects.forEach((r: { id: string; color?: string }) => {
+        const color = r.color || OCCLUSION_COLORS[0].fill;
+        if (!colorGroups[color]) colorGroups[color] = [];
+        colorGroups[color].push(r.id);
+      });
       frontContent = JSON.stringify({
         imageUrl: occlusionImageUrl, frontText: frontWithImages, rects: occlusionRects, allRects: occlusionRects,
         canvasWidth: occlusionCanvasSize?.w ?? 0, canvasHeight: occlusionCanvasSize?.h ?? 0,
+        colorGroups,
       });
     }
-    if (detectedType === 'cloze' || detectedType === 'image_occlusion') {
-      const nums = [...front.replace(/<[^>]*>/g, '').matchAll(/\{\{c(\d+)::/g)].map(m => parseInt(m[1]));
-      const unique = [...new Set(nums)].sort((a, b) => a - b);
-      if (unique.length > 0) backContent = JSON.stringify({ clozeTarget: unique[0] || 1, extra: back + backImgTags });
+    // Set clozeTarget from unified nums
+    const allNums = collectAllNums();
+    if (allNums.length > 0) {
+      backContent = JSON.stringify({ clozeTarget: allNums[0] || 1, extra: back + backImgTags });
     }
     return { frontContent, backContent, cardType: detectedType };
-  }, [front, back, frontAttachedImages, backAttachedImages, occlusionImageUrl, occlusionRects, occlusionCanvasSize, detectCardType]);
+  }, [front, back, frontAttachedImages, backAttachedImages, occlusionImageUrl, occlusionRects, occlusionCanvasSize, detectCardType, collectAllNums]);
 
   const saveCurrentCard = useCallback(async () => {
     if (!currentCard || !isDirty) return;
     const { frontContent, backContent, cardType } = buildSavePayload();
 
-    // Cloze sibling reconciliation — same logic as DeckDetailHandlers
-    if (cardType === 'cloze') {
-      const plainForNumbers = front.replace(/<[^>]*>/g, '');
-      const clozeNumMatches = [...plainForNumbers.matchAll(/\{\{c(\d+)::/g)];
-      const uniqueNums = [...new Set(clozeNumMatches.map(m => parseInt(m[1])))].sort((a, b) => a - b);
+    // Unified sibling reconciliation for cloze AND image_occlusion
+    const uniqueNums = collectAllNums();
 
+    if (uniqueNums.length > 0 && (cardType === 'cloze' || cardType === 'image_occlusion')) {
       // Find all sibling cards (same front_content)
       const allSiblingCards = await cardService.fetchClozeSiblings(
         [deckId!],
@@ -250,7 +275,7 @@ const ManageDeck = () => {
           return cardService.updateCard(cardId, frontContent, backJson);
         });
 
-        // Delete removed cloze siblings
+        // Delete removed siblings
         const deletePromises = numsToRemove.map(n => {
           const cardId = existingTargets.get(n)!;
           return cardService.deleteCard(cardId);
@@ -258,12 +283,12 @@ const ManageDeck = () => {
 
         await Promise.all([...updatePromises, ...deletePromises]);
 
-        // Create new cloze siblings
+        // Create new siblings
         if (numsToAdd.length > 0) {
           const newCards = numsToAdd.map(n => ({
             frontContent,
             backContent: JSON.stringify({ clozeTarget: n, extra: back }),
-            cardType: 'cloze',
+            cardType,
           }));
           await cardService.createCards(deckId!, newCards);
         }
@@ -271,12 +296,12 @@ const ManageDeck = () => {
         invalidateDeckRelatedQueries(queryClient, deckId!);
         setIsDirty(false);
       } catch {
-        toast({ title: 'Erro ao salvar cloze', variant: 'destructive' });
+        toast({ title: 'Erro ao salvar', variant: 'destructive' });
       }
     } else {
       updateCard.mutate({ id: currentCard.id, frontContent, backContent }, { onSuccess: () => setIsDirty(false) });
     }
-  }, [currentCard, isDirty, buildSavePayload, updateCard, front, back, deckId, queryClient, toast]);
+  }, [currentCard, isDirty, buildSavePayload, updateCard, front, back, deckId, queryClient, toast, collectAllNums]);
 
   const selectCard = useCallback((idx: number) => {
     if (idx < 0 || idx >= totalCards) return;

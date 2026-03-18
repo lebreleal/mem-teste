@@ -10,6 +10,7 @@ import { getCurrentUserId, invokeEdgeFunction } from '@/services/authService';
 import * as cardService from '@/services/cardService';
 import * as deckService from '@/services/deckService';
 import { invalidateDeckRelatedQueries } from '@/lib/queryKeys';
+import { OCCLUSION_COLORS } from '@/lib/occlusionColors';
 import type { CardRow } from '@/types/deck';
 import type { useToast } from '@/hooks/use-toast';
 import type { QueryClient } from '@tanstack/react-query';
@@ -33,6 +34,7 @@ export interface OcclusionRect {
   type: 'rect' | 'ellipse' | 'polygon' | 'text';
   text?: string;
   groupId?: string;
+  color?: string;
   points?: { x: number; y: number }[];
 }
 
@@ -172,28 +174,105 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
       } else { setEditorOpen(false); resetForm(); }
     };
 
-    // Image occlusion
+    // Image occlusion — color-based siblings
     if (occlusionImageUrl && occlusionRects.length > 0) {
       const allRects = occlusionRects;
       const userBack = back;
-    const groups: Record<string, OcclusionRect[]> = {};
-      const ungrouped: OcclusionRect[] = [];
-      allRects.forEach((r: OcclusionRect) => {
-        if (r.groupId) { if (!groups[r.groupId]) groups[r.groupId] = []; groups[r.groupId].push(r); }
-        else ungrouped.push(r);
-      });
-      const cardEntries: { activeRectIds: string[] }[] = [];
-      ungrouped.forEach(r => cardEntries.push({ activeRectIds: [r.id] }));
-      Object.values(groups).forEach(groupRects => { cardEntries.push({ activeRectIds: groupRects.map(r => r.id) }); });
       const cw = occlusionCanvasSize?.w ?? undefined;
       const ch = occlusionCanvasSize?.h ?? undefined;
       const frontText = front.trim() ? front : undefined;
+
+      // Collect unique color nums from image
+      const usedColors = new Set(allRects.map((r: OcclusionRect) => r.color || OCCLUSION_COLORS[0].fill));
+      const imageNums: number[] = [];
+      usedColors.forEach(color => {
+        const idx = OCCLUSION_COLORS.findIndex(c => c.fill === color);
+        if (idx >= 0) imageNums.push(idx + 1);
+      });
+
+      // Also collect text cloze nums
+      const textPlain = front.replace(/<[^>]*>/g, '');
+      const textClozeMatches = [...textPlain.matchAll(/\{\{c(\d+)::/g)];
+      const textNums = textClozeMatches.map(m => parseInt(m[1]));
+
+      const allNums = [...new Set([...imageNums, ...textNums])].sort((a, b) => a - b);
+
+      // Build colorGroups
+      const colorGroups: Record<string, string[]> = {};
+      allRects.forEach((r: OcclusionRect) => {
+        const color = r.color || OCCLUSION_COLORS[0].fill;
+        if (!colorGroups[color]) colorGroups[color] = [];
+        colorGroups[color].push(r.id);
+      });
+
+      const frontData = JSON.stringify({
+        imageUrl: occlusionImageUrl, allRects, activeRectIds: allRects.map((r: OcclusionRect) => r.id),
+        canvasWidth: cw, canvasHeight: ch, colorGroups,
+        ...(frontText ? { frontText } : {}),
+      });
+
       if (editingId) {
-        const frontData = JSON.stringify({ imageUrl: occlusionImageUrl, allRects, activeRectIds: cardEntries[0]?.activeRectIds ?? [], canvasWidth: cw, canvasHeight: ch, ...(frontText ? { frontText } : {}) });
-        updateCard.mutate({ id: editingId, frontContent: frontData, backContent: userBack }, { onSuccess });
+        // Sibling reconciliation for image occlusion edit
+        const editingCard = allCards.find(c => c.id === editingId);
+        const frontContentForSiblings = editingCard?.front_content;
+        const allSiblingCards = frontContentForSiblings
+          ? await cardService.fetchClozeSiblings(allDeckIds, frontContentForSiblings)
+          : [];
+
+        const existingTargets = new Map<number, string>();
+        allSiblingCards.forEach(c => {
+          try {
+            const parsed = JSON.parse(c.back_content);
+            if (typeof parsed.clozeTarget === 'number') {
+              existingTargets.set(parsed.clozeTarget, c.id);
+              return;
+            }
+          } catch {}
+          const assignedNum = allNums.find(n => !existingTargets.has(n)) ?? 1;
+          existingTargets.set(assignedNum, c.id);
+        });
+
+        const existingNums = [...existingTargets.keys()];
+        const numsToKeep = allNums.filter(n => existingTargets.has(n));
+        const numsToAdd = allNums.filter(n => !existingTargets.has(n));
+        const numsToRemove = existingNums.filter(n => !allNums.includes(n));
+
+        try {
+          const updatePromises = numsToKeep.map(n => {
+            const cardId = existingTargets.get(n)!;
+            const backJson = JSON.stringify({ clozeTarget: n, extra: userBack });
+            return cardService.updateCard(cardId, frontData, backJson);
+          });
+          const deletePromises = numsToRemove.map(n => {
+            const cardId = existingTargets.get(n)!;
+            return cardService.deleteCard(cardId);
+          });
+          await Promise.all([...updatePromises, ...deletePromises]);
+          if (numsToAdd.length > 0) {
+            const newCards = numsToAdd.map(n => ({
+              frontContent: frontData,
+              backContent: JSON.stringify({ clozeTarget: n, extra: userBack }),
+              cardType: 'image_occlusion',
+            }));
+            await cardService.createCards(deckId, newCards);
+          }
+          invalidateDeckRelatedQueries(queryClient, deckId);
+          onSuccess();
+        } catch {
+          toast({ title: 'Erro ao salvar oclusão', variant: 'destructive' });
+        }
       } else {
-        const cards = cardEntries.map(entry => ({ frontContent: JSON.stringify({ imageUrl: occlusionImageUrl, allRects, activeRectIds: entry.activeRectIds, canvasWidth: cw, canvasHeight: ch, ...(frontText ? { frontText } : {}) }), backContent: userBack, cardType: 'image_occlusion' }));
-        createCard.mutate({ cards } as any, { onSuccess });
+        // New card(s)
+        const cards = allNums.map(n => ({
+          frontContent: frontData,
+          backContent: JSON.stringify({ clozeTarget: n, extra: userBack }),
+          cardType: 'image_occlusion',
+        }));
+        if (cards.length <= 1) {
+          createCard.mutate({ frontContent: cards[0].frontContent, backContent: cards[0].backContent, cardType: 'image_occlusion' }, { onSuccess });
+        } else {
+          createCard.mutate({ cards } as any, { onSuccess });
+        }
       }
       return;
     }
@@ -289,25 +368,27 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
   const handleDelete = useCallback(async () => {
     if (!deleteId) return;
     const card = allCards.find(c => c.id === deleteId);
-    const isCloze = card?.card_type === 'cloze';
-    if (isCloze) {
+    const hasSiblings = card?.card_type === 'cloze' || card?.card_type === 'image_occlusion';
+    if (hasSiblings) {
       let frontContent = card?.front_content;
       if (!frontContent) {
         frontContent = await fetchCardFrontContent(deleteId);
       }
       const siblings = frontContent ? await cardService.fetchClozeSiblings(allDeckIds, frontContent) : [];
       const ids = siblings.map(c => c.id);
-      try {
-        await cardService.bulkDeleteCards(ids);
-        invalidateDeckRelatedQueries(queryClient, deckId);
-        toast({ title: `${ids.length} card${ids.length > 1 ? 's' : ''} cloze excluído${ids.length > 1 ? 's' : ''}` });
-      } catch {
-        toast({ title: 'Erro ao excluir', variant: 'destructive' });
+      if (ids.length > 0) {
+        try {
+          await cardService.bulkDeleteCards(ids);
+          invalidateDeckRelatedQueries(queryClient, deckId);
+          toast({ title: `${ids.length} cartão${ids.length > 1 ? 'ões' : ''} excluído${ids.length > 1 ? 's' : ''}` });
+        } catch {
+          toast({ title: 'Erro ao excluir', variant: 'destructive' });
+        }
+        setDeleteId(null);
+        return;
       }
-      setDeleteId(null);
-    } else {
-      deleteCardMutation.mutate(deleteId, { onSuccess: () => { setDeleteId(null); toast({ title: 'Card excluído' }); } });
     }
+    deleteCardMutation.mutate(deleteId, { onSuccess: () => { setDeleteId(null); toast({ title: 'Card excluído' }); } });
   }, [deleteId, deleteCardMutation, toast, allCards, allDeckIds, deckId, queryClient, setDeleteId]);
 
   const handleMoveCard = useCallback(async () => {
