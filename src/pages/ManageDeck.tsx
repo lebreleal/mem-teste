@@ -67,6 +67,7 @@ const ManageDeck = () => {
   const [occlusionCanvasSize, setOcclusionCanvasSize] = useState<{ w: number; h: number } | null>(null);
   const [occlusionModalOpen, setOcclusionModalOpen] = useState(false);
   const prevNumsKeyRef = useRef<string | null>(null);
+  const isSavingRef = useRef(false);
 
   const sortedCards = useMemo(() => [...(cards ?? [])].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()), [cards]);
   const currentCard = sortedCards[selectedIndex] ?? null;
@@ -260,71 +261,80 @@ const ManageDeck = () => {
 
   const saveCurrentCard = useCallback(async () => {
     if (!currentCard || !isDirty) return;
-    const { frontContent, backContent, cardType } = buildSavePayload();
+    if (isSavingRef.current) return; // prevent concurrent saves
+    isSavingRef.current = true;
 
-    // Unified sibling reconciliation for cloze AND image_occlusion
-    const uniqueNums = collectAllNums();
+    try {
+      const { frontContent, backContent, cardType } = buildSavePayload();
+      const uniqueNums = collectAllNums();
 
-    if (uniqueNums.length > 0 && (cardType === 'cloze' || cardType === 'image_occlusion')) {
-      // Find all sibling cards (same front_content)
-      const allSiblingCards = await cardService.fetchClozeSiblings(
-        [deckId!],
-        currentCard.front_content
-      );
+      if (uniqueNums.length > 0 && (cardType === 'cloze' || cardType === 'image_occlusion')) {
+        // Get sibling card IDs from memory (siblingMap) instead of querying by front_content
+        const group = siblingMap.get(selectedIndex);
+        const siblingCardIds: { id: string; clozeTarget: number }[] = [];
 
-      const existingTargets = new Map<number, string>();
-      allSiblingCards.forEach(c => {
-        try {
-          const parsed = JSON.parse(c.back_content);
-          if (typeof parsed.clozeTarget === 'number') {
-            existingTargets.set(parsed.clozeTarget, c.id);
-            return;
+        if (group) {
+          group.forEach(idx => {
+            const c = sortedCards[idx];
+            if (!c) return;
+            let target = 1;
+            try {
+              const parsed = JSON.parse(c.back_content);
+              if (typeof parsed.clozeTarget === 'number') target = parsed.clozeTarget;
+            } catch {}
+            siblingCardIds.push({ id: c.id, clozeTarget: target });
+          });
+        } else {
+          // Current card is alone (no group yet)
+          let target = 1;
+          try {
+            const parsed = JSON.parse(currentCard.back_content);
+            if (typeof parsed.clozeTarget === 'number') target = parsed.clozeTarget;
+          } catch {}
+          siblingCardIds.push({ id: currentCard.id, clozeTarget: target });
+        }
+
+        // Strategy: assign nums to existing cards by position, create/delete as needed
+        // Sort existing siblings by their current clozeTarget for stable assignment
+        const sortedSiblings = [...siblingCardIds].sort((a, b) => a.clozeTarget - b.clozeTarget);
+
+        const updatePromises: Promise<unknown>[] = [];
+        const deleteIds: string[] = [];
+
+        // Assign uniqueNums to existing siblings in order
+        for (let i = 0; i < Math.max(sortedSiblings.length, uniqueNums.length); i++) {
+          if (i < sortedSiblings.length && i < uniqueNums.length) {
+            // Update existing card with (possibly new) clozeTarget
+            const cardId = sortedSiblings[i].id;
+            const backJson = JSON.stringify({ clozeTarget: uniqueNums[i], extra: back });
+            updatePromises.push(cardService.updateCard(cardId, frontContent, backJson));
+          } else if (i >= uniqueNums.length && i < sortedSiblings.length) {
+            // Extra sibling — delete
+            deleteIds.push(sortedSiblings[i].id);
           }
-        } catch {}
-        const assignedNum = uniqueNums.find(n => !existingTargets.has(n)) ?? 1;
-        existingTargets.set(assignedNum, c.id);
-      });
+          // i >= sortedSiblings.length && i < uniqueNums.length → handled below as numsToAdd
+        }
 
-      const existingNums = [...existingTargets.keys()];
-      const numsToKeep = uniqueNums.filter(n => existingTargets.has(n));
-      const numsToAdd = uniqueNums.filter(n => !existingTargets.has(n));
-      const numsToRemove = existingNums.filter(n => !uniqueNums.includes(n));
+        const numsToAdd = uniqueNums.slice(sortedSiblings.length);
 
-      try {
-        // Update existing sibling cards
-        const updatePromises = numsToKeep.map(n => {
-          const cardId = existingTargets.get(n)!;
-          const backJson = JSON.stringify({ clozeTarget: n, extra: back });
-          return cardService.updateCard(cardId, frontContent, backJson);
-        });
-
-        // Delete removed siblings
-        const deletePromises = numsToRemove.map(n => {
-          const cardId = existingTargets.get(n)!;
-          return cardService.deleteCard(cardId);
-        });
-
+        const deletePromises = deleteIds.map(id => cardService.deleteCard(id));
         await Promise.all([...updatePromises, ...deletePromises]);
 
-        // Create new siblings with created_at after the last existing sibling
+        // Create new siblings for any additional nums
         if (numsToAdd.length > 0) {
           const newCards = numsToAdd.map(n => ({
             frontContent,
             backContent: JSON.stringify({ clozeTarget: n, extra: back }),
             cardType,
           }));
-          // Find the last existing sibling's created_at to insert after it
-          const group = siblingMap.get(selectedIndex);
           const lastSiblingIdx = group ? group[group.length - 1] : selectedIndex;
           const lastSiblingTime = sortedCards[lastSiblingIdx]?.created_at;
           const nextNonSiblingCard = sortedCards[lastSiblingIdx + 1];
           let baseCreatedAt: string;
           if (lastSiblingTime && nextNonSiblingCard) {
-            // Insert between last sibling and next non-sibling card
             const lastT = new Date(lastSiblingTime).getTime();
             const nextT = new Date(nextNonSiblingCard.created_at).getTime();
             const gap = nextT - lastT;
-            // Use midpoint with sub-ms precision so new siblings fit between
             baseCreatedAt = new Date(lastT + Math.min(gap * 0.1, 0.5)).toISOString();
           } else if (lastSiblingTime) {
             baseCreatedAt = new Date(new Date(lastSiblingTime).getTime() + 0.01).toISOString();
@@ -336,13 +346,15 @@ const ManageDeck = () => {
 
         invalidateDeckRelatedQueries(queryClient, deckId!);
         setIsDirty(false);
-      } catch {
-        toast({ title: 'Erro ao salvar', variant: 'destructive' });
+      } else {
+        updateCard.mutate({ id: currentCard.id, frontContent, backContent }, { onSuccess: () => setIsDirty(false) });
       }
-    } else {
-      updateCard.mutate({ id: currentCard.id, frontContent, backContent }, { onSuccess: () => setIsDirty(false) });
+    } catch {
+      toast({ title: 'Erro ao salvar', variant: 'destructive' });
+    } finally {
+      isSavingRef.current = false;
     }
-  }, [currentCard, isDirty, buildSavePayload, updateCard, front, back, deckId, queryClient, toast, collectAllNums]);
+  }, [currentCard, isDirty, buildSavePayload, updateCard, front, back, deckId, queryClient, toast, collectAllNums, siblingMap, selectedIndex, sortedCards]);
 
   // Auto-reconcile siblings when the set of unique nums changes (new color/cloze added/removed)
   const numsKey = useMemo(() => collectAllNums().join(','), [collectAllNums]);
