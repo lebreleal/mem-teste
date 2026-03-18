@@ -417,11 +417,8 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     };
 
     const handleBlur = () => {
-      if (clozeActive) {
-        deactivateClozeMode();
-        return;
-      }
-
+      // On blur, just reset UI state — don't unsetMark (no need, user isn't typing)
+      setClozeActive(false);
       setCursorInCloze(false);
       setPaletteOpen(false);
     };
