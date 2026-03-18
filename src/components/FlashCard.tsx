@@ -150,11 +150,8 @@ function renderOcclusion(frontContent: string, revealed: boolean, fallbackCanvas
       const rgb = parseColorRgb(r.color || OCCLUSION_COLORS[0].fill);
 
       if (!isActive) {
-        // Non-active shapes: show translucent when clozeTarget is set (other cards' shapes)
-        if (clozeTarget != null) {
-          return renderShapeSvg(r, `rgba(${rgb.r},${rgb.g},${rgb.b},0.2)`, `rgba(${rgb.r},${rgb.g},${rgb.b},0.4)`);
-        }
-        return ''; // No clozeTarget = legacy behavior, hide non-active
+        // Non-active shapes: hide completely (only show current card's occlusions)
+        return '';
       }
 
       if (revealed) {
