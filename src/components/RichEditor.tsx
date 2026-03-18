@@ -515,10 +515,12 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     // Start new cloze with current color
     editor.chain().focus().setMark('clozeMark', { num: String(clozeCounter) }).run();
 
+    // Always open palette when creating cloze
+    setPaletteOpen(true);
+
     if (hasSelection) {
       editor.chain().setTextSelection(to).unsetMark('clozeMark').insertContent(' ').setTextSelection(to + 1).run();
       setClozeActive(false);
-      // Auto-advance for next click
       setTimeout(() => {
         setClozeColorIndex(findNextUnusedIndex());
       }, 10);
