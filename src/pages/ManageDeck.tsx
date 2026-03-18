@@ -363,20 +363,26 @@ const ManageDeck = () => {
     prevNumsKeyRef.current = numsKey;
   }, [numsKey]);
 
-  // Visual sibling map: override DB-based grouping for the selected card's group
-  // If the editor currently has 0 nums (all clozes/colors removed), visually dissolve the group
-  const visualSiblingMap = useMemo(() => {
-    const editorNums = collectAllNums();
+  // Visual sibling map + anticipated count
+  // Shows the anticipated grouping in the sidebar based on editor content, not just DB state
+  const editorNums = useMemo(() => collectAllNums(), [collectAllNums]);
+
+  const { visualSiblingMap, anticipatedCount } = useMemo(() => {
     const selectedGroup = siblingMap.get(selectedIndex);
-    if (!selectedGroup) return siblingMap;
-    // If editor has no nums, remove grouping for the selected group
-    if (editorNums.length === 0) {
+    const currentGroupSize = selectedGroup?.length ?? 1;
+    const editorGroupSize = editorNums.length;
+
+    // If editor has no nums, dissolve the group visually
+    if (editorGroupSize === 0 && selectedGroup) {
       const newMap = new Map(siblingMap);
       selectedGroup.forEach(idx => newMap.delete(idx));
-      return newMap;
+      return { visualSiblingMap: newMap, anticipatedCount: 0 };
     }
-    return siblingMap;
-  }, [siblingMap, selectedIndex, collectAllNums]);
+
+    // If editor has more nums than current DB siblings, show anticipated extra slots
+    const anticipated = Math.max(0, editorGroupSize - currentGroupSize);
+    return { visualSiblingMap: siblingMap, anticipatedCount: anticipated };
+  }, [siblingMap, selectedIndex, editorNums]);
 
   // Pending navigation state for unsaved-changes confirmation
   const [pendingNav, setPendingNav] = useState<{ type: 'card'; idx: number } | { type: 'back' } | null>(null);
