@@ -391,7 +391,8 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       const context = getSelectionClozeContext();
       setCursorInCloze(!!context);
 
-      if (context) {
+      if (context && clozeActive) {
+        // Only sync color if cloze mode was explicitly activated by the user
         setClozeColorIndex(context.num - 1);
         setPaletteOpen(true);
         return;
@@ -403,12 +404,15 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
         return;
       }
 
-      if (clozeActive) {
+      if (clozeActive && !context) {
+        // Cursor left cloze region while mode was active → deactivate
         deactivateClozeMode();
         return;
       }
 
-      setPaletteOpen(false);
+      if (!clozeActive) {
+        setPaletteOpen(false);
+      }
     };
 
     const syncClozeContent = () => {
