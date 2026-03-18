@@ -56,7 +56,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
   const [tool, setTool] = useState<Tool>('rect');
   const [imgLoaded, setImgLoaded] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
-  const [previewOpaque, setPreviewOpaque] = useState(true);
+  const [previewOpaque, setPreviewOpaque] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [imgSize, setImgSize] = useState({ w: 0, h: 0 });
@@ -396,7 +396,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
         const newShape: OcclusionShape = { id: crypto.randomUUID(), type: 'freehand', points: [...currentPoints], color: shapeColor };
         const newShapes = [...shapes, newShape];
         setShapes(newShapes);
-        autoSwitchColor(newShapes);
+        // Do NOT auto-switch color for freehand — only switch when user manually changes color
       }
       setSelectedId(null);
       setDrawing(false);
@@ -531,11 +531,16 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
     }));
   };
 
+  // Custom cursors for eraser and freehand (brush)
+  const eraserCursorSvg = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21'/%3E%3Cpath d='M22 21H7'/%3E%3Cpath d='m5 11 9 9'/%3E%3C/svg%3E") 4 20, auto`;
+  const brushCursorSvg = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18.37 2.63 14 7l-1.59-1.59a2 2 0 0 0-2.82 0L8 7l9 9 1.59-1.59a2 2 0 0 0 0-2.82L17 10l4.37-4.37a2.12 2.12 0 1 0-3-3Z'/%3E%3Cpath d='M9 8c-2 3-4 3.5-7 4l8 10c2-1 6-5 6-7'/%3E%3Cpath d='M14.5 17.5 4.5 15'/%3E%3C/svg%3E") 2 22, crosshair`;
+
   const getCursorStyle = () => {
     if (tool === 'hand') return panning ? 'grabbing' : 'grab';
     if (dragging) return 'grabbing';
     if (tool === 'select') return selectedShape?.type === 'rect' ? 'move' : 'default';
-    if (tool === 'eraser') return 'pointer';
+    if (tool === 'eraser') return eraserCursorSvg;
+    if (tool === 'freehand' && !hoveredSelectableId) return brushCursorSvg;
     if (hoveredSelectableId) return 'move';
     return 'crosshair';
   };
@@ -597,10 +602,10 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
                 cursor: tool === 'hand'
                   ? (panning ? 'grabbing' : 'grab')
                   : tool === 'eraser'
-                    ? 'pointer'
+                    ? eraserCursorSvg
                     : hoveredSelectableId === s.id || tool === 'select'
                       ? 'move'
-                      : 'crosshair',
+                      : tool === 'freehand' ? brushCursorSvg : 'crosshair',
               }}
             />
             {/* Resize handles when selected */}
@@ -642,10 +647,10 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
       const sharedCursor = tool === 'hand'
         ? 'grab'
         : tool === 'eraser'
-          ? 'pointer'
+          ? eraserCursorSvg
           : s.type === 'polygon' && (hoveredSelectableId === s.id || tool === 'select')
             ? 'move'
-            : 'crosshair';
+            : tool === 'freehand' ? brushCursorSvg : 'crosshair';
 
       return (
         <svg key={s.id} className="absolute inset-0 pointer-events-none" style={{ width: displaySize.w, height: displaySize.h }}>
