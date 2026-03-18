@@ -11,6 +11,7 @@ import { OCCLUSION_COLORS } from '@/lib/occlusionColors';
 
 import { Button } from '@/components/ui/button';
 import { CardContent as CardPreviewContent, buildVirtualCards } from '@/components/deck-detail/CardPreviewSheet';
+import type { CardRow } from '@/types/deck';
 import { useCards } from '@/hooks/useCards';
 import { useEnergy } from '@/hooks/useEnergy';
 import { useAIModel } from '@/hooks/useAIModel';
@@ -305,14 +306,32 @@ const ManageDeck = () => {
 
         await Promise.all([...updatePromises, ...deletePromises]);
 
-        // Create new siblings with created_at close to the current card
+        // Create new siblings with created_at after the last existing sibling
         if (numsToAdd.length > 0) {
           const newCards = numsToAdd.map(n => ({
             frontContent,
             backContent: JSON.stringify({ clozeTarget: n, extra: back }),
             cardType,
           }));
-          await cardService.createCards(deckId!, newCards, currentCard.created_at);
+          // Find the last existing sibling's created_at to insert after it
+          const group = siblingMap.get(selectedIndex);
+          const lastSiblingIdx = group ? group[group.length - 1] : selectedIndex;
+          const lastSiblingTime = sortedCards[lastSiblingIdx]?.created_at;
+          const nextNonSiblingCard = sortedCards[lastSiblingIdx + 1];
+          let baseCreatedAt: string;
+          if (lastSiblingTime && nextNonSiblingCard) {
+            // Insert between last sibling and next non-sibling card
+            const lastT = new Date(lastSiblingTime).getTime();
+            const nextT = new Date(nextNonSiblingCard.created_at).getTime();
+            const gap = nextT - lastT;
+            // Use midpoint with sub-ms precision so new siblings fit between
+            baseCreatedAt = new Date(lastT + Math.min(gap * 0.1, 0.5)).toISOString();
+          } else if (lastSiblingTime) {
+            baseCreatedAt = new Date(new Date(lastSiblingTime).getTime() + 0.01).toISOString();
+          } else {
+            baseCreatedAt = currentCard.created_at;
+          }
+          await cardService.createCards(deckId!, newCards, baseCreatedAt);
         }
 
         invalidateDeckRelatedQueries(queryClient, deckId!);
@@ -713,7 +732,7 @@ const ManageDeck = () => {
 
 /* ─── Preview modal ─── */
 function ManageDeckPreview({ cards, initialIndex, open, onClose }: {
-  cards: any[]; initialIndex: number; open: boolean; onClose: () => void;
+  cards: CardRow[]; initialIndex: number; open: boolean; onClose: () => void;
 }) {
   const virtualCards = useMemo(() => buildVirtualCards(cards), [cards]);
   const [index, setIndex] = useState(initialIndex);
@@ -723,6 +742,31 @@ function ManageDeckPreview({ cards, initialIndex, open, onClose }: {
 
   const safeIndex = virtualCards.length > 0 ? Math.min(index, virtualCards.length - 1) : 0;
   const vc = virtualCards[safeIndex] ?? null;
+
+  // Build sibling map for preview sidebar
+  const previewSiblingMap = useMemo(() => {
+    const indexToGroup = new Map<number, number[]>();
+    let i = 0;
+    while (i < virtualCards.length) {
+      const card = virtualCards[i].card;
+      const isSiblingType = card.card_type === 'cloze' || card.card_type === 'image_occlusion';
+      if (isSiblingType) {
+        const group = [i];
+        let j = i + 1;
+        while (j < virtualCards.length && virtualCards[j].card.front_content === card.front_content && (virtualCards[j].card.card_type === 'cloze' || virtualCards[j].card.card_type === 'image_occlusion')) {
+          group.push(j);
+          j++;
+        }
+        if (group.length > 1) {
+          group.forEach(idx => indexToGroup.set(idx, group));
+        }
+        i = j;
+      } else {
+        i++;
+      }
+    }
+    return indexToGroup;
+  }, [virtualCards]);
 
   const goPrev = useCallback(() => { if (safeIndex > 0) { setIndex(i => i - 1); setRevealed(false); } }, [safeIndex]);
   const goNext = useCallback(() => { if (safeIndex < virtualCards.length - 1) { setIndex(i => i + 1); setRevealed(false); } }, [safeIndex, virtualCards.length]);
@@ -767,19 +811,57 @@ function ManageDeckPreview({ cards, initialIndex, open, onClose }: {
         </span>
         <div className="w-9" />
       </header>
-      <div className="flex-1 flex items-center justify-center px-4 pb-6 min-h-0">
-        <div className="w-full max-w-lg">
-          <CardPreviewContent vc={vc} revealed={revealed} onClick={() => setRevealed(r => !r)} />
+      <div className="flex-1 flex items-center justify-center px-4 pb-4 min-h-0">
+        <div className="w-full max-w-lg flex gap-1.5">
+          {/* Left sidebar — card index with sibling connectors */}
+          <div className="shrink-0 flex flex-col items-center gap-0 overflow-y-auto no-scrollbar py-1 max-h-[70vh]">
+            {virtualCards.map((vCard, idx) => {
+              const group = previewSiblingMap.get(idx);
+              const isInGroup = !!group;
+              const isFirst = isInGroup && group![0] === idx;
+              const isLast = isInGroup && group![group!.length - 1] === idx;
+              const selectedGroup = previewSiblingMap.get(safeIndex);
+              const isGroupHighlighted = isInGroup && selectedGroup && group![0] === selectedGroup[0];
+
+              return (
+                <div key={`${vCard.card.id}-${idx}`} className="flex items-stretch">
+                  <div className="w-1 mr-0.5 flex flex-col items-center">
+                    {isInGroup ? (
+                      <div className={`w-0.5 flex-1 ${isGroupHighlighted ? 'bg-primary/40' : 'bg-border'} ${isFirst ? 'rounded-t-full mt-2' : ''} ${isLast ? 'rounded-b-full mb-2' : ''}`} />
+                    ) : <div className="w-0.5 flex-1" />}
+                  </div>
+                  <button
+                    onClick={() => { setIndex(idx); setRevealed(false); }}
+                    className={`shrink-0 h-7 w-7 my-0.5 rounded-full text-[12px] font-medium transition-all flex items-center justify-center ${
+                      idx === safeIndex
+                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        : isGroupHighlighted
+                          ? 'bg-accent/60 text-foreground'
+                          : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                    }`}
+                  >
+                    {idx + 1}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Center — card content */}
+          <div className="flex-1 min-w-0">
+            <CardPreviewContent vc={vc} revealed={revealed} onClick={() => setRevealed(r => !r)} />
+          </div>
+
+          {/* Right sidebar — action buttons */}
+          <div className="shrink-0 flex flex-col items-center gap-1 py-1">
+            <button className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors" title="Duplicar">
+              <Copy className="h-4 w-4" />
+            </button>
+            <button className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="Excluir">
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
         </div>
-      </div>
-      <div className="shrink-0 flex items-center justify-center gap-3 pb-4">
-        <button onClick={goPrev} disabled={safeIndex === 0} className="h-10 w-10 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-20 transition-colors">
-          <ChevronLeft className="h-5 w-5" />
-        </button>
-        <span className="text-xs text-muted-foreground">Toque para revelar</span>
-        <button onClick={goNext} disabled={safeIndex >= virtualCards.length - 1} className="h-10 w-10 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-20 transition-colors">
-          <ChevronRight className="h-5 w-5" />
-        </button>
       </div>
     </div>
   );
