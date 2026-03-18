@@ -714,7 +714,8 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
                 cursor: getCursorStyle(),
                 userSelect: 'none',
                 WebkitUserSelect: 'none',
-                transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
+                transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
+                transformOrigin: 'center center',
               }}
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
