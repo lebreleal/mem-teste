@@ -101,7 +101,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, parentDeckId, existingDe
         if (!cancelled) {
           toast({ title: '🧠 Baralho criado!', description: `${pendingReviewData.cards.length} cartões salvos` });
           resetState(); onOpenChange(false);
-          if (targetDeckId) navigate(`/manage/${targetDeckId}`);
+          if (targetDeckId) navigate(`/decks/${targetDeckId}/manage`);
         }
       } catch (err: unknown) {
         if (!cancelled) {
@@ -478,7 +478,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, parentDeckId, existingDe
         const targetDeckId = await saveCardsToDeck(dedupedCards, deckName);
         toast({ title: existingDeckId ? '🧠 Cartões adicionados!' : '🧠 Baralho criado!', description: `${dedupedCards.length} cartões salvos` });
         resetState(); onOpenChange(false);
-        if (targetDeckId) navigate(`/manage/${targetDeckId}`);
+        if (targetDeckId) navigate(`/decks/${targetDeckId}/manage`);
       } catch (err: unknown) {
         toast({ title: 'Erro ao salvar', description: err instanceof Error ? err.message : 'Erro desconhecido', variant: 'destructive' });
         // Fallback to review step so user doesn't lose cards
@@ -523,7 +523,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, parentDeckId, existingDe
 
       toast({ title: existingDeckId ? '🧠 Cartões adicionados!' : '🧠 Baralho criado!', description: `${cards.length} cartões salvos` });
       resetState(); onOpenChange(false);
-      if (targetDeckId) navigate(`/manage/${targetDeckId}`);
+      if (targetDeckId) navigate(`/decks/${targetDeckId}/manage`);
     } catch (err: unknown) { toast({ title: 'Erro ao salvar', description: err instanceof Error ? err.message : 'Erro desconhecido', variant: 'destructive' }); }
     finally { setIsSaving(false); }
   }, [user, cards, existingDeckId, deckName, toast, resetState, onOpenChange, navigate, saveCardsToDeck, queryClient, pendingReviewData, removePending]);

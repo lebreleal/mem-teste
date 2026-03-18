@@ -6,11 +6,18 @@
 import { supabase } from '@/integrations/supabase/client';
 import { compressImage } from '@/lib/imageUtils';
 
-/** Create a single card. */
-export async function createCard(deckId: string, input: { frontContent: string; backContent: string; cardType?: string }) {
+/** Create a single card. Accepts optional created_at for positional insertion. */
+export async function createCard(deckId: string, input: { frontContent: string; backContent: string; cardType?: string; createdAt?: string }) {
+  const insertData: { deck_id: string; front_content: string; back_content: string; card_type: string; created_at?: string } = {
+    deck_id: deckId,
+    front_content: input.frontContent,
+    back_content: input.backContent,
+    card_type: input.cardType ?? 'basic',
+  };
+  if (input.createdAt) insertData.created_at = input.createdAt;
   const { data, error } = await supabase
     .from('cards')
-    .insert({ deck_id: deckId, front_content: input.frontContent, back_content: input.backContent, card_type: input.cardType ?? 'basic' })
+    .insert(insertData)
     .select()
     .single();
   if (error) throw error;
