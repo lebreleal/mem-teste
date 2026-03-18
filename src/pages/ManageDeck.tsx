@@ -784,7 +784,7 @@ const ManageDeck = () => {
       </div>
 
       {/* Preview Modal */}
-      <ManageDeckPreview cards={sortedCards} initialIndex={selectedIndex} open={previewOpen} onClose={() => setPreviewOpen(false)} />
+      <ManageDeckPreview cards={sortedCards} initialIndex={selectedIndex} open={previewOpen} onClose={() => setPreviewOpen(false)} editorOverride={editorOverride} />
 
       {/* Occlusion Editor — centered modal overlay */}
       {occlusionModalOpen && (
