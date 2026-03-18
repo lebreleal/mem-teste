@@ -29,7 +29,7 @@ import { useDeckDetailHandlers, type OcclusionRect } from './DeckDetailHandlers'
 interface DeckDetailContextValue {
   // Core data
   deckId: string;
-  deck: Tables<'decks'> | null | undefined;
+  deck: DeckRow | null | undefined;
   deckLoading: boolean;
   allCards: CardRow[];
   allCardsLoading: boolean;
