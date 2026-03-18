@@ -71,6 +71,18 @@ const SalaHero = ({
   const [infoOpen, setInfoOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
 
+  // Ctrl+K / Cmd+K shortcut to open search
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
   const cf = state.folders.find((f: Folder) => f.id === state.currentFolderId);
   const folderName = cf?.name ?? 'Sala';
   const folderImage = cf?.image_url;
