@@ -446,34 +446,11 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     setTimeout(() => { justDeactivatedRef.current = false; }, 200);
   }, [editor]);
 
-  /** Renumber all cloze groups to be sequential (1,2,3...) */
+  /** Colors are permanent — no renumbering. This is intentionally a no-op. */
   const renumberClozes = useCallback(() => {
-    if (!editor) return;
-    const html = editor.getHTML();
-    const usedNums = [...new Set([...html.matchAll(/data-cloze="(\d+)"/g)].map(m => parseInt(m[1])))].sort((a, b) => a - b);
-    if (usedNums.length === 0 || usedNums.every((n, i) => n === i + 1)) return;
-
-    const remap = new Map<number, number>();
-    usedNums.forEach((n, i) => remap.set(n, i + 1));
-
-    // Two-pass replacement to avoid collisions
-    let newHtml = html;
-    remap.forEach((newNum, oldNum) => {
-      if (newNum !== oldNum) {
-        newHtml = newHtml.split(`data-cloze="${oldNum}"`).join(`data-cloze="__REMAP_${newNum}__"`);
-      }
-    });
-    remap.forEach((newNum) => {
-      newHtml = newHtml.split(`data-cloze="__REMAP_${newNum}__"`).join(`data-cloze="${newNum}"`);
-    });
-
-    isUpdatingClozeRef.current = true;
-    try {
-      editor.commands.setContent(newHtml, { emitUpdate: true });
-    } finally {
-      isUpdatingClozeRef.current = false;
-    }
-  }, [editor]);
+    // Colors/nums are permanent once assigned. Gaps are fine (e.g. c1, c3, c5).
+    // Deleting a cloze just frees that color for future use.
+  }, []);
 
   /** Delete cloze mark from current block, then renumber remaining */
   const handleDeleteCloze = useCallback(() => {
