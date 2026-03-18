@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ChevronLeft, ChevronRight, Trash2, Copy, Plus, Loader2, Check, X } from 'lucide-react';
-import { IconAIGradient } from '@/components/icons';
+import { IconAIGradient, IconTrash } from '@/components/icons';
 import AICreateDeckDialog from '@/components/AICreateDeckDialog';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -1029,7 +1029,7 @@ function ManageDeckPreview({ cards, initialIndex, open, onClose, editorOverride 
               <Copy className="h-4 w-4" />
             </button>
             <button className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="Excluir">
-              <Trash2 className="h-4 w-4" />
+              <IconTrash className="h-4 w-4" />
             </button>
           </div>
         </div>
