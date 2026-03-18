@@ -410,20 +410,20 @@
   display: inline-block;
   background: hsl(var(--primary) / 0.15);
   color: hsl(var(--primary));
-  padding: 0.1em 0.5em;
+  padding: 0.1em 0.4em;
   border-radius: 0.25rem;
   font-weight: 600;
-  border-bottom: 2px solid hsl(var(--primary));
+  border-bottom: 2px solid hsl(var(--primary) / 0.5);
 }
 
 .cloze-revealed {
   display: inline-block;
   background: hsl(var(--primary) / 0.15);
   color: hsl(var(--primary));
-  padding: 0.1em 0.5em;
+  padding: 0.1em 0.4em;
   border-radius: 0.25rem;
   font-weight: 700;
-  border-bottom: 2px solid hsl(var(--primary));
+  border-bottom: 2px solid hsl(var(--primary) / 0.5);
 }
 
 /* Cloze editor mark – visual badge in the rich editor (colors injected via inline style) */
