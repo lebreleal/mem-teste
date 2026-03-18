@@ -480,7 +480,7 @@ const Dashboard = () => {
               state.setAiDeckOpen(open);
               if (!open) { setPendingReviewData(null); setAiDeckParentId(null); setAiDeckParentName(null); }
             }}
-            folderId={pendingReviewData?.folderId ?? state.currentFolderId}
+            folderId={pendingReviewData?.folderId ?? (aiDeckParentId ? state.decks.find(d => d.id === aiDeckParentId)?.folder_id ?? state.currentFolderId : state.currentFolderId)}
             parentDeckId={aiDeckParentId}
             existingDeckId={null}
             existingDeckName={aiDeckParentName}
