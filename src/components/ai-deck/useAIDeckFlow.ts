@@ -438,10 +438,23 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
         variant: 'destructive',
       });
       setStep('config');
+      setIsLoading(false);
     } else {
-      setCards(dedupedCards); setStep('review');
+      // Auto-save cards and navigate to ManageDeck editor
+      try {
+        setIsSaving(true);
+        const targetDeckId = await saveCardsToDeck(dedupedCards, deckName);
+        toast({ title: existingDeckId ? '🧠 Cartões adicionados!' : '🧠 Baralho criado!', description: `${dedupedCards.length} cartões salvos` });
+        resetState(); onOpenChange(false);
+        if (targetDeckId) navigate(`/manage/${targetDeckId}`);
+      } catch (err: unknown) {
+        toast({ title: 'Erro ao salvar', description: err instanceof Error ? err.message : 'Erro desconhecido', variant: 'destructive' });
+        // Fallback to review step so user doesn't lose cards
+        setCards(dedupedCards); setStep('review');
+      } finally {
+        setIsSaving(false); setIsLoading(false);
+      }
     }
-    setIsLoading(false);
   }, [pages, targetCardCount, detailLevel, cardFormats, customInstructions, model, getCost, toast, queryClient, deckName, saveCardsToDeck, updatePending, removePending, resetState, MODEL_CONFIG, deduplicateCards, isPremium]);
 
   // === Dismiss to background ===
