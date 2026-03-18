@@ -16,7 +16,7 @@ import { useAIModel } from '@/hooks/useAIModel';
 import { useToast } from '@/hooks/use-toast';
 import LazyRichEditor from '@/components/LazyRichEditor';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { useQueryClient } from '@tanstack/react-query';
+
 import OcclusionEditor from '@/components/manage-deck/OcclusionEditor';
 import AttachmentPreviewModal from '@/components/manage-deck/AttachmentPreviewModal';
 import { enhanceCard } from '@/services/card/cardAI';
