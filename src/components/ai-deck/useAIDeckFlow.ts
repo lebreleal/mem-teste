@@ -24,6 +24,8 @@ import type { Step, GenProgress, LoadProgress, GeneratedCard, DetailLevel, CardF
 interface UseAIDeckFlowParams {
   onOpenChange: (open: boolean) => void;
   folderId?: string | null;
+  /** Parent deck ID — creates the new deck as a sub-deck */
+  parentDeckId?: string | null;
   existingDeckId?: string | null;
   existingDeckName?: string | null;
   /** Pre-loaded cards from a pending background deck (opens review directly) */
@@ -36,7 +38,7 @@ interface UseAIDeckFlowParams {
   } | null;
 }
 
-export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existingDeckName, pendingReviewData }: UseAIDeckFlowParams) {
+export function useAIDeckFlow({ onOpenChange, folderId, parentDeckId, existingDeckId, existingDeckName, pendingReviewData }: UseAIDeckFlowParams) {
   const { user } = useAuth();
   const { energy } = useEnergy();
   const { isPremium } = usePremium();
