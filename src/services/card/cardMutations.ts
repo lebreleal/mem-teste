@@ -24,9 +24,11 @@ export async function createCard(deckId: string, input: { frontContent: string; 
   return data;
 }
 
-/** Create multiple cards at once (batch insert). Uses parallel batches for speed. */
-export async function createCards(deckId: string, cards: { frontContent: string; backContent: string; cardType: string }[]) {
-  const baseTime = Date.now();
+/** Create multiple cards at once (batch insert). Uses parallel batches for speed.
+ *  @param baseCreatedAt optional ISO string — siblings will get created_at = base + 1ms, base + 2ms, etc.
+ */
+export async function createCards(deckId: string, cards: { frontContent: string; backContent: string; cardType: string }[], baseCreatedAt?: string) {
+  const baseTime = baseCreatedAt ? new Date(baseCreatedAt).getTime() : Date.now();
   const rows = cards.map((c, idx) => ({
     deck_id: deckId,
     front_content: c.frontContent,
@@ -35,7 +37,7 @@ export async function createCards(deckId: string, cards: { frontContent: string;
     state: 0,
     stability: 0,
     difficulty: 0,
-    created_at: new Date(baseTime + idx).toISOString(),
+    created_at: new Date(baseTime + idx + 1).toISOString(),
   }));
   const BATCH_SIZE = 500;
   const CONCURRENT = 5;
