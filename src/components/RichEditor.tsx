@@ -343,11 +343,11 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     let newHtml = html;
     remap.forEach((newNum, oldNum) => {
       if (newNum !== oldNum) {
-        newHtml = newHtml.replaceAll(`data-cloze="${oldNum}"`, `data-cloze="__REMAP_${newNum}__"`);
+        newHtml = newHtml.split(`data-cloze="${oldNum}"`).join(`data-cloze="__REMAP_${newNum}__"`);
       }
     });
     remap.forEach((newNum) => {
-      newHtml = newHtml.replaceAll(`data-cloze="__REMAP_${newNum}__"`, `data-cloze="${newNum}"`);
+      newHtml = newHtml.split(`data-cloze="__REMAP_${newNum}__"`).join(`data-cloze="${newNum}"`);
     });
 
     isUpdatingClozeRef.current = true;
