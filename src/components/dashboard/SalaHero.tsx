@@ -15,6 +15,7 @@ import { ptBR } from 'date-fns/locale';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 import { calculateRealStudyTime } from '@/lib/studyUtils';
 import { IconTrash, IconImage, IconInfo, IconDeck, IconArchive, IconEdit } from '@/components/icons';
+const GlobalSearchDialog = lazy(() => import('@/components/GlobalSearchDialog'));
 import type { User } from '@supabase/supabase-js';
 import type { Folder } from '@/types/folder';
 import type { DeckWithStats } from '@/types/deck';
