@@ -306,6 +306,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
         setTimeout(() => {
           editor.chain().unsetMark('clozeMark').run();
           setClozeActive(false);
+          setPaletteOpen(false);
         }, 0);
       }
     };
