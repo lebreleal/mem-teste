@@ -602,19 +602,13 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
 
     const currentContext = getSelectionClozeContext();
 
+    // If cursor is already inside a cloze block, just open palette — don't re-apply mark
     if (currentContext) {
-      skipNextClozeSyncRef.current = true;
-      isUpdatingClozeRef.current = true;
-      try {
-        editor.chain().focus().setMark('clozeMark', { num: String(currentContext.num) }).run();
-      } finally {
-        isUpdatingClozeRef.current = false;
-      }
-
       setClozeColorIndex(currentContext.num - 1);
       setClozeActive(true);
       setCursorInCloze(true);
       setPaletteOpen(true);
+      editor.chain().focus().run();
       return;
     }
 
