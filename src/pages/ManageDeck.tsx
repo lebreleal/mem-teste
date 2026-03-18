@@ -357,29 +357,66 @@ const ManageDeck = () => {
     }
   }, [currentCard, isDirty, buildSavePayload, updateCard, front, back, deckId, queryClient, toast, collectAllNums, siblingMap, selectedIndex, sortedCards]);
 
-  // Auto-reconcile siblings when the set of unique nums changes (new color/cloze added/removed)
+  // Track numsKey for visual updates only (no auto-save)
   const numsKey = useMemo(() => collectAllNums().join(','), [collectAllNums]);
   useEffect(() => {
-    if (!currentCard || !isDirty) return;
-    const prev = prevNumsKeyRef.current;
     prevNumsKeyRef.current = numsKey;
-    if (prev !== null && prev !== numsKey) {
-      saveCurrentCard();
+  }, [numsKey]);
+
+  // Visual sibling map: override DB-based grouping for the selected card's group
+  // If the editor currently has 0 nums (all clozes/colors removed), visually dissolve the group
+  const visualSiblingMap = useMemo(() => {
+    const editorNums = collectAllNums();
+    const selectedGroup = siblingMap.get(selectedIndex);
+    if (!selectedGroup) return siblingMap;
+    // If editor has no nums, remove grouping for the selected group
+    if (editorNums.length === 0) {
+      const newMap = new Map(siblingMap);
+      selectedGroup.forEach(idx => newMap.delete(idx));
+      return newMap;
     }
-  }, [numsKey]); // intentionally minimal deps — we read latest via closure
+    return siblingMap;
+  }, [siblingMap, selectedIndex, collectAllNums]);
+
+  // Pending navigation state for unsaved-changes confirmation
+  const [pendingNav, setPendingNav] = useState<{ type: 'card'; idx: number } | { type: 'back' } | null>(null);
 
   const selectCard = useCallback((idx: number) => {
     if (idx < 0 || idx >= totalCards) return;
-    if (isDirty) saveCurrentCard();
-    // If clicking on a sibling, snap to the first card of the group
-    const group = siblingMap.get(idx);
-    setSelectedIndex(group ? group[0] : idx);
-  }, [isDirty, saveCurrentCard, totalCards, siblingMap]);
+    // If clicking on a sibling of the current group, snap to first of group (no navigation needed if same group)
+    const group = visualSiblingMap.get(idx);
+    const targetIdx = group ? group[0] : idx;
+    if (targetIdx === selectedIndex) return;
+    if (isDirty) {
+      setPendingNav({ type: 'card', idx: targetIdx });
+      return;
+    }
+    setSelectedIndex(targetIdx);
+  }, [isDirty, totalCards, visualSiblingMap, selectedIndex]);
 
   const handleBack = useCallback(() => {
-    if (isDirty) saveCurrentCard();
+    if (isDirty) {
+      setPendingNav({ type: 'back' });
+      return;
+    }
     navigate(`/decks/${deckId}`);
-  }, [isDirty, saveCurrentCard, navigate, deckId]);
+  }, [isDirty, navigate, deckId]);
+
+  const confirmNavSave = useCallback(async () => {
+    const nav = pendingNav;
+    setPendingNav(null);
+    await saveCurrentCard();
+    if (nav?.type === 'back') navigate(`/decks/${deckId}`);
+    else if (nav?.type === 'card') setSelectedIndex(nav.idx);
+  }, [pendingNav, saveCurrentCard, navigate, deckId]);
+
+  const confirmNavDiscard = useCallback(() => {
+    const nav = pendingNav;
+    setPendingNav(null);
+    setIsDirty(false);
+    if (nav?.type === 'back') navigate(`/decks/${deckId}`);
+    else if (nav?.type === 'card') setSelectedIndex(nav.idx);
+  }, [pendingNav, navigate, deckId]);
 
   const handleDelete = useCallback(() => {
     if (!currentCard) return;
@@ -394,7 +431,7 @@ const ManageDeck = () => {
 
   const handleAddCard = useCallback(() => {
     // If selected card belongs to a sibling group, insert after the LAST sibling
-    const group = siblingMap.get(selectedIndex);
+    const group = visualSiblingMap.get(selectedIndex);
     const insertAfterIndex = group ? group[group.length - 1] : selectedIndex;
 
     let createdAt: string | undefined;
@@ -414,7 +451,7 @@ const ManageDeck = () => {
         toast({ title: 'Novo cartão criado' });
       },
     });
-  }, [createCard, toast, sortedCards, selectedIndex, siblingMap]);
+  }, [createCard, toast, sortedCards, selectedIndex, visualSiblingMap]);
 
   const handleDuplicate = useCallback(() => {
     if (!currentCard) return;
@@ -520,11 +557,11 @@ const ManageDeck = () => {
             {/* Left sidebar — card index numbers (vertical) */}
             <div className="shrink-0 flex flex-col items-center gap-0 overflow-y-auto no-scrollbar py-1">
               {sortedCards.map((card, idx) => {
-                const group = siblingMap.get(idx);
+                const group = visualSiblingMap.get(idx);
                 const isInGroup = !!group;
                 const isFirst = isInGroup && group![0] === idx;
                 const isLast = isInGroup && group![group!.length - 1] === idx;
-                const selectedGroup = siblingMap.get(selectedIndex);
+                const selectedGroup = visualSiblingMap.get(selectedIndex);
                 const isGroupHighlighted = isInGroup && selectedGroup && group![0] === selectedGroup[0];
                 const isHovered = isInGroup && hoveredGroupKey !== null && group![0] === hoveredGroupKey;
 
@@ -733,6 +770,21 @@ const ManageDeck = () => {
             <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Excluir
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Unsaved changes confirmation */}
+      <AlertDialog open={!!pendingNav} onOpenChange={(open) => { if (!open) setPendingNav(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Alterações não salvas</AlertDialogTitle>
+            <AlertDialogDescription>Você tem alterações que não foram salvas. O que deseja fazer?</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel onClick={() => setPendingNav(null)}>Cancelar</AlertDialogCancel>
+            <Button variant="outline" onClick={confirmNavDiscard}>Descartar</Button>
+            <AlertDialogAction onClick={confirmNavSave}>Salvar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
