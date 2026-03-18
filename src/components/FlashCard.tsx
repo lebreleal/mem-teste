@@ -288,8 +288,14 @@ const FlashCard = ({
   let occlusionBackText = '';
 
   if (isOcclusion) {
-    displayFront = renderOcclusion(frontContent, false, occlusionFallbackCanvas ?? undefined);
-    displayBack = renderOcclusion(frontContent, true, occlusionFallbackCanvas ?? undefined);
+    // Extract clozeTarget from backContent for per-color-group occlusion
+    let occlusionTarget: number | undefined;
+    try {
+      const parsed = JSON.parse(backContent);
+      if (typeof parsed.clozeTarget === 'number') occlusionTarget = parsed.clozeTarget;
+    } catch {}
+    displayFront = renderOcclusion(frontContent, false, occlusionFallbackCanvas ?? undefined, occlusionTarget);
+    displayBack = renderOcclusion(frontContent, true, occlusionFallbackCanvas ?? undefined, occlusionTarget);
     try {
       const occData = JSON.parse(frontContent);
       const rawFrontText = typeof occData.frontText === 'string' ? occData.frontText : '';
