@@ -89,6 +89,7 @@ interface OcclusionRect {
   x: number; y: number; w: number; h: number;
   type?: string; text?: string;
   points?: { x: number; y: number }[];
+  color?: string;
 }
 
 interface OcclusionData {
@@ -96,6 +97,7 @@ interface OcclusionData {
   allRects?: OcclusionRect[];
   rects?: OcclusionRect[];
   activeRectIds?: string[];
+  colorGroups?: Record<string, string[]>;
   canvasWidth?: number;
   canvasHeight?: number;
   frontText?: string;
