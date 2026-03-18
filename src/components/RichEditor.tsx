@@ -231,7 +231,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   // Guard to prevent infinite loop between syncClozeState and enforceCloze
   const isUpdatingClozeRef = useRef(false);
 
-  // Track whether cursor is inside an existing cloze + re-apply mark while clozeActive
+  // Track whether cursor is inside an existing cloze (selectionUpdate only)
   useEffect(() => {
     if (!editor) return;
 
@@ -239,12 +239,17 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       if (isUpdatingClozeRef.current) return;
       const inCloze = editor.isActive('clozeMark');
       setCursorInCloze(inCloze);
-      // Auto-deactivate cloze mode when cursor moves outside a cloze region
+
+      // Update hasAnyCloze
+      const html = editor.getHTML();
+      setHasAnyCloze(/data-cloze="/.test(html));
+
+      // Auto-deactivate cloze mode ONLY on explicit cursor movement (not typing)
       if (clozeActive && !inCloze) {
         const { from, to } = editor.state.selection;
         if (from === to) {
-          // Deactivate BEFORE editor transaction to prevent re-entry
           setClozeActive(false);
+          setPaletteOpen(false);
           isUpdatingClozeRef.current = true;
           try {
             editor.chain().unsetMark('clozeMark').run();
@@ -253,16 +258,32 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
           }
         }
       }
+
+      // Open palette when cursor enters existing cloze
+      if (inCloze && !clozeActive) {
+        setPaletteOpen(true);
+      }
     };
 
-    // Re-apply cloze mark on every transaction while clozeActive
+    syncClozeState();
+    editor.on('selectionUpdate', syncClozeState);
+    editor.on('focus', syncClozeState);
+
+    return () => {
+      editor.off('selectionUpdate', syncClozeState);
+      editor.off('focus', syncClozeState);
+    };
+  }, [editor, clozeActive]);
+
+  // Re-apply cloze mark on every transaction while clozeActive (separate effect)
+  useEffect(() => {
+    if (!editor) return;
+
     const enforceCloze = () => {
       if (isUpdatingClozeRef.current) return;
-      syncClozeState();
       if (!clozeActive) return;
       const { from, to } = editor.state.selection;
-      if (from !== to) return; // don't mess with selections
-      // Check if cursor position already has the cloze mark
+      if (from !== to) return;
       if (!editor.isActive('clozeMark')) {
         isUpdatingClozeRef.current = true;
         try {
@@ -273,16 +294,8 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       }
     };
 
-    syncClozeState();
-    editor.on('selectionUpdate', syncClozeState);
     editor.on('transaction', enforceCloze);
-    editor.on('focus', syncClozeState);
-
-    return () => {
-      editor.off('selectionUpdate', syncClozeState);
-      editor.off('transaction', enforceCloze);
-      editor.off('focus', syncClozeState);
-    };
+    return () => { editor.off('transaction', enforceCloze); };
   }, [editor, clozeActive, clozeCounter]);
 
   // Deactivate cloze mark on Enter or Escape
