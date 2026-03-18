@@ -5,7 +5,8 @@
  * Layout: image centered, drawing tools above, zoom on right, bottom bar with eye+AI+colors.
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { Loader2, Undo2 } from 'lucide-react';
 import { uploadImage as uploadToStorage, invokeDetectOcclusion } from '@/services/storageService';
 import { useAuth } from '@/hooks/useAuth';
@@ -74,6 +75,9 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
   const [panning, setPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
 
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const initialShapeCountRef = useRef(0);
+
   const pushHistory = useCallback(() => {
     setHistory(prev => [...prev.slice(-20), shapes]);
   }, [shapes]);
@@ -103,6 +107,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
             : { x: r.x, y: r.y, w: r.w, h: r.h }),
         }));
         setShapes(converted);
+        initialShapeCountRef.current = converted.length;
       }
     } catch {}
   }, [initialFront]);
@@ -694,7 +699,10 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
       {/* ─── Header ─── */}
       <header className="shrink-0 flex items-center gap-2 px-3 py-2.5 border-b border-border/40">
         <button
-          onClick={onCancel}
+          onClick={() => {
+            const isDirty = shapes.length !== initialShapeCountRef.current || history.length > 0;
+            if (isDirty) { setShowCloseConfirm(true); } else { onCancel(); }
+          }}
           className="h-8 w-8 flex items-center justify-center rounded-full text-muted-foreground hover:bg-accent transition-colors shrink-0"
         >
           <IconClose />
@@ -959,6 +967,24 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
           100% { background-position: 200% 50%; }
         }
       `}</style>
+
+      {/* Close without saving confirmation */}
+      <AlertDialog open={showCloseConfirm} onOpenChange={setShowCloseConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Fechar sem salvar?</AlertDialogTitle>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={onCancel}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Fechar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
