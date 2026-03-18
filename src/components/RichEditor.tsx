@@ -59,12 +59,14 @@ const ClozeMark = Mark.create({
 });
 
 /* ─── Converters: DB format ↔ Editor format ─── */
-/** Convert {{c1::text}} → <span data-cloze="1" class="cloze-editor-mark">text</span> */
+/** Convert {{c1::text}} → <span data-cloze="1" class="cloze-editor-mark" style="...">text</span> */
 function clozeToEditor(html: string): string {
-  // First convert any remaining markdown to HTML
   let result = markdownToHtml(html);
-  return result.replace(/\{\{c(\d+)::(.+?)\}\}/g,
-    '<span data-cloze="$1" class="cloze-editor-mark">$2</span>');
+  return result.replace(/\{\{c(\d+)::(.+?)\}\}/g, (_match, num: string, text: string) => {
+    const idx = parseInt(num) - 1;
+    const color = CLOZE_COLORS[idx % CLOZE_COLORS.length];
+    return `<span data-cloze="${num}" class="cloze-editor-mark" style="--cloze-bg:${color.bg};--cloze-border:${color.border};--cloze-text:${color.text}">${text}</span>`;
+  });
 }
 /** Convert <span data-cloze="1" ...>text</span> → {{c1::text}} */
 function editorToCloze(html: string): string {
