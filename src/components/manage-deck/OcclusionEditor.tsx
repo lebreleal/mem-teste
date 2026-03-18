@@ -600,12 +600,12 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
                 borderRadius: 4,
                 boxShadow: isSelected ? `0 0 0 2px ${colorObj.border}, 0 0 8px ${colorObj.fill}` : undefined,
                 cursor: tool === 'hand'
-598:                   ? (panning ? 'grabbing' : 'grab')
-599:                   : tool === 'eraser'
-600:                     ? eraserCursorSvg
-601:                     : hoveredSelectableId === s.id || tool === 'select'
-602:                       ? 'move'
-603:                       : tool === 'freehand' ? brushCursorSvg : 'crosshair',
+                  ? (panning ? 'grabbing' : 'grab')
+                  : tool === 'eraser'
+                    ? eraserCursorSvg
+                    : hoveredSelectableId === s.id || tool === 'select'
+                      ? 'move'
+                      : tool === 'freehand' ? brushCursorSvg : 'crosshair',
               }}
             />
             {/* Resize handles when selected */}
