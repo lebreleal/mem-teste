@@ -173,7 +173,15 @@ function editorToCloze(html: string): string {
 
   mergeAdjacentClozes(container);
 
-  return container.innerHTML.replace(/<span[^>]*data-cloze="(\d+)"[^>]*>([\s\S]*?)<\/span>/g, '{{c$1::$2}}');
+  // Replace cloze spans with {{cN::content}} using DOM (avoids regex issues with nested spans)
+  const clozeSpans = Array.from(container.querySelectorAll('span[data-cloze]'));
+  // Process in reverse document order so outerHTML replacements don't invalidate earlier spans
+  clozeSpans.reverse().forEach(span => {
+    const num = span.getAttribute('data-cloze') || '1';
+    span.outerHTML = `{{c${num}::${span.innerHTML}}}`;
+  });
+
+  return container.innerHTML;
 }
 
 export interface ImageAttachment {
