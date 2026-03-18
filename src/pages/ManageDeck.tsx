@@ -11,6 +11,7 @@ import { OCCLUSION_COLORS } from '@/lib/occlusionColors';
 
 import { Button } from '@/components/ui/button';
 import { CardContent as CardPreviewContent, buildVirtualCards } from '@/components/deck-detail/CardPreviewSheet';
+import type { CardRow } from '@/types/deck';
 import { useCards } from '@/hooks/useCards';
 import { useEnergy } from '@/hooks/useEnergy';
 import { useAIModel } from '@/hooks/useAIModel';
