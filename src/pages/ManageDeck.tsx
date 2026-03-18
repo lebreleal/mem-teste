@@ -180,6 +180,7 @@ const ManageDeck = () => {
       setOcclusionImageUrl(''); setOcclusionRects([]); setOcclusionCanvasSize(null);
     }
     setIsDirty(needsAutoSave);
+    prevNumsKeyRef.current = ''; // reset so auto-reconcile doesn't fire on card switch
   }, [currentCard?.id]);
 
   const detectCardType = useCallback((): string => {
