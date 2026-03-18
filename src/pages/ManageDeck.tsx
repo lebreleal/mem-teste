@@ -67,6 +67,32 @@ const ManageDeck = () => {
   const currentCard = sortedCards[selectedIndex] ?? null;
   const totalCards = sortedCards.length;
 
+  // Sibling groups: consecutive cards with same front_content and type cloze/image_occlusion
+  const siblingMap = useMemo(() => {
+    // Maps each card index → array of all sibling indices (including itself)
+    const indexToGroup = new Map<number, number[]>();
+    let i = 0;
+    while (i < sortedCards.length) {
+      const card = sortedCards[i];
+      const isSiblingType = card.card_type === 'cloze' || card.card_type === 'image_occlusion';
+      if (isSiblingType) {
+        const group = [i];
+        let j = i + 1;
+        while (j < sortedCards.length && sortedCards[j].front_content === card.front_content && (sortedCards[j].card_type === 'cloze' || sortedCards[j].card_type === 'image_occlusion')) {
+          group.push(j);
+          j++;
+        }
+        if (group.length > 1) {
+          group.forEach(idx => indexToGroup.set(idx, group));
+        }
+        i = j;
+      } else {
+        i++;
+      }
+    }
+    return indexToGroup;
+  }, [sortedCards]);
+
   // Apply URL card only once
   useEffect(() => {
     if (pendingNewCardId && sortedCards.length > 0) {
