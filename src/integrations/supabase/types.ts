@@ -3248,10 +3248,13 @@ export type Database = {
           p_user_id: string
         }
         Returns: {
+          back_content: string
           card_id: string
+          card_type: string
           deck_id: string
           deck_name: string
           folder_name: string
+          front_content: string
           parent_deck_name: string
           rank: number
           result_type: string
