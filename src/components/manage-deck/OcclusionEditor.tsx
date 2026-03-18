@@ -699,7 +699,10 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
       {/* ─── Header ─── */}
       <header className="shrink-0 flex items-center gap-2 px-3 py-2.5 border-b border-border/40">
         <button
-          onClick={onCancel}
+          onClick={() => {
+            const isDirty = shapes.length !== initialShapeCountRef.current || history.length > 0;
+            if (isDirty) { setShowCloseConfirm(true); } else { onCancel(); }
+          }}
           className="h-8 w-8 flex items-center justify-center rounded-full text-muted-foreground hover:bg-accent transition-colors shrink-0"
         >
           <IconClose />
