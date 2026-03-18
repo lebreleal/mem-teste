@@ -215,73 +215,184 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     }
   }, [content, editor]);
 
-  // Sync cloze color index from content
+  // Sync persisted cloze metadata from content without forcing the next active color
   useEffect(() => {
     if (!editor) return;
-    const html = editor.getHTML();
-    const matches = [...html.matchAll(/data-cloze="(\d+)"/g)];
-    if (matches.length > 0) {
-      const maxNum = Math.max(...matches.map(m => parseInt(m[1])));
-      setClozeColorIndex(maxNum - 1);
-    } else {
+    const hasCloze = /data-cloze="/.test(editor.getHTML());
+    setHasAnyCloze(hasCloze);
+    if (!hasCloze) {
       setClozeColorIndex(0);
     }
   }, [content, editor]);
 
-  // Guard to prevent infinite loop between syncClozeState and enforceCloze
+  // Guards to prevent recursive cloze updates and stale selection sync
   const isUpdatingClozeRef = useRef(false);
+  const skipNextClozeSyncRef = useRef(false);
 
-  // Track whether cursor is inside an existing cloze (selectionUpdate only)
+  const getSelectionClozeContext = useCallback((): { num: number; from: number; to: number } | null => {
+    if (!editor) return null;
+
+    const markType = editor.schema.marks.clozeMark;
+    const { from, to, empty, $from } = editor.state.selection;
+    const docSize = editor.state.doc.content.size;
+    const safeResolve = (pos: number) => editor.state.doc.resolve(Math.max(0, Math.min(pos, docSize)));
+
+    let currentNum: string | null = null;
+
+    if (empty) {
+      const marksAtCursor = [
+        ...$from.marks(),
+        ...safeResolve(from > 0 ? from - 1 : from).marks(),
+        ...safeResolve(from < docSize ? from + 1 : from).marks(),
+      ];
+      currentNum = marksAtCursor.find((mark) => mark.type === markType)?.attrs.num ?? null;
+    } else {
+      editor.state.doc.nodesBetween(from, to, (node) => {
+        if (currentNum || !node.isText) return;
+        const currentMark = node.marks.find((mark) => mark.type === markType);
+        if (currentMark) {
+          currentNum = String(currentMark.attrs.num ?? '1');
+        }
+      });
+    }
+
+    if (!currentNum) return null;
+
+    const anchorPos = empty ? $from.pos : from;
+    const resolvedPos = editor.state.doc.resolve(anchorPos);
+    const parent = resolvedPos.parent;
+    const parentOffset = resolvedPos.start();
+    let markFrom = anchorPos;
+    let markTo = anchorPos;
+
+    parent.nodesBetween(0, parent.content.size, (node, offset) => {
+      if (!node.isText) return;
+      const nodeFrom = parentOffset + offset;
+      const nodeTo = nodeFrom + node.nodeSize;
+      const hasThisMark = node.marks.some(
+        (mark) => mark.type === markType && String(mark.attrs.num ?? '1') === currentNum,
+      );
+      const touchesSelection = empty
+        ? nodeFrom <= anchorPos && nodeTo >= anchorPos
+        : nodeFrom < to && nodeTo > from;
+
+      if (hasThisMark && touchesSelection) {
+        markFrom = Math.min(markFrom, nodeFrom);
+        markTo = Math.max(markTo, nodeTo);
+      }
+    });
+
+    let expanded = true;
+    while (expanded) {
+      expanded = false;
+      parent.nodesBetween(0, parent.content.size, (node, offset) => {
+        if (!node.isText) return;
+        const nodeFrom = parentOffset + offset;
+        const nodeTo = nodeFrom + node.nodeSize;
+        const hasThisMark = node.marks.some(
+          (mark) => mark.type === markType && String(mark.attrs.num ?? '1') === currentNum,
+        );
+
+        if (hasThisMark && ((nodeFrom <= markTo && nodeTo > markTo) || (nodeTo >= markFrom && nodeFrom < markFrom))) {
+          const nextFrom = Math.min(markFrom, nodeFrom);
+          const nextTo = Math.max(markTo, nodeTo);
+          if (nextFrom !== markFrom || nextTo !== markTo) {
+            markFrom = nextFrom;
+            markTo = nextTo;
+            expanded = true;
+          }
+        }
+      });
+    }
+
+    return {
+      num: Math.max(1, Number(currentNum) || 1),
+      from: markFrom,
+      to: markTo,
+    };
+  }, [editor]);
+
+  const deactivateClozeMode = useCallback((closePalette = true) => {
+    if (!editor) return;
+
+    skipNextClozeSyncRef.current = false;
+    setClozeActive(false);
+    setCursorInCloze(false);
+    if (closePalette) setPaletteOpen(false);
+
+    isUpdatingClozeRef.current = true;
+    try {
+      editor.chain().unsetMark('clozeMark').run();
+    } finally {
+      isUpdatingClozeRef.current = false;
+    }
+  }, [editor]);
+
   useEffect(() => {
     if (!editor) return;
 
     const syncClozeState = () => {
       if (isUpdatingClozeRef.current) return;
-      const inCloze = editor.isActive('clozeMark');
-      setCursorInCloze(inCloze);
 
-      // Update hasAnyCloze
-      const html = editor.getHTML();
-      setHasAnyCloze(/data-cloze="/.test(html));
+      const context = getSelectionClozeContext();
+      setCursorInCloze(!!context);
 
-      // Auto-deactivate cloze mode ONLY on explicit cursor movement (not typing)
-      if (clozeActive && !inCloze) {
-        const { from, to } = editor.state.selection;
-        if (from === to) {
-          setClozeActive(false);
-          setPaletteOpen(false);
-          isUpdatingClozeRef.current = true;
-          try {
-            editor.chain().unsetMark('clozeMark').run();
-          } finally {
-            isUpdatingClozeRef.current = false;
-          }
-        }
-      }
-
-      // Open palette when cursor enters existing cloze
-      if (inCloze && !clozeActive) {
+      if (context) {
+        setClozeColorIndex(context.num - 1);
         setPaletteOpen(true);
+        return;
       }
+
+      if (skipNextClozeSyncRef.current) {
+        skipNextClozeSyncRef.current = false;
+        setPaletteOpen(true);
+        return;
+      }
+
+      if (clozeActive) {
+        deactivateClozeMode();
+        return;
+      }
+
+      setPaletteOpen(false);
+    };
+
+    const syncClozeContent = () => {
+      if (isUpdatingClozeRef.current) return;
+      setHasAnyCloze(/data-cloze="/.test(editor.getHTML()));
+    };
+
+    const handleBlur = () => {
+      if (clozeActive) {
+        deactivateClozeMode();
+        return;
+      }
+
+      setCursorInCloze(false);
+      setPaletteOpen(false);
     };
 
     syncClozeState();
+    syncClozeContent();
     editor.on('selectionUpdate', syncClozeState);
     editor.on('focus', syncClozeState);
+    editor.on('blur', handleBlur);
+    editor.on('transaction', syncClozeContent);
 
     return () => {
       editor.off('selectionUpdate', syncClozeState);
       editor.off('focus', syncClozeState);
+      editor.off('blur', handleBlur);
+      editor.off('transaction', syncClozeContent);
     };
-  }, [editor, clozeActive]);
+  }, [editor, clozeActive, deactivateClozeMode, getSelectionClozeContext]);
 
-  // Re-apply cloze mark on every transaction while clozeActive (separate effect)
+  // Re-apply cloze mark while the mode is active so typing can continue inside the same group
   useEffect(() => {
     if (!editor) return;
 
     const enforceCloze = () => {
-      if (isUpdatingClozeRef.current) return;
-      if (!clozeActive) return;
+      if (isUpdatingClozeRef.current || !clozeActive) return;
       const { from, to } = editor.state.selection;
       if (from !== to) return;
       if (!editor.isActive('clozeMark')) {
@@ -301,18 +412,21 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   // Deactivate cloze mark on Enter or Escape
   useEffect(() => {
     if (!editor) return;
+
     const handleKey = (e: KeyboardEvent) => {
       if ((e.key === 'Enter' || e.key === 'Escape') && clozeActive) {
-        setTimeout(() => {
-          editor.chain().unsetMark('clozeMark').run();
-          setClozeActive(false);
-          setPaletteOpen(false);
-        }, 0);
+        deactivateClozeMode();
+        return;
+      }
+
+      if (e.key === 'Escape' && cursorInCloze) {
+        setPaletteOpen(false);
       }
     };
+
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [editor, clozeActive]);
+  }, [editor, clozeActive, cursorInCloze, deactivateClozeMode]);
 
   /* ─── Shared image upload helpers ─── */
   const handleUploadImage = async (file: File): Promise<string | null> => {
@@ -423,12 +537,6 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     input.click();
   };
 
-  /** Check if cursor is inside a cloze mark */
-  const isCursorInCloze = useCallback(() => {
-    if (!editor) return false;
-    return editor.isActive('clozeMark');
-  }, [editor]);
-
   /** Get used cloze number indices from editor content */
   const getUsedClozeIndices = useCallback((): Set<number> => {
     if (!editor) return new Set();
@@ -437,160 +545,92 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     return new Set(nums);
   }, [editor]);
 
-  /** Find next unused cloze number (0-indexed) */
-  const findNextUnusedIndex = useCallback((): number => {
-    const used = getUsedClozeIndices();
-    for (let i = 0; i < CLOZE_COLORS.length; i++) {
-      if (!used.has(i)) return i;
-    }
-    return used.size; // fallback
-  }, [getUsedClozeIndices]);
-
-  /** Toggle cloze mark — unified button: remove if in cloze, auto-advance if creating new */
+  /** Toggle cloze mode without forcing an exit after the first characters */
   const handleCloze = useCallback(() => {
     if (!editor) return;
+
+    const currentContext = getSelectionClozeContext();
+
+    if (currentContext) {
+      skipNextClozeSyncRef.current = true;
+      isUpdatingClozeRef.current = true;
+      try {
+        editor.chain().focus().setMark('clozeMark', { num: String(currentContext.num) }).run();
+      } finally {
+        isUpdatingClozeRef.current = false;
+      }
+
+      setClozeColorIndex(currentContext.num - 1);
+      setClozeActive(true);
+      setCursorInCloze(true);
+      setPaletteOpen(true);
+      return;
+    }
+
     const { from, to } = editor.state.selection;
     const hasSelection = from !== to;
 
-    if (isCursorInCloze()) {
-      // Find the exact range of the cloze mark at cursor position
-      const { $from } = editor.state.selection;
-      const pos = $from.pos;
-      const resolvedPos = editor.state.doc.resolve(pos);
-      const markType = editor.schema.marks.clozeMark;
-      const currentMark = resolvedPos.marks().find(m => m.type === markType);
-      if (currentMark) {
-        const parent = resolvedPos.parent;
-        const parentOffset = resolvedPos.start();
-        let markFrom = pos;
-        let markTo = pos;
-        parent.nodesBetween(0, parent.content.size, (node, offset) => {
-          if (node.isText) {
-            const nodeFrom = parentOffset + offset;
-            const nodeTo = nodeFrom + node.nodeSize;
-            const hasThisMark = node.marks.some(m => m.type === markType && m.attrs.num === currentMark.attrs.num);
-            if (hasThisMark && nodeFrom <= pos && nodeTo >= markFrom) {
-              markFrom = Math.min(markFrom, nodeFrom);
-              markTo = Math.max(markTo, nodeTo);
-            }
-          }
-        });
-        let changed = true;
-        while (changed) {
-          changed = false;
-          parent.nodesBetween(0, parent.content.size, (node, offset) => {
-            if (node.isText) {
-              const nodeFrom = parentOffset + offset;
-              const nodeTo = nodeFrom + node.nodeSize;
-              const hasThisMark = node.marks.some(m => m.type === markType && m.attrs.num === currentMark.attrs.num);
-              if (hasThisMark && ((nodeFrom <= markTo && nodeTo > markTo) || (nodeTo >= markFrom && nodeFrom < markFrom))) {
-                markFrom = Math.min(markFrom, nodeFrom);
-                markTo = Math.max(markTo, nodeTo);
-                changed = true;
-              }
-            }
-          });
-        }
-        editor.chain().focus().setTextSelection({ from: markFrom, to: markTo }).unsetMark('clozeMark').setTextSelection(pos).run();
+    skipNextClozeSyncRef.current = true;
+    isUpdatingClozeRef.current = true;
+    try {
+      const chain = editor.chain().focus().setMark('clozeMark', { num: String(clozeCounter) });
+      if (hasSelection) {
+        chain.setTextSelection(to).setMark('clozeMark', { num: String(clozeCounter) });
       }
-      setClozeActive(false);
-      setCursorInCloze(false);
-      setPaletteOpen(false);
-      setTimeout(() => {
-        setClozeColorIndex(findNextUnusedIndex());
-      }, 10);
-      return;
+      chain.run();
+    } finally {
+      isUpdatingClozeRef.current = false;
     }
 
-    // If cloze is active and no selection — deactivate, then auto-advance to next color
-    if (clozeActive && !hasSelection) {
-      editor.chain().focus().unsetMark('clozeMark').run();
-      setClozeActive(false);
-      // Auto-advance to next unused color
-      const nextIdx = findNextUnusedIndex();
-      setClozeColorIndex(nextIdx);
-      // Immediately start new cloze with next color
-      setTimeout(() => {
-        editor.chain().focus().setMark('clozeMark', { num: String(nextIdx + 1) }).run();
-        setClozeActive(true);
-      }, 10);
-      return;
-    }
+    setClozeActive(true);
+    setCursorInCloze(true);
+    setPaletteOpen(true);
+  }, [editor, clozeCounter, getSelectionClozeContext]);
 
-    // Start new cloze with current color
-    editor.chain().focus().setMark('clozeMark', { num: String(clozeCounter) }).run();
+  /** Change cloze group/color while keeping the editor active inside the same cloze */
+  const handleClozeColorChange = useCallback((colorIdx: number) => {
+    if (!editor) return;
 
-    // Always open palette when creating cloze
+    const nextNum = colorIdx + 1;
+    const currentContext = getSelectionClozeContext();
+
+    setClozeColorIndex(colorIdx);
     setPaletteOpen(true);
 
-    if (hasSelection) {
-      editor.chain().setTextSelection(to).unsetMark('clozeMark').insertContent(' ').setTextSelection(to + 1).run();
-      setClozeActive(false);
-      setTimeout(() => {
-        setClozeColorIndex(findNextUnusedIndex());
-      }, 10);
-    } else {
-      setClozeActive(true);
-    }
-  }, [editor, clozeCounter, clozeActive, isCursorInCloze, findNextUnusedIndex, clozeColorIndex]);
+    if (currentContext) {
+      const nextCursorPos = Math.max(currentContext.from, Math.min(editor.state.selection.to, currentContext.to));
 
-  /** Change cloze color — for clicking palette dots */
-  const handleClozeColorChange = useCallback((colorIdx: number) => {
-    setClozeColorIndex(colorIdx);
-    if (!editor) return;
-    const num = String(colorIdx + 1);
-    if (clozeActive) {
-      // Update active cloze mark to new number
-      editor.chain().focus().setMark('clozeMark', { num }).run();
-    } else if (cursorInCloze) {
-      // Change color of existing cloze at cursor
-      const { $from } = editor.state.selection;
-      const pos = $from.pos;
-      const resolvedPos = editor.state.doc.resolve(pos);
-      const markType = editor.schema.marks.clozeMark;
-      const currentMark = resolvedPos.marks().find(m => m.type === markType);
-      if (currentMark) {
-        const parent = resolvedPos.parent;
-        const parentOffset = resolvedPos.start();
-        let markFrom = pos;
-        let markTo = pos;
-        parent.nodesBetween(0, parent.content.size, (node, offset) => {
-          if (node.isText) {
-            const nodeFrom = parentOffset + offset;
-            const nodeTo = nodeFrom + node.nodeSize;
-            const hasThisMark = node.marks.some(m => m.type === markType && m.attrs.num === currentMark.attrs.num);
-            if (hasThisMark && nodeFrom <= pos && nodeTo >= markFrom) {
-              markFrom = Math.min(markFrom, nodeFrom);
-              markTo = Math.max(markTo, nodeTo);
-            }
-          }
-        });
-        let changed2 = true;
-        while (changed2) {
-          changed2 = false;
-          parent.nodesBetween(0, parent.content.size, (node, offset) => {
-            if (node.isText) {
-              const nodeFrom = parentOffset + offset;
-              const nodeTo = nodeFrom + node.nodeSize;
-              const hasThisMark = node.marks.some(m => m.type === markType && m.attrs.num === currentMark.attrs.num);
-              if (hasThisMark && ((nodeFrom <= markTo && nodeTo > markTo) || (nodeTo >= markFrom && nodeFrom < markFrom))) {
-                markFrom = Math.min(markFrom, nodeFrom);
-                markTo = Math.max(markTo, nodeTo);
-                changed2 = true;
-              }
-            }
-          });
-        }
+      skipNextClozeSyncRef.current = true;
+      isUpdatingClozeRef.current = true;
+      try {
         editor.chain()
           .focus()
-          .setTextSelection({ from: markFrom, to: markTo })
+          .setTextSelection({ from: currentContext.from, to: currentContext.to })
           .unsetMark('clozeMark')
-          .setMark('clozeMark', { num })
-          .setTextSelection(pos)
+          .setMark('clozeMark', { num: String(nextNum) })
+          .setTextSelection(nextCursorPos)
+          .setMark('clozeMark', { num: String(nextNum) })
           .run();
+      } finally {
+        isUpdatingClozeRef.current = false;
       }
+
+      setClozeActive(true);
+      setCursorInCloze(true);
+      return;
     }
-  }, [editor, clozeActive, cursorInCloze]);
+
+    skipNextClozeSyncRef.current = true;
+    isUpdatingClozeRef.current = true;
+    try {
+      editor.chain().focus().setMark('clozeMark', { num: String(nextNum) }).run();
+    } finally {
+      isUpdatingClozeRef.current = false;
+    }
+
+    setClozeActive(true);
+    setCursorInCloze(true);
+  }, [editor, getSelectionClozeContext]);
 
   const handleSetColor = (color: string) => {
     if (!editor) return;
@@ -733,28 +773,20 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
                 if (hideCloze) return null;
                 const usedIndices = getUsedClozeIndices();
                 const visibleIndices = getVisibleColorIndices(usedIndices);
-                const currentClozeColor = CLOZE_COLORS[clozeColorIndex % CLOZE_COLORS.length];
                 return (
                   <Popover key={t.id} open={paletteOpen} onOpenChange={(open) => {
                     if (!open) setPaletteOpen(false);
                   }}>
                     <PopoverTrigger asChild>
                       <Button type="button" variant="ghost" size="icon"
-                        className={`h-7 w-7 relative transition-all ${(clozeActive || cursorInCloze) ? 'bg-primary/15 text-primary ring-1 ring-primary/40' : ''}`}
+                        className={`h-7 w-7 transition-all ${(clozeActive || cursorInCloze) ? 'bg-primary/15 text-primary ring-1 ring-primary/40' : ''}`}
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={handleCloze}
-                        title={`Oclusão de texto c${clozeCounter}`}
+                        title="Oclusão de texto"
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                           <path fillRule="evenodd" d="M3 17.25V19a2 2 0 0 0 2 2h1.75v-2H5v-1.75zm0-3.5h2v-3.5H3zm0-7h2V5h1.75V3H5a2 2 0 0 0-2 2zM10.25 3v2h3.5V3zm7 0v2H19v1.75h2V5a2 2 0 0 0-2-2zM21 10.25h-2v3.5h2zm0 7h-2V19h-1.75v2H19a2 2 0 0 0 2-2zM13.75 21v-2h-3.5v2z" clipRule="evenodd" />
                         </svg>
-                        {/* Color indicator dot — only when content has clozes */}
-                        {hasAnyCloze && (
-                          <span
-                            className="absolute bottom-0.5 left-1/2 -translate-x-1/2 h-1 w-3.5 rounded-full"
-                            style={{ backgroundColor: currentClozeColor.dot }}
-                          />
-                        )}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent
@@ -775,7 +807,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
                             style={{ backgroundColor: c.dot }}
                             onMouseDown={(e) => e.preventDefault()}
                             onClick={() => handleClozeColorChange(idx)}
-                            title={`c${idx + 1} — ${c.label}`}
+                            title={c.label}
                           />
                         );
                       })}
@@ -786,7 +818,9 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
               case 'occlusion':
                 if (!onOcclusionImageReady && !onOcclusionPaste && !onOcclusionAttach) return null;
                 return (
-                  <DropdownMenu key={t.id}>
+                  <DropdownMenu key={t.id} onOpenChange={(open) => {
+                    if (open) deactivateClozeMode();
+                  }}>
                     <DropdownMenuTrigger asChild>
                       <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Oclusão de imagem">
                         <IconImageOcclusion className="h-3.5 w-3.5" />
