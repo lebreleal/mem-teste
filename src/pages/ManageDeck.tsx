@@ -305,14 +305,32 @@ const ManageDeck = () => {
 
         await Promise.all([...updatePromises, ...deletePromises]);
 
-        // Create new siblings with created_at close to the current card
+        // Create new siblings with created_at after the last existing sibling
         if (numsToAdd.length > 0) {
           const newCards = numsToAdd.map(n => ({
             frontContent,
             backContent: JSON.stringify({ clozeTarget: n, extra: back }),
             cardType,
           }));
-          await cardService.createCards(deckId!, newCards, currentCard.created_at);
+          // Find the last existing sibling's created_at to insert after it
+          const group = siblingMap.get(selectedIndex);
+          const lastSiblingIdx = group ? group[group.length - 1] : selectedIndex;
+          const lastSiblingTime = sortedCards[lastSiblingIdx]?.created_at;
+          const nextNonSiblingCard = sortedCards[lastSiblingIdx + 1];
+          let baseCreatedAt: string;
+          if (lastSiblingTime && nextNonSiblingCard) {
+            // Insert between last sibling and next non-sibling card
+            const lastT = new Date(lastSiblingTime).getTime();
+            const nextT = new Date(nextNonSiblingCard.created_at).getTime();
+            const gap = nextT - lastT;
+            // Use midpoint with sub-ms precision so new siblings fit between
+            baseCreatedAt = new Date(lastT + Math.min(gap * 0.1, 0.5)).toISOString();
+          } else if (lastSiblingTime) {
+            baseCreatedAt = new Date(new Date(lastSiblingTime).getTime() + 0.01).toISOString();
+          } else {
+            baseCreatedAt = currentCard.created_at;
+          }
+          await cardService.createCards(deckId!, newCards, baseCreatedAt);
         }
 
         invalidateDeckRelatedQueries(queryClient, deckId!);
