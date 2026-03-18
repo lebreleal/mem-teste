@@ -1,4 +1,5 @@
-import { ScanEye, X } from 'lucide-react';
+import { X } from 'lucide-react';
+import { IconImageOcclusion } from '@/components/icons';
 
 import { Button } from '@/components/ui/button';
 
@@ -49,7 +50,7 @@ const AttachmentPreviewModal = ({
           {canConvertToOcclusion && onAddOcclusion ? (
             <div className="flex justify-center">
               <Button type="button" className="gap-2 rounded-full px-5" onClick={onAddOcclusion}>
-                <ScanEye className="h-4 w-4" />
+                <IconImageOcclusion className="h-4 w-4" />
                 Adicionar oclusão de imagem
               </Button>
             </div>

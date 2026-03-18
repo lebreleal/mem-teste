@@ -32,6 +32,8 @@ interface OcclusionEditorProps {
   onSave: (front: string, back: string) => void;
   onCancel: () => void;
   isSaving: boolean;
+  /** Color indices used by text clozes (for syncing the dynamic palette) */
+  externalUsedColorIndices?: Set<number>;
 }
 
 // Use shared colors — alias for backward compat within this file
@@ -43,7 +45,7 @@ const cloneShape = (shape: OcclusionShape): OcclusionShape => ({
   points: shape.points?.map(point => ({ ...point })),
 });
 
-const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: OcclusionEditorProps) => {
+const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUsedColorIndices }: OcclusionEditorProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [imageUrl, setImageUrl] = useState('');
@@ -464,8 +466,14 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
     return () => window.removeEventListener('keydown', handler);
   }, [selectedId, deleteSelected, undo]);
 
-  // Dynamic visible colors — show all used + next available
+  // Dynamic visible colors — show all used (shapes + external text clozes) + next available
   const usedColorFills = new Set(shapes.map(s => s.color || COLORS[0].fill));
+  // Merge external text cloze color indices
+  if (externalUsedColorIndices) {
+    externalUsedColorIndices.forEach(idx => {
+      if (idx >= 0 && idx < COLORS.length) usedColorFills.add(COLORS[idx].fill);
+    });
+  }
   const visibleColors = (() => {
     const visible: typeof COLORS = [];
     for (const c of COLORS) {

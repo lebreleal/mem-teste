@@ -582,6 +582,12 @@ const ManageDeck = () => {
               imageUrl: occlusionImageUrl, rects: occlusionRects, allRects: occlusionRects,
               canvasWidth: occlusionCanvasSize?.w ?? 0, canvasHeight: occlusionCanvasSize?.h ?? 0,
             }) : ''}
+            externalUsedColorIndices={(() => {
+              const indices = new Set<number>();
+              const matches = front.matchAll(/\{\{c(\d+)::/g);
+              for (const m of matches) indices.add(parseInt(m[1]) - 1);
+              return indices;
+            })()}
             onSave={(frontContent) => {
               try {
                 const data = JSON.parse(frontContent);
