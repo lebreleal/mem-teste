@@ -103,37 +103,65 @@ interface OcclusionData {
   frontText?: string;
 }
 
-function renderOcclusion(frontContent: string, revealed: boolean, fallbackCanvas?: { w: number; h: number }): string {
+/** Extract RGB components from rgba/rgb color string */
+function parseColorRgb(color: string): { r: string; g: string; b: string } {
+  const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+  return m ? { r: m[1], g: m[2], b: m[3] } : { r: '59', g: '130', b: '246' };
+}
+
+function renderShapeSvg(r: OcclusionRect, fill: string, stroke: string): string {
+  const shapeType = r.type || 'rect';
+  const textW = r.w || Math.max(48, ((r.text ?? '').toString().length * 9) + 16);
+  const textH = r.h || 30;
+  const safeText = (r.text ?? '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  if (shapeType === 'text') return `<g><rect x="${r.x}" y="${r.y}" width="${textW}" height="${textH}" rx="6" fill="${fill}" stroke="${stroke}" stroke-width="2"/><text x="${r.x + textW / 2}" y="${r.y + textH / 2}" fill="white" font-size="16" font-weight="700" text-anchor="middle" dominant-baseline="middle">${safeText || '?'}</text></g>`;
+  if (shapeType === 'ellipse') return `<ellipse cx="${r.x + r.w/2}" cy="${r.y + r.h/2}" rx="${Math.abs(r.w/2)}" ry="${Math.abs(r.h/2)}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
+  if (shapeType === 'polygon' && r.points) { const pts = r.points.map(p => `${p.x},${p.y}`).join(' '); return `<polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`; }
+  if (shapeType === 'freehand' && r.points && r.points.length > 1) {
+    const d = r.points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
+    return `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>`;
+  }
+  return `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${fill}" stroke="${stroke}" stroke-width="2" rx="4"/>`;
+}
+
+function renderOcclusion(frontContent: string, revealed: boolean, fallbackCanvas?: { w: number; h: number }, clozeTarget?: number): string {
   try {
     const data: OcclusionData = JSON.parse(frontContent);
     const { imageUrl } = data;
     if (!imageUrl) return '<p>Erro ao carregar</p>';
     const allRects: OcclusionRect[] = data.allRects || data.rects || [];
-    const activeRectIds: string[] = data.activeRectIds || allRects.map(r => r.id);
     if (allRects.length === 0) return `<img src="${imageUrl}" style="max-width:100%;border-radius:0.5rem" />`;
 
+    // Determine which shapes are "active" (occluded for this card) based on clozeTarget
+    let activeIds: Set<string>;
+    if (clozeTarget != null && clozeTarget > 0) {
+      const targetFill = OCCLUSION_COLORS[clozeTarget - 1]?.fill;
+      if (targetFill) {
+        activeIds = new Set(allRects.filter(r => (r.color || OCCLUSION_COLORS[0].fill) === targetFill).map(r => r.id));
+      } else {
+        activeIds = new Set(data.activeRectIds || allRects.map(r => r.id));
+      }
+    } else {
+      activeIds = new Set(data.activeRectIds || allRects.map(r => r.id));
+    }
+
     const svgShapes = allRects.map((r: OcclusionRect) => {
-      const isActive = activeRectIds.includes(r.id);
-      if (!isActive) return '';
-      const shapeType = r.type || 'rect';
-      const textW = r.w || Math.max(48, ((r.text ?? '').toString().length * 9) + 16);
-      const textH = r.h || 30;
-      const safeText = (r.text ?? '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const isActive = activeIds.has(r.id);
+      const rgb = parseColorRgb(r.color || OCCLUSION_COLORS[0].fill);
+
+      if (!isActive) {
+        // Non-active shapes: show translucent when clozeTarget is set (other cards' shapes)
+        if (clozeTarget != null) {
+          return renderShapeSvg(r, `rgba(${rgb.r},${rgb.g},${rgb.b},0.2)`, `rgba(${rgb.r},${rgb.g},${rgb.b},0.4)`);
+        }
+        return ''; // No clozeTarget = legacy behavior, hide non-active
+      }
 
       if (revealed) {
-        const fill = 'rgba(59,130,246,0.25)';
-        const stroke = 'rgba(59,130,246,0.5)';
-        if (shapeType === 'text') return `<g><rect x="${r.x}" y="${r.y}" width="${textW}" height="${textH}" rx="6" fill="${fill}" stroke="${stroke}" stroke-width="2"/><text x="${r.x + textW / 2}" y="${r.y + textH / 2}" fill="white" font-size="16" font-weight="700" text-anchor="middle" dominant-baseline="middle">${safeText || '?'}</text></g>`;
-        if (shapeType === 'ellipse') return `<ellipse cx="${r.x + r.w/2}" cy="${r.y + r.h/2}" rx="${Math.abs(r.w/2)}" ry="${Math.abs(r.h/2)}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
-        if (shapeType === 'polygon' && r.points) { const pts = r.points.map(p => `${p.x},${p.y}`).join(' '); return `<polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`; }
-        return `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${fill}" stroke="${stroke}" stroke-width="2" rx="4"/>`;
+        return renderShapeSvg(r, `rgba(${rgb.r},${rgb.g},${rgb.b},0.25)`, `rgba(${rgb.r},${rgb.g},${rgb.b},0.5)`);
       }
-      const fill = 'rgb(59,130,246)';
-      const stroke = 'rgb(49,120,236)';
-      if (shapeType === 'text') return `<g><rect x="${r.x}" y="${r.y}" width="${textW}" height="${textH}" rx="6" fill="${fill}" stroke="${stroke}" stroke-width="2"/></g>`;
-      if (shapeType === 'ellipse') return `<ellipse cx="${r.x + r.w/2}" cy="${r.y + r.h/2}" rx="${Math.abs(r.w/2)}" ry="${Math.abs(r.h/2)}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
-        if (shapeType === 'polygon' && r.points) { const pts = r.points.map(p => `${p.x},${p.y}`).join(' '); return `<polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`; }
-      return `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${fill}" stroke="${stroke}" stroke-width="2" rx="4"/>`;
+      // Occluded (hidden)
+      return renderShapeSvg(r, `rgb(${rgb.r},${rgb.g},${rgb.b})`, `rgba(${rgb.r},${rgb.g},${rgb.b},0.8)`);
     }).join('');
 
     const vbW = data.canvasWidth || fallbackCanvas?.w || (() => {
