@@ -239,12 +239,10 @@ const ManageDeck = () => {
     if (!currentCard || !isDirty) return;
     const { frontContent, backContent, cardType } = buildSavePayload();
 
-    // Cloze sibling reconciliation — same logic as DeckDetailHandlers
-    if (cardType === 'cloze') {
-      const plainForNumbers = front.replace(/<[^>]*>/g, '');
-      const clozeNumMatches = [...plainForNumbers.matchAll(/\{\{c(\d+)::/g)];
-      const uniqueNums = [...new Set(clozeNumMatches.map(m => parseInt(m[1])))].sort((a, b) => a - b);
+    // Unified sibling reconciliation for cloze AND image_occlusion
+    const uniqueNums = collectAllNums();
 
+    if (uniqueNums.length > 0 && (cardType === 'cloze' || cardType === 'image_occlusion')) {
       // Find all sibling cards (same front_content)
       const allSiblingCards = await cardService.fetchClozeSiblings(
         [deckId!],
@@ -277,7 +275,7 @@ const ManageDeck = () => {
           return cardService.updateCard(cardId, frontContent, backJson);
         });
 
-        // Delete removed cloze siblings
+        // Delete removed siblings
         const deletePromises = numsToRemove.map(n => {
           const cardId = existingTargets.get(n)!;
           return cardService.deleteCard(cardId);
@@ -285,12 +283,12 @@ const ManageDeck = () => {
 
         await Promise.all([...updatePromises, ...deletePromises]);
 
-        // Create new cloze siblings
+        // Create new siblings
         if (numsToAdd.length > 0) {
           const newCards = numsToAdd.map(n => ({
             frontContent,
             backContent: JSON.stringify({ clozeTarget: n, extra: back }),
-            cardType: 'cloze',
+            cardType,
           }));
           await cardService.createCards(deckId!, newCards);
         }
@@ -298,12 +296,12 @@ const ManageDeck = () => {
         invalidateDeckRelatedQueries(queryClient, deckId!);
         setIsDirty(false);
       } catch {
-        toast({ title: 'Erro ao salvar cloze', variant: 'destructive' });
+        toast({ title: 'Erro ao salvar', variant: 'destructive' });
       }
     } else {
       updateCard.mutate({ id: currentCard.id, frontContent, backContent }, { onSuccess: () => setIsDirty(false) });
     }
-  }, [currentCard, isDirty, buildSavePayload, updateCard, front, back, deckId, queryClient, toast]);
+  }, [currentCard, isDirty, buildSavePayload, updateCard, front, back, deckId, queryClient, toast, collectAllNums]);
 
   const selectCard = useCallback((idx: number) => {
     if (idx < 0 || idx >= totalCards) return;
