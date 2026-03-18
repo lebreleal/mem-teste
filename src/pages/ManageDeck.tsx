@@ -451,7 +451,7 @@ const ManageDeck = () => {
         toast({ title: 'Novo cartão criado' });
       },
     });
-  }, [createCard, toast, sortedCards, selectedIndex, siblingMap]);
+  }, [createCard, toast, sortedCards, selectedIndex, visualSiblingMap]);
 
   const handleDuplicate = useCallback(() => {
     if (!currentCard) return;
