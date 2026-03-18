@@ -101,7 +101,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, parentDeckId, existingDe
         if (!cancelled) {
           toast({ title: '🧠 Baralho criado!', description: `${pendingReviewData.cards.length} cartões salvos` });
           resetState(); onOpenChange(false);
-          if (targetDeckId) navigate(`/manage/${targetDeckId}`);
+          if (targetDeckId) navigate(`/decks/${targetDeckId}/manage`);
         }
       } catch (err: unknown) {
         if (!cancelled) {
