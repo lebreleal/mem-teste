@@ -924,7 +924,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
           <button
             onClick={() => setPreviewOpaque(v => !v)}
             className={`h-8 w-8 shrink-0 flex items-center justify-center rounded-lg transition-colors ${
-              !previewOpaque ? 'text-foreground bg-accent' : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+              previewOpaque ? 'text-foreground bg-accent' : 'text-muted-foreground hover:text-foreground hover:bg-accent'
             }`}
             title={previewOpaque ? 'Opaco (escondido)' : 'Transparente (visível)'}
           >
