@@ -507,6 +507,14 @@ const ManageDeck = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* AI Create Cards Dialog */}
+      <AICreateDeckDialog
+        open={aiDeckDialogOpen}
+        onOpenChange={setAIDeckDialogOpen}
+        existingDeckId={deckId}
+        existingDeckName={deckName ?? ''}
+      />
     </div>
   );
 };
