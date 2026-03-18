@@ -585,21 +585,23 @@ const ManageDeck = () => {
                 const isGroupHighlighted = isInGroup && selectedGroup && group![0] === selectedGroup[0];
                 const isHovered = isInGroup && hoveredGroupKey !== null && group![0] === hoveredGroupKey;
 
-                // Determine if this is the last real card in the selected group (to inject ghosts after it)
+                // Determine if ghosts should appear after this card
+                const isSoloSelected = !isInGroup && idx === selectedIndex && anticipatedCount > 0;
                 const isLastOfSelectedGroup = isInGroup && selectedGroup && group![0] === selectedGroup[0] && idx === group![group!.length - 1];
+                const hasGhosts = anticipatedCount > 0 && (isLastOfSelectedGroup || isSoloSelected);
 
-                // Check if anticipated ghosts extend the connector
-                const hasGhosts = anticipatedCount > 0 && isLastOfSelectedGroup;
-                const isFirst = isInGroup && group![0] === idx;
+                // Connector bar logic: extend if ghosts follow
+                const isFirst = (isInGroup && group![0] === idx) || (isSoloSelected);
                 const isLast = isInGroup && group![group!.length - 1] === idx && !hasGhosts;
+                const showConnector = isInGroup || isSoloSelected;
 
                 return (
                   <Fragment key={card.id}>
                     <div className="flex items-stretch">
                       {/* Sibling connector bar */}
                       <div className="w-1 mr-0.5 flex flex-col items-center">
-                        {isInGroup ? (
-                          <div className={`w-0.5 flex-1 ${isGroupHighlighted ? 'bg-primary/40' : 'bg-border'} ${isFirst ? 'rounded-t-full mt-2' : ''} ${isLast ? 'rounded-b-full mb-2' : ''}`} />
+                        {showConnector ? (
+                          <div className={`w-0.5 flex-1 ${isGroupHighlighted || isSoloSelected ? 'bg-primary/40' : 'bg-border'} ${isFirst ? 'rounded-t-full mt-2' : ''} ${isLast ? 'rounded-b-full mb-2' : ''}`} />
                         ) : <div className="w-0.5 flex-1" />}
                       </div>
                       <button
