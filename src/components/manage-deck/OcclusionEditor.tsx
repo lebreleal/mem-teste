@@ -647,10 +647,10 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
       const sharedCursor = tool === 'hand'
         ? 'grab'
         : tool === 'eraser'
-          ? 'pointer'
+          ? eraserCursorSvg
           : s.type === 'polygon' && (hoveredSelectableId === s.id || tool === 'select')
             ? 'move'
-            : 'crosshair';
+            : tool === 'freehand' ? brushCursorSvg : 'crosshair';
 
       return (
         <svg key={s.id} className="absolute inset-0 pointer-events-none" style={{ width: displaySize.w, height: displaySize.h }}>
