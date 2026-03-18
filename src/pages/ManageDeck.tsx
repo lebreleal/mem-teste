@@ -431,7 +431,7 @@ const ManageDeck = () => {
 
   const handleAddCard = useCallback(() => {
     // If selected card belongs to a sibling group, insert after the LAST sibling
-    const group = siblingMap.get(selectedIndex);
+    const group = visualSiblingMap.get(selectedIndex);
     const insertAfterIndex = group ? group[group.length - 1] : selectedIndex;
 
     let createdAt: string | undefined;
