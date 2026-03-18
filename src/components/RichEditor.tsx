@@ -421,6 +421,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
 
     skipNextClozeSyncRef.current = false;
     justDeactivatedRef.current = true;
+    selectionCreatedClozeRef.current = false;
     setClozeActive(false);
     setCursorInCloze(false);
     if (closePalette) setPaletteOpen(false);
