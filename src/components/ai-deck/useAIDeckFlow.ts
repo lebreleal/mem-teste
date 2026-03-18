@@ -87,14 +87,34 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Sync state when pendingReviewData changes (e.g. clicking a review_ready pending deck while dialog is already mounted)
+  // When pendingReviewData arrives, auto-save and navigate to ManageDeck
   useEffect(() => {
-    if (pendingReviewData) {
-      setStep('review');
-      setCards(pendingReviewData.cards);
-      setDeckName(pendingReviewData.deckName);
-      textSampleRef.current = pendingReviewData.textSample || '';
-    }
+    if (!pendingReviewData || !user) return;
+    let cancelled = false;
+    (async () => {
+      setIsSaving(true);
+      try {
+        const targetDeckId = await saveCardsToDeck(pendingReviewData.cards, pendingReviewData.deckName);
+        removePending(pendingReviewData.pendingId);
+        if (!cancelled) {
+          toast({ title: '🧠 Baralho criado!', description: `${pendingReviewData.cards.length} cartões salvos` });
+          resetState(); onOpenChange(false);
+          if (targetDeckId) navigate(`/manage/${targetDeckId}`);
+        }
+      } catch (err: unknown) {
+        if (!cancelled) {
+          toast({ title: 'Erro ao salvar', description: err instanceof Error ? err.message : 'Erro desconhecido', variant: 'destructive' });
+          // Fallback: show review step
+          setStep('review');
+          setCards(pendingReviewData.cards);
+          setDeckName(pendingReviewData.deckName);
+          textSampleRef.current = pendingReviewData.textSample || '';
+        }
+      } finally {
+        if (!cancelled) setIsSaving(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [pendingReviewData]);
 
   const selectedPages = pages.filter(p => p.selected);
