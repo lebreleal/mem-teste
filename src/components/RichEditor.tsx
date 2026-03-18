@@ -211,16 +211,16 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     }
   }, [content, editor]);
 
-  // Sync cloze counter from content
+  // Sync cloze color index from content
   useEffect(() => {
     if (!editor) return;
     const html = editor.getHTML();
     const matches = [...html.matchAll(/data-cloze="(\d+)"/g)];
     if (matches.length > 0) {
       const maxNum = Math.max(...matches.map(m => parseInt(m[1])));
-      setClozeCounter(maxNum);
+      setClozeColorIndex(maxNum - 1);
     } else {
-      setClozeCounter(1);
+      setClozeColorIndex(0);
     }
   }, [content, editor]);
 
