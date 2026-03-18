@@ -13,8 +13,7 @@ export interface ToolbarItem {
 
 export const DEFAULT_TOOLBAR_ITEMS: ToolbarItem[] = [
   { id: 'image', label: 'Anexo de imagem', icon: ImagePlus, visible: true },
-  { id: 'cloze', label: 'Preencha o espaço em branco', icon: 'cloze', visible: true },
-  { id: 'clozeNext', label: 'Oclusão de texto (+)', icon: 'clozeNext', visible: true },
+  { id: 'cloze', label: 'Oclusão de texto', icon: 'cloze', visible: true },
   { id: 'occlusion', label: 'Oclusão de imagem', icon: ScanEye, visible: true },
   { id: 'drawing', label: 'Desenho', icon: ScanEye, visible: true },
   { id: 'link', label: 'Inserir link', icon: Link2, visible: true },
