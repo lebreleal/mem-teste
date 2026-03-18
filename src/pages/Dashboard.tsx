@@ -481,7 +481,8 @@ const Dashboard = () => {
               if (!open) { setPendingReviewData(null); setAiDeckParentId(null); setAiDeckParentName(null); }
             }}
             folderId={pendingReviewData?.folderId ?? state.currentFolderId}
-            existingDeckId={aiDeckParentId}
+            parentDeckId={aiDeckParentId}
+            existingDeckId={null}
             existingDeckName={aiDeckParentName}
             pendingReviewData={pendingReviewData}
           />
