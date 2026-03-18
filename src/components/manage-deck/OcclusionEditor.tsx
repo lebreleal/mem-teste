@@ -5,7 +5,8 @@
  * Layout: image centered, drawing tools above, zoom on right, bottom bar with eye+AI+colors.
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { Loader2, Undo2 } from 'lucide-react';
 import { uploadImage as uploadToStorage, invokeDetectOcclusion } from '@/services/storageService';
 import { useAuth } from '@/hooks/useAuth';
