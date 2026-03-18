@@ -129,7 +129,6 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   const [colorOpen, setColorOpen] = useState(false);
   const [imageMenuOpen, setImageMenuOpen] = useState(false);
   const [clozeColorIndex, setClozeColorIndex] = useState(0); // index into CLOZE_COLORS
-  const clozeCounter = clozeColorIndex + 1; // c1, c2, c3...
   const [clozeActive, setClozeActive] = useState(false);
   const [cursorInCloze, setCursorInCloze] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
