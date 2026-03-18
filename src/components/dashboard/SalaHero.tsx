@@ -3,9 +3,9 @@
  * Extracted from Dashboard.tsx (copy-paste integral).
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Clock, GripVertical, LogOut, MoreVertical, Play, RefreshCw, Share2, SlidersHorizontal } from 'lucide-react';
+import { ChevronLeft, Clock, GripVertical, LogOut, MoreVertical, Play, RefreshCw, Search, Share2, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -15,6 +15,7 @@ import { ptBR } from 'date-fns/locale';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 import { calculateRealStudyTime } from '@/lib/studyUtils';
 import { IconTrash, IconImage, IconInfo, IconDeck, IconArchive, IconEdit } from '@/components/icons';
+const GlobalSearchDialog = lazy(() => import('@/components/GlobalSearchDialog'));
 import type { User } from '@supabase/supabase-js';
 import type { Folder } from '@/types/folder';
 import type { DeckWithStats } from '@/types/deck';
@@ -68,6 +69,19 @@ const SalaHero = ({
 }: SalaHeroProps) => {
   const navigate = useNavigate();
   const [infoOpen, setInfoOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  // Ctrl+K / Cmd+K shortcut to open search
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   const cf = state.folders.find((f: Folder) => f.id === state.currentFolderId);
   const folderName = cf?.name ?? 'Sala';
@@ -188,6 +202,14 @@ const SalaHero = ({
               <span>Dashboard</span>
             </button>
             <div className="flex items-center gap-1.5">
+              {/* Search button */}
+              <button
+                onClick={() => setSearchOpen(true)}
+                className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted/60 transition-colors text-muted-foreground hover:text-foreground"
+                aria-label="Buscar na sala"
+              >
+                <Search className="h-4 w-4" />
+              </button>
               {!isComm && (
                 <>
                   {/* Share button — only for own salas */}
@@ -353,6 +375,15 @@ const SalaHero = ({
           )}
         </div>
       )}
+
+      {/* Global Search Dialog */}
+      <Suspense fallback={null}>
+        <GlobalSearchDialog
+          open={searchOpen}
+          onOpenChange={setSearchOpen}
+          folderId={state.currentFolderId}
+        />
+      </Suspense>
     </>
   );
 };
