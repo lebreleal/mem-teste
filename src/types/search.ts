@@ -11,4 +11,8 @@ export interface SearchResult {
   card_id: string | null;
   snippet: string;
   rank: number;
+  /** Raw card content for preview (only for card results) */
+  front_content: string | null;
+  back_content: string | null;
+  card_type: string | null;
 }
