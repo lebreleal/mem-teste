@@ -316,6 +316,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     if (!editor) return;
 
     skipNextClozeSyncRef.current = false;
+    justDeactivatedRef.current = true;
     setClozeActive(false);
     setCursorInCloze(false);
     if (closePalette) setPaletteOpen(false);
@@ -327,6 +328,9 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     } finally {
       isUpdatingClozeRef.current = false;
     }
+
+    // Clear the guard after a tick so future clicks can re-open the palette
+    setTimeout(() => { justDeactivatedRef.current = false; }, 200);
   }, [editor]);
 
   /** Renumber all cloze groups to be sequential (1,2,3...) */
