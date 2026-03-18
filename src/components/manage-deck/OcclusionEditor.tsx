@@ -211,7 +211,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
       if (selectableHit) {
         setSelectedId(selectableHit.id);
         setShapeColor(selectableHit.color || COLORS[0].fill);
-        if (selectableHit.type === 'rect') {
+        if (selectableHit.type === 'rect' || selectableHit.type === 'polygon') {
           pushHistory();
           setDragging({ startX: clampedPos.x, startY: clampedPos.y, origShape: cloneShape(selectableHit) });
           (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
