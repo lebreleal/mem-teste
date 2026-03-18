@@ -452,7 +452,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       if (!editor.isActive('clozeMark')) {
         isUpdatingClozeRef.current = true;
         try {
-          editor.chain().setMark('clozeMark', { num: String(clozeCounter) }).run();
+          editor.chain().setMark('clozeMark', { num: String(clozeColorIndex + 1) }).run();
         } finally {
           isUpdatingClozeRef.current = false;
         }
@@ -461,7 +461,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
 
     editor.on('transaction', enforceCloze);
     return () => { editor.off('transaction', enforceCloze); };
-  }, [editor, clozeActive, clozeCounter]);
+  }, [editor, clozeActive, clozeColorIndex]);
 
   // Deactivate cloze mark on Enter or Escape
   useEffect(() => {
