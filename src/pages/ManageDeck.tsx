@@ -882,10 +882,30 @@ const ManageDeck = () => {
 };
 
 /* ─── Preview modal ─── */
-function ManageDeckPreview({ cards, initialIndex, open, onClose }: {
+function ManageDeckPreview({ cards, initialIndex, open, onClose, editorOverride }: {
   cards: CardRow[]; initialIndex: number; open: boolean; onClose: () => void;
+  editorOverride?: { cardId: string; frontContent: string; backContent: string; cardType: string };
 }) {
-  const virtualCards = useMemo(() => buildVirtualCards(cards), [cards]);
+  // Apply editor override: replace current card (and its siblings' front) with editor state
+  const effectiveCards = useMemo(() => {
+    if (!editorOverride) return cards;
+    const targetCard = cards.find(c => c.id === editorOverride.cardId);
+    if (!targetCard) return cards;
+    const originalFront = targetCard.front_content;
+    const isSiblingType = (ct: string) => ct === 'cloze' || ct === 'image_occlusion';
+    return cards.map(c => {
+      if (c.id === editorOverride.cardId) {
+        return { ...c, front_content: editorOverride.frontContent, back_content: editorOverride.backContent, card_type: editorOverride.cardType };
+      }
+      // Update siblings' front_content too (they share the same content)
+      if (isSiblingType(c.card_type) && c.front_content === originalFront) {
+        return { ...c, front_content: editorOverride.frontContent, card_type: editorOverride.cardType };
+      }
+      return c;
+    });
+  }, [cards, editorOverride]);
+
+  const virtualCards = useMemo(() => buildVirtualCards(effectiveCards), [effectiveCards]);
   const [index, setIndex] = useState(initialIndex);
   const [revealed, setRevealed] = useState(false);
 
