@@ -870,7 +870,8 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
             {/* Colors — left middle outside image */}
             <div className="absolute left-2 top-1/2 z-20 -translate-y-1/2 flex flex-col items-center gap-2 rounded-xl border border-border/60 bg-card/90 p-2 shadow-sm backdrop-blur-sm">
               {visibleColors.map(c => {
-                const isActive = shapeColor === c.fill;
+                const showHighlight = tool !== 'select' || !!selectedId;
+                const isActive = showHighlight && shapeColor === c.fill;
                 return (
                   <button
                     key={c.label}

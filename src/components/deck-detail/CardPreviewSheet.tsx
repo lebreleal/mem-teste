@@ -18,12 +18,20 @@ import type { CardRow } from '@/types/deck';
 
 /* ─── Cloze helpers (exported for reuse) ─── */
 
+function parseOcclusionRgb(color: string): { r: string; g: string; b: string } {
+  const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+  return m ? { r: m[1], g: m[2], b: m[3] } : { r: '59', g: '130', b: '246' };
+}
+
 export function renderClozePreview(html: string, revealed: boolean, targetNum?: number): string {
   return html.replace(/\{\{c(\d+)::(.+?)\}\}/g, (_, num, answer) => {
     const n = parseInt(num);
     if (targetNum !== undefined && n !== targetNum) return answer;
-    if (revealed) return `<span class="cloze-revealed">${answer}</span>`;
-    return `<span class="cloze-blank">[...]</span>`;
+    const colorIdx = n - 1;
+    const oc = OCCLUSION_COLORS[colorIdx];
+    const rgb = oc ? parseOcclusionRgb(oc.fill) : { r: '59', g: '130', b: '246' };
+    if (revealed) return `<span class="cloze-revealed" style="color:rgb(${rgb.r},${rgb.g},${rgb.b})">${answer}</span>`;
+    return `<span class="cloze-blank" style="background:rgba(${rgb.r},${rgb.g},${rgb.b},0.15);border:1px solid rgba(${rgb.r},${rgb.g},${rgb.b},0.4);color:rgb(${rgb.r},${rgb.g},${rgb.b});padding:1px 6px;border-radius:4px">[...]</span>`;
   });
 }
 
