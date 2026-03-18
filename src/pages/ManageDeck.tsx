@@ -235,17 +235,18 @@ const ManageDeck = () => {
   }, [currentCard, deleteCard, selectedIndex, totalCards, toast]);
 
   const handleAddCard = useCallback(() => {
-    // Calculate created_at to insert below the currently selected card
+    // If selected card belongs to a sibling group, insert after the LAST sibling
+    const group = siblingMap.get(selectedIndex);
+    const insertAfterIndex = group ? group[group.length - 1] : selectedIndex;
+
     let createdAt: string | undefined;
-    if (sortedCards.length > 0 && selectedIndex >= 0) {
-      const currentTime = new Date(sortedCards[selectedIndex].created_at).getTime();
-      const nextCard = sortedCards[selectedIndex + 1];
+    if (sortedCards.length > 0 && insertAfterIndex >= 0) {
+      const currentTime = new Date(sortedCards[insertAfterIndex].created_at).getTime();
+      const nextCard = sortedCards[insertAfterIndex + 1];
       if (nextCard) {
         const nextTime = new Date(nextCard.created_at).getTime();
-        // Midpoint between current and next card
         createdAt = new Date(currentTime + Math.floor((nextTime - currentTime) / 2)).toISOString();
       } else {
-        // After last card — use current + 1ms
         createdAt = new Date(currentTime + 1).toISOString();
       }
     }
@@ -255,7 +256,7 @@ const ManageDeck = () => {
         toast({ title: 'Novo cartão criado' });
       },
     });
-  }, [createCard, toast, sortedCards, selectedIndex]);
+  }, [createCard, toast, sortedCards, selectedIndex, siblingMap]);
 
   const handleDuplicate = useCallback(() => {
     if (!currentCard) return;
