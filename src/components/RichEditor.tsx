@@ -30,7 +30,7 @@ import { uploadImage as uploadToStorage, uploadFile as uploadFileToStorage } fro
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { compressImage } from '@/lib/imageUtils';
-import { CLOZE_COLORS, getVisibleColorIndices } from '@/lib/occlusionColors';
+import { CLOZE_COLORS } from '@/lib/occlusionColors';
 
 /* ─── Cloze Mark Extension ─── */
 const ClozeMark = Mark.create({
