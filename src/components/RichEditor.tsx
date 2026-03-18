@@ -227,6 +227,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   // Guards to prevent recursive cloze updates and stale selection sync
   const isUpdatingClozeRef = useRef(false);
   const skipNextClozeSyncRef = useRef(false);
+  const justDeactivatedRef = useRef(false);
 
   const getSelectionClozeContext = useCallback((): { num: number; from: number; to: number } | null => {
     if (!editor) return null;
