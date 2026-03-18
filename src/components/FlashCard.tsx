@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
+import { OCCLUSION_COLORS } from '@/lib/occlusionColors';
 import type { Rating } from '@/lib/fsrs';
 import type { DeckStudyConfig } from '@/types/study';
 import { buildPreviewParams, getPreviewIntervals, getCardDifficulty, getDifficultyColor, getDifficultyBgColor } from '@/lib/flashCardUtils';

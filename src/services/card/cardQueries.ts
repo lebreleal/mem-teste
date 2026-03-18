@@ -131,18 +131,19 @@ export async function fetchAggregatedCards(deckIds: string[]) {
   return results;
 }
 
-/** Fetch cloze siblings by front_content. */
+/** Fetch cloze/occlusion siblings by front_content. */
 export async function fetchClozeSiblings(deckIds: string[], frontContent: string): Promise<CardRow[]> {
   if (deckIds.length === 0) return [];
+  const siblingTypes = ['cloze', 'image_occlusion'];
   if (deckIds.length === 1) {
-    const { data, error } = await supabase.from('cards').select(CARD_COLS).eq('deck_id', deckIds[0]).eq('card_type', 'cloze').eq('front_content', frontContent);
+    const { data, error } = await supabase.from('cards').select(CARD_COLS).eq('deck_id', deckIds[0]).in('card_type', siblingTypes).eq('front_content', frontContent);
     if (error) throw error;
     return (data ?? []) as CardRow[];
   }
   const results: CardRow[] = [];
   for (let i = 0; i < deckIds.length; i += IN_BATCH) {
     const batch = deckIds.slice(i, i + IN_BATCH);
-    const { data, error } = await supabase.from('cards').select(CARD_COLS).in('deck_id', batch).eq('card_type', 'cloze').eq('front_content', frontContent);
+    const { data, error } = await supabase.from('cards').select(CARD_COLS).in('deck_id', batch).in('card_type', siblingTypes).eq('front_content', frontContent);
     if (error) throw error;
     if (data) results.push(...(data as CardRow[]));
   }
