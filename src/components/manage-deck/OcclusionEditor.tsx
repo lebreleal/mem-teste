@@ -107,6 +107,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
             : { x: r.x, y: r.y, w: r.w, h: r.h }),
         }));
         setShapes(converted);
+        initialShapeCountRef.current = converted.length;
       }
     } catch {}
   }, [initialFront]);
