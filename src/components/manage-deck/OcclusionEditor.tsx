@@ -738,7 +738,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
                 crossOrigin="anonymous"
                 onLoad={handleImgLoad}
                 className="block select-none pointer-events-none"
-                style={{ width: displaySize.w, height: displaySize.h, userSelect: 'none', WebkitUserDrag: 'none' } as any}
+                style={{ width: displaySize.w || '100%', height: displaySize.h || 'auto', userSelect: 'none', WebkitUserDrag: 'none' } as React.CSSProperties}
                 draggable={false}
               />
 
