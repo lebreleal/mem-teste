@@ -132,6 +132,8 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   const clozeCounter = clozeColorIndex + 1; // c1, c2, c3...
   const [clozeActive, setClozeActive] = useState(false);
   const [cursorInCloze, setCursorInCloze] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [hasAnyCloze, setHasAnyCloze] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [toolbarItems, setToolbarItems] = useState<ToolbarItem[]>(loadToolbarConfig);
   const [configOpen, setConfigOpen] = useState(false);
@@ -229,7 +231,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   // Guard to prevent infinite loop between syncClozeState and enforceCloze
   const isUpdatingClozeRef = useRef(false);
 
-  // Track whether cursor is inside an existing cloze + re-apply mark while clozeActive
+  // Track whether cursor is inside an existing cloze (selectionUpdate only)
   useEffect(() => {
     if (!editor) return;
 
@@ -237,12 +239,17 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       if (isUpdatingClozeRef.current) return;
       const inCloze = editor.isActive('clozeMark');
       setCursorInCloze(inCloze);
-      // Auto-deactivate cloze mode when cursor moves outside a cloze region
+
+      // Update hasAnyCloze
+      const html = editor.getHTML();
+      setHasAnyCloze(/data-cloze="/.test(html));
+
+      // Auto-deactivate cloze mode ONLY on explicit cursor movement (not typing)
       if (clozeActive && !inCloze) {
         const { from, to } = editor.state.selection;
         if (from === to) {
-          // Deactivate BEFORE editor transaction to prevent re-entry
           setClozeActive(false);
+          setPaletteOpen(false);
           isUpdatingClozeRef.current = true;
           try {
             editor.chain().unsetMark('clozeMark').run();
@@ -251,16 +258,32 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
           }
         }
       }
+
+      // Open palette when cursor enters existing cloze
+      if (inCloze && !clozeActive) {
+        setPaletteOpen(true);
+      }
     };
 
-    // Re-apply cloze mark on every transaction while clozeActive
+    syncClozeState();
+    editor.on('selectionUpdate', syncClozeState);
+    editor.on('focus', syncClozeState);
+
+    return () => {
+      editor.off('selectionUpdate', syncClozeState);
+      editor.off('focus', syncClozeState);
+    };
+  }, [editor, clozeActive]);
+
+  // Re-apply cloze mark on every transaction while clozeActive (separate effect)
+  useEffect(() => {
+    if (!editor) return;
+
     const enforceCloze = () => {
       if (isUpdatingClozeRef.current) return;
-      syncClozeState();
       if (!clozeActive) return;
       const { from, to } = editor.state.selection;
-      if (from !== to) return; // don't mess with selections
-      // Check if cursor position already has the cloze mark
+      if (from !== to) return;
       if (!editor.isActive('clozeMark')) {
         isUpdatingClozeRef.current = true;
         try {
@@ -271,16 +294,8 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       }
     };
 
-    syncClozeState();
-    editor.on('selectionUpdate', syncClozeState);
     editor.on('transaction', enforceCloze);
-    editor.on('focus', syncClozeState);
-
-    return () => {
-      editor.off('selectionUpdate', syncClozeState);
-      editor.off('transaction', enforceCloze);
-      editor.off('focus', syncClozeState);
-    };
+    return () => { editor.off('transaction', enforceCloze); };
   }, [editor, clozeActive, clozeCounter]);
 
   // Deactivate cloze mark on Enter or Escape
@@ -291,6 +306,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
         setTimeout(() => {
           editor.chain().unsetMark('clozeMark').run();
           setClozeActive(false);
+          setPaletteOpen(false);
         }, 0);
       }
     };
@@ -373,11 +389,15 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   /* ─── Occlusion image — reuses shared helpers ─── */
   const handleOcclusionAttach = () => {
     if (!user) return;
+    setClozeActive(false);
+    setPaletteOpen(false);
     pickFileAndUpload((url) => onOcclusionImageReady?.(url));
   };
 
   const handleOcclusionPasteClipboard = () => {
     if (!user) return;
+    setClozeActive(false);
+    setPaletteOpen(false);
     pasteClipboardAndUpload((url) => onOcclusionImageReady?.(url));
   };
 
@@ -475,7 +495,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       }
       setClozeActive(false);
       setCursorInCloze(false);
-      // Re-sync to next unused
+      setPaletteOpen(false);
       setTimeout(() => {
         setClozeColorIndex(findNextUnusedIndex());
       }, 10);
@@ -500,10 +520,12 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     // Start new cloze with current color
     editor.chain().focus().setMark('clozeMark', { num: String(clozeCounter) }).run();
 
+    // Always open palette when creating cloze
+    setPaletteOpen(true);
+
     if (hasSelection) {
       editor.chain().setTextSelection(to).unsetMark('clozeMark').insertContent(' ').setTextSelection(to + 1).run();
       setClozeActive(false);
-      // Auto-advance for next click
       setTimeout(() => {
         setClozeColorIndex(findNextUnusedIndex());
       }, 10);
@@ -711,10 +733,11 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
                 if (hideCloze) return null;
                 const usedIndices = getUsedClozeIndices();
                 const visibleIndices = getVisibleColorIndices(usedIndices);
-                const showPalette = clozeActive || cursorInCloze;
                 const currentClozeColor = CLOZE_COLORS[clozeColorIndex % CLOZE_COLORS.length];
                 return (
-                  <Popover key={t.id} open={showPalette} onOpenChange={() => {}}>
+                  <Popover key={t.id} open={paletteOpen} onOpenChange={(open) => {
+                    if (!open) setPaletteOpen(false);
+                  }}>
                     <PopoverTrigger asChild>
                       <Button type="button" variant="ghost" size="icon"
                         className={`h-7 w-7 relative transition-all ${(clozeActive || cursorInCloze) ? 'bg-primary/15 text-primary ring-1 ring-primary/40' : ''}`}
@@ -725,38 +748,38 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                           <path fillRule="evenodd" d="M3 17.25V19a2 2 0 0 0 2 2h1.75v-2H5v-1.75zm0-3.5h2v-3.5H3zm0-7h2V5h1.75V3H5a2 2 0 0 0-2 2zM10.25 3v2h3.5V3zm7 0v2H19v1.75h2V5a2 2 0 0 0-2-2zM21 10.25h-2v3.5h2zm0 7h-2V19h-1.75v2H19a2 2 0 0 0 2-2zM13.75 21v-2h-3.5v2z" clipRule="evenodd" />
                         </svg>
-                        {/* Color indicator dot */}
-                        <span
-                          className="absolute bottom-0.5 left-1/2 -translate-x-1/2 h-1 w-3.5 rounded-full"
-                          style={{ backgroundColor: currentClozeColor.dot }}
-                        />
+                        {/* Color indicator dot — only when content has clozes */}
+                        {hasAnyCloze && (
+                          <span
+                            className="absolute bottom-0.5 left-1/2 -translate-x-1/2 h-1 w-3.5 rounded-full"
+                            style={{ backgroundColor: currentClozeColor.dot }}
+                          />
+                        )}
                       </Button>
                     </PopoverTrigger>
-                    {showPalette && (
-                      <PopoverContent
-                        side="top"
-                        align="center"
-                        sideOffset={6}
-                        className="w-auto p-1.5 flex items-center gap-1"
-                        onOpenAutoFocus={(e) => e.preventDefault()}
-                        onCloseAutoFocus={(e) => e.preventDefault()}
-                      >
-                        {visibleIndices.map(idx => {
-                          const c = CLOZE_COLORS[idx % CLOZE_COLORS.length];
-                          const isActive = clozeColorIndex === idx;
-                          return (
-                            <button
-                              key={idx}
-                              className={`h-5 w-5 rounded-full transition-all shrink-0 ${isActive ? 'ring-2 ring-offset-1 ring-offset-background ring-foreground/40 scale-110' : 'hover:scale-110'}`}
-                              style={{ backgroundColor: c.dot }}
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => handleClozeColorChange(idx)}
-                              title={`c${idx + 1} — ${c.label}`}
-                            />
-                          );
-                        })}
-                      </PopoverContent>
-                    )}
+                    <PopoverContent
+                      side="top"
+                      align="center"
+                      sideOffset={6}
+                      className="w-auto p-1.5 flex items-center gap-1"
+                      onOpenAutoFocus={(e) => e.preventDefault()}
+                      onCloseAutoFocus={(e) => e.preventDefault()}
+                    >
+                      {visibleIndices.map(idx => {
+                        const c = CLOZE_COLORS[idx % CLOZE_COLORS.length];
+                        const isActive = clozeColorIndex === idx;
+                        return (
+                          <button
+                            key={idx}
+                            className={`h-5 w-5 rounded-full transition-all shrink-0 ${isActive ? 'ring-2 ring-offset-1 ring-offset-background ring-foreground/40 scale-110' : 'hover:scale-110'}`}
+                            style={{ backgroundColor: c.dot }}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => handleClozeColorChange(idx)}
+                            title={`c${idx + 1} — ${c.label}`}
+                          />
+                        );
+                      })}
+                    </PopoverContent>
                   </Popover>
                 );
               }
