@@ -190,6 +190,14 @@ const SalaHero = ({
               <span>Dashboard</span>
             </button>
             <div className="flex items-center gap-1.5">
+              {/* Search button */}
+              <button
+                onClick={() => setSearchOpen(true)}
+                className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted/60 transition-colors text-muted-foreground hover:text-foreground"
+                aria-label="Buscar na sala"
+              >
+                <Search className="h-4 w-4" />
+              </button>
               {!isComm && (
                 <>
                   {/* Share button — only for own salas */}
