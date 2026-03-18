@@ -70,19 +70,110 @@ function clozeToEditor(html: string): string {
 }
 /** Convert <span data-cloze="1" ...>text</span> → {{c1::text}} */
 function editorToCloze(html: string): string {
-  // First merge adjacent cloze spans with the same number (TipTap may split across inline nodes)
-  let merged = html;
-  // Repeatedly merge until stable: <span data-cloze="X" ...>A</span><span data-cloze="X" ...>B</span> → single span
-  // Also handle whitespace/text between two same-number spans
-  let prev = '';
-  while (prev !== merged) {
-    prev = merged;
-    merged = merged.replace(
-      /(<span[^>]*data-cloze="(\d+)"[^>]*>)(.*?)<\/span>([\s]*)(<span[^>]*data-cloze="\2"[^>]*>)(.*?)<\/span>/g,
-      '$1$3$4$6</span>'
-    );
-  }
-  return merged.replace(/<span[^>]*data-cloze="(\d+)"[^>]*>(.*?)<\/span>/g, '{{c$1::$2}}');
+  if (!html) return html;
+
+  const container = document.createElement('div');
+  container.innerHTML = html;
+
+  const inlineFormattingTags = new Set(['EM', 'STRONG', 'U', 'S', 'CODE', 'A', 'SUB', 'SUP', 'MARK', 'I', 'B']);
+
+  const getUniformDescendantClozeNum = (element: Element): string | null => {
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    let foundNum: string | null = null;
+    let currentNode = walker.nextNode();
+
+    while (currentNode) {
+      const text = currentNode.textContent ?? '';
+      if (text.trim()) {
+        const parent = currentNode.parentElement;
+        const clozeAncestor = parent?.closest('span[data-cloze]');
+        if (!clozeAncestor || !element.contains(clozeAncestor)) return null;
+
+        const num = clozeAncestor.getAttribute('data-cloze');
+        if (!num) return null;
+        if (foundNum && foundNum !== num) return null;
+        foundNum = num;
+      }
+      currentNode = walker.nextNode();
+    }
+
+    return foundNum;
+  };
+
+  const unwrapSameClozeDescendants = (root: Element, num: string) => {
+    const nested = Array.from(root.querySelectorAll(`span[data-cloze="${num}"]`));
+    nested.forEach((span) => {
+      if (span === root) return;
+      const parent = span.parentNode;
+      if (!parent) return;
+      while (span.firstChild) parent.insertBefore(span.firstChild, span);
+      parent.removeChild(span);
+    });
+  };
+
+  Array.from(container.querySelectorAll('*'))
+    .reverse()
+    .forEach((element) => {
+      if (!(element instanceof HTMLElement)) return;
+      if (element.matches('span[data-cloze]')) return;
+      if (!inlineFormattingTags.has(element.tagName)) return;
+
+      const num = getUniformDescendantClozeNum(element);
+      if (!num || !element.parentNode) return;
+
+      const wrapper = document.createElement('span');
+      wrapper.setAttribute('data-cloze', num);
+      element.parentNode.insertBefore(wrapper, element);
+      wrapper.appendChild(element);
+      unwrapSameClozeDescendants(wrapper, num);
+    });
+
+  const mergeAdjacentClozes = (parent: Node) => {
+    Array.from(parent.childNodes).forEach((child) => {
+      if (child.nodeType === Node.ELEMENT_NODE) mergeAdjacentClozes(child);
+    });
+
+    let current = parent.firstChild;
+    while (current) {
+      if (current.nodeType !== Node.ELEMENT_NODE || !(current as Element).matches('span[data-cloze]')) {
+        current = current.nextSibling;
+        continue;
+      }
+
+      const currentElement = current as HTMLElement;
+      const currentNum = currentElement.getAttribute('data-cloze');
+      if (!currentNum) {
+        current = current.nextSibling;
+        continue;
+      }
+
+      while (true) {
+        const between: Node[] = [];
+        let probe = currentElement.nextSibling;
+
+        while (probe) {
+          const isWhitespaceText = probe.nodeType === Node.TEXT_NODE && !(probe.textContent ?? '').trim();
+          const isLineBreak = probe.nodeType === Node.ELEMENT_NODE && (probe as Element).tagName === 'BR';
+          if (!isWhitespaceText && !isLineBreak) break;
+          between.push(probe);
+          probe = probe.nextSibling;
+        }
+
+        const nextElement = probe?.nodeType === Node.ELEMENT_NODE ? probe as Element : null;
+        if (!nextElement?.matches(`span[data-cloze="${currentNum}"]`)) break;
+
+        between.forEach((node) => currentElement.appendChild(node));
+        while (nextElement.firstChild) currentElement.appendChild(nextElement.firstChild);
+        nextElement.remove();
+      }
+
+      current = currentElement.nextSibling;
+    }
+  };
+
+  mergeAdjacentClozes(container);
+
+  return container.innerHTML.replace(/<span[^>]*data-cloze="(\d+)"[^>]*>([\s\S]*?)<\/span>/g, '{{c$1::$2}}');
 }
 
 export interface ImageAttachment {
@@ -240,6 +331,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   const isUpdatingClozeRef = useRef(false);
   const skipNextClozeSyncRef = useRef(false);
   const justDeactivatedRef = useRef(false);
+  const selectionCreatedClozeRef = useRef(false);
 
   const getSelectionClozeContext = useCallback((): { num: number; from: number; to: number } | null => {
     if (!editor) return null;
@@ -329,6 +421,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
 
     skipNextClozeSyncRef.current = false;
     justDeactivatedRef.current = true;
+    selectionCreatedClozeRef.current = false;
     setClozeActive(false);
     setCursorInCloze(false);
     if (closePalette) setPaletteOpen(false);
@@ -460,7 +553,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     if (!editor) return;
 
     const enforceCloze = () => {
-      if (isUpdatingClozeRef.current || !clozeActive) return;
+      if (isUpdatingClozeRef.current || !clozeActive || selectionCreatedClozeRef.current) return;
       const { from, to } = editor.state.selection;
       if (from !== to) return;
       if (!editor.isActive('clozeMark')) {
@@ -641,21 +734,18 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     const { from, to } = editor.state.selection;
     const hasSelection = from !== to;
 
+    selectionCreatedClozeRef.current = hasSelection;
     skipNextClozeSyncRef.current = true;
     isUpdatingClozeRef.current = true;
     try {
-      const chain = editor.chain().focus().setMark('clozeMark', { num: String(nextNum) });
-      if (hasSelection) {
-        chain.setTextSelection(to).setMark('clozeMark', { num: String(nextNum) });
-      }
-      chain.run();
+      editor.chain().focus().setMark('clozeMark', { num: String(nextNum) }).run();
     } finally {
       isUpdatingClozeRef.current = false;
     }
 
     setClozeColorIndex(nextColorIdx);
-    setClozeActive(true);
-    setCursorInCloze(true);
+    setClozeActive(!hasSelection);
+    setCursorInCloze(!hasSelection);
     setPaletteOpen(true);
   }, [editor, clozeActive, paletteOpen, deactivateClozeMode, getSelectionClozeContext]);
 
