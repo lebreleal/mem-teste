@@ -788,6 +788,32 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
 
               {shapes.map(renderShape)}
 
+              {/* Polygon resize handles (bounding box uniform scale) */}
+              {selectedId && selectedShape && tool === 'select' && selectedShape.type === 'polygon' && selectedShape.points && selectedShape.points.length > 1 && (() => {
+                const pts = selectedShape.points!;
+                const xs = pts.map(p => p.x);
+                const ys = pts.map(p => p.y);
+                const bbox = { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
+                const colorObj = getColorObj(selectedShape.color || COLORS[0].fill);
+                return ['nw', 'ne', 'sw', 'se'].map(corner => {
+                  const left = corner.includes('w') ? bbox.minX * scale - 4 : bbox.maxX * scale - 4;
+                  const top = corner.includes('n') ? bbox.minY * scale - 4 : bbox.maxY * scale - 4;
+                  return (
+                    <div
+                      key={corner}
+                      className="absolute z-20 pointer-events-auto"
+                      style={{ left, top, width: 8, height: 8, backgroundColor: '#fff', border: `2px solid ${colorObj.border}`, borderRadius: 2, cursor: 'nwse-resize' }}
+                      onPointerDown={(e) => {
+                        e.stopPropagation(); e.preventDefault();
+                        pushHistory();
+                        setResizing({ corner, startX: toImgCoords(e.clientX, e.clientY).x, startY: toImgCoords(e.clientX, e.clientY).y, origShape: cloneShape(selectedShape) });
+                        (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+                      }}
+                    />
+                  );
+                });
+              })()}
+
               {selectedId && selectedShape && tool === 'select' && selectedShape.type !== 'freehand' && (
                 <div
                   className="absolute z-30 pointer-events-auto"
@@ -797,6 +823,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
                   }}
                 >
                   <button
+                    onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
                     onClick={(e) => { e.stopPropagation(); deleteSelected(); }}
                     className="h-7 w-7 flex items-center justify-center rounded-full bg-foreground/90 text-background shadow-lg hover:bg-destructive transition-colors"
                     title="Excluir"
