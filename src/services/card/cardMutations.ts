@@ -37,7 +37,7 @@ export async function createCards(deckId: string, cards: { frontContent: string;
     state: 0,
     stability: 0,
     difficulty: 0,
-    created_at: new Date(baseTime + idx + 1).toISOString(),
+    created_at: new Date(baseTime + (idx + 1) * 0.001).toISOString(),
   }));
   const BATCH_SIZE = 500;
   const CONCURRENT = 5;

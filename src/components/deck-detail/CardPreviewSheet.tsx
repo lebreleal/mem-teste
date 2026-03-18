@@ -118,7 +118,6 @@ export function CardContent({
     try {
       if (isOcclusion && occlusionData?.imageUrl) {
         const rects = occlusionData.allRects || [];
-        const activeRectIds = occlusionData.activeRectIds || rects.map((r: any) => r.id);
         const vbW = occlusionData.canvasWidth || occlusionFallbackCanvas?.w || (() => {
           const xs = rects.flatMap((r: any) => r.points ? r.points.map((p: any) => p.x) : [r.x, r.x + r.w]);
           return Math.max(...xs, 100) * 1.02;
@@ -128,47 +127,81 @@ export function CardContent({
           return Math.max(...ys, 100) * 1.02;
         })();
 
+        // Determine active shapes based on clozeTarget (same logic as FlashCard.tsx)
+        let activeIds: Set<string>;
+        if (clozeTarget != null && clozeTarget > 0) {
+          const targetFill = OCCLUSION_COLORS[clozeTarget - 1]?.fill;
+          if (targetFill) {
+            activeIds = new Set(rects.filter((r: any) => (r.color || OCCLUSION_COLORS[0].fill) === targetFill).map((r: any) => r.id));
+          } else {
+            activeIds = new Set(occlusionData.activeRectIds || rects.map((r: any) => r.id));
+          }
+        } else {
+          activeIds = new Set(occlusionData.activeRectIds || rects.map((r: any) => r.id));
+        }
+
+        const parseColorRgb = (color: string) => {
+          const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+          return m ? { r: m[1], g: m[2], b: m[3] } : { r: '59', g: '130', b: '246' };
+        };
+
+        const renderShape = (r: any, fill: string, stroke: string) => {
+          const shapeType = r.type || 'rect';
+          if (shapeType === 'text') {
+            const textW = r.w || Math.max(48, ((r.text ?? '').toString().length * 9) + 16);
+            const textH = r.h || 30;
+            return (
+              <g key={r.id}>
+                <rect x={r.x} y={r.y} width={textW} height={textH} fill={fill} stroke={stroke} strokeWidth={2} rx={6} />
+                {revealed && (
+                  <text x={r.x + textW / 2} y={r.y + textH / 2} fill="white" fontSize={16} fontWeight={700} textAnchor="middle" dominantBaseline="middle">
+                    {(r.text ?? '').toString() || '?'}
+                  </text>
+                )}
+              </g>
+            );
+          }
+          if (shapeType === 'ellipse') return <ellipse key={r.id} cx={r.x + r.w / 2} cy={r.y + r.h / 2} rx={Math.abs(r.w / 2)} ry={Math.abs(r.h / 2)} fill={fill} stroke={stroke} strokeWidth={2} />;
+          if (shapeType === 'polygon' && r.points) {
+            const pts = (r.points as { x: number; y: number }[]).map((p) => `${p.x},${p.y}`).join(' ');
+            return <polygon key={r.id} points={pts} fill={fill} stroke={stroke} strokeWidth={2} />;
+          }
+          return <rect key={r.id} x={r.x} y={r.y} width={r.w} height={r.h} fill={fill} stroke={stroke} strokeWidth={2} rx={4} />;
+        };
+
+        // Render frontText with cloze syntax resolved
+        const rawFrontText = occlusionData.frontText as string | undefined;
+        const frontTextHtml = rawFrontText?.replace(/<[^>]*>/g, '').trim()
+          ? renderClozePreview(rawFrontText!, revealed, clozeTarget)
+          : null;
+
         return (
           <div>
             <div className="relative inline-block mx-auto max-w-full">
               <img src={occlusionData.imageUrl} alt="Oclusão" className="max-w-full max-h-[50vh] rounded-lg object-contain" />
               <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox={`0 0 ${vbW} ${vbH}`} preserveAspectRatio="xMidYMid meet">
-                {rects.map((r: any, i: number) => {
-                  const isActive = activeRectIds.includes(r.id);
-                  if (!isActive) return null;
+                {rects.map((r: any) => {
+                  const isActive = activeIds.has(r.id);
+                  const rgb = parseColorRgb(r.color || OCCLUSION_COLORS[0].fill);
 
-                  const fill = revealed ? 'rgba(59,130,246,0.25)' : 'rgba(59,130,246,0.85)';
-                  const stroke = revealed ? 'rgba(59,130,246,0.5)' : 'rgb(49,120,236)';
-                  const shapeType = r.type || 'rect';
+                  if (!isActive) {
+                    // Non-active: show translucent with real color (context)
+                    if (clozeTarget != null) {
+                      return renderShape(r, `rgba(${rgb.r},${rgb.g},${rgb.b},0.2)`, `rgba(${rgb.r},${rgb.g},${rgb.b},0.4)`);
+                    }
+                    return null;
+                  }
 
-                  if (shapeType === 'text') {
-                    const textW = r.w || Math.max(48, ((r.text ?? '').toString().length * 9) + 16);
-                    const textH = r.h || 30;
-                    return (
-                      <g key={i}>
-                        <rect x={r.x} y={r.y} width={textW} height={textH} fill={fill} stroke={stroke} strokeWidth={2} rx={6} />
-                        {revealed && (
-                          <text x={r.x + textW / 2} y={r.y + textH / 2} fill="white" fontSize={16} fontWeight={700} textAnchor="middle" dominantBaseline="middle">
-                            {(r.text ?? '').toString() || '?'}
-                          </text>
-                        )}
-                      </g>
-                    );
+                  if (revealed) {
+                    return renderShape(r, `rgba(${rgb.r},${rgb.g},${rgb.b},0.25)`, `rgba(${rgb.r},${rgb.g},${rgb.b},0.5)`);
                   }
-                  if (shapeType === 'ellipse') {
-                    return <ellipse key={i} cx={r.x + r.w / 2} cy={r.y + r.h / 2} rx={Math.abs(r.w / 2)} ry={Math.abs(r.h / 2)} fill={fill} stroke={stroke} strokeWidth={2} />;
-                  }
-                  if (shapeType === 'polygon' && r.points) {
-                    const pts = (r.points as { x: number; y: number }[]).map((p) => `${p.x},${p.y}`).join(' ');
-                    return <polygon key={i} points={pts} fill={fill} stroke={stroke} strokeWidth={2} />;
-                  }
-                  return <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} fill={fill} stroke={stroke} strokeWidth={2} rx={4} />;
+                  // Occluded (hidden) — use real color
+                  return renderShape(r, `rgb(${rgb.r},${rgb.g},${rgb.b})`, `rgba(${rgb.r},${rgb.g},${rgb.b},0.8)`);
                 })}
               </svg>
             </div>
-            {/* Keep frontText visible on both faces; show back content only when revealed */}
-            {occlusionData.frontText && (occlusionData.frontText as string).replace(/<[^>]*>/g, '').trim() && (
-              <div className="mt-4 text-base leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeHtml(occlusionData.frontText as string) }} />
+            {frontTextHtml && (
+              <div className="mt-4 text-base leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeHtml(frontTextHtml) }} />
             )}
             {revealed && card.back_content && card.back_content.trim() && (
               <div className="mt-4 pt-4 border-t border-border/30 text-base leading-relaxed text-muted-foreground" dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.back_content) }} />
