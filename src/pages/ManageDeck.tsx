@@ -633,11 +633,13 @@ const ManageDeck = () => {
                         onMouseEnter={() => { if (isInGroup) setHoveredGroupKey(group![0]); }}
                         onMouseLeave={() => setHoveredGroupKey(null)}
                         className={`shrink-0 h-7 w-7 my-0.5 rounded-full text-[12px] font-medium transition-all flex items-center justify-center ${
-                          idx === selectedIndex || isGroupHighlighted
-                            ? 'bg-primary text-primary-foreground shadow-sm'
-                            : isHovered
-                              ? 'bg-accent text-foreground'
-                              : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                          deletedSiblingIndices.has(idx)
+                            ? 'opacity-30 line-through bg-destructive/10 text-destructive border border-dashed border-destructive/40'
+                            : idx === selectedIndex || isGroupHighlighted
+                              ? 'bg-primary text-primary-foreground shadow-sm'
+                              : isHovered
+                                ? 'bg-accent text-foreground'
+                                : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                         }`}
                       >
                         {idx + 1}
