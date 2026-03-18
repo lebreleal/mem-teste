@@ -572,11 +572,11 @@ const ManageDeck = () => {
           <div className="flex items-center gap-1">
             {totalCards > 0 && (
               <button
-                onClick={() => { if (isDirty) saveCurrentCard(); setPreviewOpen(true); }}
+                onClick={() => setPreviewOpen(true)}
                 className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                 title="Preview"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" fillRule="evenodd" clipRule="evenodd">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" fillRule="evenodd" clipRule="evenodd">
                   <path d="M15 6H9v12h6zM9 4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zM5 8v8a1 1 0 1 1-2 0V8a1 1 0 0 1 2 0M21 8v8a1 1 0 1 1-2 0V8a1 1 0 1 1 2 0" />
                 </svg>
               </button>

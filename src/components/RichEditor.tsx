@@ -745,9 +745,10 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     isUpdatingClozeRef.current = true;
     try {
       if (hasSelection) {
-        // Apply mark to selection only — no cursor repositioning to avoid trailing space
+        // Apply mark to selection, then collapse cursor to end (outside the mark)
         editor.chain().focus()
           .setMark('clozeMark', { num: String(nextNum) })
+          .setTextSelection(to)
           .run();
       } else {
         skipNextClozeSyncRef.current = true;

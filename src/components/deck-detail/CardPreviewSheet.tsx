@@ -203,9 +203,19 @@ export function CardContent({
             {frontTextHtml && (
               <div className="mt-4 text-base leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeHtml(frontTextHtml) }} />
             )}
-            {revealed && card.back_content && card.back_content.trim() && (
-              <div className="mt-4 pt-4 border-t border-border/30 text-base leading-relaxed text-muted-foreground" dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.back_content) }} />
-            )}
+            {revealed && (() => {
+              let extraBack = '';
+              try {
+                const parsed = JSON.parse(card.back_content);
+                extraBack = parsed.extra || '';
+              } catch {
+                extraBack = card.back_content || '';
+              }
+              const hasContent = extraBack.replace(/<[^>]*>/g, '').trim() || /<img\s/i.test(extraBack);
+              return hasContent ? (
+                <div className="mt-4 pt-4 border-t border-border/30 text-base leading-relaxed text-muted-foreground" dangerouslySetInnerHTML={{ __html: sanitizeHtml(extraBack) }} />
+              ) : null;
+            })()}
           </div>
         );
       }
