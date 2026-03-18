@@ -7,6 +7,7 @@ import { useAIModel } from '@/hooks/useAIModel';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { sanitizeHtml } from '@/lib/sanitize';
+import { OCCLUSION_COLORS } from '@/lib/occlusionColors';
 
 export type EditorCardType = 'basic' | 'cloze' | 'image_occlusion';
 
