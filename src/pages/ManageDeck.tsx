@@ -31,6 +31,16 @@ const ManageDeck = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isAICreating, setIsAICreating] = useState(false);
+  const [aiDeckDialogOpen, setAIDeckDialogOpen] = useState(false);
+
+  const { data: deckName } = useQuery({
+    queryKey: ['deck-name', deckId],
+    queryFn: async () => {
+      const { data } = await supabase.from('decks').select('name').eq('id', deckId!).single();
+      return data?.name ?? '';
+    },
+    enabled: !!deckId,
+  });
 
   const initialCardId = searchParams.get('cardId');
   const hasAppliedInitialCardRef = useRef(false);
