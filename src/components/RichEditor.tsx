@@ -15,9 +15,9 @@ import { Mark, mergeAttributes } from '@tiptap/core';
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough, Heading2,
   List, ListOrdered, Code, Volume2, Palette, ImagePlus, ScanEye,
-  ClipboardPaste, Paperclip, Search, Settings2, Trash2,
+  ClipboardPaste, Paperclip, Search, Settings2,
 } from 'lucide-react';
-import { IconImage, IconImageOcclusion } from '@/components/icons';
+import { IconImage, IconImageOcclusion, IconTrash } from '@/components/icons';
 import { loadToolbarConfig, saveToolbarConfig, type ToolbarItem } from '@/components/rich-editor/toolbarConfig';
 import { lazy, Suspense } from 'react';
 const ToolbarConfigSheet = lazy(() => import('@/components/rich-editor/ToolbarConfigSheet'));
