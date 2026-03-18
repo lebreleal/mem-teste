@@ -15,7 +15,7 @@ import { Mark, mergeAttributes } from '@tiptap/core';
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough, Heading2,
   List, ListOrdered, Code, Volume2, Palette, ImagePlus, ScanEye,
-  ClipboardPaste, Paperclip, Search, Settings2,
+  ClipboardPaste, Paperclip, Search, Settings2, Trash2,
 } from 'lucide-react';
 import { IconImage, IconImageOcclusion } from '@/components/icons';
 import { loadToolbarConfig, saveToolbarConfig, type ToolbarItem } from '@/components/rich-editor/toolbarConfig';
@@ -320,6 +320,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     setCursorInCloze(false);
     if (closePalette) setPaletteOpen(false);
 
+    // Only unset stored marks (to stop next character from getting cloze), don't touch existing content
     isUpdatingClozeRef.current = true;
     try {
       editor.chain().unsetMark('clozeMark').run();
@@ -327,6 +328,59 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       isUpdatingClozeRef.current = false;
     }
   }, [editor]);
+
+  /** Renumber all cloze groups to be sequential (1,2,3...) */
+  const renumberClozes = useCallback(() => {
+    if (!editor) return;
+    const html = editor.getHTML();
+    const usedNums = [...new Set([...html.matchAll(/data-cloze="(\d+)"/g)].map(m => parseInt(m[1])))].sort((a, b) => a - b);
+    if (usedNums.length === 0 || usedNums.every((n, i) => n === i + 1)) return;
+
+    const remap = new Map<number, number>();
+    usedNums.forEach((n, i) => remap.set(n, i + 1));
+
+    // Two-pass replacement to avoid collisions
+    let newHtml = html;
+    remap.forEach((newNum, oldNum) => {
+      if (newNum !== oldNum) {
+        newHtml = newHtml.split(`data-cloze="${oldNum}"`).join(`data-cloze="__REMAP_${newNum}__"`);
+      }
+    });
+    remap.forEach((newNum) => {
+      newHtml = newHtml.split(`data-cloze="__REMAP_${newNum}__"`).join(`data-cloze="${newNum}"`);
+    });
+
+    isUpdatingClozeRef.current = true;
+    try {
+      editor.commands.setContent(newHtml, { emitUpdate: true });
+    } finally {
+      isUpdatingClozeRef.current = false;
+    }
+  }, [editor]);
+
+  /** Delete cloze mark from current block, then renumber remaining */
+  const handleDeleteCloze = useCallback(() => {
+    const ctx = getSelectionClozeContext();
+    if (!ctx || !editor) return;
+
+    isUpdatingClozeRef.current = true;
+    try {
+      editor.chain()
+        .setTextSelection({ from: ctx.from, to: ctx.to })
+        .unsetMark('clozeMark')
+        .setTextSelection(ctx.from)
+        .run();
+    } finally {
+      isUpdatingClozeRef.current = false;
+    }
+
+    setClozeActive(false);
+    setCursorInCloze(false);
+    setPaletteOpen(false);
+
+    // Renumber after DOM settles
+    setTimeout(() => renumberClozes(), 10);
+  }, [editor, getSelectionClozeContext, renumberClozes]);
 
   useEffect(() => {
     if (!editor) return;
@@ -363,11 +417,8 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     };
 
     const handleBlur = () => {
-      if (clozeActive) {
-        deactivateClozeMode();
-        return;
-      }
-
+      // On blur, just reset UI state — don't unsetMark (no need, user isn't typing)
+      setClozeActive(false);
       setCursorInCloze(false);
       setPaletteOpen(false);
     };
@@ -551,19 +602,13 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
 
     const currentContext = getSelectionClozeContext();
 
+    // If cursor is already inside a cloze block, just open palette — don't re-apply mark
     if (currentContext) {
-      skipNextClozeSyncRef.current = true;
-      isUpdatingClozeRef.current = true;
-      try {
-        editor.chain().focus().setMark('clozeMark', { num: String(currentContext.num) }).run();
-      } finally {
-        isUpdatingClozeRef.current = false;
-      }
-
       setClozeColorIndex(currentContext.num - 1);
       setClozeActive(true);
       setCursorInCloze(true);
       setPaletteOpen(true);
+      editor.chain().focus().run();
       return;
     }
 
@@ -811,6 +856,19 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
                           />
                         );
                       })}
+                      {cursorInCloze && (
+                        <>
+                          <div className="mx-0.5 h-4 w-px bg-border shrink-0" />
+                          <button
+                            className="h-5 w-5 rounded-full flex items-center justify-center transition-all shrink-0 hover:bg-destructive/15 text-muted-foreground hover:text-destructive"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={handleDeleteCloze}
+                            title="Remover oclusão"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </>
+                      )}
                     </PopoverContent>
                   </Popover>
                 );
