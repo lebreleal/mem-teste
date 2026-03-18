@@ -3,18 +3,15 @@
  * Calls searchService and groups results by type.
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { searchUserContent } from '@/services/searchService';
 import type { SearchResult } from '@/types/search';
 
 function useDebounce(value: string, delay: number): string {
   const [debounced, setDebounced] = useState(value);
-  // Using useState + useEffect pattern
-  import.meta.hot; // dummy to keep module alive
-  
-  // Simple inline debounce using setTimeout
-  useMemo(() => {
+
+  useEffect(() => {
     const id = setTimeout(() => setDebounced(value), delay);
     return () => clearTimeout(id);
   }, [value, delay]);
