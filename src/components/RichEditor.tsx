@@ -637,7 +637,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     setClozeActive(true);
     setCursorInCloze(true);
     setPaletteOpen(true);
-  }, [editor, clozeCounter, getSelectionClozeContext]);
+  }, [editor, clozeCounter, paletteOpen, deactivateClozeMode, getSelectionClozeContext]);
 
   /** Change cloze group/color while keeping the editor active inside the same cloze */
   const handleClozeColorChange = useCallback((colorIdx: number) => {
