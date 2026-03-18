@@ -466,8 +466,14 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
     return () => window.removeEventListener('keydown', handler);
   }, [selectedId, deleteSelected, undo]);
 
-  // Dynamic visible colors — show all used + next available
+  // Dynamic visible colors — show all used (shapes + external text clozes) + next available
   const usedColorFills = new Set(shapes.map(s => s.color || COLORS[0].fill));
+  // Merge external text cloze color indices
+  if (externalUsedColorIndices) {
+    externalUsedColorIndices.forEach(idx => {
+      if (idx >= 0 && idx < COLORS.length) usedColorFills.add(COLORS[idx].fill);
+    });
+  }
   const visibleColors = (() => {
     const visible: typeof COLORS = [];
     for (const c of COLORS) {
