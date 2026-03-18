@@ -396,7 +396,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
         const newShape: OcclusionShape = { id: crypto.randomUUID(), type: 'freehand', points: [...currentPoints], color: shapeColor };
         const newShapes = [...shapes, newShape];
         setShapes(newShapes);
-        autoSwitchColor(newShapes);
+        // Do NOT auto-switch color for freehand — only switch when user manually changes color
       }
       setSelectedId(null);
       setDrawing(false);
