@@ -602,7 +602,14 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
 
     const currentContext = getSelectionClozeContext();
 
-    // If cursor is already inside a cloze block, just open palette — don't re-apply mark
+    // If cursor is inside a cloze block AND palette is already open → toggle OFF (deactivate)
+    if (currentContext && paletteOpen) {
+      deactivateClozeMode(true);
+      editor.chain().focus().run();
+      return;
+    }
+
+    // If cursor is inside a cloze block but palette not open → open palette
     if (currentContext) {
       setClozeColorIndex(currentContext.num - 1);
       setClozeActive(true);
