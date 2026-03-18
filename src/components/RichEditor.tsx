@@ -552,7 +552,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     if (!editor) return;
 
     const enforceCloze = () => {
-      if (isUpdatingClozeRef.current || !clozeActive) return;
+      if (isUpdatingClozeRef.current || !clozeActive || selectionCreatedClozeRef.current) return;
       const { from, to } = editor.state.selection;
       if (from !== to) return;
       if (!editor.isActive('clozeMark')) {
