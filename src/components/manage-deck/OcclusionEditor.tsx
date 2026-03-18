@@ -967,6 +967,24 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
           100% { background-position: 200% 50%; }
         }
       `}</style>
+
+      {/* Close without saving confirmation */}
+      <AlertDialog open={showCloseConfirm} onOpenChange={setShowCloseConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Fechar sem salvar?</AlertDialogTitle>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={onCancel}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Fechar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
