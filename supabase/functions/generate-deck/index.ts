@@ -267,7 +267,7 @@ Deno.serve(async (req) => {
     const { textContent, cardCount, detailLevel, cardFormats, customInstructions, aiModel, energyCost } = await req.json();
 
     const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
-    if (!AI_KEY) return jsonResponse({ error: "GOOGLE_AI_KEY não configurada" }, 500);
+    if (!AI_KEY) return jsonResponse({ error: "AI API key não configurada" }, 500);
     if (!textContent?.trim()) return jsonResponse({ error: "textContent é obrigatório" }, 400);
 
     const cost = energyCost || 0;

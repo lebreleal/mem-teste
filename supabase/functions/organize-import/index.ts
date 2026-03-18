@@ -229,7 +229,7 @@ Deno.serve(async (req) => {
 
     const { cards, deckName } = await req.json();
     const { apiKey: AI_KEY } = getAIConfig();
-    if (!AI_KEY) throw new Error("GOOGLE_AI_KEY is not configured");
+    if (!AI_KEY) throw new Error("AI API key is not configured");
     if (!cards || !Array.isArray(cards) || cards.length === 0) {
       return jsonResponse({ error: "No cards provided" }, 400);
     }
