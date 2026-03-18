@@ -522,9 +522,14 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
         return;
       }
 
-      // Cursor is outside any cloze — deactivate everything
-      if (clozeActive || paletteOpen) {
-        deactivateClozeMode();
+      // Cursor is outside any cloze
+      // If clozeActive is true, user is actively creating/extending — let enforceCloze handle it
+      if (clozeActive) return;
+
+      // Only close palette if it was open from navigating into an existing cloze
+      if (paletteOpen) {
+        setCursorInCloze(false);
+        setPaletteOpen(false);
         return;
       }
     };
