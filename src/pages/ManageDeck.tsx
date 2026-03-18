@@ -557,11 +557,11 @@ const ManageDeck = () => {
             {/* Left sidebar — card index numbers (vertical) */}
             <div className="shrink-0 flex flex-col items-center gap-0 overflow-y-auto no-scrollbar py-1">
               {sortedCards.map((card, idx) => {
-                const group = siblingMap.get(idx);
+                const group = visualSiblingMap.get(idx);
                 const isInGroup = !!group;
                 const isFirst = isInGroup && group![0] === idx;
                 const isLast = isInGroup && group![group!.length - 1] === idx;
-                const selectedGroup = siblingMap.get(selectedIndex);
+                const selectedGroup = visualSiblingMap.get(selectedIndex);
                 const isGroupHighlighted = isInGroup && selectedGroup && group![0] === selectedGroup[0];
                 const isHovered = isInGroup && hoveredGroupKey !== null && group![0] === hoveredGroupKey;
 
