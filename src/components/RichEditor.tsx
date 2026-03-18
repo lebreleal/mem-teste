@@ -844,19 +844,38 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
                       onOpenAutoFocus={(e) => e.preventDefault()}
                       onCloseAutoFocus={(e) => e.preventDefault()}
                     >
-                      {CLOZE_COLORS.map((c, idx) => {
-                        const isActive = clozeColorIndex === idx;
-                        return (
-                          <button
-                            key={idx}
-                            className={`h-5 w-5 rounded-full transition-all shrink-0 ${isActive ? 'ring-2 ring-offset-1 ring-offset-background ring-foreground/40 scale-110' : 'hover:scale-110'}`}
-                            style={{ backgroundColor: c.dot }}
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => handleClozeColorChange(idx)}
-                            title={c.label}
-                          />
-                        );
-                      })}
+                      {(() => {
+                        // Dynamic palette: show used colors + next available (synced with image occlusion)
+                        const html = editor.getHTML();
+                        const usedNums = new Set([...html.matchAll(/data-cloze="(\d+)"/g)].map(m => parseInt(m[1])));
+                        const usedIndices = new Set([...usedNums].map(n => n - 1));
+                        const visible: number[] = [];
+                        for (let i = 0; i < CLOZE_COLORS.length; i++) {
+                          if (usedIndices.has(i)) visible.push(i);
+                        }
+                        for (let i = 0; i < CLOZE_COLORS.length; i++) {
+                          if (!usedIndices.has(i)) { visible.push(i); break; }
+                        }
+                        if (visible.length < 2) {
+                          for (let i = 0; i < CLOZE_COLORS.length; i++) {
+                            if (!visible.includes(i)) { visible.push(i); break; }
+                          }
+                        }
+                        return visible.map((idx) => {
+                          const c = CLOZE_COLORS[idx];
+                          const isActive = clozeColorIndex === idx;
+                          return (
+                            <button
+                              key={idx}
+                              className={`h-5 w-5 rounded-full transition-all shrink-0 ${isActive ? 'ring-2 ring-offset-1 ring-offset-background ring-foreground/40 scale-110' : 'hover:scale-110'}`}
+                              style={{ backgroundColor: c.dot }}
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => handleClozeColorChange(idx)}
+                              title={c.label}
+                            />
+                          );
+                        });
+                      })()}
                       {cursorInCloze && (
                         <>
                           <div className="mx-0.5 h-4 w-px bg-border shrink-0" />
