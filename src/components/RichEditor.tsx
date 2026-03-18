@@ -588,13 +588,6 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     input.click();
   };
 
-  /** Get used cloze number indices from editor content */
-  const getUsedClozeIndices = useCallback((): Set<number> => {
-    if (!editor) return new Set();
-    const html = editor.getHTML();
-    const nums = [...html.matchAll(/data-cloze="(\d+)"/g)].map(m => parseInt(m[1]) - 1);
-    return new Set(nums);
-  }, [editor]);
 
   /** Toggle cloze mode without forcing an exit after the first characters */
   const handleCloze = useCallback(() => {
