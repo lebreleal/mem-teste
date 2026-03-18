@@ -132,8 +132,8 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
     if (!el) return { x: 0, y: 0 };
     const rect = el.getBoundingClientRect();
     return {
-      x: (clientX - rect.left) / scale,
-      y: (clientY - rect.top) / scale,
+      x: (clientX - rect.left) / (scale * zoom),
+      y: (clientY - rect.top) / (scale * zoom),
     };
   };
 
