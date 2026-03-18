@@ -512,6 +512,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
 
       if (strictInCloze && contextNum) {
         setClozeColorIndex(contextNum - 1);
+        setClozeActive(true); // Enable enforceCloze so typing continues inside the mark
         setPaletteOpen(true);
         return;
       }
