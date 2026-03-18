@@ -1,4 +1,5 @@
-import { ScanEye, X } from 'lucide-react';
+import { X } from 'lucide-react';
+import { IconImageOcclusion } from '@/components/icons';
 
 import { Button } from '@/components/ui/button';
 
