@@ -581,35 +581,59 @@ const ManageDeck = () => {
               {sortedCards.map((card, idx) => {
                 const group = visualSiblingMap.get(idx);
                 const isInGroup = !!group;
-                const isFirst = isInGroup && group![0] === idx;
-                const isLast = isInGroup && group![group!.length - 1] === idx;
                 const selectedGroup = visualSiblingMap.get(selectedIndex);
                 const isGroupHighlighted = isInGroup && selectedGroup && group![0] === selectedGroup[0];
                 const isHovered = isInGroup && hoveredGroupKey !== null && group![0] === hoveredGroupKey;
 
+                // Determine if this is the last real card in the selected group (to inject ghosts after it)
+                const isLastOfSelectedGroup = isInGroup && selectedGroup && group![0] === selectedGroup[0] && idx === group![group!.length - 1];
+
+                // Check if anticipated ghosts extend the connector
+                const hasGhosts = anticipatedCount > 0 && isLastOfSelectedGroup;
+                const isFirst = isInGroup && group![0] === idx;
+                const isLast = isInGroup && group![group!.length - 1] === idx && !hasGhosts;
+
                 return (
-                  <div key={card.id} className="flex items-stretch">
-                    {/* Sibling connector bar */}
-                    <div className="w-1 mr-0.5 flex flex-col items-center">
-                      {isInGroup ? (
-                        <div className={`w-0.5 flex-1 ${isGroupHighlighted ? 'bg-primary/40' : 'bg-border'} ${isFirst ? 'rounded-t-full mt-2' : ''} ${isLast ? 'rounded-b-full mb-2' : ''}`} />
-                      ) : <div className="w-0.5 flex-1" />}
+                  <Fragment key={card.id}>
+                    <div className="flex items-stretch">
+                      {/* Sibling connector bar */}
+                      <div className="w-1 mr-0.5 flex flex-col items-center">
+                        {isInGroup ? (
+                          <div className={`w-0.5 flex-1 ${isGroupHighlighted ? 'bg-primary/40' : 'bg-border'} ${isFirst ? 'rounded-t-full mt-2' : ''} ${isLast ? 'rounded-b-full mb-2' : ''}`} />
+                        ) : <div className="w-0.5 flex-1" />}
+                      </div>
+                      <button
+                        onClick={() => selectCard(idx)}
+                        onMouseEnter={() => { if (isInGroup) setHoveredGroupKey(group![0]); }}
+                        onMouseLeave={() => setHoveredGroupKey(null)}
+                        className={`shrink-0 h-7 w-7 my-0.5 rounded-full text-[12px] font-medium transition-all flex items-center justify-center ${
+                          idx === selectedIndex || isGroupHighlighted
+                            ? 'bg-primary text-primary-foreground shadow-sm'
+                            : isHovered
+                              ? 'bg-accent text-foreground'
+                              : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                        }`}
+                      >
+                        {idx + 1}
+                      </button>
                     </div>
-                    <button
-                      onClick={() => selectCard(idx)}
-                      onMouseEnter={() => { if (isInGroup) setHoveredGroupKey(group![0]); }}
-                      onMouseLeave={() => setHoveredGroupKey(null)}
-                      className={`shrink-0 h-7 w-7 my-0.5 rounded-full text-[12px] font-medium transition-all flex items-center justify-center ${
-                        idx === selectedIndex || isGroupHighlighted
-                          ? 'bg-primary text-primary-foreground shadow-sm'
-                          : isHovered
-                            ? 'bg-accent text-foreground'
-                            : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-                      }`}
-                    >
-                      {idx + 1}
-                    </button>
-                  </div>
+
+                    {/* Anticipated ghost siblings (visual preview before save) */}
+                    {hasGhosts && Array.from({ length: anticipatedCount }).map((_, gi) => {
+                      const ghostNum = idx + 2 + gi; // display number
+                      const isGhostLast = gi === anticipatedCount - 1;
+                      return (
+                        <div key={`ghost-${gi}`} className="flex items-stretch opacity-50">
+                          <div className="w-1 mr-0.5 flex flex-col items-center">
+                            <div className={`w-0.5 flex-1 bg-primary/40 ${isGhostLast ? 'rounded-b-full mb-2' : ''}`} />
+                          </div>
+                          <div className="shrink-0 h-7 w-7 my-0.5 rounded-full text-[12px] font-medium flex items-center justify-center bg-primary/20 text-primary border border-dashed border-primary/40">
+                            {ghostNum}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </Fragment>
                 );
               })}
             </div>
