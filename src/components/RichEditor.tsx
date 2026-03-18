@@ -553,7 +553,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       editor.off('blur', handleBlur);
       editor.off('transaction', syncClozeContent);
     };
-  }, [editor, clozeActive, deactivateClozeMode, getSelectionClozeContext]);
+  }, [editor, clozeActive, paletteOpen, deactivateClozeMode, getSelectionClozeContext]);
 
   // Re-apply cloze mark while the mode is active so typing can continue inside the same group
   useEffect(() => {
