@@ -497,7 +497,8 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
 
   const handleColorPick = (fill: string) => {
     setShapeColor(fill);
-    if (!selectedId) return;
+    // Only recolor the selected shape if the user is in select mode (explicitly selecting)
+    if (!selectedId || tool !== 'select') return;
     setShapes(prev => prev.map(shape => {
       if (shape.id !== selectedId || shape.type === 'freehand') return shape;
       return { ...shape, color: fill };
