@@ -774,6 +774,21 @@ const ManageDeck = () => {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Unsaved changes confirmation */}
+      <AlertDialog open={!!pendingNav} onOpenChange={(open) => { if (!open) setPendingNav(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Alterações não salvas</AlertDialogTitle>
+            <AlertDialogDescription>Você tem alterações que não foram salvas. O que deseja fazer?</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel onClick={() => setPendingNav(null)}>Cancelar</AlertDialogCancel>
+            <Button variant="outline" onClick={confirmNavDiscard}>Descartar</Button>
+            <AlertDialogAction onClick={confirmNavSave}>Salvar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* AI Create Cards Dialog */}
       <AICreateDeckDialog
         open={aiDeckDialogOpen}
