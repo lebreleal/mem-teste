@@ -142,7 +142,7 @@ async function organizeBatch(
     method: "POST",
     headers: { Authorization: `Bearer ${AI_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "gemini-2.5-pro",
+      model: "google/gemini-2.5-pro",
       messages: [
         { role: "system", content: buildSystemPrompt(deckName) },
         { role: "user", content: userPrompt },
