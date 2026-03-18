@@ -368,25 +368,27 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
   const handleDelete = useCallback(async () => {
     if (!deleteId) return;
     const card = allCards.find(c => c.id === deleteId);
-    const isCloze = card?.card_type === 'cloze';
-    if (isCloze) {
+    const hasSiblings = card?.card_type === 'cloze' || card?.card_type === 'image_occlusion';
+    if (hasSiblings) {
       let frontContent = card?.front_content;
       if (!frontContent) {
         frontContent = await fetchCardFrontContent(deleteId);
       }
       const siblings = frontContent ? await cardService.fetchClozeSiblings(allDeckIds, frontContent) : [];
       const ids = siblings.map(c => c.id);
-      try {
-        await cardService.bulkDeleteCards(ids);
-        invalidateDeckRelatedQueries(queryClient, deckId);
-        toast({ title: `${ids.length} card${ids.length > 1 ? 's' : ''} cloze excluído${ids.length > 1 ? 's' : ''}` });
-      } catch {
-        toast({ title: 'Erro ao excluir', variant: 'destructive' });
+      if (ids.length > 0) {
+        try {
+          await cardService.bulkDeleteCards(ids);
+          invalidateDeckRelatedQueries(queryClient, deckId);
+          toast({ title: `${ids.length} cartão${ids.length > 1 ? 'ões' : ''} excluído${ids.length > 1 ? 's' : ''}` });
+        } catch {
+          toast({ title: 'Erro ao excluir', variant: 'destructive' });
+        }
+        setDeleteId(null);
+        return;
       }
-      setDeleteId(null);
-    } else {
-      deleteCardMutation.mutate(deleteId, { onSuccess: () => { setDeleteId(null); toast({ title: 'Card excluído' }); } });
     }
+    deleteCardMutation.mutate(deleteId, { onSuccess: () => { setDeleteId(null); toast({ title: 'Card excluído' }); } });
   }, [deleteId, deleteCardMutation, toast, allCards, allDeckIds, deckId, queryClient, setDeleteId]);
 
   const handleMoveCard = useCallback(async () => {
