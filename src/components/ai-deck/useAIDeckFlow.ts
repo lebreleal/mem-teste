@@ -521,7 +521,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
 
       toast({ title: existingDeckId ? '🧠 Cartões adicionados!' : '🧠 Baralho criado!', description: `${cards.length} cartões salvos` });
       resetState(); onOpenChange(false);
-      if (!existingDeckId && targetDeckId) navigate(`/decks/${targetDeckId}`);
+      if (targetDeckId) navigate(`/manage/${targetDeckId}`);
     } catch (err: unknown) { toast({ title: 'Erro ao salvar', description: err instanceof Error ? err.message : 'Erro desconhecido', variant: 'destructive' }); }
     finally { setIsSaving(false); }
   }, [user, cards, existingDeckId, deckName, toast, resetState, onOpenChange, navigate, saveCardsToDeck, queryClient, pendingReviewData, removePending]);
