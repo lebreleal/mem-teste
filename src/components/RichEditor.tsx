@@ -567,7 +567,35 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       editor.off('blur', handleBlur);
       editor.off('transaction', syncClozeContent);
     };
-  }, [editor, clozeActive, paletteOpen, deactivateClozeMode, getSelectionClozeContext]);
+  }, [editor, clozeActive, paletteOpen, deactivateClozeMode]);
+
+  // Deactivate cloze on click far from any cloze mark (mousedown-based, not typing)
+  useEffect(() => {
+    if (!editor || !clozeActive) return;
+    const editorEl = editor.view.dom;
+
+    const handleMouseUp = () => {
+      // After click settles, check if cursor landed inside a cloze
+      requestAnimationFrame(() => {
+        if (!editor || editor.isDestroyed) return;
+        const markType = editor.schema.marks.clozeMark;
+        const { $from, empty } = editor.state.selection;
+        if (!empty) return; // selection drag — don't deactivate
+
+        const inCloze = $from.marks().some(m => m.type === markType);
+        if (inCloze) return;
+
+        // Check adjacent (broader context)
+        const ctx = getSelectionClozeContext();
+        if (ctx) return;
+
+        deactivateClozeMode();
+      });
+    };
+
+    editorEl.addEventListener('mouseup', handleMouseUp);
+    return () => editorEl.removeEventListener('mouseup', handleMouseUp);
+  }, [editor, clozeActive, deactivateClozeMode, getSelectionClozeContext]);
 
   // Re-apply cloze mark while the mode is active so typing can continue inside the same group
   useEffect(() => {
