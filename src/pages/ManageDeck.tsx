@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ChevronLeft, ChevronRight, Trash2, Copy, Plus, Loader2, Check, X } from 'lucide-react';
 import { IconAIGradient } from '@/components/icons';
@@ -363,20 +363,26 @@ const ManageDeck = () => {
     prevNumsKeyRef.current = numsKey;
   }, [numsKey]);
 
-  // Visual sibling map: override DB-based grouping for the selected card's group
-  // If the editor currently has 0 nums (all clozes/colors removed), visually dissolve the group
-  const visualSiblingMap = useMemo(() => {
-    const editorNums = collectAllNums();
+  // Visual sibling map + anticipated count
+  // Shows the anticipated grouping in the sidebar based on editor content, not just DB state
+  const editorNums = useMemo(() => collectAllNums(), [collectAllNums]);
+
+  const { visualSiblingMap, anticipatedCount } = useMemo(() => {
     const selectedGroup = siblingMap.get(selectedIndex);
-    if (!selectedGroup) return siblingMap;
-    // If editor has no nums, remove grouping for the selected group
-    if (editorNums.length === 0) {
+    const currentGroupSize = selectedGroup?.length ?? 1;
+    const editorGroupSize = editorNums.length;
+
+    // If editor has no nums, dissolve the group visually
+    if (editorGroupSize === 0 && selectedGroup) {
       const newMap = new Map(siblingMap);
       selectedGroup.forEach(idx => newMap.delete(idx));
-      return newMap;
+      return { visualSiblingMap: newMap, anticipatedCount: 0 };
     }
-    return siblingMap;
-  }, [siblingMap, selectedIndex, collectAllNums]);
+
+    // If editor has more nums than current DB siblings, show anticipated extra slots
+    const anticipated = Math.max(0, editorGroupSize - currentGroupSize);
+    return { visualSiblingMap: siblingMap, anticipatedCount: anticipated };
+  }, [siblingMap, selectedIndex, editorNums]);
 
   // Pending navigation state for unsaved-changes confirmation
   const [pendingNav, setPendingNav] = useState<{ type: 'card'; idx: number } | { type: 'back' } | null>(null);
@@ -575,35 +581,61 @@ const ManageDeck = () => {
               {sortedCards.map((card, idx) => {
                 const group = visualSiblingMap.get(idx);
                 const isInGroup = !!group;
-                const isFirst = isInGroup && group![0] === idx;
-                const isLast = isInGroup && group![group!.length - 1] === idx;
                 const selectedGroup = visualSiblingMap.get(selectedIndex);
                 const isGroupHighlighted = isInGroup && selectedGroup && group![0] === selectedGroup[0];
                 const isHovered = isInGroup && hoveredGroupKey !== null && group![0] === hoveredGroupKey;
 
+                // Determine if ghosts should appear after this card
+                const isSoloSelected = !isInGroup && idx === selectedIndex && anticipatedCount > 0;
+                const isLastOfSelectedGroup = isInGroup && selectedGroup && group![0] === selectedGroup[0] && idx === group![group!.length - 1];
+                const hasGhosts = anticipatedCount > 0 && (isLastOfSelectedGroup || isSoloSelected);
+
+                // Connector bar logic: extend if ghosts follow
+                const isFirst = (isInGroup && group![0] === idx) || (isSoloSelected);
+                const isLast = isInGroup && group![group!.length - 1] === idx && !hasGhosts;
+                const showConnector = isInGroup || isSoloSelected;
+
                 return (
-                  <div key={card.id} className="flex items-stretch">
-                    {/* Sibling connector bar */}
-                    <div className="w-1 mr-0.5 flex flex-col items-center">
-                      {isInGroup ? (
-                        <div className={`w-0.5 flex-1 ${isGroupHighlighted ? 'bg-primary/40' : 'bg-border'} ${isFirst ? 'rounded-t-full mt-2' : ''} ${isLast ? 'rounded-b-full mb-2' : ''}`} />
-                      ) : <div className="w-0.5 flex-1" />}
+                  <Fragment key={card.id}>
+                    <div className="flex items-stretch">
+                      {/* Sibling connector bar */}
+                      <div className="w-1 mr-0.5 flex flex-col items-center">
+                        {showConnector ? (
+                          <div className={`w-0.5 flex-1 ${isGroupHighlighted || isSoloSelected ? 'bg-primary/40' : 'bg-border'} ${isFirst ? 'rounded-t-full mt-2' : ''} ${isLast ? 'rounded-b-full mb-2' : ''}`} />
+                        ) : <div className="w-0.5 flex-1" />}
+                      </div>
+                      <button
+                        onClick={() => selectCard(idx)}
+                        onMouseEnter={() => { if (isInGroup) setHoveredGroupKey(group![0]); }}
+                        onMouseLeave={() => setHoveredGroupKey(null)}
+                        className={`shrink-0 h-7 w-7 my-0.5 rounded-full text-[12px] font-medium transition-all flex items-center justify-center ${
+                          idx === selectedIndex || isGroupHighlighted
+                            ? 'bg-primary text-primary-foreground shadow-sm'
+                            : isHovered
+                              ? 'bg-accent text-foreground'
+                              : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                        }`}
+                      >
+                        {idx + 1}
+                      </button>
                     </div>
-                    <button
-                      onClick={() => selectCard(idx)}
-                      onMouseEnter={() => { if (isInGroup) setHoveredGroupKey(group![0]); }}
-                      onMouseLeave={() => setHoveredGroupKey(null)}
-                      className={`shrink-0 h-7 w-7 my-0.5 rounded-full text-[12px] font-medium transition-all flex items-center justify-center ${
-                        idx === selectedIndex || isGroupHighlighted
-                          ? 'bg-primary text-primary-foreground shadow-sm'
-                          : isHovered
-                            ? 'bg-accent text-foreground'
-                            : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-                      }`}
-                    >
-                      {idx + 1}
-                    </button>
-                  </div>
+
+                    {/* Anticipated ghost siblings (visual preview before save) */}
+                    {hasGhosts && Array.from({ length: anticipatedCount }).map((_, gi) => {
+                      const ghostNum = idx + 2 + gi; // display number
+                      const isGhostLast = gi === anticipatedCount - 1;
+                      return (
+                        <div key={`ghost-${gi}`} className="flex items-stretch opacity-50">
+                          <div className="w-1 mr-0.5 flex flex-col items-center">
+                            <div className={`w-0.5 flex-1 bg-primary/40 ${isGhostLast ? 'rounded-b-full mb-2' : ''}`} />
+                          </div>
+                          <div className="shrink-0 h-7 w-7 my-0.5 rounded-full text-[12px] font-medium flex items-center justify-center bg-primary/20 text-primary border border-dashed border-primary/40">
+                            {ghostNum}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </Fragment>
                 );
               })}
             </div>
