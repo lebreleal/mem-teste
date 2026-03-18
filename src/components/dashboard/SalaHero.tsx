@@ -3,7 +3,7 @@
  * Extracted from Dashboard.tsx (copy-paste integral).
  */
 
-import { useMemo, useState, lazy, Suspense } from 'react';
+import { useMemo, useState, useEffect, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Clock, GripVertical, LogOut, MoreVertical, Play, RefreshCw, Search, Share2, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
