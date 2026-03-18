@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, lazy, Suspense } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
+import { OCCLUSION_COLORS } from '@/lib/occlusionColors';
 import { X, ChevronLeft, ChevronRight, PenLine, MoreVertical, Trash2, ArrowUpRight, Flame } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
