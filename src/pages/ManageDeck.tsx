@@ -360,20 +360,38 @@ const ManageDeck = () => {
           <div className="mx-auto max-w-2xl flex h-full p-3 sm:p-5 gap-1.5">
 
             {/* Left sidebar — card index numbers (vertical) */}
-            <div className="shrink-0 flex flex-col items-center gap-1 overflow-y-auto no-scrollbar py-1">
-              {sortedCards.map((card, idx) => (
-                <button
-                  key={card.id}
-                  onClick={() => selectCard(idx)}
-                  className={`shrink-0 h-7 w-7 rounded-full text-[12px] font-medium transition-all flex items-center justify-center ${
-                    idx === selectedIndex
-                      ? 'bg-primary text-primary-foreground shadow-sm'
-                      : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-                  }`}
-                >
-                  {idx + 1}
-                </button>
-              ))}
+            <div className="shrink-0 flex flex-col items-center gap-0 overflow-y-auto no-scrollbar py-1">
+              {sortedCards.map((card, idx) => {
+                const group = siblingMap.get(idx);
+                const isInGroup = !!group;
+                const isFirst = isInGroup && group![0] === idx;
+                const isLast = isInGroup && group![group!.length - 1] === idx;
+                const selectedGroup = siblingMap.get(selectedIndex);
+                const isGroupHighlighted = isInGroup && selectedGroup && group![0] === selectedGroup[0];
+
+                return (
+                  <div key={card.id} className="flex items-stretch">
+                    {/* Sibling connector bar */}
+                    <div className="w-1 mr-0.5 flex flex-col items-center">
+                      {isInGroup ? (
+                        <div className={`w-0.5 flex-1 ${isGroupHighlighted ? 'bg-primary/40' : 'bg-border'} ${isFirst ? 'rounded-t-full mt-2' : ''} ${isLast ? 'rounded-b-full mb-2' : ''}`} />
+                      ) : <div className="w-0.5 flex-1" />}
+                    </div>
+                    <button
+                      onClick={() => selectCard(idx)}
+                      className={`shrink-0 h-7 w-7 my-0.5 rounded-full text-[12px] font-medium transition-all flex items-center justify-center ${
+                        idx === selectedIndex
+                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          : isGroupHighlighted
+                            ? 'bg-accent/60 text-foreground'
+                            : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                      }`}
+                    >
+                      {idx + 1}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
 
             {/* Center — card editors */}
