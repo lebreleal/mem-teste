@@ -390,8 +390,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       const context = getSelectionClozeContext();
       setCursorInCloze(!!context);
 
-      if (context && clozeActive) {
-        // Only sync color if cloze mode was explicitly activated by the user
+      if (context) {
         setClozeColorIndex(context.num - 1);
         setPaletteOpen(true);
         return;
@@ -403,15 +402,12 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
         return;
       }
 
-      if (clozeActive && !context) {
-        // Cursor left cloze region while mode was active → deactivate
+      if (clozeActive) {
         deactivateClozeMode();
         return;
       }
 
-      if (!clozeActive) {
-        setPaletteOpen(false);
-      }
+      setPaletteOpen(false);
     };
 
     const syncClozeContent = () => {
@@ -831,11 +827,17 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
                 if (hideCloze) return null;
                 return (
                   <Popover key={t.id} open={paletteOpen} onOpenChange={(open) => {
-                    if (!open) {
-                      setPaletteOpen(false);
-                      // If palette closes and we're not inside a cloze, deactivate
-                      if (!cursorInCloze) setClozeActive(false);
+                    if (open) {
+                      setPaletteOpen(true);
+                      return;
                     }
+
+                    if (clozeActive) {
+                      deactivateClozeMode(true);
+                      return;
+                    }
+
+                    setPaletteOpen(false);
                   }}>
                     <PopoverTrigger asChild>
                       <Button type="button" variant="ghost" size="icon"
