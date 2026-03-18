@@ -490,7 +490,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       }
       setClozeActive(false);
       setCursorInCloze(false);
-      // Re-sync to next unused
+      setPaletteOpen(false);
       setTimeout(() => {
         setClozeColorIndex(findNextUnusedIndex());
       }, 10);
