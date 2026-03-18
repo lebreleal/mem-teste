@@ -389,11 +389,15 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   /* ─── Occlusion image — reuses shared helpers ─── */
   const handleOcclusionAttach = () => {
     if (!user) return;
+    setClozeActive(false);
+    setPaletteOpen(false);
     pickFileAndUpload((url) => onOcclusionImageReady?.(url));
   };
 
   const handleOcclusionPasteClipboard = () => {
     if (!user) return;
+    setClozeActive(false);
+    setPaletteOpen(false);
     pasteClipboardAndUpload((url) => onOcclusionImageReady?.(url));
   };
 
