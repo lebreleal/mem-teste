@@ -739,14 +739,25 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     }
     const nextNum = nextColorIdx + 1;
 
-    const { from, to } = editor.state.selection;
+    let { from, to } = editor.state.selection;
     const hasSelection = from !== to;
+
+    // Trim leading/trailing whitespace from selection so spaces don't become part of the cloze
+    if (hasSelection) {
+      const selectedText = editor.state.doc.textBetween(from, to);
+      const leadingSpaces = selectedText.length - selectedText.trimStart().length;
+      const trailingSpaces = selectedText.length - selectedText.trimEnd().length;
+      from += leadingSpaces;
+      to -= trailingSpaces;
+      if (from >= to) return; // nothing left after trim
+    }
 
     isUpdatingClozeRef.current = true;
     try {
       if (hasSelection) {
-        // Apply mark to selection, then collapse cursor to end (outside the mark)
+        // Apply mark to trimmed selection, then collapse cursor to end (outside the mark)
         editor.chain().focus()
+          .setTextSelection({ from, to })
           .setMark('clozeMark', { num: String(nextNum) })
           .setTextSelection(to)
           .run();
