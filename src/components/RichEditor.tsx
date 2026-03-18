@@ -592,15 +592,18 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
 
   if (!editor) return null;
 
-  const ToolBtn = ({ onClick, active, children, title }: { onClick: () => void; active?: boolean; children: React.ReactNode; title?: string }) => (
-    <Button type="button" variant="ghost" size="icon"
-      className={`h-7 w-7 transition-all ${active ? 'bg-primary/15 text-primary ring-1 ring-primary/40' : ''}`}
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={onClick} title={title}
-    >
-      {children}
-    </Button>
+  const ToolBtn = React.forwardRef<HTMLButtonElement, { onClick: () => void; active?: boolean; children: React.ReactNode; title?: string }>(
+    ({ onClick, active, children, title }, ref) => (
+      <Button type="button" variant="ghost" size="icon" ref={ref}
+        className={`h-7 w-7 transition-all ${active ? 'bg-primary/15 text-primary ring-1 ring-primary/40' : ''}`}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onClick} title={title}
+      >
+        {children}
+      </Button>
+    )
   );
+  ToolBtn.displayName = 'ToolBtn';
 
   const currentColor = editor.getAttributes('textStyle').color || '';
   const currentHighlight = editor.getAttributes('highlight').color || '';
