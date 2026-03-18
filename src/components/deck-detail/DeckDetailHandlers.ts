@@ -10,6 +10,7 @@ import { getCurrentUserId, invokeEdgeFunction } from '@/services/authService';
 import * as cardService from '@/services/cardService';
 import * as deckService from '@/services/deckService';
 import { invalidateDeckRelatedQueries } from '@/lib/queryKeys';
+import { OCCLUSION_COLORS } from '@/lib/occlusionColors';
 import type { CardRow } from '@/types/deck';
 import type { useToast } from '@/hooks/use-toast';
 import type { QueryClient } from '@tanstack/react-query';
