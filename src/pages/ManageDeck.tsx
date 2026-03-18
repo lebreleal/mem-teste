@@ -325,14 +325,13 @@ const ManageDeck = () => {
     }
   }, [currentCard, isDirty, buildSavePayload, updateCard, front, back, deckId, queryClient, toast, collectAllNums]);
 
-  // Auto-reconcile siblings when the set of unique nums changes (new color/cloze added)
+  // Auto-reconcile siblings when the set of unique nums changes (new color/cloze added/removed)
   const numsKey = useMemo(() => collectAllNums().join(','), [collectAllNums]);
   useEffect(() => {
     if (!currentCard || !isDirty) return;
     const prev = prevNumsKeyRef.current;
     prevNumsKeyRef.current = numsKey;
-    // Only auto-save when nums actually changed (not on initial load)
-    if (prev && prev !== numsKey && numsKey) {
+    if (prev !== null && prev !== numsKey) {
       saveCurrentCard();
     }
   }, [numsKey]); // intentionally minimal deps — we read latest via closure
