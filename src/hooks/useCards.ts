@@ -17,7 +17,7 @@ export const useCards = (deckId: string, opts?: { enableQuery?: boolean }) => {
   });
 
   const createCard = useMutation({
-    mutationFn: async (input: { frontContent: string; backContent: string; cardType?: string } | { cards: { frontContent: string; backContent: string; cardType: string }[] }) => {
+    mutationFn: async (input: { frontContent: string; backContent: string; cardType?: string; createdAt?: string } | { cards: { frontContent: string; backContent: string; cardType: string }[] }) => {
       if ('cards' in input) {
         return cardService.createCards(deckId, input.cards);
       }
