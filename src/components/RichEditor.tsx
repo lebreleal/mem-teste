@@ -722,7 +722,15 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     skipNextClozeSyncRef.current = true;
     isUpdatingClozeRef.current = true;
     try {
-      editor.chain().focus().setMark('clozeMark', { num: String(nextNum) }).run();
+      if (hasSelection) {
+        // Apply mark to selection, then place cursor at end of selection (inside the mark)
+        editor.chain().focus()
+          .setMark('clozeMark', { num: String(nextNum) })
+          .setTextSelection(to)
+          .run();
+      } else {
+        editor.chain().focus().setMark('clozeMark', { num: String(nextNum) }).run();
+      }
     } finally {
       isUpdatingClozeRef.current = false;
     }
