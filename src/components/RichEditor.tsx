@@ -227,6 +227,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   // Guards to prevent recursive cloze updates and stale selection sync
   const isUpdatingClozeRef = useRef(false);
   const skipNextClozeSyncRef = useRef(false);
+  const justDeactivatedRef = useRef(false);
 
   const getSelectionClozeContext = useCallback((): { num: number; from: number; to: number } | null => {
     if (!editor) return null;
@@ -315,6 +316,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     if (!editor) return;
 
     skipNextClozeSyncRef.current = false;
+    justDeactivatedRef.current = true;
     setClozeActive(false);
     setCursorInCloze(false);
     if (closePalette) setPaletteOpen(false);
@@ -326,6 +328,9 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     } finally {
       isUpdatingClozeRef.current = false;
     }
+
+    // Clear the guard after a tick so future clicks can re-open the palette
+    setTimeout(() => { justDeactivatedRef.current = false; }, 200);
   }, [editor]);
 
   /** Renumber all cloze groups to be sequential (1,2,3...) */
@@ -386,6 +391,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
 
     const syncClozeState = () => {
       if (isUpdatingClozeRef.current) return;
+      if (justDeactivatedRef.current) return; // Don't re-open palette right after deactivation
 
       const context = getSelectionClozeContext();
       setCursorInCloze(!!context);
