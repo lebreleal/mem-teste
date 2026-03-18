@@ -523,22 +523,15 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
         return;
       }
 
-      // Cursor is outside any cloze
-      // If clozeActive is true, check broader context (adjacent positions) before deactivating
-      // This allows typing at mark boundaries (inclusive:false) while still deactivating on far clicks
+      // Cursor is outside any cloze mark at this position.
+      // When clozeActive is true, NEVER auto-deactivate from syncClozeState.
+      // Deactivation only occurs via explicit user actions:
+      //   - Enter / Escape keys
+      //   - Clicking the cloze toolbar button again
+      //   - Explicit far-click handler (mousedown)
+      // This prevents typing at mark boundaries (inclusive:false) from breaking the flow.
       if (clozeActive) {
-        // Check if cursor is at/near a cloze boundary (adjacent characters have the mark)
-        const broaderCtx = getSelectionClozeContext();
-        if (broaderCtx) return; // near a cloze boundary — let enforceCloze handle it
-
-        // Also check stored marks — user may have just activated cloze and hasn't typed yet
-        const storedMarks = editor.state.storedMarks || [];
-        const hasStoredCloze = storedMarks.some(m => m.type === editor.schema.marks.clozeMark);
-        if (hasStoredCloze) return; // stored mark ready for next character
-
-        // Cursor is genuinely far from any cloze — deactivate
-        deactivateClozeMode();
-        return;
+        return; // keep cloze mode active — enforceCloze will re-apply the mark
       }
 
       // Only close palette if it was open from navigating into an existing cloze
@@ -574,7 +567,35 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       editor.off('blur', handleBlur);
       editor.off('transaction', syncClozeContent);
     };
-  }, [editor, clozeActive, paletteOpen, deactivateClozeMode, getSelectionClozeContext]);
+  }, [editor, clozeActive, paletteOpen, deactivateClozeMode]);
+
+  // Deactivate cloze on click far from any cloze mark (mousedown-based, not typing)
+  useEffect(() => {
+    if (!editor || !clozeActive) return;
+    const editorEl = editor.view.dom;
+
+    const handleMouseUp = () => {
+      // After click settles, check if cursor landed inside a cloze
+      requestAnimationFrame(() => {
+        if (!editor || editor.isDestroyed) return;
+        const markType = editor.schema.marks.clozeMark;
+        const { $from, empty } = editor.state.selection;
+        if (!empty) return; // selection drag — don't deactivate
+
+        const inCloze = $from.marks().some(m => m.type === markType);
+        if (inCloze) return;
+
+        // Check adjacent (broader context)
+        const ctx = getSelectionClozeContext();
+        if (ctx) return;
+
+        deactivateClozeMode();
+      });
+    };
+
+    editorEl.addEventListener('mouseup', handleMouseUp);
+    return () => editorEl.removeEventListener('mouseup', handleMouseUp);
+  }, [editor, clozeActive, deactivateClozeMode, getSelectionClozeContext]);
 
   // Re-apply cloze mark while the mode is active so typing can continue inside the same group
   useEffect(() => {

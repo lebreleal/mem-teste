@@ -760,7 +760,7 @@ const ManageDeck = () => {
                 <Plus className="h-4.5 w-4.5" />
               </button>
               <button onClick={() => setAIDeckDialogOpen(true)} className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors" title="Gerar com IA">
-                <IconAIGradient className="h-4.5 w-4.5" />
+                <IconAIGradient className="h-3.5 w-3.5" />
               </button>
               <button onClick={handleDuplicate} className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors" title="Duplicar">
                 <Copy className="h-4 w-4" />
