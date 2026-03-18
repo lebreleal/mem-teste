@@ -226,34 +226,48 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     }
   }, [content, editor]);
 
+  // Guard to prevent infinite loop between syncClozeState and enforceCloze
+  const isUpdatingClozeRef = useRef(false);
+
   // Track whether cursor is inside an existing cloze + re-apply mark while clozeActive
   useEffect(() => {
     if (!editor) return;
 
     const syncClozeState = () => {
+      if (isUpdatingClozeRef.current) return;
       const inCloze = editor.isActive('clozeMark');
       setCursorInCloze(inCloze);
       // Auto-deactivate cloze mode when cursor moves outside a cloze region
       if (clozeActive && !inCloze) {
         const { from, to } = editor.state.selection;
         if (from === to) {
-          // Cursor is outside cloze — deactivate
-          editor.chain().unsetMark('clozeMark').run();
+          // Deactivate BEFORE editor transaction to prevent re-entry
           setClozeActive(false);
+          isUpdatingClozeRef.current = true;
+          try {
+            editor.chain().unsetMark('clozeMark').run();
+          } finally {
+            isUpdatingClozeRef.current = false;
+          }
         }
       }
     };
 
     // Re-apply cloze mark on every transaction while clozeActive
     const enforceCloze = () => {
+      if (isUpdatingClozeRef.current) return;
       syncClozeState();
       if (!clozeActive) return;
       const { from, to } = editor.state.selection;
       if (from !== to) return; // don't mess with selections
       // Check if cursor position already has the cloze mark
       if (!editor.isActive('clozeMark')) {
-        // Re-apply cloze mark at cursor so next typed char is inside
-        editor.chain().setMark('clozeMark', { num: String(clozeCounter) }).run();
+        isUpdatingClozeRef.current = true;
+        try {
+          editor.chain().setMark('clozeMark', { num: String(clozeCounter) }).run();
+        } finally {
+          isUpdatingClozeRef.current = false;
+        }
       }
     };
 
