@@ -188,7 +188,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
     setPolygonPreviewPoint(null);
     setHoveredSelectableId(shape.id);
 
-    if (shape.type === 'rect' && pointerPos) {
+    if ((shape.type === 'rect' || shape.type === 'polygon') && pointerPos) {
       setDragging({ startX: pointerPos.x, startY: pointerPos.y, origShape: cloneShape(shape) });
     }
   }, []);
@@ -211,7 +211,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
       if (selectableHit) {
         setSelectedId(selectableHit.id);
         setShapeColor(selectableHit.color || COLORS[0].fill);
-        if (selectableHit.type === 'rect') {
+        if (selectableHit.type === 'rect' || selectableHit.type === 'polygon') {
           pushHistory();
           setDragging({ startX: clampedPos.x, startY: clampedPos.y, origShape: cloneShape(selectableHit) });
           (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
@@ -285,10 +285,20 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
       return;
     }
 
-    if (dragging?.origShape.type === 'rect') {
-      const nextX = clamp(dragging.origShape.x! + (cx - dragging.startX), 0, imgSize.w - dragging.origShape.w!);
-      const nextY = clamp(dragging.origShape.y! + (cy - dragging.startY), 0, imgSize.h - dragging.origShape.h!);
-      setShapes(prev => prev.map(shape => shape.id === dragging.origShape.id ? { ...shape, x: nextX, y: nextY } : shape));
+    if (dragging) {
+      if (dragging.origShape.type === 'rect') {
+        const nextX = clamp(dragging.origShape.x! + (cx - dragging.startX), 0, imgSize.w - dragging.origShape.w!);
+        const nextY = clamp(dragging.origShape.y! + (cy - dragging.startY), 0, imgSize.h - dragging.origShape.h!);
+        setShapes(prev => prev.map(shape => shape.id === dragging.origShape.id ? { ...shape, x: nextX, y: nextY } : shape));
+      } else if (dragging.origShape.type === 'polygon' && dragging.origShape.points) {
+        const dx = cx - dragging.startX;
+        const dy = cy - dragging.startY;
+        const newPoints = dragging.origShape.points.map(p => ({
+          x: clamp(p.x + dx, 0, imgSize.w),
+          y: clamp(p.y + dy, 0, imgSize.h),
+        }));
+        setShapes(prev => prev.map(shape => shape.id === dragging.origShape.id ? { ...shape, points: newPoints } : shape));
+      }
       return;
     }
 
@@ -309,6 +319,22 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
         newW = Math.max(10, newW);
         newH = Math.max(10, newH);
         setShapes(prev => prev.map(sh => sh.id === s.id ? { ...sh, x: newX, y: newY, w: newW, h: newH } : sh));
+      } else if (s.type === 'polygon' && s.points) {
+        const pts = s.points;
+        const xs = pts.map(p => p.x);
+        const ys = pts.map(p => p.y);
+        const anchor = {
+          x: resizing.corner.includes('w') ? Math.max(...xs) : Math.min(...xs),
+          y: resizing.corner.includes('n') ? Math.max(...ys) : Math.min(...ys),
+        };
+        const origDist = Math.hypot(resizing.startX - anchor.x, resizing.startY - anchor.y);
+        const newDist = Math.hypot(cx - anchor.x, cy - anchor.y);
+        const scaleFactor = origDist > 10 ? newDist / origDist : 1;
+        const newPoints = pts.map(p => ({
+          x: clamp(anchor.x + (p.x - anchor.x) * scaleFactor, 0, imgSize.w),
+          y: clamp(anchor.y + (p.y - anchor.y) * scaleFactor, 0, imgSize.h),
+        }));
+        setShapes(prev => prev.map(sh => sh.id === s.id ? { ...sh, points: newPoints } : sh));
       }
       return;
     }
@@ -762,6 +788,32 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
 
               {shapes.map(renderShape)}
 
+              {/* Polygon resize handles (bounding box uniform scale) */}
+              {selectedId && selectedShape && tool === 'select' && selectedShape.type === 'polygon' && selectedShape.points && selectedShape.points.length > 1 && (() => {
+                const pts = selectedShape.points!;
+                const xs = pts.map(p => p.x);
+                const ys = pts.map(p => p.y);
+                const bbox = { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
+                const colorObj = getColorObj(selectedShape.color || COLORS[0].fill);
+                return ['nw', 'ne', 'sw', 'se'].map(corner => {
+                  const left = corner.includes('w') ? bbox.minX * scale - 4 : bbox.maxX * scale - 4;
+                  const top = corner.includes('n') ? bbox.minY * scale - 4 : bbox.maxY * scale - 4;
+                  return (
+                    <div
+                      key={corner}
+                      className="absolute z-20 pointer-events-auto"
+                      style={{ left, top, width: 8, height: 8, backgroundColor: '#fff', border: `2px solid ${colorObj.border}`, borderRadius: 2, cursor: 'nwse-resize' }}
+                      onPointerDown={(e) => {
+                        e.stopPropagation(); e.preventDefault();
+                        pushHistory();
+                        setResizing({ corner, startX: toImgCoords(e.clientX, e.clientY).x, startY: toImgCoords(e.clientX, e.clientY).y, origShape: cloneShape(selectedShape) });
+                        (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+                      }}
+                    />
+                  );
+                });
+              })()}
+
               {selectedId && selectedShape && tool === 'select' && selectedShape.type !== 'freehand' && (
                 <div
                   className="absolute z-30 pointer-events-auto"
@@ -771,6 +823,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
                   }}
                 >
                   <button
+                    onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
                     onClick={(e) => { e.stopPropagation(); deleteSelected(); }}
                     className="h-7 w-7 flex items-center justify-center rounded-full bg-foreground/90 text-background shadow-lg hover:bg-destructive transition-colors"
                     title="Excluir"
@@ -817,7 +870,8 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
             {/* Colors — left middle outside image */}
             <div className="absolute left-2 top-1/2 z-20 -translate-y-1/2 flex flex-col items-center gap-2 rounded-xl border border-border/60 bg-card/90 p-2 shadow-sm backdrop-blur-sm">
               {visibleColors.map(c => {
-                const isActive = shapeColor === c.fill;
+                const showHighlight = tool !== 'select' || !!selectedId;
+                const isActive = showHighlight && shapeColor === c.fill;
                 return (
                   <button
                     key={c.label}
