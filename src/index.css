@@ -426,22 +426,22 @@
   border-bottom: 2px solid hsl(var(--primary));
 }
 
-/* Cloze editor mark – visual badge in the rich editor */
+/* Cloze editor mark – visual badge in the rich editor (colors injected via inline style) */
 .cloze-editor-mark {
   display: inline;
-  background: hsl(var(--primary) / 0.15);
-  color: hsl(var(--primary));
+  background: var(--cloze-bg, hsl(var(--primary) / 0.15));
+  color: var(--cloze-text, hsl(var(--primary)));
   padding: 0.1em 0.4em;
   border-radius: 0.25rem;
   font-weight: 600;
-  border-bottom: 2px solid hsl(var(--primary) / 0.5);
+  border-bottom: 2px solid var(--cloze-border, hsl(var(--primary) / 0.5));
   position: relative;
 }
 .cloze-editor-mark::before {
   content: attr(data-cloze);
   font-size: 0.6em;
   font-weight: 700;
-  color: hsl(var(--primary) / 0.6);
+  color: var(--cloze-text, hsl(var(--primary) / 0.6));
   vertical-align: super;
   margin-right: 1px;
 }

@@ -3,8 +3,10 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ChevronLeft, ChevronRight, Trash2, Copy, Plus, Loader2, Check, X } from 'lucide-react';
 import { IconAIGradient } from '@/components/icons';
 import AICreateDeckDialog from '@/components/AICreateDeckDialog';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import * as cardService from '@/services/cardService';
+import { invalidateDeckRelatedQueries } from '@/lib/queryKeys';
 
 import { Button } from '@/components/ui/button';
 import { CardContent as CardPreviewContent, buildVirtualCards } from '@/components/deck-detail/CardPreviewSheet';
@@ -14,7 +16,7 @@ import { useAIModel } from '@/hooks/useAIModel';
 import { useToast } from '@/hooks/use-toast';
 import LazyRichEditor from '@/components/LazyRichEditor';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { useQueryClient } from '@tanstack/react-query';
+
 import OcclusionEditor from '@/components/manage-deck/OcclusionEditor';
 import AttachmentPreviewModal from '@/components/manage-deck/AttachmentPreviewModal';
 import { enhanceCard } from '@/services/card/cardAI';
@@ -208,9 +210,73 @@ const ManageDeck = () => {
 
   const saveCurrentCard = useCallback(async () => {
     if (!currentCard || !isDirty) return;
-    const { frontContent, backContent } = buildSavePayload();
-    updateCard.mutate({ id: currentCard.id, frontContent, backContent }, { onSuccess: () => setIsDirty(false) });
-  }, [currentCard, isDirty, buildSavePayload, updateCard]);
+    const { frontContent, backContent, cardType } = buildSavePayload();
+
+    // Cloze sibling reconciliation — same logic as DeckDetailHandlers
+    if (cardType === 'cloze') {
+      const plainForNumbers = front.replace(/<[^>]*>/g, '');
+      const clozeNumMatches = [...plainForNumbers.matchAll(/\{\{c(\d+)::/g)];
+      const uniqueNums = [...new Set(clozeNumMatches.map(m => parseInt(m[1])))].sort((a, b) => a - b);
+
+      // Find all sibling cards (same front_content)
+      const allSiblingCards = await cardService.fetchClozeSiblings(
+        [deckId!],
+        currentCard.front_content
+      );
+
+      const existingTargets = new Map<number, string>();
+      allSiblingCards.forEach(c => {
+        try {
+          const parsed = JSON.parse(c.back_content);
+          if (typeof parsed.clozeTarget === 'number') {
+            existingTargets.set(parsed.clozeTarget, c.id);
+            return;
+          }
+        } catch {}
+        const assignedNum = uniqueNums.find(n => !existingTargets.has(n)) ?? 1;
+        existingTargets.set(assignedNum, c.id);
+      });
+
+      const existingNums = [...existingTargets.keys()];
+      const numsToKeep = uniqueNums.filter(n => existingTargets.has(n));
+      const numsToAdd = uniqueNums.filter(n => !existingTargets.has(n));
+      const numsToRemove = existingNums.filter(n => !uniqueNums.includes(n));
+
+      try {
+        // Update existing sibling cards
+        const updatePromises = numsToKeep.map(n => {
+          const cardId = existingTargets.get(n)!;
+          const backJson = JSON.stringify({ clozeTarget: n, extra: back });
+          return cardService.updateCard(cardId, frontContent, backJson);
+        });
+
+        // Delete removed cloze siblings
+        const deletePromises = numsToRemove.map(n => {
+          const cardId = existingTargets.get(n)!;
+          return cardService.deleteCard(cardId);
+        });
+
+        await Promise.all([...updatePromises, ...deletePromises]);
+
+        // Create new cloze siblings
+        if (numsToAdd.length > 0) {
+          const newCards = numsToAdd.map(n => ({
+            frontContent,
+            backContent: JSON.stringify({ clozeTarget: n, extra: back }),
+            cardType: 'cloze',
+          }));
+          await cardService.createCards(deckId!, newCards);
+        }
+
+        invalidateDeckRelatedQueries(queryClient, deckId!);
+        setIsDirty(false);
+      } catch {
+        toast({ title: 'Erro ao salvar cloze', variant: 'destructive' });
+      }
+    } else {
+      updateCard.mutate({ id: currentCard.id, frontContent, backContent }, { onSuccess: () => setIsDirty(false) });
+    }
+  }, [currentCard, isDirty, buildSavePayload, updateCard, front, back, deckId, queryClient, toast]);
 
   const selectCard = useCallback((idx: number) => {
     if (idx < 0 || idx >= totalCards) return;

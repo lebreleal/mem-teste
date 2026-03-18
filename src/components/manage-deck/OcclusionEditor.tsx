@@ -11,6 +11,7 @@ import { uploadImage as uploadToStorage, invokeDetectOcclusion } from '@/service
 import { useAuth } from '@/hooks/useAuth';
 import { compressImage } from '@/lib/imageUtils';
 import { useToast } from '@/hooks/use-toast';
+import { OCCLUSION_COLORS } from '@/lib/occlusionColors';
 import {
   IconRect, IconPolygon, IconFreehand, IconEraser, IconEyeOpen, IconEyeClosed,
   IconSparkle, IconUpload, IconClose, IconCheck, IconTrash, IconCursor, IconHand,
@@ -33,20 +34,8 @@ interface OcclusionEditorProps {
   isSaving: boolean;
 }
 
-const COLORS = [
-  { fill: 'rgba(59,130,246,0.6)', border: 'rgba(59,130,246,0.9)', label: 'Azul' },
-  { fill: 'rgba(239,68,68,0.55)', border: 'rgba(239,68,68,0.9)', label: 'Vermelho' },
-  { fill: 'rgba(34,197,94,0.55)', border: 'rgba(34,197,94,0.9)', label: 'Verde' },
-  { fill: 'rgba(234,179,8,0.55)', border: 'rgba(234,179,8,0.9)', label: 'Amarelo' },
-  { fill: 'rgba(168,85,247,0.55)', border: 'rgba(168,85,247,0.9)', label: 'Roxo' },
-  { fill: 'rgba(249,115,22,0.55)', border: 'rgba(249,115,22,0.9)', label: 'Laranja' },
-  { fill: 'rgba(20,184,166,0.55)', border: 'rgba(20,184,166,0.9)', label: 'Teal' },
-  { fill: 'rgba(236,72,153,0.55)', border: 'rgba(236,72,153,0.9)', label: 'Rosa' },
-  { fill: 'rgba(0,0,0,0.6)', border: 'rgba(0,0,0,0.85)', label: 'Preto' },
-  { fill: 'rgba(107,114,128,0.55)', border: 'rgba(107,114,128,0.9)', label: 'Cinza' },
-  { fill: 'rgba(6,182,212,0.55)', border: 'rgba(6,182,212,0.9)', label: 'Ciano' },
-  { fill: 'rgba(132,204,22,0.55)', border: 'rgba(132,204,22,0.9)', label: 'Lima' },
-];
+// Use shared colors — alias for backward compat within this file
+const COLORS = OCCLUSION_COLORS;
 
 const getColorObj = (fill: string) => COLORS.find(c => c.fill === fill) || COLORS[0];
 const cloneShape = (shape: OcclusionShape): OcclusionShape => ({
@@ -749,7 +738,7 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
                 crossOrigin="anonymous"
                 onLoad={handleImgLoad}
                 className="block select-none pointer-events-none"
-                style={{ width: displaySize.w, height: displaySize.h, userSelect: 'none', WebkitUserDrag: 'none' } as any}
+                style={{ width: displaySize.w || '100%', height: displaySize.h || 'auto', userSelect: 'none', WebkitUserDrag: 'none' } as React.CSSProperties}
                 draggable={false}
               />
 
