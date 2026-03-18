@@ -110,8 +110,14 @@ const Dashboard = () => {
   useEffect(() => {
     const action = searchParams.get('action');
     if (action === 'ai-deck') {
+      const parentId = searchParams.get('parentDeckId');
+      if (parentId) {
+        const parentDeck = state.decks.find(d => d.id === parentId);
+        setAiDeckParentId(parentId);
+        setAiDeckParentName(parentDeck?.name ?? null);
+      }
       state.setAiDeckOpen(true);
-      setSearchParams((prev) => { const p = new URLSearchParams(prev); p.delete('action'); return p; }, { replace: true });
+      setSearchParams((prev) => { const p = new URLSearchParams(prev); p.delete('action'); p.delete('parentDeckId'); return p; }, { replace: true });
     } else if (action === 'create-deck') {
       state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(null);
       setSearchParams((prev) => { const p = new URLSearchParams(prev); p.delete('action'); return p; }, { replace: true });
