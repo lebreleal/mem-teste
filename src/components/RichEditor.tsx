@@ -524,8 +524,14 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       }
 
       // Cursor is outside any cloze
-      // If clozeActive is true, user is actively creating/extending — let enforceCloze handle it
-      if (clozeActive) return;
+      // If clozeActive is true, check broader context (adjacent positions) before deactivating
+      // This allows typing at mark boundaries (inclusive:false) while still deactivating on far clicks
+      if (clozeActive) {
+        const broaderCtx = getSelectionClozeContext();
+        if (broaderCtx) return; // cursor is at/near a cloze boundary — let enforceCloze handle it
+        deactivateClozeMode();
+        return;
+      }
 
       // Only close palette if it was open from navigating into an existing cloze
       if (paletteOpen) {
