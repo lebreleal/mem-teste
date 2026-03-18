@@ -285,10 +285,20 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
       return;
     }
 
-    if (dragging?.origShape.type === 'rect') {
-      const nextX = clamp(dragging.origShape.x! + (cx - dragging.startX), 0, imgSize.w - dragging.origShape.w!);
-      const nextY = clamp(dragging.origShape.y! + (cy - dragging.startY), 0, imgSize.h - dragging.origShape.h!);
-      setShapes(prev => prev.map(shape => shape.id === dragging.origShape.id ? { ...shape, x: nextX, y: nextY } : shape));
+    if (dragging) {
+      if (dragging.origShape.type === 'rect') {
+        const nextX = clamp(dragging.origShape.x! + (cx - dragging.startX), 0, imgSize.w - dragging.origShape.w!);
+        const nextY = clamp(dragging.origShape.y! + (cy - dragging.startY), 0, imgSize.h - dragging.origShape.h!);
+        setShapes(prev => prev.map(shape => shape.id === dragging.origShape.id ? { ...shape, x: nextX, y: nextY } : shape));
+      } else if (dragging.origShape.type === 'polygon' && dragging.origShape.points) {
+        const dx = cx - dragging.startX;
+        const dy = cy - dragging.startY;
+        const newPoints = dragging.origShape.points.map(p => ({
+          x: clamp(p.x + dx, 0, imgSize.w),
+          y: clamp(p.y + dy, 0, imgSize.h),
+        }));
+        setShapes(prev => prev.map(shape => shape.id === dragging.origShape.id ? { ...shape, points: newPoints } : shape));
+      }
       return;
     }
 
@@ -309,6 +319,22 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
         newW = Math.max(10, newW);
         newH = Math.max(10, newH);
         setShapes(prev => prev.map(sh => sh.id === s.id ? { ...sh, x: newX, y: newY, w: newW, h: newH } : sh));
+      } else if (s.type === 'polygon' && s.points) {
+        const pts = s.points;
+        const xs = pts.map(p => p.x);
+        const ys = pts.map(p => p.y);
+        const anchor = {
+          x: resizing.corner.includes('w') ? Math.max(...xs) : Math.min(...xs),
+          y: resizing.corner.includes('n') ? Math.max(...ys) : Math.min(...ys),
+        };
+        const origDist = Math.hypot(resizing.startX - anchor.x, resizing.startY - anchor.y);
+        const newDist = Math.hypot(cx - anchor.x, cy - anchor.y);
+        const scaleFactor = origDist > 10 ? newDist / origDist : 1;
+        const newPoints = pts.map(p => ({
+          x: clamp(anchor.x + (p.x - anchor.x) * scaleFactor, 0, imgSize.w),
+          y: clamp(anchor.y + (p.y - anchor.y) * scaleFactor, 0, imgSize.h),
+        }));
+        setShapes(prev => prev.map(sh => sh.id === s.id ? { ...sh, points: newPoints } : sh));
       }
       return;
     }
