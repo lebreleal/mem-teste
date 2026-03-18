@@ -537,11 +537,9 @@ const ManageDeck = () => {
                     <button
                       onClick={() => selectCard(idx)}
                       className={`shrink-0 h-7 w-7 my-0.5 rounded-full text-[12px] font-medium transition-all flex items-center justify-center ${
-                        idx === selectedIndex
+                        idx === selectedIndex || isGroupHighlighted
                           ? 'bg-primary text-primary-foreground shadow-sm'
-                          : isGroupHighlighted
-                            ? 'bg-accent/60 text-foreground'
-                            : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                          : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                       }`}
                     >
                       {idx + 1}
