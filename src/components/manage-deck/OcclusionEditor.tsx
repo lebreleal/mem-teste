@@ -45,7 +45,7 @@ const cloneShape = (shape: OcclusionShape): OcclusionShape => ({
   points: shape.points?.map(point => ({ ...point })),
 });
 
-const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: OcclusionEditorProps) => {
+const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUsedColorIndices }: OcclusionEditorProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [imageUrl, setImageUrl] = useState('');
