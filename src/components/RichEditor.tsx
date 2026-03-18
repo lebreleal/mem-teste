@@ -521,12 +521,11 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
         return;
       }
 
-      if (clozeActive) {
+      // Cursor is outside any cloze — deactivate everything
+      if (clozeActive || paletteOpen) {
         deactivateClozeMode();
         return;
       }
-
-      setPaletteOpen(false);
     };
 
     const syncClozeContent = () => {
