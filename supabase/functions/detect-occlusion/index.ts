@@ -26,7 +26,7 @@ Deno.serve(async (req) => {
     if (!apiKey) return jsonResponse({ error: "AI não configurada" }, 500);
 
     // Use cheapest Gemini model without thinking
-    const model = "gemini-2.0-flash-lite";
+    const model = "google/gemini-2.5-flash-lite";
 
     const systemPrompt = `You are an OCR bounding box detector. Given an image, identify ALL text regions (lines, paragraphs, titles, labels).
 Return a JSON array of objects, each with normalized coordinates (0 to 1 relative to image dimensions):

@@ -309,7 +309,7 @@ Deno.serve(async (req) => {
     }
 
     if (userId) {
-      await logTokenUsage(supabase, userId, "organize_import", "gemini-2.5-pro",
+      await logTokenUsage(supabase, userId, "organize_import", "google/gemini-2.5-pro",
         { prompt_tokens: totalPromptTokens, completion_tokens: totalCompletionTokens, total_tokens: totalTokens }, 0);
     }
 
