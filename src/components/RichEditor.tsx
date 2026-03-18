@@ -391,6 +391,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
 
     const syncClozeState = () => {
       if (isUpdatingClozeRef.current) return;
+      if (justDeactivatedRef.current) return; // Don't re-open palette right after deactivation
 
       const context = getSelectionClozeContext();
       setCursorInCloze(!!context);
