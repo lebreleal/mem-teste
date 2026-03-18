@@ -65,6 +65,7 @@ const ManageDeck = () => {
   const [occlusionRects, setOcclusionRects] = useState<any[]>([]);
   const [occlusionCanvasSize, setOcclusionCanvasSize] = useState<{ w: number; h: number } | null>(null);
   const [occlusionModalOpen, setOcclusionModalOpen] = useState(false);
+  const prevNumsKeyRef = useRef<string>('');
 
   const sortedCards = useMemo(() => [...(cards ?? [])].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()), [cards]);
   const currentCard = sortedCards[selectedIndex] ?? null;
@@ -179,6 +180,7 @@ const ManageDeck = () => {
       setOcclusionImageUrl(''); setOcclusionRects([]); setOcclusionCanvasSize(null);
     }
     setIsDirty(needsAutoSave);
+    prevNumsKeyRef.current = ''; // reset so auto-reconcile doesn't fire on card switch
   }, [currentCard?.id]);
 
   const detectCardType = useCallback((): string => {
@@ -302,6 +304,18 @@ const ManageDeck = () => {
       updateCard.mutate({ id: currentCard.id, frontContent, backContent }, { onSuccess: () => setIsDirty(false) });
     }
   }, [currentCard, isDirty, buildSavePayload, updateCard, front, back, deckId, queryClient, toast, collectAllNums]);
+
+  // Auto-reconcile siblings when the set of unique nums changes (new color/cloze added)
+  const numsKey = useMemo(() => collectAllNums().join(','), [collectAllNums]);
+  useEffect(() => {
+    if (!currentCard || !isDirty) return;
+    const prev = prevNumsKeyRef.current;
+    prevNumsKeyRef.current = numsKey;
+    // Only auto-save when nums actually changed (not on initial load)
+    if (prev && prev !== numsKey && numsKey) {
+      saveCurrentCard();
+    }
+  }, [numsKey]); // intentionally minimal deps — we read latest via closure
 
   const selectCard = useCallback((idx: number) => {
     if (idx < 0 || idx >= totalCards) return;
