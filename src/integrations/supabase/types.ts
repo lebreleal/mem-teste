@@ -3145,6 +3145,20 @@ export type Database = {
           name: string
         }[]
       }
+      get_recent_cards: {
+        Args: { p_folder_id?: string; p_limit?: number; p_user_id: string }
+        Returns: {
+          back_content: string
+          card_id: string
+          card_type: string
+          deck_id: string
+          deck_name: string
+          folder_name: string
+          front_content: string
+          parent_deck_name: string
+          updated_at: string
+        }[]
+      }
       get_retention_over_time: {
         Args: { p_days?: number; p_user_id: string }
         Returns: {

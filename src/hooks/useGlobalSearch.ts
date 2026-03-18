@@ -1,12 +1,11 @@
 /**
- * useGlobalSearch — debounced FTS hook.
- * Calls searchService and groups results by type.
+ * useGlobalSearch — debounced FTS hook + recent cards.
  */
 
 import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { searchUserContent } from '@/services/searchService';
-import type { SearchResult } from '@/types/search';
+import { searchUserContent, getRecentCards } from '@/services/searchService';
+import type { SearchResult, RecentCard } from '@/types/search';
 
 function useDebounce(value: string, delay: number): string {
   const [debounced, setDebounced] = useState(value);
@@ -35,20 +34,28 @@ export function useGlobalSearch(query: string, options?: UseGlobalSearchOptions)
     gcTime: 5 * 60_000,
   });
 
-  const grouped = useMemo(() => {
-    if (!data) return { decks: [], cards: [] };
-    return {
-      decks: data.filter(r => r.result_type === 'deck'),
-      cards: data.filter(r => r.result_type === 'card'),
-    };
-  }, [data]);
-
   return {
     results: data ?? [],
-    decks: grouped.decks,
-    cards: grouped.cards,
     isLoading: isLoading && debouncedQuery.length >= 2,
     error,
     hasQuery: debouncedQuery.length >= 2,
+  };
+}
+
+export function useRecentCards(options?: UseGlobalSearchOptions & { enabled?: boolean }) {
+  const folderId = options?.folderId;
+  const enabled = options?.enabled ?? true;
+
+  const { data, isLoading } = useQuery<RecentCard[]>({
+    queryKey: ['recent-cards', folderId],
+    queryFn: () => getRecentCards(folderId),
+    enabled,
+    staleTime: 2 * 60_000,
+    gcTime: 5 * 60_000,
+  });
+
+  return {
+    recentCards: data ?? [],
+    isLoading,
   };
 }
