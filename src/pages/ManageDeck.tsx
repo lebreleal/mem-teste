@@ -283,14 +283,14 @@ const ManageDeck = () => {
 
         await Promise.all([...updatePromises, ...deletePromises]);
 
-        // Create new siblings
+        // Create new siblings with created_at close to the current card
         if (numsToAdd.length > 0) {
           const newCards = numsToAdd.map(n => ({
             frontContent,
             backContent: JSON.stringify({ clozeTarget: n, extra: back }),
             cardType,
           }));
-          await cardService.createCards(deckId!, newCards);
+          await cardService.createCards(deckId!, newCards, currentCard.created_at);
         }
 
         invalidateDeckRelatedQueries(queryClient, deckId!);
