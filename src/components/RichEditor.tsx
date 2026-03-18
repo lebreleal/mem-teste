@@ -229,7 +229,17 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     if (!editor) return;
 
     const syncClozeState = () => {
-      setCursorInCloze(editor.isActive('clozeMark'));
+      const inCloze = editor.isActive('clozeMark');
+      setCursorInCloze(inCloze);
+      // Auto-deactivate cloze mode when cursor moves outside a cloze region
+      if (clozeActive && !inCloze) {
+        const { from, to } = editor.state.selection;
+        if (from === to) {
+          // Cursor is outside cloze — deactivate
+          editor.chain().unsetMark('clozeMark').run();
+          setClozeActive(false);
+        }
+      }
     };
 
     // Re-apply cloze mark on every transaction while clozeActive
