@@ -426,13 +426,23 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
 
     if (isBackgroundRef.current && pendingIdRef.current) {
       if (dedupedCards.length > 0) {
-        // Store cards for review instead of auto-saving
-        updatePending(pendingIdRef.current, {
-          status: 'review_ready',
-          cards: dedupedCards,
-          textSample: textSampleRef.current,
-        });
-        toast({ title: '✅ Cartões prontos para revisão', description: `${dedupedCards.length} cartões aguardando revisão.` });
+        // Auto-save cards in background and navigate to ManageDeck
+        try {
+          updatePending(pendingIdRef.current, { status: 'saving' });
+          const targetDeckId = await saveCardsToDeck(dedupedCards, deckName);
+          removePending(pendingIdRef.current);
+          toast({ title: '🧠 Baralho criado!', description: `${dedupedCards.length} cartões salvos` });
+          queryClient.invalidateQueries({ queryKey: ['decks'] });
+          if (targetDeckId) navigate(`/manage/${targetDeckId}`);
+        } catch {
+          // Fallback: store for review
+          updatePending(pendingIdRef.current, {
+            status: 'review_ready',
+            cards: dedupedCards,
+            textSample: textSampleRef.current,
+          });
+          toast({ title: '⚠️ Erro ao salvar automaticamente', description: 'Cartões aguardando revisão manual.', variant: 'destructive' });
+        }
       } else {
         const allFailed = failedCount === totalBatches;
         toast({
