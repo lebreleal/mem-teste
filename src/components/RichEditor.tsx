@@ -70,7 +70,19 @@ function clozeToEditor(html: string): string {
 }
 /** Convert <span data-cloze="1" ...>text</span> → {{c1::text}} */
 function editorToCloze(html: string): string {
-  return html.replace(/<span[^>]*data-cloze="(\d+)"[^>]*>(.*?)<\/span>/g, '{{c$1::$2}}');
+  // First merge adjacent cloze spans with the same number (TipTap may split across inline nodes)
+  let merged = html;
+  // Repeatedly merge until stable: <span data-cloze="X" ...>A</span><span data-cloze="X" ...>B</span> → single span
+  // Also handle whitespace/text between two same-number spans
+  let prev = '';
+  while (prev !== merged) {
+    prev = merged;
+    merged = merged.replace(
+      /(<span[^>]*data-cloze="(\d+)"[^>]*>)(.*?)<\/span>([\s]*)(<span[^>]*data-cloze="\2"[^>]*>)(.*?)<\/span>/g,
+      '$1$3$4$6</span>'
+    );
+  }
+  return merged.replace(/<span[^>]*data-cloze="(\d+)"[^>]*>(.*?)<\/span>/g, '{{c$1::$2}}');
 }
 
 export interface ImageAttachment {
