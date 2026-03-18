@@ -366,22 +366,47 @@ const ManageDeck = () => {
   // Shows the anticipated grouping in the sidebar based on editor content, not just DB state
   const editorNums = useMemo(() => collectAllNums(), [collectAllNums]);
 
-  const { visualSiblingMap, anticipatedCount } = useMemo(() => {
+  // Compute which siblings will be deleted/added based on editor content
+  const { visualSiblingMap, anticipatedCount, deletedSiblingIndices } = useMemo(() => {
     const selectedGroup = siblingMap.get(selectedIndex);
     const currentGroupSize = selectedGroup?.length ?? 1;
     const editorGroupSize = editorNums.length;
+    const editorNumsSet = new Set(editorNums);
 
     // If editor has no nums, dissolve the group visually
     if (editorGroupSize === 0 && selectedGroup) {
       const newMap = new Map(siblingMap);
       selectedGroup.forEach(idx => newMap.delete(idx));
-      return { visualSiblingMap: newMap, anticipatedCount: 0 };
+      return { visualSiblingMap: newMap, anticipatedCount: 0, deletedSiblingIndices: new Set<number>() };
     }
 
-    // If editor has more nums than current DB siblings, show anticipated extra slots
-    const anticipated = Math.max(0, editorGroupSize - currentGroupSize);
-    return { visualSiblingMap: siblingMap, anticipatedCount: anticipated };
-  }, [siblingMap, selectedIndex, editorNums]);
+    // Determine which existing siblings will be deleted (their clozeTarget is no longer in editor)
+    const deleted = new Set<number>();
+    if (selectedGroup) {
+      selectedGroup.forEach(idx => {
+        const c = sortedCards[idx];
+        if (!c) return;
+        let target = 1;
+        try { const p = JSON.parse(c.back_content); if (typeof p.clozeTarget === 'number') target = p.clozeTarget; } catch {}
+        if (!editorNumsSet.has(target)) deleted.add(idx);
+      });
+    }
+
+    // Count how many new siblings will be created
+    const existingTargets = new Set<number>();
+    if (selectedGroup) {
+      selectedGroup.forEach(idx => {
+        const c = sortedCards[idx];
+        if (!c) return;
+        try { const p = JSON.parse(c.back_content); if (typeof p.clozeTarget === 'number') existingTargets.add(p.clozeTarget); } catch {}
+      });
+    } else if (currentCard) {
+      try { const p = JSON.parse(currentCard.back_content); if (typeof p.clozeTarget === 'number') existingTargets.add(p.clozeTarget); } catch {}
+    }
+    const anticipated = editorNums.filter(n => !existingTargets.has(n)).length;
+
+    return { visualSiblingMap: siblingMap, anticipatedCount: anticipated, deletedSiblingIndices: deleted };
+  }, [siblingMap, selectedIndex, editorNums, sortedCards, currentCard]);
 
   // Pending navigation state for unsaved-changes confirmation
   const [pendingNav, setPendingNav] = useState<{ type: 'card'; idx: number } | { type: 'back' } | null>(null);
@@ -608,11 +633,13 @@ const ManageDeck = () => {
                         onMouseEnter={() => { if (isInGroup) setHoveredGroupKey(group![0]); }}
                         onMouseLeave={() => setHoveredGroupKey(null)}
                         className={`shrink-0 h-7 w-7 my-0.5 rounded-full text-[12px] font-medium transition-all flex items-center justify-center ${
-                          idx === selectedIndex || isGroupHighlighted
-                            ? 'bg-primary text-primary-foreground shadow-sm'
-                            : isHovered
-                              ? 'bg-accent text-foreground'
-                              : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                          deletedSiblingIndices.has(idx)
+                            ? 'opacity-30 line-through bg-destructive/10 text-destructive border border-dashed border-destructive/40'
+                            : idx === selectedIndex || isGroupHighlighted
+                              ? 'bg-primary text-primary-foreground shadow-sm'
+                              : isHovered
+                                ? 'bg-accent text-foreground'
+                                : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                         }`}
                       >
                         {idx + 1}
