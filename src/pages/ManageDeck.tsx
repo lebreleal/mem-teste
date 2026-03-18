@@ -126,6 +126,12 @@ const ManageDeck = () => {
     if (!currentCard) return;
     const ct = (currentCard.card_type ?? 'basic') as string;
     let needsAutoSave = false;
+    const loadedNums = new Set<number>();
+
+    const collectTextNums = (value: string) => {
+      const plain = value.replace(/<[^>]*>/g, '');
+      [...plain.matchAll(/\{\{c(\d+)::/g)].forEach((m) => loadedNums.add(parseInt(m[1])));
+    };
 
     const strippedFront = currentCard.front_content.replace(/<[^>]*>/g, '').trim();
     const looksLikeOcclusionJson = /^\s*\{.*"imageUrl"\s*:/.test(strippedFront);
@@ -136,13 +142,25 @@ const ManageDeck = () => {
         let data: any;
         try { data = JSON.parse(currentCard.front_content); }
         catch { data = JSON.parse(strippedFront); }
+        const rects = data.allRects || data.rects || [];
         setOcclusionImageUrl(data.imageUrl || '');
-        setOcclusionRects(data.allRects || data.rects || []);
+        setOcclusionRects(rects);
         setOcclusionCanvasSize(data.canvasWidth ? { w: data.canvasWidth, h: data.canvasHeight } : null);
         const { text, images } = extractImages(data.frontText || '');
         setFront(text);
         setFrontAttachedImages(images);
-      } catch { setFront(''); setOcclusionImageUrl(''); setOcclusionRects([]); setFrontAttachedImages([]); }
+        collectTextNums(data.frontText || '');
+        const usedColors = new Set(rects.map((r: { color?: string }) => r.color || OCCLUSION_COLORS[0].fill));
+        usedColors.forEach((color) => {
+          const idx = OCCLUSION_COLORS.findIndex(c => c.fill === color);
+          if (idx >= 0) loadedNums.add(idx + 1);
+        });
+      } catch {
+        setFront('');
+        setOcclusionImageUrl('');
+        setOcclusionRects([]);
+        setFrontAttachedImages([]);
+      }
       let backRaw = currentCard.back_content || '';
       try { const p = JSON.parse(backRaw); if (p && typeof p.clozeTarget === 'number') backRaw = p.extra || ''; } catch {}
       const { text: backText, images: backImgs } = extractImages(backRaw);
@@ -157,6 +175,8 @@ const ManageDeck = () => {
       const frontPlain = frontVal.replace(/<[^>]*>/g, '');
       const frontHasCloze = /\{\{c\d+::/.test(frontPlain);
       const backHasCloze = /\{\{c\d+::/.test(backPlain);
+      collectTextNums(frontVal);
+      collectTextNums(backRaw);
       if (backHasCloze && !frontHasCloze) {
         const { text, images } = extractImages(backRaw);
         setFront(text); setBack(frontVal && frontVal !== '<p></p>' ? frontVal : '');
@@ -180,7 +200,7 @@ const ManageDeck = () => {
       setOcclusionImageUrl(''); setOcclusionRects([]); setOcclusionCanvasSize(null);
     }
     setIsDirty(needsAutoSave);
-    prevNumsKeyRef.current = ''; // reset so auto-reconcile doesn't fire on card switch
+    prevNumsKeyRef.current = [...loadedNums].sort((a, b) => a - b).join(',');
   }, [currentCard?.id]);
 
   const detectCardType = useCallback((): string => {
