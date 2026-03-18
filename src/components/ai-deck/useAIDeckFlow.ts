@@ -24,6 +24,8 @@ import type { Step, GenProgress, LoadProgress, GeneratedCard, DetailLevel, CardF
 interface UseAIDeckFlowParams {
   onOpenChange: (open: boolean) => void;
   folderId?: string | null;
+  /** Parent deck ID — creates the new deck as a sub-deck */
+  parentDeckId?: string | null;
   existingDeckId?: string | null;
   existingDeckName?: string | null;
   /** Pre-loaded cards from a pending background deck (opens review directly) */
@@ -36,7 +38,7 @@ interface UseAIDeckFlowParams {
   } | null;
 }
 
-export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existingDeckName, pendingReviewData }: UseAIDeckFlowParams) {
+export function useAIDeckFlow({ onOpenChange, folderId, parentDeckId, existingDeckId, existingDeckName, pendingReviewData }: UseAIDeckFlowParams) {
   const { user } = useAuth();
   const { energy } = useEnergy();
   const { isPremium } = usePremium();
@@ -227,7 +229,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     } else {
       // Resolve unique name to avoid duplicates
       const uniqueName = await deckService.resolveUniqueDeckName(user.id, name.trim());
-      const deck = await deckService.createDeck(user.id, uniqueName, folderId ?? null, null, 'fsrs');
+      const deck = await deckService.createDeck(user.id, uniqueName, folderId ?? null, parentDeckId ?? null, 'fsrs');
       targetDeckId = (deck as any).id;
     }
 
@@ -260,7 +262,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     queryClient.invalidateQueries({ queryKey: ['decks'] });
     queryClient.invalidateQueries({ queryKey: ['cards', targetDeckId] });
     return targetDeckId;
-  }, [user, existingDeckId, folderId, queryClient]);
+  }, [user, existingDeckId, folderId, parentDeckId, queryClient]);
 
   // === Deduplication helper (Bloco 4) ===
   const deduplicateCards = useCallback((cards: GeneratedCard[]): GeneratedCard[] => {
