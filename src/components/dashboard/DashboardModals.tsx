@@ -50,6 +50,9 @@ interface DashboardModalsProps {
 
 const DashboardModals = (props: DashboardModalsProps) => {
   const [addMenuStep, setAddMenuStep] = useState<'main' | 'create-deck'>('main');
+  const isSub = props.isSubDeckContext ?? false;
+  const deckLabel = isSub ? 'sub-baralho' : 'baralho';
+  const deckLabelCap = isSub ? 'Sub-baralho' : 'Baralho';
 
   return (
     <>
@@ -58,13 +61,13 @@ const DashboardModals = (props: DashboardModalsProps) => {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>
-               {props.addMenuInfoType === 'deck' && 'O que é um Baralho?'}
-               {props.addMenuInfoType === 'deck-manual' && 'Criar baralho manualmente'}
-               {props.addMenuInfoType === 'deck-ia' && 'Criar baralho com IA'}
+               {props.addMenuInfoType === 'deck' && `O que é um ${deckLabelCap}?`}
+               {props.addMenuInfoType === 'deck-manual' && `Criar ${deckLabel} manualmente`}
+               {props.addMenuInfoType === 'deck-ia' && `Criar ${deckLabel} com IA`}
             </DialogTitle>
             <DialogDescription asChild>
             <div className="text-sm text-muted-foreground leading-relaxed pt-2 space-y-2">
-               {props.addMenuInfoType === 'deck' && (
+               {props.addMenuInfoType === 'deck' && !isSub && (
                  <>
                    <p>
                      O <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3.5 w-3.5" /> baralho</span> organiza seus cartões por tema. No <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3.5 w-3.5" /> baralho</span> de <em>"Antibióticos"</em>, por exemplo, ficam guardados todos os seus cartões sobre esse assunto.
@@ -77,9 +80,19 @@ const DashboardModals = (props: DashboardModalsProps) => {
                    </p>
                  </>
                )}
+               {props.addMenuInfoType === 'deck' && isSub && (
+                 <>
+                   <p>
+                     O <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3.5 w-3.5" /> sub-baralho</span> fica dentro de um baralho pai e permite dividir o conteúdo em subtemas. Por exemplo, dentro do baralho <em>"Farmacologia"</em>, você pode ter sub-baralhos como <em>"Antibióticos"</em> e <em>"Anti-inflamatórios"</em>.
+                   </p>
+                   <p>
+                     Cada sub-baralho herda os limites de estudo do baralho pai, mas organiza seus cartões de forma independente.
+                   </p>
+                 </>
+               )}
                {props.addMenuInfoType === 'deck-manual' && (
                  <>
-                   <p>Você escolhe o nome do <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> baralho</span> e adiciona os cartões (flashcards) um a um.</p>
+                   <p>Você escolhe o nome do <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> {deckLabel}</span> e adiciona os cartões (flashcards) um a um.</p>
                    <p>Ideal quando você quer ter controle total sobre o conteúdo dos seus cartões.</p>
                  </>
                )}
