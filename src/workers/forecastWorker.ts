@@ -193,7 +193,7 @@ let cancelled = false;
 
 function runSimulation(input: SimulatorInput): SimulatorResult {
   cancelled = false;
-  const { params, horizonDays, newCardsPerDay, createdCardsPerDay, dailyMinutes, weeklyMinutes, weeklyNewCards, createdCardsStopDay } = input;
+  const { params, horizonDays, newCardsPerDay, createdCardsPerDay, dailyMinutes, weeklyMinutes, weeklyNewCards, createdCardsStopDay, calibrationFactor } = input;
   const { decks, cards: rawCards, timing, rating_distribution, total_reviews_90d } = params;
 
   const useAdaptive = total_reviews_90d >= 50;
