@@ -64,6 +64,7 @@ const DeckDetailContent = () => {
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameName, setRenameName] = useState('');
   const [activeTab, setActiveTab] = useState('cards');
+  const [studySettingsOpen, setStudySettingsOpen] = useState(false);
 
   const deckMap = useMemo(() => new Map(decks.map(d => [d.id, d])), [decks]);
 
