@@ -352,9 +352,9 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
     // Reviews: account for lapse rate (lapses generate 2× relearning interactions)
     const expectedLapses = reviewCount * lapseRate;
     const successfulReviews = reviewCount - expectedLapses;
-    const revMinRaw = ((successfulReviews * reviewSecsPerCard + expectedLapses * relearningSecsPerCard * 2) * scaleFactor) / 60;
-    const learnMinRaw = (learningCount * learningSecsPerCard * scaleFactor) / 60;
-    const relearnMinRaw = (relearningCount * relearningSecsPerCard * scaleFactor) / 60;
+    const revMinRaw = ((successfulReviews * reviewSecsPerCard + expectedLapses * relearningSecsPerCard * 2) * calFactor) / 60;
+    const learnMinRaw = (learningCount * learningSecsPerCard * calFactor) / 60;
+    const relearnMinRaw = (relearningCount * relearningSecsPerCard * calFactor) / 60;
     const usedMin = revMinRaw + learnMinRaw + relearnMinRaw;
     const dayNewCardsLimit = getNewCardsLimitForDay(day, startDate, newCardsPerDay, weeklyNewCards);
     const effectiveNewLimit = dayNewCardsLimit;
