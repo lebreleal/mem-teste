@@ -45,19 +45,11 @@ export const DEFAULT_STUDY_METRICS: RealStudyMetrics = {
 /** Default calibration factor (empirically measured ~18% gap between elapsed_ms and wall-clock). */
 export const DEFAULT_CALIBRATION_FACTOR = 1.20;
 
-/** Safety floors per state (seconds) to avoid unrealistically low estimates. */
-const FLOOR_REVIEW_S = 5;
-const FLOOR_LEARNING_S = 8;
-const FLOOR_RELEARNING_S = 8;
-const FLOOR_NEW_S = 15;
-
 /**
  * Calculate study time using REAL per-state seconds from user history.
- * Accounts for:
- * - New cards: 1 first-see interaction + (reviewsPerNewCard - 1) learning interactions
- * - Review cards that lapse and become relearning cards
- * - Calibration factor to compensate for between-card gaps not captured by elapsed_ms
- * - Blending between user data and defaults based on data volume
+ * Uses raw user metrics directly — no artificial floors or blending.
+ * The calibration factor (from get_user_time_calibration) already accounts
+ * for between-card gaps, so we trust the user's actual speed.
  */
 export function calculateRealStudyTime(
   newCards: number,
@@ -68,15 +60,10 @@ export function calculateRealStudyTime(
 ): number {
   const factor = calibrationFactor ?? DEFAULT_CALIBRATION_FACTOR;
 
-  // Blend user metrics with defaults based on data volume
-  const weight = Math.min(1, (metrics.totalReviews90d || 0) / 200);
-  const blend = (userVal: number, defaultVal: number, floor: number): number =>
-    Math.max(floor, userVal * weight + defaultVal * (1 - weight));
-
-  const avgNewSec = blend(metrics.avgNewSeconds || DEFAULT_STUDY_METRICS.avgNewSeconds, DEFAULT_STUDY_METRICS.avgNewSeconds, FLOOR_NEW_S);
-  const avgLearnSec = blend(metrics.avgLearningSeconds || DEFAULT_STUDY_METRICS.avgLearningSeconds, DEFAULT_STUDY_METRICS.avgLearningSeconds, FLOOR_LEARNING_S);
-  const avgReviewSec = blend(metrics.avgReviewSeconds || DEFAULT_STUDY_METRICS.avgReviewSeconds, DEFAULT_STUDY_METRICS.avgReviewSeconds, FLOOR_REVIEW_S);
-  const avgRelearnSec = blend(metrics.avgRelearningSeconds || DEFAULT_STUDY_METRICS.avgRelearningSeconds, DEFAULT_STUDY_METRICS.avgRelearningSeconds, FLOOR_RELEARNING_S);
+  const avgNewSec = metrics.avgNewSeconds || DEFAULT_STUDY_METRICS.avgNewSeconds;
+  const avgLearnSec = metrics.avgLearningSeconds || DEFAULT_STUDY_METRICS.avgLearningSeconds;
+  const avgReviewSec = metrics.avgReviewSeconds || DEFAULT_STUDY_METRICS.avgReviewSeconds;
+  const avgRelearnSec = metrics.avgRelearningSeconds || DEFAULT_STUDY_METRICS.avgRelearningSeconds;
 
   const reviewsPerNewCard = Math.max(2, metrics.avgReviewsPerNewCard || DEFAULT_STUDY_METRICS.avgReviewsPerNewCard);
 
