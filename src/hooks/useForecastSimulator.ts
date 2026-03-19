@@ -130,7 +130,7 @@ export function useForecastSimulator(options: UseForecastSimulatorOptions) {
     setIsSimulating(true);
     setProgress(0);
     workerRef.current.postMessage({ type: 'run', input } as WorkerMessage);
-  }, [paramsQuery.data, horizonDays, newCardsPerDay, createdCardsPerDay, dailyMinutes, weeklyMinutes, weeklyNewCards, latestTargetDate]);
+  }, [paramsQuery.data, horizonDays, newCardsPerDay, createdCardsPerDay, dailyMinutes, weeklyMinutes, weeklyNewCards, calibrationFactor, latestTargetDate]);
 
   // Debounced trigger
   useEffect(() => {
