@@ -297,69 +297,6 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
         )}
       </div>
 
-
-      {/* Add deck modal */}
-      <Dialog open={showAddDeckMenu} onOpenChange={setShowAddDeckMenu}>
-        <DialogContent className="max-w-xs">
-          <DialogHeader>
-            <DialogTitle>Novo subbaralho em {deck.name}</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col gap-2 pt-1">
-            <button
-              onClick={() => { setShowAddDeckMenu(false); onCreateSubDeck(deck.id); }}
-              className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
-            >
-              <span className="text-sm font-medium text-foreground">Criar subbaralho manualmente</span>
-              <button
-                onClick={(e) => { e.stopPropagation(); setAddDeckInfoType('manual'); }}
-                className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
-              >
-                <Info className="h-3.5 w-3.5" />
-              </button>
-              <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 ml-auto shrink-0" />
-            </button>
-            {onCreateSubDeckAI && (
-              <button
-                onClick={() => { setShowAddDeckMenu(false); onCreateSubDeckAI(deck.id); }}
-                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
-              >
-                <span className="text-sm font-medium text-foreground">Criar subbaralho com IA</span>
-                <button
-                  onClick={(e) => { e.stopPropagation(); setAddDeckInfoType('ia'); }}
-                  className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                >
-                  <Info className="h-3.5 w-3.5" />
-                </button>
-                <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 ml-auto shrink-0" />
-              </button>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Info modal for add deck options */}
-      <Dialog open={addDeckInfoType !== null} onOpenChange={(v) => { if (!v) setAddDeckInfoType(null); }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>{addDeckInfoType === 'manual' ? 'Criar subbaralho manualmente' : 'Criar subbaralho com IA'}</DialogTitle>
-            <DialogDescription className="text-sm text-muted-foreground leading-relaxed pt-2 space-y-2">
-              {addDeckInfoType === 'manual' ? (
-                <>
-                   <p>Você escolhe o nome do baralho e adiciona os cartões (flashcards) um a um.</p>
-                   <p>Ideal quando você quer ter controle total sobre o conteúdo dos seus cartões.</p>
-                </>
-              ) : (
-                <>
-                  <p>Envie seu material de estudo (PDF, imagem ou texto) e a inteligência artificial gera os cartões automaticamente.</p>
-                  <p>Ideal para transformar anotações, slides ou apostilas em flashcards rapidamente.</p>
-                </>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-        </DialogContent>
-      </Dialog>
-
-
       {/* Dev modal for non-admin users */}
       <Dialog open={showDevModal} onOpenChange={setShowDevModal}>
         <DialogContent className="max-w-sm">
