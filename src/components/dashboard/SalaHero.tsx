@@ -65,7 +65,7 @@ const SalaHero = ({
   state, user, isCommunityFolder, sourceTurmaId, communityTurmaInfo,
   userTurma, publishing, handleTogglePublish, openShareModal,
   setSalaImageOpen, setLeaveSalaConfirm, setStudySettingsOpen,
-  realStudyMetrics, salaDifficultyStats,
+  realStudyMetrics, calibrationFactor, salaDifficultyStats,
   organizeMode, setOrganizeMode,
 }: SalaHeroProps) => {
   const navigate = useNavigate();
