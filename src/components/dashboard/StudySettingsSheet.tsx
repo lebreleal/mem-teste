@@ -71,7 +71,7 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
       order.push(d.id);
 
       if (isMateria) {
-        const sortedSubs = [...subs].sort((a, b) => (a as any).sort_order - (b as any).sort_order || a.name.localeCompare(b.name));
+        const sortedSubs = [...subs].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name));
         for (const sub of sortedSubs) {
           map[sub.id] = {
             id: sub.id,

@@ -428,15 +428,15 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     const scopedRoots = hasPlanActive ? roots.filter(d => planRootIds.has(d.id)) : roots;
     return scopedRoots.reduce((sum, d) => {
       const collectNew = (id: string): number => {
-        const dk = decks.find(x => x.id === id);
+        const dk = deckMap.get(id);
         let nr = dk?.new_reviewed_today ?? 0;
-        const children = decks.filter(x => x.parent_deck_id === id && !x.is_archived);
+        const children = childrenIndex.get(id) ?? [];
         for (const child of children) nr += collectNew(child.id);
         return nr;
       };
       return sum + collectNew(d.id);
     }, 0);
-  }, [decks, hasPlanActive, planRootIds]);
+  }, [decks, deckMap, childrenIndex, hasPlanActive, planRootIds]);
 
   const profileQuery = useProfile();
   const profileData = profileQuery.data;
