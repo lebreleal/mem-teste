@@ -560,7 +560,7 @@ export function useStudyPlan(options?: { full?: boolean }) {
       return { cardsPerDay: newCardsPerDay, daysDiff: diff, daysNeeded: newDaysNeeded, peakDay, peakMin };
     }
     return { cardsPerDay: newCardsPerDay, daysDiff: null, daysNeeded: null, peakDay, peakMin };
-  }, [plans, realMetricsQuery.data, metricsQuery.data, forecastQuery.data]);
+  }, [plans, realMetricsQuery.data, calibrationQuery.data, metricsQuery.data, forecastQuery.data]);
 
   const invalidate = useCallback(() => {
     qc.invalidateQueries({ queryKey: ['study-plans'] });
