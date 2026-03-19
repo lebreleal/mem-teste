@@ -34,7 +34,9 @@ export function getAIConfig() {
 
 /** Fetch model mapping from ai_settings table. */
 export async function getModelMap(supabase: any): Promise<Record<string, string>> {
-  const map: Record<string, string> = { pro: "google/gemini-2.5-pro", flash: "google/gemini-2.5-flash-lite" };
+  const isGoogleDirect = !!Deno.env.get("GOOGLE_AI_KEY");
+  const prefix = isGoogleDirect ? "" : "google/";
+  const map: Record<string, string> = { pro: `${prefix}gemini-2.5-pro`, flash: `${prefix}gemini-2.5-flash-lite` };
   try {
     const { data } = await supabase
       .from("ai_settings")

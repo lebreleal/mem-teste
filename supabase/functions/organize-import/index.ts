@@ -311,7 +311,8 @@ Deno.serve(async (req) => {
     }
 
     if (userId) {
-      await logTokenUsage(supabase, userId, "organize_import", "google/gemini-2.5-pro",
+      const logModelMap = await getModelMap(null as any);
+      await logTokenUsage(supabase, userId, "organize_import", logModelMap.pro,
         { prompt_tokens: totalPromptTokens, completion_tokens: totalCompletionTokens, total_tokens: totalTokens }, 0);
     }
 
