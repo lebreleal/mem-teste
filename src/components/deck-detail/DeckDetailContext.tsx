@@ -579,7 +579,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     examTitle, examTotalQuestions, examWrittenCount, examOptionsCount, examTimeLimit,
     improvePreview,
     createCard, updateCard, deleteCard,
-    createExam: createExamStub as Parameters<typeof useDeckDetailHandlers>[0]['createExam'], addNotification, updateNotification,
+    createExam: createExamStub as unknown as Parameters<typeof useDeckDetailHandlers>[0]['createExam'], addNotification, updateNotification,
     setFront, setBack, setEditingId, setCardType, setDeleteId,
     setMoveCardId, setMoveTargetDeck, setSelectedCards, setSelectionMode,
     setBulkMoveOpen, setEditorOpen, setOcclusionImageUrl, setOcclusionRects,
