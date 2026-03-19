@@ -29,6 +29,7 @@ export interface UseForecastSimulatorOptions {
   dailyMinutes: number;
   weeklyMinutes: WeeklyMinutes | null;
   weeklyNewCards?: Record<string, number> | null;
+  calibrationFactor?: number;
   enabled?: boolean;
   /** Latest target date across all objectives — used to stop adding created cards */
   latestTargetDate?: string | null;
