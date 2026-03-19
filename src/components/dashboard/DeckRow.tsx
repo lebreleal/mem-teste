@@ -231,13 +231,13 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
     navigate(`/decks/${deckId}`, readOnlyNavState ? { state: readOnlyNavState } : undefined);
   };
 
-  // Matéria = section header style
-  const isMateria = hasChildren || isEmptyMateria;
+  // Parent deck = section header style (has sub-decks)
+  const isParentDeck = hasChildren || isEmptyParentDeck;
 
   return (
     <>
-      {/* Wrapper for Matéria: rounded container with subtle bg */}
-      {isMateria && (
+      {/* Wrapper for parent deck: rounded container with subtle bg */}
+      {isParentDeck && (
         <div
           {...(dragHandlers ? {
             draggable: dragHandlers.draggable,
