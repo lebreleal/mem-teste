@@ -3023,6 +3023,13 @@ export type Database = {
         }
         Returns: Json
       }
+      get_all_card_ids_for_user: {
+        Args: { p_user_id: string }
+        Returns: {
+          deck_id: string
+          id: string
+        }[]
+      }
       get_all_user_card_counts: {
         Args: { p_user_id: string }
         Returns: {
