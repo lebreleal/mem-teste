@@ -68,19 +68,17 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
 
   const doCreate = useCallback((name: string) => {
     if (state.createType === 'deck') {
-      const isMateria = state.createParentDeckId === '__materia__';
-      const actualParentDeckId = isMateria ? null : state.createParentDeckId;
       state.createDeck.mutate(
-        { name, folderId: actualParentDeckId ? null : state.currentFolderId, parentDeckId: actualParentDeckId, algorithmMode: defaultAlgorithm },
+        { name, folderId: state.createParentDeckId ? null : state.currentFolderId, parentDeckId: state.createParentDeckId, algorithmMode: defaultAlgorithm },
         {
-          onSuccess: (newDeck: any) => {
+          onSuccess: (newDeck: { id: string } | undefined) => {
             state.setCreateType(null); state.setCreateName('');
-            if (isMateria && newDeck?.id) {
-              toast({ title: 'Matéria criada!' });
-              state.toggleExpand(newDeck.id);
+            if (state.createParentDeckId) {
+              toast({ title: 'Subbaralho criado!' });
+              state.toggleExpand(state.createParentDeckId);
             } else {
               toast({ title: 'Baralho criado!' });
-              if (state.createParentDeckId) state.toggleExpand(state.createParentDeckId);
+              if (newDeck?.id) state.toggleExpand(newDeck.id);
             }
             state.setCreateParentDeckId(null);
           },
@@ -89,8 +87,8 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
       );
     } else {
       state.createFolder.mutate({ name, parentId: state.currentFolderId, section: state.dashboardSection }, {
-        onSuccess: () => { state.setCreateType(null); state.setCreateName(''); toast({ title: 'Classe criada!' }); },
-        onError: () => toast({ title: 'Erro ao criar classe', variant: 'destructive' }),
+        onSuccess: () => { state.setCreateType(null); state.setCreateName(''); toast({ title: 'Sala criada!' }); },
+        onError: () => toast({ title: 'Erro ao criar sala', variant: 'destructive' }),
       });
     }
   }, [state, defaultAlgorithm, toast]);
