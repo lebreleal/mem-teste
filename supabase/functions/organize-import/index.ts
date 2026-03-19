@@ -138,11 +138,13 @@ async function organizeBatch(
     : `Organize estes ${batchCount} flashcards (de um total de ${totalCards}) em uma árvore temática.\nOs índices são GLOBAIS, mantenha-os exatamente como estão:\n\n${cardLines}`;
 
   const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
+  const modelMap = await getModelMap(null as any);
+  const organizeModel = modelMap.pro;
   const response = await fetch(AI_URL, {
     method: "POST",
     headers: { Authorization: `Bearer ${AI_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "google/gemini-2.5-pro",
+      model: organizeModel,
       messages: [
         { role: "system", content: buildSystemPrompt(deckName) },
         { role: "user", content: userPrompt },
