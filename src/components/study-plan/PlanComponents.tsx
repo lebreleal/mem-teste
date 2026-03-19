@@ -648,7 +648,7 @@ export function ForecastSimulator({
               </PopoverContent>
             </Popover>
             {/* Folder (Sala) filter */}
-            {folderOptions && folderOptions.length > 1 && onFolderChange && (
+            {folderOptions && folderOptions.length > 0 && onFolderChange && (
               <div className="ml-auto">
                 <select
                   value={selectedFolderId ?? ''}
