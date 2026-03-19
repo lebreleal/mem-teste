@@ -506,16 +506,17 @@ const MateriaDetail: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Study settings — filtered to only decks inside this pasta */}
+      {/* Study settings — matéria mode: show subdecks with toggle-only */}
       <Suspense fallback={null}>
         {studySettingsOpen && (
           <StudySettingsSheet
             open={studySettingsOpen}
             onOpenChange={setStudySettingsOpen}
-            decks={subDecks}
+            decks={decks}
             getSubDecks={getSubDecks}
             getAggregateStats={getAggregateStats}
             currentFolderId={materia.folder_id ?? null}
+            parentDeckId={id}
           />
         )}
       </Suspense>
