@@ -283,12 +283,23 @@ const Dashboard = () => {
             getAggregateStats={state.getAggregateStats}
             getCommunityLinkId={state.getCommunityLinkId}
             navigateToCommunity={actions.handleNavigateCommunity}
-            onCreateSubDeck={salas.isCommunityFolder ? () => {} : (deckId) => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(deckId); }}
-            onCreateSubDeckAI={salas.isCommunityFolder ? undefined : (deckId) => {
-              const parentDeck = state.decks.find(d => d.id === deckId);
-              setAiDeckParentId(deckId); setAiDeckParentName(parentDeck?.name ?? null);
-              state.setAiDeckOpen(true);
-            }}
+             onCreateSubDeck={salas.isCommunityFolder ? () => {} : (deckId) => {
+               const parentDeck = state.decks.find(d => d.id === deckId);
+               if (parentDeck?.parent_deck_id) {
+                 toast({ title: 'Subbaralhos só podem ter 1 nível de profundidade', variant: 'destructive' });
+                 return;
+               }
+               state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(deckId);
+             }}
+             onCreateSubDeckAI={salas.isCommunityFolder ? undefined : (deckId) => {
+               const parentDeck = state.decks.find(d => d.id === deckId);
+               if (parentDeck?.parent_deck_id) {
+                 toast({ title: 'Subbaralhos só podem ter 1 nível de profundidade', variant: 'destructive' });
+                 return;
+               }
+               setAiDeckParentId(deckId); setAiDeckParentName(parentDeck?.name ?? null);
+               state.setAiDeckOpen(true);
+             }}
             onRenameDeck={salas.isCommunityFolder ? () => {} : (d) => { state.setRenameTarget({ type: 'deck', id: d.id, name: d.name }); state.setRenameName(d.name); }}
             onMoveDeck={salas.isCommunityFolder ? () => {} : (d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(d.folder_id || state.currentFolderId); state.setMoveParentDeckId(null); }}
             onArchiveDeck={salas.isCommunityFolder ? () => {} : (id) => state.archiveDeck.mutate(id)}
