@@ -133,7 +133,7 @@ const MateriaDetail: React.FC = () => {
       invalidateDeckRelatedQueries(queryClient);
       setColorVersion(v => v + 1);
       setShowEdit(false);
-      toast({ title: 'Pasta atualizada' });
+      toast({ title: 'Baralho atualizado' });
     },
     onError: (err: Error) => {
       toast({ title: 'Erro ao salvar', description: err.message, variant: 'destructive' });
