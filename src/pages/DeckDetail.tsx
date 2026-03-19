@@ -31,12 +31,12 @@ interface LinkableDeck {
   id: string;
 }
 
-function checkIsLinkedDeck(deck: LinkableDeck | null | undefined, decks: LinkableDeck[]): boolean {
+function checkIsLinkedDeck(deck: LinkableDeck | null | undefined, deckMap: Map<string, LinkableDeck>): boolean {
   if (!deck) return false;
   if (deck.source_turma_deck_id || deck.source_listing_id || deck.is_live_deck) return true;
   let parentId = deck.parent_deck_id;
   while (parentId) {
-    const parent = decks.find(d => d.id === parentId);
+    const parent = deckMap.get(parentId);
     if (!parent) break;
     if (parent.source_turma_deck_id || parent.source_listing_id || parent.is_live_deck) return true;
     parentId = parent.parent_deck_id;
