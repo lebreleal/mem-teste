@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
+import { useState, useMemo, useCallback, useEffect, lazy, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { DeckWithStats } from '@/types/deck';
 import type { Tables } from '@/integrations/supabase/types';
@@ -11,7 +11,7 @@ import DeckDetailDialogs from '@/components/deck-detail/DeckDetailDialogs';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Settings, Layers, RefreshCw, Pencil, Check, MessageSquare, HelpCircle, ChevronRight, BookOpen, SquarePlus, RotateCcw, CheckCircle2, Info, Clock, Play } from 'lucide-react';
+import { ArrowLeft, Settings, Layers, RefreshCw, Pencil, Check, MessageSquare, HelpCircle, ChevronRight, BookOpen, SquarePlus, RotateCcw, CheckCircle2, Info, Clock, Play, SlidersHorizontal } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { calculateRealStudyTime, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils';
 import { formatDistanceToNow } from 'date-fns';
@@ -20,6 +20,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchLinkedDeckSource, fetchPendingSuggestions, countPendingSuggestions } from '@/services/deck/deckCrud';
 import { fetchFolderImageUrl } from '@/services/folderService';
 import { toast } from '@/hooks/use-toast';
+
+const StudySettingsSheet = lazy(() => import('@/components/dashboard/StudySettingsSheet'));
 
 
 /** Detect if a deck is linked to a community/marketplace source (including linked ancestors) */
