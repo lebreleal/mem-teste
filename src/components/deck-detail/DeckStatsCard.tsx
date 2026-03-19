@@ -61,6 +61,17 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
     ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
     : `${remainingMin}min`;
 
+  // Total to finish ALL cards (no daily limits)
+  const allNew = serverCardCounts?.new_count ?? 0;
+  const allLearning = serverCardCounts?.learning_count ?? 0;
+  const allReview = serverCardCounts?.review_count ?? 0;
+  const totalAllCards = allNew + allLearning + allReview;
+  const totalAllSeconds = calculateRealStudyTime(allNew, allLearning, allReview, studyMetrics);
+  const totalAllMin = Math.ceil(totalAllSeconds / 60);
+  const totalAllLabel = totalAllMin >= 60
+    ? `${Math.floor(totalAllMin / 60)}h${totalAllMin % 60 > 0 ? `${totalAllMin % 60}min` : ''}`
+    : `${totalAllMin}min`;
+
   // Gauge segments
   const R = 22;
   const C = 2 * Math.PI * R;
@@ -88,15 +99,27 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
       {pendingForTime > 0 && (
         <div className="flex items-center gap-1.5 px-1">
           <Clock className="h-3 w-3 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">Estimativa: ~{timeLabel}</span>
+          <span className="text-xs text-muted-foreground">Hoje: ~{timeLabel}</span>
           <Popover>
             <PopoverTrigger asChild>
               <button className="text-muted-foreground hover:text-foreground transition-colors">
                 <Info className="h-3 w-3" />
               </button>
             </PopoverTrigger>
-            <PopoverContent side="top" className="text-xs w-56 p-2">
-              {'Tempo estimado para revisar todos os cartões pendentes deste baralho, com base na sua velocidade média de estudo.'}
+            <PopoverContent side="top" className="text-xs w-64 p-3">
+              <div className="space-y-1.5">
+                <p>
+                  <span className="font-semibold">Hoje:</span> {pendingForTime} cartões em ~{timeLabel}
+                </p>
+                {totalAllCards > pendingForTime && (
+                  <p>
+                    <span className="font-semibold">Dominar tudo:</span> {totalAllCards} cartões em ~{totalAllLabel}
+                  </p>
+                )}
+                <p className="text-muted-foreground pt-1 border-t border-border/40">
+                  Baseado na sua velocidade média de estudo.
+                </p>
+              </div>
             </PopoverContent>
           </Popover>
         </div>

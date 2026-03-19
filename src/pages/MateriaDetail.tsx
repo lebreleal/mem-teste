@@ -192,10 +192,10 @@ const MateriaDetail: React.FC = () => {
       return { newCount: nc, newReviewed: nr };
     };
 
+    let rawNewCount = 0;
     let newCountTodayByDeckLimits = 0;
     let learningCount = 0;
     let reviewCount = 0;
-    let reviewedToday = 0;
     let totalDailyReviewLimit = 0;
     let totalReviewReviewedToday = 0;
 
@@ -205,7 +205,6 @@ const MateriaDetail: React.FC = () => {
 
       learningCount += dk.learning_count ?? 0;
       reviewCount += dk.review_count ?? 0;
-      reviewedToday += dk.reviewed_today ?? 0;
       const deckNewGraduatedToday = dk.new_graduated_today ?? 0;
       totalReviewReviewedToday += Math.max(0, (dk.reviewed_today ?? 0) - deckNewGraduatedToday);
 
@@ -216,6 +215,7 @@ const MateriaDetail: React.FC = () => {
         const childNew = collectHierarchyNew(deckId);
         hierarchyNewCount += childNew.newCount;
         hierarchyNewReviewed += childNew.newReviewed;
+        rawNewCount += hierarchyNewCount;
         const remaining = Math.max(0, (dk.daily_new_limit ?? 20) - hierarchyNewReviewed);
         newCountTodayByDeckLimits += Math.min(hierarchyNewCount, remaining);
       }
@@ -237,7 +237,16 @@ const MateriaDetail: React.FC = () => {
     const timeLabel = remainingMin >= 60
       ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
       : `${remainingMin}min`;
-    return { totalDue, timeLabel };
+
+    // Total to finish ALL (no limits)
+    const totalAllSeconds = calculateRealStudyTime(rawNewCount, learningCount, reviewCount, realStudyMetrics);
+    const totalAllMin = Math.ceil(totalAllSeconds / 60);
+    const totalAllLabel = totalAllMin >= 60
+      ? `${Math.floor(totalAllMin / 60)}h${totalAllMin % 60 > 0 ? `${totalAllMin % 60}min` : ''}`
+      : `${totalAllMin}min`;
+    const totalAllCards = rawNewCount + learningCount + reviewCount;
+
+    return { totalDue, timeLabel, totalAllCards, totalAllLabel };
   }, [subDecks, childrenIndex, deckMap, realStudyMetrics]);
 
   // Deck actions — using service layer (Law 2A)
@@ -370,10 +379,20 @@ const MateriaDetail: React.FC = () => {
                 </button>
               </PopoverTrigger>
               <PopoverContent side="bottom" align="center" sideOffset={8} className="w-auto max-w-[18rem] rounded-2xl border border-border bg-background px-3 py-2 text-xs text-foreground shadow-md">
-                <p className="leading-relaxed">
-                  Você é rápido! Em <span className="font-semibold">{studyStats.timeLabel}</span> você termina esses{' '}
-                  <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> {studyStats.totalDue} cartões</span>.
-                </p>
+                <div className="space-y-1.5 leading-relaxed">
+                  <p>
+                    <span className="font-semibold">Hoje:</span>{' '}
+                    <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> {studyStats.totalDue} cartões</span>{' '}
+                    em ~<span className="font-semibold">{studyStats.timeLabel}</span>
+                  </p>
+                  {studyStats.totalAllCards > studyStats.totalDue && (
+                    <p>
+                      <span className="font-semibold">Dominar tudo:</span>{' '}
+                      <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> {studyStats.totalAllCards} cartões</span>{' '}
+                      em ~<span className="font-semibold">{studyStats.totalAllLabel}</span>
+                    </p>
+                  )}
+                </div>
               </PopoverContent>
             </Popover>
           </div>

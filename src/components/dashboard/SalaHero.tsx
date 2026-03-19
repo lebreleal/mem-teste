@@ -171,6 +171,14 @@ const SalaHero = ({
       ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
       : `${remainingMin}min`;
 
+    // Total to finish ALL (no daily limits)
+    const totalAllSeconds = calculateRealStudyTime(rawNewCount, learningCount, reviewCount, realStudyMetrics);
+    const totalAllMin = Math.ceil(totalAllSeconds / 60);
+    const totalAllLabel = totalAllMin >= 60
+      ? `${Math.floor(totalAllMin / 60)}h${totalAllMin % 60 > 0 ? `${totalAllMin % 60}min` : ''}`
+      : `${totalAllMin}min`;
+    const totalAllCards = rawNewCount + learningCount + reviewCount;
+
     const ds = salaDifficultyStats ?? { novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
     const classifiedTotal = ds.novo + ds.facil + ds.bom + ds.dificil + ds.errei;
     const effectiveTotal = classifiedTotal > 0 ? classifiedTotal : totalCards;
@@ -178,7 +186,8 @@ const SalaHero = ({
 
     return {
       newCount: rawNewCount, newCountToday, learningCount, reviewCount, reviewedToday,
-      totalDue, progressPct, timeLabel, totalCards: effectiveTotal, masteredCount, ...ds,
+      totalDue, progressPct, timeLabel, totalCards: effectiveTotal, masteredCount,
+      totalAllLabel, totalAllCards, ...ds,
     };
   }, [state.isInsideSala, state.currentDecks, state.deckMap, state.childrenIndex, salaDifficultyStats, realStudyMetrics]);
 
@@ -365,10 +374,20 @@ const SalaHero = ({
                   sideOffset={8}
                   className="w-auto max-w-[18rem] rounded-2xl border border-border bg-background px-3 py-2 text-xs text-foreground shadow-md"
                 >
-                  <p className="leading-relaxed">
-                    Você é rápido! Em <span className="font-semibold">{salaStudyStats.timeLabel}</span> você termina esses{' '}
-                    <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> {salaStudyStats.totalDue} cartões</span>.
-                  </p>
+                  <div className="space-y-1.5 leading-relaxed">
+                    <p>
+                      <span className="font-semibold">Hoje:</span>{' '}
+                      <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> {salaStudyStats.totalDue} cartões</span>{' '}
+                      em ~<span className="font-semibold">{salaStudyStats.timeLabel}</span>
+                    </p>
+                    {salaStudyStats.totalAllCards > salaStudyStats.totalDue && (
+                      <p>
+                        <span className="font-semibold">Dominar tudo:</span>{' '}
+                        <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> {salaStudyStats.totalAllCards} cartões</span>{' '}
+                        em ~<span className="font-semibold">{salaStudyStats.totalAllLabel}</span>
+                      </p>
+                    )}
+                  </div>
                 </PopoverContent>
               </Popover>
             </div>
