@@ -52,7 +52,7 @@ interface StudyPlanHomeProps {
 
 export const StudyPlanHome = ({
   plans, activeDecks, globalCapacity, expandedDeckIds, allDeckIds, metrics,
-  avgSecondsPerCard, isPremium, updateCapacity, updateNewCardsLimit,
+  avgSecondsPerCard, isPremium, calibrationFactor, updateCapacity, updateNewCardsLimit,
   reorderObjectives, updatePlan,
   onNavigateBack, onStartNewPlan, onStartEdit,
 }: StudyPlanHomeProps) => {
