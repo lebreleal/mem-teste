@@ -36,7 +36,7 @@ import type { Rating } from '@/lib/fsrs';
 const FAST_THRESHOLD_MS = 3000;
 const BASE_TUTOR_COST = 2;
 
-function getSiblingIds(card: any, queue: any[]): string[] {
+function getSiblingIds(card: StudyCard, queue: StudyCard[]): string[] {
   if (card.card_type !== 'cloze') return [];
   return queue.filter(c => c.id !== card.id && c.card_type === 'cloze' && c.front_content === card.front_content).map(c => c.id);
 }
