@@ -104,6 +104,7 @@ export async function fetchStudyQueue(
         // Rebuild deckMap after refresh
         deckMap.clear();
         for (const d of activeDecks) deckMap.set(d.id, d);
+        rootDeckIds = collectRootDeckIds();
       }
     }
 
