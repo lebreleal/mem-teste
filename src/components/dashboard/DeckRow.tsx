@@ -274,8 +274,8 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
       )}
 
 
-      {/* Regular deck (non-matéria) — original flat row */}
-      {!isMateria && (
+      {/* Regular deck (non-parent) — original flat row */}
+      {!isParentDeck && (
         <div
           {...(dragHandlers ? {
             draggable: dragHandlers.draggable,
