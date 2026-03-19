@@ -247,7 +247,7 @@ const MateriaDetail: React.FC = () => {
     const totalAllCards = rawNewCount + learningCount + reviewCount;
 
     return { totalDue, timeLabel, totalAllCards, totalAllLabel };
-  }, [subDecks, childrenIndex, deckMap, realStudyMetrics]);
+  }, [subDecks, childrenIndex, deckMap, realStudyMetrics, calibrationFactor]);
 
   // Deck actions — using service layer (Law 2A)
   const handleRename = useCallback((deck: DeckWithStats) => {
