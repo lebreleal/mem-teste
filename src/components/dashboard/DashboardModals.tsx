@@ -203,7 +203,7 @@ const DashboardModals = (props: DashboardModalsProps) => {
                 onClick={() => { props.setSalaAddMenuOpen(false); setAddMenuStep('main'); props.onCreateDeckManual(); }}
               >
                 <IconDeck className="h-5 w-5 text-muted-foreground shrink-0" />
-                <span className="text-sm font-medium text-foreground flex-1">Criar baralho manualmente</span>
+                <span className="text-sm font-medium text-foreground flex-1">Criar {deckLabel} manualmente</span>
                 <button
                   onClick={(e) => { e.stopPropagation(); props.setAddMenuInfoType('deck-manual'); }}
                   className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
