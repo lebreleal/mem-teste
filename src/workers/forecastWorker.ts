@@ -347,9 +347,11 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
       relearningCount++;
     }
 
-    // ── Step 2: Calculate time used by reviews, then limit new cards by remaining capacity ──
-    // Use fractional minutes during calculation to avoid rounding errors that compound over weeks
-    const revMinRaw = (reviewCount * reviewSecsPerCard * scaleFactor) / 60;
+    // ── Step 2: Calculate time — match calculateRealStudyTime logic ──
+    // Reviews: account for lapse rate (lapses generate 2× relearning interactions)
+    const expectedLapses = reviewCount * lapseRate;
+    const successfulReviews = reviewCount - expectedLapses;
+    const revMinRaw = ((successfulReviews * reviewSecsPerCard + expectedLapses * relearningSecsPerCard * 2) * scaleFactor) / 60;
     const learnMinRaw = (learningCount * learningSecsPerCard * scaleFactor) / 60;
     const relearnMinRaw = (relearningCount * relearningSecsPerCard * scaleFactor) / 60;
     const usedMin = revMinRaw + learnMinRaw + relearnMinRaw;
