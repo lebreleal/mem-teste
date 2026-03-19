@@ -17,6 +17,7 @@ interface DeckStatsTabProps {
 export function DeckStatsTab({ deckId }: DeckStatsTabProps) {
   const { user } = useAuth();
   const { decks } = useDecks();
+  const { calibrationFactor } = useStudyPlan();
   const { forecastView, setForecastView } = useForecastView();
 
   // Collect this deck + all descendant IDs
