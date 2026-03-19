@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import * as studyService from '@/services/studyService';
 import type { Rating } from '@/lib/fsrs';
-import type { StudyQueueResult, StudyCard, DeckStudyConfig } from '@/types/study';
+import type { StudyQueueResult, StudyCard, DeckStudyConfig, CardReviewResult } from '@/types/study';
 
 export type { StudyQueueResult, StudyCard, DeckStudyConfig } from '@/types/study';
 
