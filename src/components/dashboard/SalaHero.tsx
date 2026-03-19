@@ -55,6 +55,7 @@ interface SalaHeroProps {
   setLeaveSalaConfirm: (v: { folderId: string; turmaId: string } | null) => void;
   setStudySettingsOpen: (v: boolean) => void;
   realStudyMetrics: RealStudyMetrics;
+  calibrationFactor?: number;
   salaDifficultyStats: { novo: number; facil: number; bom: number; dificil: number; errei: number };
   organizeMode: boolean;
   setOrganizeMode: (v: boolean) => void;
