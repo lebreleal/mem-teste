@@ -13,7 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
-import { calculateRealStudyTime } from '@/lib/studyUtils';
+import { calculateRealStudyTime, DEFAULT_CALIBRATION_FACTOR } from '@/lib/studyUtils';
 import { IconTrash, IconImage, IconInfo, IconDeck, IconArchive, IconEdit } from '@/components/icons';
 const GlobalSearchDialog = lazy(() => import('@/components/GlobalSearchDialog'));
 import type { User } from '@supabase/supabase-js';
