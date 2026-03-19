@@ -171,6 +171,14 @@ const SalaHero = ({
       ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
       : `${remainingMin}min`;
 
+    // Total to finish ALL (no daily limits)
+    const totalAllSeconds = calculateRealStudyTime(rawNewCount, learningCount, reviewCount, realStudyMetrics);
+    const totalAllMin = Math.ceil(totalAllSeconds / 60);
+    const totalAllLabel = totalAllMin >= 60
+      ? `${Math.floor(totalAllMin / 60)}h${totalAllMin % 60 > 0 ? `${totalAllMin % 60}min` : ''}`
+      : `${totalAllMin}min`;
+    const totalAllCards = rawNewCount + learningCount + reviewCount;
+
     const ds = salaDifficultyStats ?? { novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
     const classifiedTotal = ds.novo + ds.facil + ds.bom + ds.dificil + ds.errei;
     const effectiveTotal = classifiedTotal > 0 ? classifiedTotal : totalCards;
@@ -178,7 +186,8 @@ const SalaHero = ({
 
     return {
       newCount: rawNewCount, newCountToday, learningCount, reviewCount, reviewedToday,
-      totalDue, progressPct, timeLabel, totalCards: effectiveTotal, masteredCount, ...ds,
+      totalDue, progressPct, timeLabel, totalCards: effectiveTotal, masteredCount,
+      totalAllLabel, totalAllCards, ...ds,
     };
   }, [state.isInsideSala, state.currentDecks, state.deckMap, state.childrenIndex, salaDifficultyStats, realStudyMetrics]);
 
