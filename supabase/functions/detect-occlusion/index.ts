@@ -3,7 +3,7 @@
  * Returns normalized bounding boxes (0-1) for each text region.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders, handleCors, jsonResponse, getAIConfig } from "../_shared/utils.ts";
+import { corsHeaders, handleCors, jsonResponse, getAIConfig, getModelMap } from "../_shared/utils.ts";
 
 Deno.serve(async (req) => {
   const cors = handleCors(req);
