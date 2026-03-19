@@ -191,7 +191,7 @@ const SalaHero = ({
       totalDue, progressPct, timeLabel, totalCards: effectiveTotal, masteredCount,
       totalAllLabel, totalAllCards, ...ds,
     };
-  }, [state.isInsideSala, state.currentDecks, state.deckMap, state.childrenIndex, salaDifficultyStats, realStudyMetrics]);
+  }, [state.isInsideSala, state.currentDecks, state.deckMap, state.childrenIndex, salaDifficultyStats, realStudyMetrics, calibrationFactor]);
 
   return (
     <>
