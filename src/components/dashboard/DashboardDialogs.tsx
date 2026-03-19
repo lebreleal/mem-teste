@@ -280,7 +280,7 @@ const DeckMoveDialog = ({
           if (materiasInNewFolder.length === 0) return null;
           return (
             <div className="space-y-1 min-w-0">
-              <p className="text-xs text-muted-foreground font-medium px-1">Mover para dentro de uma matéria:</p>
+              <p className="text-xs text-muted-foreground font-medium px-1">Mover para dentro de um baralho-pai:</p>
               <div className="max-h-40 w-full min-w-0 overflow-y-auto overflow-x-hidden rounded-lg border border-border divide-y divide-border">
                 {materiasInNewFolder.map(m => (
                   <button
