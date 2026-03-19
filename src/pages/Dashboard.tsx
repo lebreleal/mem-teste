@@ -403,10 +403,9 @@ const Dashboard = () => {
         leaveSalaConfirm={salas.leaveSalaConfirm} setLeaveSalaConfirm={salas.setLeaveSalaConfirm}
         handleLeaveSala={salas.handleLeaveSala}
         salaAddMenuOpen={salaAddMenuOpen} setSalaAddMenuOpen={setSalaAddMenuOpen}
-        onCreateDeckManual={() => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
-        onCreateDeckAI={() => state.setAiDeckOpen(true)}
-        onCreateMateria={() => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId('__materia__'); }}
-        onImportCards={() => { state.setImportOpen(true); state.setImportDeckId(null); state.setImportDeckName(''); }}
+         onCreateDeckManual={() => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
+         onCreateDeckAI={() => state.setAiDeckOpen(true)}
+         onImportCards={() => { state.setImportOpen(true); state.setImportDeckId(null); state.setImportDeckName(''); }}
       />
 
       <ShareSalaModal

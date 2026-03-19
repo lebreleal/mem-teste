@@ -400,7 +400,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
       <Dialog open={addDeckInfoType !== null} onOpenChange={(v) => { if (!v) setAddDeckInfoType(null); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>{addDeckInfoType === 'manual' ? 'Criar baralho manualmente' : 'Criar baralho com IA'}</DialogTitle>
+            <DialogTitle>{addDeckInfoType === 'manual' ? 'Criar subbaralho manualmente' : 'Criar subbaralho com IA'}</DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground leading-relaxed pt-2 space-y-2">
               {addDeckInfoType === 'manual' ? (
                 <>

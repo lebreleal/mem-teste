@@ -344,7 +344,7 @@ const DeckMoveDialog = ({
 
       {!isMateria && materiasInFolder.length === 0 && !currentDeck?.parent_deck_id && (
         <div className="px-4 py-4 text-center text-sm text-muted-foreground rounded-lg border border-border">
-          Nenhuma matéria nesta sala para mover
+          Nenhum baralho-pai nesta sala para mover
         </div>
       )}
 

@@ -169,22 +169,7 @@ const DashboardModals = (props: DashboardModalsProps) => {
                 </button>
                 <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 shrink-0" />
               </button>
-              {!props.hideCreatePasta && (
-                <button
-                  className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
-                  onClick={() => { props.setSalaAddMenuOpen(false); setAddMenuStep('main'); props.onCreateMateria(); }}
-                >
-                  <IconFolder className="h-5 w-5 text-muted-foreground shrink-0" />
-                  <span className="text-sm font-medium text-foreground flex-1">Criar pasta</span>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); props.setAddMenuInfoType('materia'); }}
-                    className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                  >
-                    <IconInfo className="h-3.5 w-3.5" />
-                  </button>
-                  <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 shrink-0" />
-                </button>
-              )}
+              </button>
               <button
                 className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
                 onClick={() => { props.setSalaAddMenuOpen(false); setAddMenuStep('main'); props.onImportCards(); }}

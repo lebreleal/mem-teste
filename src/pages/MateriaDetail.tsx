@@ -455,7 +455,7 @@ const MateriaDetail: React.FC = () => {
             <Input
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
-              placeholder="Nome da pasta"
+              placeholder="Nome do baralho"
               autoFocus
             />
             <div>
