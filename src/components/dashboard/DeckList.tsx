@@ -212,15 +212,15 @@ const DeckList = ({
         );
       })}
 
-      {/* Spacer between matérias and loose decks */}
+      {/* Spacer between parent decks and loose decks */}
       {(() => {
-        const hasMaterias = deckDrag.displayItems.some(d => deckRowProps.getSubDecks(d.id).length > 0);
+        const hasParentDecks = deckDrag.displayItems.some(d => deckRowProps.getSubDecks(d.id).length > 0);
         const hasLoose = deckDrag.displayItems.some(d => {
           const subs = deckRowProps.getSubDecks(d.id);
-          const isEmptyMateria = subs.length === 0 && d.total_cards === 0 && deckRowProps.expandedDecks.has(d.id);
-          return subs.length === 0 && !isEmptyMateria;
+          const isEmptyParent = subs.length === 0 && d.total_cards === 0 && deckRowProps.expandedDecks.has(d.id);
+          return subs.length === 0 && !isEmptyParent;
         });
-        return hasMaterias && hasLoose ? <div className="h-3" /> : null;
+        return hasParentDecks && hasLoose ? <div className="h-3" /> : null;
       })()}
 
       {/* Loose decks */}
