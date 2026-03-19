@@ -498,6 +498,7 @@ export function ForecastSimulator({
   onDailyMinutesChange, onWeeklyMinutesChange,
   onApplyCapacity, hasAnyOverride,
   realWeeklyNewCards, weeklyNewCardsOverride, onWeeklyNewCardsChange,
+  folderOptions, selectedFolderId, onFolderChange,
 }: {
   data: ForecastPoint[];
   summary: SimulatorSummary | null;
@@ -528,6 +529,9 @@ export function ForecastSimulator({
   realWeeklyNewCards: WeeklyNewCards | null;
   weeklyNewCardsOverride: WeeklyNewCards | undefined;
   onWeeklyNewCardsChange: (v: WeeklyNewCards | undefined) => void;
+  folderOptions?: { id: string; name: string }[];
+  selectedFolderId?: string | null;
+  onFolderChange?: (id: string | null) => void;
 }) {
   const [showDatePicker, setShowDatePicker] = useState(false);
 
