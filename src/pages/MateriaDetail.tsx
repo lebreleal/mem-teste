@@ -54,7 +54,7 @@ const MateriaDetail: React.FC = () => {
   const queryClient = useQueryClient();
   const { decks, createDeck } = useDecks();
   const { folders } = useFolders();
-  const { realStudyMetrics } = useStudyPlan();
+  const { realStudyMetrics, calibrationFactor } = useStudyPlan();
 
   const materia = useMemo(() => decks?.find(d => d.id === id), [decks, id]);
   const subDecks = useMemo(
