@@ -70,6 +70,35 @@ const DeckDetailContent = () => {
 
   const isLinkedDeck = useMemo(() => checkIsLinkedDeck(deck, deckMap), [deck, deckMap]);
 
+  // Resolve root ancestor folder for StudySettingsSheet
+  const rootFolderId = useMemo(() => {
+    if (!deck) return null;
+    let current: DeckWithStats | undefined = deck as unknown as DeckWithStats;
+    while (current?.parent_deck_id) {
+      current = deckMap.get(current.parent_deck_id);
+    }
+    return current?.folder_id ?? deck.folder_id ?? null;
+  }, [deck, deckMap]);
+
+  const childrenIndex = useMemo(() => {
+    const ci = new Map<string, DeckWithStats[]>();
+    for (const d of decks) {
+      if (d.parent_deck_id && !d.is_archived) {
+        const arr = ci.get(d.parent_deck_id);
+        if (arr) arr.push(d); else ci.set(d.parent_deck_id, [d]);
+      }
+    }
+    return ci;
+  }, [decks]);
+
+  const getSubDecks = useCallback((parentId: string) => childrenIndex.get(parentId) ?? [], [childrenIndex]);
+  const getAggregateStats = useCallback((d: DeckWithStats) => ({
+    new_count: d.new_count ?? 0,
+    learning_count: d.learning_count ?? 0,
+    review_count: d.review_count ?? 0,
+    reviewed_today: d.reviewed_today ?? 0,
+  }), []);
+
   // Resolve folder image for blurred hero background
   const folderImage = useMemo(() => {
     if (!deck) return null;
