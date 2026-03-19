@@ -26,6 +26,7 @@ interface ForecastSimulatorSectionProps {
   updateCapacity: { mutateAsync: (input: { daily_study_minutes: number; weekly_study_minutes?: WeeklyMinutes | null }) => Promise<void> };
   metricsTotalNew?: number;
   activeDecks: DeckWithStats[];
+  calibrationFactor?: number;
 }
 
 export function ForecastSimulatorSection({
