@@ -226,8 +226,8 @@ const DeckList = ({
       {/* Loose decks */}
       {deckDrag.displayItems.filter(d => {
         const subs = deckRowProps.getSubDecks(d.id);
-        const isEmptyMateria = subs.length === 0 && d.total_cards === 0 && deckRowProps.expandedDecks.has(d.id);
-        return subs.length === 0 && !isEmptyMateria;
+        const isEmptyParent = subs.length === 0 && d.total_cards === 0 && deckRowProps.expandedDecks.has(d.id);
+        return subs.length === 0 && !isEmptyParent;
       }).map(deck => {
         const dragHandlers = deckDrag.getHandlers(deck);
         return (

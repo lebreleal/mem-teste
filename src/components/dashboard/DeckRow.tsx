@@ -259,7 +259,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
             </span>
           <div className="flex-1 min-w-0">
             <h3 className="text-[15px] font-semibold text-foreground truncate">{displayName}</h3>
-            {isEmptyMateria && !readOnly && (
+            {isEmptyParentDeck && !readOnly && (
               <button
                 onClick={(e) => { e.stopPropagation(); setShowAddDeckMenu(true); }}
                 className="flex items-center gap-1.5 mt-0.5 text-xs text-muted-foreground hover:text-primary transition-colors"
