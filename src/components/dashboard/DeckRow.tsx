@@ -1,13 +1,12 @@
 /**
  * DeckRow — a single deck item in the dashboard list.
- * Shows name, card count, 4-color progress bar (novo/aprendendo/revisão/dominado).
- * If the deck has sub-decks, shows an expand/collapse icon.
- * 3-dot menu + play icon: visible on hover for loose decks, on expand for matérias.
+ * Shows name, classification bar, hover actions (play/menu), and chevron.
+ * Unified template for all decks (with or without sub-decks).
  */
 
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Info, ChevronDown, ChevronRight, Layers, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings, Plus, Minus, Play, Sparkles, BookOpen, GripVertical } from 'lucide-react';
+import { ChevronDown, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings, Play, GripVertical } from 'lucide-react';
 import { IconDeck } from '@/components/icons';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { DeckWithStats } from '@/hooks/useDecks';
@@ -22,14 +21,6 @@ import {
 
 const ERROR_DECK_NAME = '📕 Baralho de Erros';
 
-function getMateriaColor(deckId: string): string | null {
-  try {
-    const colors = JSON.parse(localStorage.getItem('memo-materia-colors') || '{}');
-    return colors[deckId] ?? null;
-  } catch { return null; }
-}
-
-/**
 /**
  * 5-segment classification bar matching the deck detail gauge:
  *  - info/blue: fácil (d ≤ 3)
@@ -158,7 +149,7 @@ function aggregateClassification(deck: DeckWithStats, getSubDecks: (id: string) 
 }
 
 
-const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
+const DeckRow = ({
   deck, deckSelectionMode, selectedDeckIds,
   toggleDeckSelection, getSubDecks, getAggregateStats,
   onCreateSubDeck, onCreateSubDeckAI,
@@ -170,14 +161,11 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   disableManagementActions = false,
   readOnlyNavState,
   organizeMode = false,
-}, ref) => {
+}: DeckRowProps) => {
   const navigate = useNavigate();
   const { isAdmin } = useIsAdmin();
   const isErrorDeck = deck.name === ERROR_DECK_NAME;
-  const folderColor = useMemo(() => getMateriaColor(deck.id), [deck.id]);
   const [showDevModal, setShowDevModal] = useState(false);
-  const [showAddDeckMenu, setShowAddDeckMenu] = useState(false);
-  const [addDeckInfoType, setAddDeckInfoType] = useState<'manual' | 'ia' | null>(null);
 
   // Auto-detect linked (followed) decks — hide management actions for community-sourced decks
   const isLinkedDeck = useMemo(() => {
@@ -187,7 +175,6 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
 
   const subDecks = useMemo(() => getSubDecks(deck.id), [deck.id, getSubDecks]);
   const hasChildren = subDecks.length > 0;
-  const isExpanded = expandedAccordionId === deck.id;
 
   // Aggregate classification across deck + all descendants
   const classPcts = useMemo(() => aggregateClassification(deck, getSubDecks), [deck, getSubDecks]);
@@ -195,11 +182,6 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   const aggStats = useMemo(() => getAggregateStats(deck), [deck, getAggregateStats]);
   const displayName = isErrorDeck ? 'Baralho de Erros' : deck.name;
   const hasDueCards = aggStats.new_count + aggStats.learning_count + aggStats.review_count > 0;
-
-  // A deck is an empty parent deck only if it has no children, no cards, and is currently expanded
-  const isEmptyParentDeck = !hasChildren && totalCards === 0 && !isErrorDeck && isExpanded;
-  // Empty parent decks stay expanded
-  const effectiveExpanded = isEmptyParentDeck ? true : isExpanded;
 
   const handleClick = () => {
     if (deckSelectionMode) {
@@ -214,12 +196,8 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
       }
       return;
     }
-    // Matéria with children → navigate to dedicated page
+    // Deck with children → navigate to materia detail page
     if (hasChildren) {
-      navigate(`/materia/${deck.id}`);
-      return;
-    }
-    if (isEmptyParentDeck) {
       navigate(`/materia/${deck.id}`);
       return;
     }
@@ -231,201 +209,85 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
     navigate(`/decks/${deckId}`, readOnlyNavState ? { state: readOnlyNavState } : undefined);
   };
 
-  // Parent deck = section header style (has sub-decks)
-  const isParentDeck = hasChildren || isEmptyParentDeck;
-
   return (
     <>
-      {/* Wrapper for parent deck: rounded container with subtle bg */}
-      {isParentDeck && (
-        <div
-          {...(dragHandlers ? {
-            draggable: dragHandlers.draggable,
-            onDragStart: dragHandlers.onDragStart,
-            onDragOver: dragHandlers.onDragOver,
-            onDragEnter: dragHandlers.onDragEnter,
-            onDragLeave: dragHandlers.onDragLeave,
-            onDrop: dragHandlers.onDrop,
-            onDragEnd: dragHandlers.onDragEnd,
-          } : {})}
-          className={`group flex items-center gap-3 px-4 py-3.5 cursor-pointer transition-all hover:bg-muted/30 border-b border-border/50 ${dragHandlers ? dragHandlers.className : ''}`}
-           onClick={handleClick}
-         >
-           {organizeMode && (
-             <GripVertical className="h-4 w-4 text-muted-foreground/50 shrink-0 cursor-grab active:cursor-grabbing" />
-           )}
-           <span className="shrink-0" style={folderColor ? { color: folderColor } : undefined}>
-              <IconDeck className="h-5 w-5" />
-            </span>
-          <div className="flex-1 min-w-0">
-            <h3 className="text-[15px] font-semibold text-foreground truncate">{displayName}</h3>
-            {isEmptyParentDeck && !readOnly && (
-              <button
-                onClick={(e) => { e.stopPropagation(); setShowAddDeckMenu(true); }}
-                className="flex items-center gap-1.5 mt-0.5 text-xs text-muted-foreground hover:text-primary transition-colors"
-              >
-                <Plus className="h-3 w-3" />
-                <span>Adicionar Deck</span>
-              </button>
+      {/* Unified deck row — same template for all decks */}
+      <div
+        {...(dragHandlers ? {
+          draggable: dragHandlers.draggable,
+          onDragStart: dragHandlers.onDragStart,
+          onDragOver: dragHandlers.onDragOver,
+          onDragEnter: dragHandlers.onDragEnter,
+          onDragLeave: dragHandlers.onDragLeave,
+          onDrop: dragHandlers.onDrop,
+          onDragEnd: dragHandlers.onDragEnd,
+        } : {})}
+        className={`group flex items-center gap-3 px-4 py-4 cursor-pointer transition-all hover:bg-muted/50 ${dragHandlers ? dragHandlers.className : ''}`}
+        onClick={handleClick}
+      >
+        {organizeMode && (
+          <GripVertical className="h-4 w-4 text-muted-foreground/50 shrink-0 cursor-grab active:cursor-grabbing" />
+        )}
+        <IconDeck solid={isErrorDeck} className={`h-5 w-5 shrink-0 ${isErrorDeck ? 'text-destructive' : 'text-muted-foreground'}`} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h3 className="font-display text-[13px] font-semibold truncate text-foreground">{displayName}</h3>
+            {isErrorDeck && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    onClick={(e) => e.stopPropagation()}
+                    className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <HelpCircle className="h-4 w-4" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent side="bottom" align="center" sideOffset={8} className="w-auto max-w-[17rem] rounded-2xl border border-border bg-background px-3 py-2.5 text-xs text-foreground shadow-md" onClick={(e) => e.stopPropagation()}>
+                  <p className="leading-relaxed">
+                    Errou? Vem pra cá! 🧠 Quando você corrige seus erros, o cérebro grava de verdade. Estude esse baralho pra dominar o que te pega e nunca mais esquecer.
+                  </p>
+                </PopoverContent>
+              </Popover>
             )}
-            {!isEmptyParentDeck && !readOnly && (
-              <ClassificationBar
-                facilPct={classPcts.facilPct}
-                bomPct={classPcts.bomPct}
-                dificilPct={classPcts.dificilPct}
-                erreiPct={classPcts.erreiPct}
-                novoPct={classPcts.novoPct}
-                className="mt-1.5"
-              />
-            )}
-          </div>
-          <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-        </div>
-      )}
-
-
-      {/* Regular deck (non-parent) — original flat row */}
-      {!isParentDeck && (
-        <div
-          {...(dragHandlers ? {
-            draggable: dragHandlers.draggable,
-            onDragStart: dragHandlers.onDragStart,
-            onDragOver: dragHandlers.onDragOver,
-            onDragEnter: dragHandlers.onDragEnter,
-            onDragLeave: dragHandlers.onDragLeave,
-            onDrop: dragHandlers.onDrop,
-            onDragEnd: dragHandlers.onDragEnd,
-          } : {})}
-          className={`group flex items-center gap-3 px-4 py-4 cursor-pointer transition-all hover:bg-muted/50 ${dragHandlers ? dragHandlers.className : ''}`}
-          onClick={handleClick}
-        >
-          {organizeMode && (
-            <GripVertical className="h-4 w-4 text-muted-foreground/50 shrink-0 cursor-grab active:cursor-grabbing" />
-          )}
-          <IconDeck solid={isErrorDeck} className={`h-5 w-5 shrink-0 ${isErrorDeck ? 'text-destructive' : 'text-muted-foreground'}`} />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className={`font-display text-[13px] font-semibold truncate text-foreground`}>{displayName}</h3>
-              {isErrorDeck && (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button
-                      onClick={(e) => e.stopPropagation()}
-                      className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      <HelpCircle className="h-4 w-4" />
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent side="bottom" align="center" sideOffset={8} className="w-auto max-w-[17rem] rounded-2xl border border-border bg-background px-3 py-2.5 text-xs text-foreground shadow-md" onClick={(e) => e.stopPropagation()}>
-                    <p className="leading-relaxed">
-                      Errou? Vem pra cá! 🧠 Quando você corrige seus erros, o cérebro grava de verdade. Estude esse baralho pra dominar o que te pega e nunca mais esquecer.
-                    </p>
-                  </PopoverContent>
-                </Popover>
-              )}
-              {hasPendingUpdate && (
-                <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-destructive animate-pulse" title="Atualização disponível" />
-              )}
-            </div>
-            {!isErrorDeck && !readOnly && (
-              <ClassificationBar
-                facilPct={classPcts.facilPct}
-                bomPct={classPcts.bomPct}
-                dificilPct={classPcts.dificilPct}
-                erreiPct={classPcts.erreiPct}
-                novoPct={classPcts.novoPct}
-                className="mt-1.5"
-              />
+            {hasPendingUpdate && (
+              <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-destructive animate-pulse" title="Atualização disponível" />
             )}
           </div>
-
-          {/* Actions on hover */}
-          {!isErrorDeck && !deckSelectionMode && !readOnly && (
-            <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-              {hasDueCards && (
-                <button
-                  onClick={(e) => handleStudy(e, deck.id)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                  aria-label="Estudar"
-                >
-                  <Play className="h-3.5 w-3.5 fill-current" />
-                </button>
-              )}
-              {!effectiveDisableManagement && (
-                <DeckMenu deck={deck} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
-              )}
-            </div>
-          )}
-
-          {/* Chevron for navigation */}
-          {!deckSelectionMode && !isErrorDeck && (
-            <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 -rotate-90 group-hover:hidden" />
+          {!isErrorDeck && !readOnly && (
+            <ClassificationBar
+              facilPct={classPcts.facilPct}
+              bomPct={classPcts.bomPct}
+              dificilPct={classPcts.dificilPct}
+              erreiPct={classPcts.erreiPct}
+              novoPct={classPcts.novoPct}
+              className="mt-1.5"
+            />
           )}
         </div>
-      )}
 
-
-      {/* Add deck modal */}
-      <Dialog open={showAddDeckMenu} onOpenChange={setShowAddDeckMenu}>
-        <DialogContent className="max-w-xs">
-          <DialogHeader>
-            <DialogTitle>Novo subbaralho em {deck.name}</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col gap-2 pt-1">
-            <button
-              onClick={() => { setShowAddDeckMenu(false); onCreateSubDeck(deck.id); }}
-              className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
-            >
-              <span className="text-sm font-medium text-foreground">Criar subbaralho manualmente</span>
+        {/* Actions on hover */}
+        {!isErrorDeck && !deckSelectionMode && !readOnly && (
+          <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            {hasDueCards && (
               <button
-                onClick={(e) => { e.stopPropagation(); setAddDeckInfoType('manual'); }}
-                className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                onClick={(e) => handleStudy(e, deck.id)}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                aria-label="Estudar"
               >
-                <Info className="h-3.5 w-3.5" />
-              </button>
-              <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 ml-auto shrink-0" />
-            </button>
-            {onCreateSubDeckAI && (
-              <button
-                onClick={() => { setShowAddDeckMenu(false); onCreateSubDeckAI(deck.id); }}
-                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
-              >
-                <span className="text-sm font-medium text-foreground">Criar subbaralho com IA</span>
-                <button
-                  onClick={(e) => { e.stopPropagation(); setAddDeckInfoType('ia'); }}
-                  className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                >
-                  <Info className="h-3.5 w-3.5" />
-                </button>
-                <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 ml-auto shrink-0" />
+                <Play className="h-3.5 w-3.5 fill-current" />
               </button>
             )}
+            {!effectiveDisableManagement && (
+              <DeckMenu deck={deck} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
+            )}
           </div>
-        </DialogContent>
-      </Dialog>
+        )}
 
-      {/* Info modal for add deck options */}
-      <Dialog open={addDeckInfoType !== null} onOpenChange={(v) => { if (!v) setAddDeckInfoType(null); }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>{addDeckInfoType === 'manual' ? 'Criar subbaralho manualmente' : 'Criar subbaralho com IA'}</DialogTitle>
-            <DialogDescription className="text-sm text-muted-foreground leading-relaxed pt-2 space-y-2">
-              {addDeckInfoType === 'manual' ? (
-                <>
-                   <p>Você escolhe o nome do baralho e adiciona os cartões (flashcards) um a um.</p>
-                   <p>Ideal quando você quer ter controle total sobre o conteúdo dos seus cartões.</p>
-                </>
-              ) : (
-                <>
-                  <p>Envie seu material de estudo (PDF, imagem ou texto) e a inteligência artificial gera os cartões automaticamente.</p>
-                  <p>Ideal para transformar anotações, slides ou apostilas em flashcards rapidamente.</p>
-                </>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-        </DialogContent>
-      </Dialog>
-
+        {/* Chevron for navigation */}
+        {!deckSelectionMode && !isErrorDeck && (
+          <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 -rotate-90 group-hover:hidden" />
+        )}
+      </div>
 
       {/* Dev modal for non-admin users */}
       <Dialog open={showDevModal} onOpenChange={setShowDevModal}>
@@ -455,8 +317,6 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
       </Dialog>
     </>
   );
-});
-
-DeckRow.displayName = 'DeckRow';
+};
 
 export default React.memo(DeckRow);
