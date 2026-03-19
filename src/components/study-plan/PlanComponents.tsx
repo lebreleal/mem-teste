@@ -498,6 +498,7 @@ export function ForecastSimulator({
   onDailyMinutesChange, onWeeklyMinutesChange,
   onApplyCapacity, hasAnyOverride,
   realWeeklyNewCards, weeklyNewCardsOverride, onWeeklyNewCardsChange,
+  folderOptions, selectedFolderId, onFolderChange,
 }: {
   data: ForecastPoint[];
   summary: SimulatorSummary | null;
@@ -528,6 +529,9 @@ export function ForecastSimulator({
   realWeeklyNewCards: WeeklyNewCards | null;
   weeklyNewCardsOverride: WeeklyNewCards | undefined;
   onWeeklyNewCardsChange: (v: WeeklyNewCards | undefined) => void;
+  folderOptions?: { id: string; name: string }[];
+  selectedFolderId?: string | null;
+  onFolderChange?: (id: string | null) => void;
 }) {
   const [showDatePicker, setShowDatePicker] = useState(false);
 
@@ -624,7 +628,7 @@ export function ForecastSimulator({
       {/* Block 2: Chart */}
       <Card>
         <CardContent className="p-4 space-y-3">
-          {/* Header with info tooltip */}
+          {/* Header with info tooltip and folder filter */}
           <div className="flex items-center gap-1.5">
             <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
             <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Carga Diária Prevista</h3>
@@ -643,6 +647,21 @@ export function ForecastSimulator({
                 </div>
               </PopoverContent>
             </Popover>
+            {/* Folder (Sala) filter */}
+            {folderOptions && folderOptions.length > 1 && onFolderChange && (
+              <div className="ml-auto">
+                <select
+                  value={selectedFolderId ?? ''}
+                  onChange={(e) => onFolderChange(e.target.value || null)}
+                  className="text-[11px] h-7 rounded-md border border-border bg-background px-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="">Todas as salas</option>
+                  {folderOptions.map(f => (
+                    <option key={f.id} value={f.id}>{f.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           {/* View chips */}
