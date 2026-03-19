@@ -1,7 +1,7 @@
 /**
- * MateriaDetail — full-screen view for a "Pasta" (parent deck).
+ * MateriaDetail — full-screen view for a deck-pai (parent deck with subdecks).
  * Matches the Sala layout: hero banner, study bar, DeckRow list, BottomNav.
- * No pasta creation inside a pasta (hideCreatePasta).
+ * Subdecks cannot be created inside subdecks (max 2 levels).
  */
 import React, { useState, useMemo, useCallback, useEffect, lazy, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
