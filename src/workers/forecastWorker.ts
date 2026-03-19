@@ -421,7 +421,9 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
     }
 
     // Calculate minutes — keep raw fractional values, round only for final output
-    const newMinRaw = (newCardsToday * newSecsPerCard * scaleFactor) / 60;
+    // New cards: each generates multiple interactions (learning steps + failures)
+    const newInteractions = newCardsToday * reviewsPerNewCard;
+    const newMinRaw = (newInteractions * newSecsPerCard * scaleFactor) / 60;
     const totalMinRaw = revMinRaw + newMinRaw + learnMinRaw + relearnMinRaw;
 
     points.push({
