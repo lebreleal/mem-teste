@@ -249,10 +249,12 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
   }
 
   const useAdaptiveTiming = useAdaptive; // total_reviews_90d >= 50
-  const newSecsPerCard = (useAdaptiveTiming && timing?.avg_new_seconds) ? timing.avg_new_seconds : 30;
+  const newSecsPerCard = (useAdaptiveTiming && timing?.avg_new_seconds) ? Math.max(15, timing.avg_new_seconds) : 30;
   const reviewSecsPerCard = (useAdaptiveTiming && timing?.avg_review_seconds) ? timing.avg_review_seconds : 8;
   const learningSecsPerCard = (useAdaptiveTiming && timing?.avg_learning_seconds) ? timing.avg_learning_seconds : 15;
   const relearningSecsPerCard = (useAdaptiveTiming && timing?.avg_relearning_seconds) ? timing.avg_relearning_seconds : 12;
+  const reviewsPerNewCard = Math.max(2, (useAdaptiveTiming && timing?.avg_reviews_per_new_card) ? timing.avg_reviews_per_new_card : 3);
+  const lapseRate = (useAdaptiveTiming && timing?.avg_lapse_rate != null) ? timing.avg_lapse_rate : 0.10;
 
   const points: ForecastPoint[] = [];
   const newCardsIntroducedPerDeck = new Map<string, number>();
