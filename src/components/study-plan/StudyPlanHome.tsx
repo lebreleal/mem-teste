@@ -40,6 +40,7 @@ interface StudyPlanHomeProps {
   metrics: PlanMetrics | null;
   avgSecondsPerCard: number;
   isPremium: boolean;
+  calibrationFactor?: number;
   updateCapacity: UpdateCapacityMutation;
   updateNewCardsLimit: UpdateNewCardsLimitMutation;
   reorderObjectives: ReorderObjectivesMutation;
