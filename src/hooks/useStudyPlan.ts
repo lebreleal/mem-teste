@@ -682,6 +682,7 @@ export function useStudyPlan(options?: { full?: boolean }) {
     metrics: computed,
     avgSecondsPerCard: realMetricsQuery.data ? deriveAvgSecondsPerCard(realMetricsQuery.data) : 30,
     realStudyMetrics: realMetricsQuery.data ?? DEFAULT_STUDY_METRICS,
+    calibrationFactor: calibrationQuery.data ?? DEFAULT_CALIBRATION_FACTOR,
     calcImpact,
     createPlan,
     updatePlan,
