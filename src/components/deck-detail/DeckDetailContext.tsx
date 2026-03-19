@@ -210,8 +210,8 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const { cards, isLoading: cardsLoading, createCard, updateCard, deleteCard } = useCards(deckId, { enableQuery: false });
   const { decks } = useDecks();
   const { toast } = useToast();
-  // Exam generation stubs (exams system removed)
-  const createExam: DeckDetailContextValue['createExam'] = { mutateAsync: async () => ({ id: '' }) };
+  // Exam generation stubs (exams system removed) — typed loosely to satisfy AnyMutation in handlers
+  const createExamStub = { mutateAsync: async () => ({ id: '' }), isPending: false };
   const addNotification: DeckDetailContextValue['addNotification'] = () => {};
   const updateNotification: DeckDetailContextValue['updateNotification'] = () => {};
   const { energy, spendEnergy } = useEnergy();
