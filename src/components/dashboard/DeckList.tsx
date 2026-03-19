@@ -185,7 +185,7 @@ const DeckList = ({
         );
       })}
 
-      {/* Matérias */}
+      {/* Baralhos-pai (with sub-decks) */}
       {deckDrag.displayItems.filter(d => {
         const subs = deckRowProps.getSubDecks(d.id);
         return subs.length > 0 || (d.total_cards === 0 && deckRowProps.expandedDecks.has(d.id));
