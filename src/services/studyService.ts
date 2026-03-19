@@ -120,7 +120,7 @@ export async function fetchStudyQueue(
     deckIds.forEach(buildZeroLimitSet);
 
     const rootDecks = rootDeckIds
-      .map(id => activeDecks.find(d => d.id === id))
+      .map(id => deckMap.get(id))
       .filter((d): d is (typeof activeDecks)[number] => !!d);
 
     folderLimitDecks = rootDecks;
