@@ -128,7 +128,7 @@ const Study = () => {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const readyIndex = useMemo(() => getNextReadyIndex(localQueue), [localQueue, waitingSeconds, learningTick]);
   const nextCard = readyIndex >= 0 ? localQueue[readyIndex] : null;
-  const [displayedCard, setDisplayedCard] = useState<any>(null);
+  const [displayedCard, setDisplayedCard] = useState<StudyCard | null>(null);
   useEffect(() => { if (!isTransitioning) setDisplayedCard(nextCard); }, [cardKey, isTransitioning, queueInitialized]);
   const currentCard = displayedCard ?? nextCard;
 
