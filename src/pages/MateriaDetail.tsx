@@ -232,7 +232,7 @@ const MateriaDetail: React.FC = () => {
     const cappedReviewCount = Math.max(0, Math.min(reviewCount, totalDailyReviewLimit - totalReviewReviewedToday));
     const totalDue = newCountTodayByDeckLimits + learningCount + cappedReviewCount;
 
-    const remainingSeconds = calculateRealStudyTime(newCountTodayByDeckLimits, learningCount, cappedReviewCount, realStudyMetrics);
+    const remainingSeconds = calculateRealStudyTime(newCountTodayByDeckLimits, learningCount, cappedReviewCount, realStudyMetrics, calibrationFactor);
     const remainingMin = Math.ceil(remainingSeconds / 60);
     const timeLabel = remainingMin >= 60
       ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
