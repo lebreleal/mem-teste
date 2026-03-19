@@ -101,7 +101,9 @@ export async function fetchStudyQueue(
         if (refreshError) throw refreshError;
 
         activeDecks = (refreshedDecks ?? []).filter(d => !d.is_archived);
-        rootDeckIds = collectRootDeckIds();
+        // Rebuild deckMap after refresh
+        deckMap.clear();
+        for (const d of activeDecks) deckMap.set(d.id, d);
       }
     }
 
