@@ -43,6 +43,9 @@ interface DashboardModalsProps {
   onCreateDeckManual: () => void;
   onCreateDeckAI: () => void;
   onImportCards: () => void;
+
+  /** When true, labels say "Sub-baralho" instead of "Baralho" (inside a deck pai) */
+  isSubDeckContext?: boolean;
 }
 
 const DashboardModals = (props: DashboardModalsProps) => {
