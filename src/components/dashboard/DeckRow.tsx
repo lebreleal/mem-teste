@@ -174,7 +174,6 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   const navigate = useNavigate();
   const { isAdmin } = useIsAdmin();
   const isErrorDeck = deck.name === ERROR_DECK_NAME;
-  const folderColor = useMemo(() => getMateriaColor(deck.id), [deck.id]);
   const [showDevModal, setShowDevModal] = useState(false);
   const [showAddDeckMenu, setShowAddDeckMenu] = useState(false);
   const [addDeckInfoType, setAddDeckInfoType] = useState<'manual' | 'ia' | null>(null);
@@ -187,7 +186,6 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
 
   const subDecks = useMemo(() => getSubDecks(deck.id), [deck.id, getSubDecks]);
   const hasChildren = subDecks.length > 0;
-  const isExpanded = expandedAccordionId === deck.id;
 
   // Aggregate classification across deck + all descendants
   const classPcts = useMemo(() => aggregateClassification(deck, getSubDecks), [deck, getSubDecks]);
@@ -195,11 +193,6 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   const aggStats = useMemo(() => getAggregateStats(deck), [deck, getAggregateStats]);
   const displayName = isErrorDeck ? 'Baralho de Erros' : deck.name;
   const hasDueCards = aggStats.new_count + aggStats.learning_count + aggStats.review_count > 0;
-
-  // A deck is an empty parent deck only if it has no children, no cards, and is currently expanded
-  const isEmptyParentDeck = !hasChildren && totalCards === 0 && !isErrorDeck && isExpanded;
-  // Empty parent decks stay expanded
-  const effectiveExpanded = isEmptyParentDeck ? true : isExpanded;
 
   const handleClick = () => {
     if (deckSelectionMode) {
@@ -214,12 +207,8 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
       }
       return;
     }
-    // Matéria with children → navigate to dedicated page
+    // Deck with children → navigate to materia detail page
     if (hasChildren) {
-      navigate(`/materia/${deck.id}`);
-      return;
-    }
-    if (isEmptyParentDeck) {
       navigate(`/materia/${deck.id}`);
       return;
     }
@@ -230,9 +219,6 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
     e.stopPropagation();
     navigate(`/decks/${deckId}`, readOnlyNavState ? { state: readOnlyNavState } : undefined);
   };
-
-  // Parent deck = section header style (has sub-decks)
-  const isParentDeck = hasChildren || isEmptyParentDeck;
 
   return (
     <>
