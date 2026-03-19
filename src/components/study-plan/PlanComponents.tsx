@@ -752,6 +752,27 @@ export function ForecastSimulator({
             </div>
           )}
 
+          {/* Summary stats strip */}
+          {summary && chartData.length > 0 && !isSimulating && (
+            <div className="grid grid-cols-3 gap-2 pt-1">
+              <div className="flex flex-col items-center rounded-lg bg-muted/40 px-2 py-1.5">
+                <span className="text-[10px] text-muted-foreground">Média/dia</span>
+                <span className="text-sm font-bold text-foreground">{formatMinutes(summary.avgAllDaysMin)}</span>
+                <span className="text-[10px] text-muted-foreground">{summary.avgDailyCards} cards</span>
+              </div>
+              <div className="flex flex-col items-center rounded-lg bg-muted/40 px-2 py-1.5">
+                <span className="text-[10px] text-muted-foreground">Pico</span>
+                <span className="text-sm font-bold text-foreground">{formatMinutes(summary.peakMin)}</span>
+                <span className="text-[10px] text-muted-foreground">{summary.peakDate}</span>
+              </div>
+              <div className="flex flex-col items-center rounded-lg bg-muted/40 px-2 py-1.5">
+                <span className="text-[10px] text-muted-foreground">Total período</span>
+                <span className="text-sm font-bold text-foreground">{summary.totalCards} cards</span>
+                <span className="text-[10px] text-muted-foreground">{formatMinutes(summary.avgDailyMin * chartData.length)}</span>
+              </div>
+            </div>
+          )}
+
           {/* Empty state */}
           {data.length === 0 && !isSimulating && (
             <div className="text-center py-6 text-sm text-muted-foreground">
