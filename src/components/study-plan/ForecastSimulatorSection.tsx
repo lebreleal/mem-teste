@@ -31,7 +31,7 @@ interface ForecastSimulatorSectionProps {
 
 export function ForecastSimulatorSection({
   allDeckIds, dailyMinutes, weeklyMinutes, weeklyNewCards, plans,
-  updateCapacity, metricsTotalNew, activeDecks,
+  updateCapacity, metricsTotalNew, activeDecks, calibrationFactor,
 }: ForecastSimulatorSectionProps) {
   const { forecastView, setForecastView } = useForecastView();
   const { toast } = useToast();
