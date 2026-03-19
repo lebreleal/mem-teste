@@ -61,6 +61,17 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
     ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
     : `${remainingMin}min`;
 
+  // Total to finish ALL cards (no daily limits)
+  const allNew = serverCardCounts?.new_count ?? 0;
+  const allLearning = serverCardCounts?.learning_count ?? 0;
+  const allReview = serverCardCounts?.review_count ?? 0;
+  const totalAllCards = allNew + allLearning + allReview;
+  const totalAllSeconds = calculateRealStudyTime(allNew, allLearning, allReview, studyMetrics);
+  const totalAllMin = Math.ceil(totalAllSeconds / 60);
+  const totalAllLabel = totalAllMin >= 60
+    ? `${Math.floor(totalAllMin / 60)}h${totalAllMin % 60 > 0 ? `${totalAllMin % 60}min` : ''}`
+    : `${totalAllMin}min`;
+
   // Gauge segments
   const R = 22;
   const C = 2 * Math.PI * R;
