@@ -1,68 +1,79 @@
 
 
-# Plano: Remover fallback Lovable Gateway + Eliminar gargalo `fetchAllCardIds`
+# Plano: Otimização de Performance + StudySettings no Subdeck + Limpeza
 
-## Situação Atual
+## Problemas Identificados
 
-### AI Gateway
-- `GOOGLE_AI_KEY` **ja esta configurada** nos secrets do Supabase
-- Porem `getAIConfig()` ainda tem fallback para `LOVABLE_API_KEY` / `ai.gateway.lovable.dev` (linhas 28-32 de `_shared/utils.ts`). No servidor proprio, se `GOOGLE_AI_KEY` estiver setada, funciona. Mas o fallback deve ser removido para evitar confusao.
+### 1. StudySettingsSheet não disponível dentro do subdeck (DeckDetail)
+Dentro de `DeckDetail.tsx`, não existe botão "Configurar Estudo" (SlidersHorizontal). O `StudySettingsSheet` só aparece na Sala (Dashboard/SalaHero) e no deck-pai (MateriaDetail). Quando o usuário está dentro de um subdeck, não tem como configurar limites.
 
-### Performance — Por que esta lento
+### 2. `DeckDetailContext.tsx` — 19x `decks.find()` = O(n²) (Lei 1A)
+Dentro de `useMemo` e callbacks, usa `decks.find(dk => dk.id === ...)` repetidamente em loops recursivos (rootTotals, globalNewReviewedToday, descendantIds, rootId). Com 50+ decks, cada `.find()` é O(n). O contexto deveria usar um `Map<string, DeckWithStats>` para lookups O(1).
 
-O **maior gargalo** é `fetchAllCardIds()` em `studyService.ts` (linhas 188-210). Essa funcao:
-1. Divide todos os deckIds ativos em batches de 300
-2. Para cada batch, pagina de 1000 em 1000 **sequencialmente** com `while (hasMore)`
-3. So depois de terminar TODAS as paginas de TODOS os batches, continua para Round 3
+### 3. `DeckDetail.tsx` — `checkIsLinkedDeck` usa `.find()` em loop
+`decks.find(d => d.id === parentId)` dentro de while loop — mesmo problema.
 
-Para um usuario com 50 decks e 5000 cards, isso pode gerar 5-10 round-trips sequenciais ao Supabase. Cada round-trip custa ~100-300ms = **1-3 segundos so nessa etapa**.
+### 4. `_SubDeckList` deprecado mas ainda no bundle (270 linhas mortas)
+O componente está marcado `@deprecated` mas continua no arquivo, aumentando bundle size e confusão.
 
-Alem disso, `fetchAllCardIds` busca IDs de **todos os decks ativos do usuario** (nao so os que vai estudar), porque precisa calcular limites globais. Isso e necessario, mas deve ser feito no servidor, nao com paginacao no cliente.
+### 5. `DeckDetailContext` — `descendantIds` usa `.filter()` recursivo em vez de Map
+Linhas 285-295: BFS com `decks.filter(d => d.parent_deck_id === current)` em cada iteração — O(n²).
 
-## Mudancas
+### 6. `StudySettingsSheet` — usa `(a as any).sort_order` (Lei 3)
+Linhas 48 e 74: cast para `any` para acessar `sort_order`.
 
-### 1. Remover fallback do Lovable Gateway
-**Arquivo: `supabase/functions/_shared/utils.ts`**
-- `getAIConfig()`: usar apenas `GOOGLE_AI_KEY`, sem fallback. Se nao existir, lançar erro claro.
-- `getModelMap()`: remover logica de prefixo condicional, usar nomes diretos sempre.
+### 7. `DeckDetailContext` — `createExam` e notification stubs usam `any` (Lei 3)
+Linhas 214-216: `as any` para stubs de exame.
 
-### 2. Criar RPC `get_all_card_ids_for_user` (Migration SQL)
-```sql
-CREATE OR REPLACE FUNCTION public.get_all_card_ids_for_user(p_user_id uuid)
-RETURNS TABLE(id uuid, deck_id uuid) 
-LANGUAGE sql STABLE SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT c.id, c.deck_id
-  FROM cards c
-  INNER JOIN decks d ON d.id = c.deck_id
-  WHERE d.user_id = p_user_id
-    AND d.is_archived = false;
-$$;
-```
-Uma unica query no servidor, sem paginacao, sem batches. Retorna todos os `(id, deck_id)` de uma vez.
+---
 
-### 3. Substituir `fetchAllCardIds` pela RPC
-**Arquivo: `src/services/studyService.ts`**
-- Remover a funcao `fetchAllCardIds` inteira (linhas 188-210)
-- No `Promise.all` do Round 2, trocar `fetchAllCardIds()` por:
-  ```ts
-  supabase.rpc('get_all_card_ids_for_user', { p_user_id: userId })
-  ```
-- Ajustar o resultado para usar `rpcResult.data ?? []`
+## Mudanças
 
-### 4. Atualizar tipos no Supabase types
-- O arquivo `src/integrations/supabase/types.ts` sera atualizado automaticamente apos a migration.
+### 1. Adicionar botão "Configurar Estudo" no DeckDetail (subdeck)
+**Arquivo: `src/pages/DeckDetail.tsx`**
+- Adicionar ícone `SlidersHorizontal` no header do subdeck (ao lado do Settings)
+- Abrir `StudySettingsSheet` filtrado para os decks do root ancestor (mesma experiência da Sala/MateriaDetail)
+- Passar `decks` filtrados pelo folder do root ancestor
+
+### 2. Criar `deckMap` + `childrenIndex` no DeckDetailContext
+**Arquivo: `src/components/deck-detail/DeckDetailContext.tsx`**
+- Adicionar `deckMap = new Map(decks.map(d => [d.id, d]))` em um `useMemo`
+- Adicionar `childrenIndex = Map<parentId, children[]>` 
+- Substituir TODOS os `decks.find()` e `decks.filter(d => d.parent_deck_id === ...)` por lookups no Map
+- Substituir `rootId` useMemo: usar `deckMap.get()` em vez de `decks.find()`
+- Substituir `rootTotals`: usar `childrenIndex.get()` em vez de `decks.filter()`
+- Substituir `globalNewReviewedToday`: usar `childrenIndex.get()` em vez de `decks.filter()`
+- Substituir `descendantIds`: usar `childrenIndex.get()` em vez de `decks.filter()`
+
+### 3. Substituir `checkIsLinkedDeck` para usar Map
+**Arquivo: `src/pages/DeckDetail.tsx`**
+- Aceitar `deckMap: Map` como parâmetro em vez de `decks: LinkableDeck[]`
+- Usar `deckMap.get(parentId)` em vez de `decks.find()`
+
+### 4. Remover `_SubDeckList` deprecado
+**Arquivo: `src/pages/DeckDetail.tsx`**
+- Deletar ~270 linhas de código morto (linhas 50-320)
+
+### 5. Corrigir `any` no StudySettingsSheet
+**Arquivo: `src/components/dashboard/StudySettingsSheet.tsx`**
+- Trocar `(a as any).sort_order` por `(a.sort_order ?? 0)` — `DeckWithStats` já tem `sort_order`
+
+### 6. Limpar stubs `any` no DeckDetailContext
+**Arquivo: `src/components/deck-detail/DeckDetailContext.tsx`**
+- Tipar `createExam` e notification stubs corretamente sem `any`
 
 ## Arquivos afetados
 
-| Arquivo | Mudanca |
+| Arquivo | Mudança |
 |---|---|
-| `supabase/functions/_shared/utils.ts` | Remover fallback Lovable, so Google direto |
-| Migration SQL | Criar RPC `get_all_card_ids_for_user` |
-| `src/services/studyService.ts` | Trocar `fetchAllCardIds()` por chamada RPC |
+| `src/pages/DeckDetail.tsx` | Botão StudySettings no subdeck; remover `_SubDeckList`; Map-based `checkIsLinkedDeck` |
+| `src/components/deck-detail/DeckDetailContext.tsx` | `deckMap` + `childrenIndex` Maps; eliminar 19x `.find()`; limpar `any` |
+| `src/components/dashboard/StudySettingsSheet.tsx` | Remover `as any` |
 
 ## Impacto esperado
-- **AI**: funciona exclusivamente com `GOOGLE_AI_KEY`, sem dependencia do Lovable
-- **Performance**: eliminacao de 5-10 round-trips sequenciais → 1 unica chamada RPC. Estimativa de melhoria: **1-3 segundos mais rapido** no inicio da sessao de estudo
+- **UX**: usuário pode configurar estudo de dentro de qualquer subdeck
+- **Performance**: eliminação de O(n²) → O(1) no DeckDetailContext (sentido especialmente ao abrir subdecks)
+- **Bundle**: ~270 linhas mortas removidas
+- **Lei 3**: zero `any` nos arquivos afetados
+- **Sem impacto** em estatísticas, contagens ou funcionalidades existentes — apenas otimização de lookups
 
