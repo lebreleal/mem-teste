@@ -124,6 +124,7 @@ export function useForecastSimulator(options: UseForecastSimulatorOptions) {
       weeklyMinutes: weeklyMinutes as Record<string, number> | null,
       weeklyNewCards: weeklyNewCards as Record<string, number> | null ?? null,
       createdCardsStopDay,
+      calibrationFactor: calibrationFactor ?? DEFAULT_CALIBRATION_FACTOR,
     };
 
     setIsSimulating(true);
