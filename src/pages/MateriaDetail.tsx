@@ -1,7 +1,7 @@
 /**
- * MateriaDetail — full-screen view for a "Pasta" (parent deck).
+ * MateriaDetail — full-screen view for a deck-pai (parent deck with subdecks).
  * Matches the Sala layout: hero banner, study bar, DeckRow list, BottomNav.
- * No pasta creation inside a pasta (hideCreatePasta).
+ * Subdecks cannot be created inside subdecks (max 2 levels).
  */
 import React, { useState, useMemo, useCallback, useEffect, lazy, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -106,7 +106,7 @@ const MateriaDetail: React.FC = () => {
 
   // Add menu state (reusing DashboardModals)
   const [salaAddMenuOpen, setSalaAddMenuOpen] = useState(false);
-  const [addMenuInfoType, setAddMenuInfoType] = useState<'deck' | 'materia' | 'deck-manual' | 'deck-ia' | null>(null);
+  const [addMenuInfoType, setAddMenuInfoType] = useState<'deck' | 'deck-manual' | 'deck-ia' | null>(null);
 
   // Listen for + button from BottomNav
   useEffect(() => {
@@ -133,7 +133,7 @@ const MateriaDetail: React.FC = () => {
       invalidateDeckRelatedQueries(queryClient);
       setColorVersion(v => v + 1);
       setShowEdit(false);
-      toast({ title: 'Pasta atualizada' });
+      toast({ title: 'Baralho atualizado' });
     },
     onError: (err: Error) => {
       toast({ title: 'Erro ao salvar', description: err.message, variant: 'destructive' });
@@ -147,7 +147,7 @@ const MateriaDetail: React.FC = () => {
     },
     onSuccess: () => {
       invalidateDeckRelatedQueries(queryClient);
-      toast({ title: 'Pasta arquivada' });
+      toast({ title: 'Baralho arquivado' });
       navigate(-1);
     },
     onError: () => { toast({ title: 'Erro ao arquivar', variant: 'destructive' }); },
@@ -160,7 +160,7 @@ const MateriaDetail: React.FC = () => {
     },
     onSuccess: () => {
       invalidateDeckRelatedQueries(queryClient);
-      toast({ title: 'Pasta excluída' });
+      toast({ title: 'Baralho excluído' });
       navigate(-1);
     },
     onError: () => { toast({ title: 'Erro ao excluir', variant: 'destructive' }); },
@@ -304,12 +304,12 @@ const MateriaDetail: React.FC = () => {
                 <DropdownMenuItem onClick={() => setOrganizeMode(!organizeMode)}>
                   <GripVertical className="h-4 w-4 mr-2" /> {organizeMode ? 'Concluir organização' : 'Organizar baralhos'}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => archiveMutation.mutate()}>
-                  <IconArchive className="h-4 w-4 mr-2" /> Arquivar pasta
-                </DropdownMenuItem>
-                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => deleteMutation.mutate()}>
-                  <IconTrash className="h-4 w-4 mr-2" /> Excluir pasta
-                </DropdownMenuItem>
+                 <DropdownMenuItem onClick={() => archiveMutation.mutate()}>
+                   <IconArchive className="h-4 w-4 mr-2" /> Arquivar baralho
+                 </DropdownMenuItem>
+                 <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => deleteMutation.mutate()}>
+                   <IconTrash className="h-4 w-4 mr-2" /> Excluir baralho
+                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -409,7 +409,7 @@ const MateriaDetail: React.FC = () => {
       {subDecks.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-center px-4">
           <IconDeck className="h-10 w-10 text-muted-foreground/30 mb-3" />
-          <p className="text-sm text-muted-foreground">Nenhum baralho nesta pasta</p>
+          <p className="text-sm text-muted-foreground">Nenhum subbaralho neste baralho</p>
         </div>
       )}
 
@@ -427,37 +427,35 @@ const MateriaDetail: React.FC = () => {
         leaveSalaConfirm={null}
         setLeaveSalaConfirm={noop}
         handleLeaveSala={noop}
-        salaAddMenuOpen={salaAddMenuOpen}
-        setSalaAddMenuOpen={setSalaAddMenuOpen}
-        onCreateDeckManual={() => {
-          createDeck.mutate({ name: 'Novo baralho', parentDeckId: id }, {
-            onSuccess: (newDeck) => {
-              toast({ title: 'Baralho criado' });
-              if (newDeck?.id) navigate(`/decks/${newDeck.id}`);
-            },
-          });
-        }}
-        onCreateDeckAI={() => {
-          navigate(`/dashboard?action=ai-deck&parentDeckId=${id}`);
-        }}
-        onCreateMateria={noop}
-        onImportCards={() => {
-          navigate(`/dashboard?action=import&parentDeckId=${id}`);
-        }}
-        hideCreatePasta
+         salaAddMenuOpen={salaAddMenuOpen}
+         setSalaAddMenuOpen={setSalaAddMenuOpen}
+         onCreateDeckManual={() => {
+           createDeck.mutate({ name: 'Novo subbaralho', parentDeckId: id }, {
+             onSuccess: (newDeck) => {
+               toast({ title: 'Subbaralho criado' });
+               if (newDeck?.id) navigate(`/decks/${newDeck.id}`);
+             },
+           });
+         }}
+         onCreateDeckAI={() => {
+           navigate(`/dashboard?action=ai-deck&parentDeckId=${id}`);
+         }}
+         onImportCards={() => {
+           navigate(`/dashboard?action=import&parentDeckId=${id}`);
+         }}
       />
 
       {/* Edit modal */}
       <Dialog open={showEdit} onOpenChange={setShowEdit}>
         <DialogContent className="max-w-xs">
           <DialogHeader>
-            <DialogTitle>Editar Pasta</DialogTitle>
+            <DialogTitle>Editar Baralho</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <Input
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
-              placeholder="Nome da pasta"
+              placeholder="Nome do baralho"
               autoFocus
             />
             <div>

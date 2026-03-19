@@ -95,7 +95,7 @@ const Dashboard = () => {
   const [studyWeightsOpen, setStudyWeightsOpen] = useState(false);
   const [studySalaSheetOpen, setStudySalaSheetOpen] = useState(false);
   const [studySettingsOpen, setStudySettingsOpen] = useState(false);
-  const [addMenuInfoType, setAddMenuInfoType] = useState<'deck' | 'materia' | 'deck-manual' | 'deck-ia' | null>(null);
+  const [addMenuInfoType, setAddMenuInfoType] = useState<'deck' | 'deck-manual' | 'deck-ia' | null>(null);
 
   const [pendingReviewData, setPendingReviewData] = useState<{
     pendingId: string; cards: GeneratedCard[]; deckName: string; folderId: string | null; textSample?: string;
@@ -283,12 +283,23 @@ const Dashboard = () => {
             getAggregateStats={state.getAggregateStats}
             getCommunityLinkId={state.getCommunityLinkId}
             navigateToCommunity={actions.handleNavigateCommunity}
-            onCreateSubDeck={salas.isCommunityFolder ? () => {} : (deckId) => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(deckId); }}
-            onCreateSubDeckAI={salas.isCommunityFolder ? undefined : (deckId) => {
-              const parentDeck = state.decks.find(d => d.id === deckId);
-              setAiDeckParentId(deckId); setAiDeckParentName(parentDeck?.name ?? null);
-              state.setAiDeckOpen(true);
-            }}
+             onCreateSubDeck={salas.isCommunityFolder ? () => {} : (deckId) => {
+               const parentDeck = state.decks.find(d => d.id === deckId);
+               if (parentDeck?.parent_deck_id) {
+                 toast({ title: 'Subbaralhos só podem ter 1 nível de profundidade', variant: 'destructive' });
+                 return;
+               }
+               state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(deckId);
+             }}
+             onCreateSubDeckAI={salas.isCommunityFolder ? undefined : (deckId) => {
+               const parentDeck = state.decks.find(d => d.id === deckId);
+               if (parentDeck?.parent_deck_id) {
+                 toast({ title: 'Subbaralhos só podem ter 1 nível de profundidade', variant: 'destructive' });
+                 return;
+               }
+               setAiDeckParentId(deckId); setAiDeckParentName(parentDeck?.name ?? null);
+               state.setAiDeckOpen(true);
+             }}
             onRenameDeck={salas.isCommunityFolder ? () => {} : (d) => { state.setRenameTarget({ type: 'deck', id: d.id, name: d.name }); state.setRenameName(d.name); }}
             onMoveDeck={salas.isCommunityFolder ? () => {} : (d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(d.folder_id || state.currentFolderId); state.setMoveParentDeckId(null); }}
             onArchiveDeck={salas.isCommunityFolder ? () => {} : (id) => state.archiveDeck.mutate(id)}
@@ -392,10 +403,9 @@ const Dashboard = () => {
         leaveSalaConfirm={salas.leaveSalaConfirm} setLeaveSalaConfirm={salas.setLeaveSalaConfirm}
         handleLeaveSala={salas.handleLeaveSala}
         salaAddMenuOpen={salaAddMenuOpen} setSalaAddMenuOpen={setSalaAddMenuOpen}
-        onCreateDeckManual={() => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
-        onCreateDeckAI={() => state.setAiDeckOpen(true)}
-        onCreateMateria={() => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId('__materia__'); }}
-        onImportCards={() => { state.setImportOpen(true); state.setImportDeckId(null); state.setImportDeckName(''); }}
+         onCreateDeckManual={() => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
+         onCreateDeckAI={() => state.setAiDeckOpen(true)}
+         onImportCards={() => { state.setImportOpen(true); state.setImportDeckId(null); state.setImportDeckName(''); }}
       />
 
       <ShareSalaModal

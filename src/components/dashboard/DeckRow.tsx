@@ -361,14 +361,14 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
       <Dialog open={showAddDeckMenu} onOpenChange={setShowAddDeckMenu}>
         <DialogContent className="max-w-xs">
           <DialogHeader>
-            <DialogTitle>Novo baralho em {deck.name}</DialogTitle>
+            <DialogTitle>Novo subbaralho em {deck.name}</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-2 pt-1">
             <button
               onClick={() => { setShowAddDeckMenu(false); onCreateSubDeck(deck.id); }}
               className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
             >
-              <span className="text-sm font-medium text-foreground">Criar baralho manualmente</span>
+              <span className="text-sm font-medium text-foreground">Criar subbaralho manualmente</span>
               <button
                 onClick={(e) => { e.stopPropagation(); setAddDeckInfoType('manual'); }}
                 className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
@@ -382,7 +382,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                 onClick={() => { setShowAddDeckMenu(false); onCreateSubDeckAI(deck.id); }}
                 className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
               >
-                <span className="text-sm font-medium text-foreground">Criar baralho com IA</span>
+                <span className="text-sm font-medium text-foreground">Criar subbaralho com IA</span>
                 <button
                   onClick={(e) => { e.stopPropagation(); setAddDeckInfoType('ia'); }}
                   className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
@@ -400,7 +400,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
       <Dialog open={addDeckInfoType !== null} onOpenChange={(v) => { if (!v) setAddDeckInfoType(null); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>{addDeckInfoType === 'manual' ? 'Criar baralho manualmente' : 'Criar baralho com IA'}</DialogTitle>
+            <DialogTitle>{addDeckInfoType === 'manual' ? 'Criar subbaralho manualmente' : 'Criar subbaralho com IA'}</DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground leading-relaxed pt-2 space-y-2">
               {addDeckInfoType === 'manual' ? (
                 <>

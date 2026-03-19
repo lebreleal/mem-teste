@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { IconInfo, IconDeck, IconFolder, IconImport, IconAIGradient } from '@/components/icons';
+import { IconInfo, IconDeck, IconImport, IconAIGradient } from '@/components/icons';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -18,8 +18,8 @@ import SalaImageCropDialog from '@/components/dashboard/SalaImageCropDialog';
 
 interface DashboardModalsProps {
   // Info dialog
-  addMenuInfoType: 'deck' | 'materia' | 'deck-manual' | 'deck-ia' | null;
-  setAddMenuInfoType: (v: 'deck' | 'materia' | 'deck-manual' | 'deck-ia' | null) => void;
+  addMenuInfoType: 'deck' | 'deck-manual' | 'deck-ia' | null;
+  setAddMenuInfoType: (v: 'deck' | 'deck-manual' | 'deck-ia' | null) => void;
 
   // Detach
   detachTarget: { id: string; name: string } | null;
@@ -42,11 +42,7 @@ interface DashboardModalsProps {
   setSalaAddMenuOpen: (v: boolean) => void;
   onCreateDeckManual: () => void;
   onCreateDeckAI: () => void;
-  onCreateMateria: () => void;
   onImportCards: () => void;
-
-  // Whether we're inside a matéria (pasta) — hides "Criar pasta" option
-  hideCreatePasta?: boolean;
 }
 
 const DashboardModals = (props: DashboardModalsProps) => {
@@ -59,26 +55,12 @@ const DashboardModals = (props: DashboardModalsProps) => {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>
-               {props.addMenuInfoType === 'materia' && 'O que é uma Pasta?'}
                {props.addMenuInfoType === 'deck' && 'O que é um Baralho?'}
                {props.addMenuInfoType === 'deck-manual' && 'Criar baralho manualmente'}
                {props.addMenuInfoType === 'deck-ia' && 'Criar baralho com IA'}
             </DialogTitle>
             <DialogDescription asChild>
             <div className="text-sm text-muted-foreground leading-relaxed pt-2 space-y-2">
-               {props.addMenuInfoType === 'materia' && (
-                 <>
-                   <p>
-                     A <span className="inline-flex items-center gap-0.5 font-semibold"><IconFolder className="inline h-3.5 w-3.5" /> Pasta</span> serve para organizar seus <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3.5 w-3.5" /> baralhos</span> por temas maiores.
-                   </p>
-                   <p>
-                     Por exemplo, dentro da <span className="inline-flex items-center gap-0.5 font-semibold"><IconFolder className="inline h-3 w-3" /> Pasta</span> <em>"Clínica Médica"</em>, você guarda os <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> baralhos</span> de <em>"Cardiologia"</em> ou <em>"Nefrologia"</em>.
-                   </p>
-                   <p>
-                     Você também pode estudar todos os <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> baralhos</span> dentro da <span className="inline-flex items-center gap-0.5 font-semibold"><IconFolder className="inline h-3 w-3" /> pasta</span> com um clique. Se preferir, nossa <span className="inline-flex items-center gap-0.5 font-semibold"><IconAIGradient className="inline h-3.5 w-3.5" /> IA</span> lê seu material de estudo e cria esses <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> baralhos</span> direto dentro da <span className="inline-flex items-center gap-0.5 font-semibold"><IconFolder className="inline h-3 w-3" /> pasta</span> para você não ter trabalho nenhum.
-                   </p>
-                 </>
-               )}
                {props.addMenuInfoType === 'deck' && (
                  <>
                    <p>
@@ -186,23 +168,7 @@ const DashboardModals = (props: DashboardModalsProps) => {
                   <IconInfo className="h-3.5 w-3.5" />
                 </button>
                 <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 shrink-0" />
-              </button>
-              {!props.hideCreatePasta && (
-                <button
-                  className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
-                  onClick={() => { props.setSalaAddMenuOpen(false); setAddMenuStep('main'); props.onCreateMateria(); }}
-                >
-                  <IconFolder className="h-5 w-5 text-muted-foreground shrink-0" />
-                  <span className="text-sm font-medium text-foreground flex-1">Criar pasta</span>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); props.setAddMenuInfoType('materia'); }}
-                    className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                  >
-                    <IconInfo className="h-3.5 w-3.5" />
-                  </button>
-                  <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 shrink-0" />
-                </button>
-              )}
+               </button>
               <button
                 className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
                 onClick={() => { props.setSalaAddMenuOpen(false); setAddMenuStep('main'); props.onImportCards(); }}
