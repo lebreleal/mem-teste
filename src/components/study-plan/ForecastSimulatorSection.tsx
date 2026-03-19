@@ -110,6 +110,7 @@ export function ForecastSimulatorSection({
     dailyMinutes: effectiveDailyMin,
     weeklyMinutes: effectiveWeeklyMin,
     weeklyNewCards: weeklyNewCardsOverride ?? weeklyNewCards,
+    calibrationFactor,
     enabled: filteredDeckIds.length > 0,
     latestTargetDate,
   });
