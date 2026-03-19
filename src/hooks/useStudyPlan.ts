@@ -401,7 +401,7 @@ export function useStudyPlan(options?: { full?: boolean }) {
     }
 
     const dailyNewCards = Math.min(globalNewBudget, totalNew);
-    const newSeconds = calculateRealStudyTime(dailyNewCards, 0, 0, rm);
+    const newSeconds = calculateRealStudyTime(dailyNewCards, 0, 0, rm, calFactor);
     const maxNewMinutes = Math.max(0, todayCapacityMinutes - reviewMinutes);
     const newMinutes = Math.min(Math.round(newSeconds / 60), maxNewMinutes);
     const estimatedMinutesToday = reviewMinutes + newMinutes;
