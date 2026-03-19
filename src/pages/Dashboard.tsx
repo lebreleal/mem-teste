@@ -232,6 +232,7 @@ const Dashboard = () => {
             setLeaveSalaConfirm={salas.setLeaveSalaConfirm}
             setStudySettingsOpen={setStudySettingsOpen}
             realStudyMetrics={realStudyMetrics}
+            calibrationFactor={calibrationFactor}
             salaDifficultyStats={salaDifficultyStats}
             organizeMode={organizeMode}
             setOrganizeMode={setOrganizeMode}
