@@ -211,9 +211,9 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const { decks } = useDecks();
   const { toast } = useToast();
   // Exam generation stubs (exams system removed)
-  const createExam = { mutateAsync: async () => ({ id: '' }), isPending: false } as any;
-  const addNotification = (_n: any) => {};
-  const updateNotification = (_id: string, _update: any) => {};
+  const createExam: DeckDetailContextValue['createExam'] = { mutateAsync: async () => ({ id: '' }) };
+  const addNotification: DeckDetailContextValue['addNotification'] = () => {};
+  const updateNotification: DeckDetailContextValue['updateNotification'] = () => {};
   const { energy, spendEnergy } = useEnergy();
   const { model, setModel, getCost } = useAIModel();
 
