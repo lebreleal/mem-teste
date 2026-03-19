@@ -222,133 +222,83 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
 
   return (
     <>
-      {/* Wrapper for parent deck: rounded container with subtle bg */}
-      {isParentDeck && (
-        <div
-          {...(dragHandlers ? {
-            draggable: dragHandlers.draggable,
-            onDragStart: dragHandlers.onDragStart,
-            onDragOver: dragHandlers.onDragOver,
-            onDragEnter: dragHandlers.onDragEnter,
-            onDragLeave: dragHandlers.onDragLeave,
-            onDrop: dragHandlers.onDrop,
-            onDragEnd: dragHandlers.onDragEnd,
-          } : {})}
-          className={`group flex items-center gap-3 px-4 py-3.5 cursor-pointer transition-all hover:bg-muted/30 border-b border-border/50 ${dragHandlers ? dragHandlers.className : ''}`}
-           onClick={handleClick}
-         >
-           {organizeMode && (
-             <GripVertical className="h-4 w-4 text-muted-foreground/50 shrink-0 cursor-grab active:cursor-grabbing" />
-           )}
-           <span className="shrink-0" style={folderColor ? { color: folderColor } : undefined}>
-              <IconDeck className="h-5 w-5" />
-            </span>
-          <div className="flex-1 min-w-0">
-            <h3 className="text-[15px] font-semibold text-foreground truncate">{displayName}</h3>
-            {isEmptyParentDeck && !readOnly && (
+      {/* Unified deck row — same template for all decks */}
+      <div
+        {...(dragHandlers ? {
+          draggable: dragHandlers.draggable,
+          onDragStart: dragHandlers.onDragStart,
+          onDragOver: dragHandlers.onDragOver,
+          onDragEnter: dragHandlers.onDragEnter,
+          onDragLeave: dragHandlers.onDragLeave,
+          onDrop: dragHandlers.onDrop,
+          onDragEnd: dragHandlers.onDragEnd,
+        } : {})}
+        className={`group flex items-center gap-3 px-4 py-4 cursor-pointer transition-all hover:bg-muted/50 ${dragHandlers ? dragHandlers.className : ''}`}
+        onClick={handleClick}
+      >
+        {organizeMode && (
+          <GripVertical className="h-4 w-4 text-muted-foreground/50 shrink-0 cursor-grab active:cursor-grabbing" />
+        )}
+        <IconDeck solid={isErrorDeck} className={`h-5 w-5 shrink-0 ${isErrorDeck ? 'text-destructive' : 'text-muted-foreground'}`} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h3 className="font-display text-[13px] font-semibold truncate text-foreground">{displayName}</h3>
+            {isErrorDeck && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    onClick={(e) => e.stopPropagation()}
+                    className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <HelpCircle className="h-4 w-4" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent side="bottom" align="center" sideOffset={8} className="w-auto max-w-[17rem] rounded-2xl border border-border bg-background px-3 py-2.5 text-xs text-foreground shadow-md" onClick={(e) => e.stopPropagation()}>
+                  <p className="leading-relaxed">
+                    Errou? Vem pra cá! 🧠 Quando você corrige seus erros, o cérebro grava de verdade. Estude esse baralho pra dominar o que te pega e nunca mais esquecer.
+                  </p>
+                </PopoverContent>
+              </Popover>
+            )}
+            {hasPendingUpdate && (
+              <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-destructive animate-pulse" title="Atualização disponível" />
+            )}
+          </div>
+          {!isErrorDeck && !readOnly && (
+            <ClassificationBar
+              facilPct={classPcts.facilPct}
+              bomPct={classPcts.bomPct}
+              dificilPct={classPcts.dificilPct}
+              erreiPct={classPcts.erreiPct}
+              novoPct={classPcts.novoPct}
+              className="mt-1.5"
+            />
+          )}
+        </div>
+
+        {/* Actions on hover */}
+        {!isErrorDeck && !deckSelectionMode && !readOnly && (
+          <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            {hasDueCards && (
               <button
-                onClick={(e) => { e.stopPropagation(); setShowAddDeckMenu(true); }}
-                className="flex items-center gap-1.5 mt-0.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+                onClick={(e) => handleStudy(e, deck.id)}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                aria-label="Estudar"
               >
-                <Plus className="h-3 w-3" />
-                <span>Adicionar Deck</span>
+                <Play className="h-3.5 w-3.5 fill-current" />
               </button>
             )}
-            {!isEmptyParentDeck && !readOnly && (
-              <ClassificationBar
-                facilPct={classPcts.facilPct}
-                bomPct={classPcts.bomPct}
-                dificilPct={classPcts.dificilPct}
-                erreiPct={classPcts.erreiPct}
-                novoPct={classPcts.novoPct}
-                className="mt-1.5"
-              />
+            {!effectiveDisableManagement && (
+              <DeckMenu deck={deck} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
             )}
           </div>
-          <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-        </div>
-      )}
+        )}
 
-
-      {/* Regular deck (non-parent) — original flat row */}
-      {!isParentDeck && (
-        <div
-          {...(dragHandlers ? {
-            draggable: dragHandlers.draggable,
-            onDragStart: dragHandlers.onDragStart,
-            onDragOver: dragHandlers.onDragOver,
-            onDragEnter: dragHandlers.onDragEnter,
-            onDragLeave: dragHandlers.onDragLeave,
-            onDrop: dragHandlers.onDrop,
-            onDragEnd: dragHandlers.onDragEnd,
-          } : {})}
-          className={`group flex items-center gap-3 px-4 py-4 cursor-pointer transition-all hover:bg-muted/50 ${dragHandlers ? dragHandlers.className : ''}`}
-          onClick={handleClick}
-        >
-          {organizeMode && (
-            <GripVertical className="h-4 w-4 text-muted-foreground/50 shrink-0 cursor-grab active:cursor-grabbing" />
-          )}
-          <IconDeck solid={isErrorDeck} className={`h-5 w-5 shrink-0 ${isErrorDeck ? 'text-destructive' : 'text-muted-foreground'}`} />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className={`font-display text-[13px] font-semibold truncate text-foreground`}>{displayName}</h3>
-              {isErrorDeck && (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button
-                      onClick={(e) => e.stopPropagation()}
-                      className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      <HelpCircle className="h-4 w-4" />
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent side="bottom" align="center" sideOffset={8} className="w-auto max-w-[17rem] rounded-2xl border border-border bg-background px-3 py-2.5 text-xs text-foreground shadow-md" onClick={(e) => e.stopPropagation()}>
-                    <p className="leading-relaxed">
-                      Errou? Vem pra cá! 🧠 Quando você corrige seus erros, o cérebro grava de verdade. Estude esse baralho pra dominar o que te pega e nunca mais esquecer.
-                    </p>
-                  </PopoverContent>
-                </Popover>
-              )}
-              {hasPendingUpdate && (
-                <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-destructive animate-pulse" title="Atualização disponível" />
-              )}
-            </div>
-            {!isErrorDeck && !readOnly && (
-              <ClassificationBar
-                facilPct={classPcts.facilPct}
-                bomPct={classPcts.bomPct}
-                dificilPct={classPcts.dificilPct}
-                erreiPct={classPcts.erreiPct}
-                novoPct={classPcts.novoPct}
-                className="mt-1.5"
-              />
-            )}
-          </div>
-
-          {/* Actions on hover */}
-          {!isErrorDeck && !deckSelectionMode && !readOnly && (
-            <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-              {hasDueCards && (
-                <button
-                  onClick={(e) => handleStudy(e, deck.id)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                  aria-label="Estudar"
-                >
-                  <Play className="h-3.5 w-3.5 fill-current" />
-                </button>
-              )}
-              {!effectiveDisableManagement && (
-                <DeckMenu deck={deck} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
-              )}
-            </div>
-          )}
-
-          {/* Chevron for navigation */}
-          {!deckSelectionMode && !isErrorDeck && (
-            <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 -rotate-90 group-hover:hidden" />
-          )}
-        </div>
-      )}
+        {/* Chevron for navigation */}
+        {!deckSelectionMode && !isErrorDeck && (
+          <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 -rotate-90 group-hover:hidden" />
+        )}
+      </div>
 
 
       {/* Add deck modal */}
