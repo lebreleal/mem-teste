@@ -385,26 +385,26 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const rootId = useMemo(() => {
     let currentId = deckId;
     while (true) {
-      const d = decks.find(dk => dk.id === currentId);
+      const d = deckMap.get(currentId);
       if (!d?.parent_deck_id) return currentId;
       currentId = d.parent_deck_id;
     }
-  }, [decks, deckId]);
+  }, [deckMap, deckId]);
 
-  const rootDeck = decks.find(d => d.id === rootId);
+  const rootDeck = deckMap.get(rootId);
 
   const rootTotals = useMemo(() => {
     const collectAll = (id: string): { newReviewed: number; reviewed: number; newGraduated: number } => {
-      const d = decks.find(dk => dk.id === id);
+      const d = deckMap.get(id);
       let newReviewed = d?.new_reviewed_today ?? 0;
       let reviewed = d?.reviewed_today ?? 0;
       let newGraduated = d?.new_graduated_today ?? 0;
-      const children = decks.filter(dk => dk.parent_deck_id === id && !dk.is_archived);
+      const children = childrenIndex.get(id) ?? [];
       for (const child of children) { const c = collectAll(child.id); newReviewed += c.newReviewed; reviewed += c.reviewed; newGraduated += c.newGraduated; }
       return { newReviewed, reviewed, newGraduated };
     };
     return collectAll(rootId);
-  }, [decks, rootId]);
+  }, [deckMap, childrenIndex, rootId]);
 
   const studyPlansQuery = useQuery({
     queryKey: ['study-plans-for-deck-detail', user?.id],
