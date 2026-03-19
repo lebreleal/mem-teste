@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useForecastSimulator, useForecastView } from '@/hooks/useForecastSimulator';
 import { ForecastSimulator } from '@/components/study-plan/PlanComponents';
 import type { WeeklyMinutes, WeeklyNewCards } from '@/hooks/useStudyPlan';
+import { useStudyPlan } from '@/hooks/useStudyPlan';
 import { useQuery } from '@tanstack/react-query';
 import { fetchProfileCapacity } from '@/services/dashboardService';
 import { useAuth } from '@/hooks/useAuth';
