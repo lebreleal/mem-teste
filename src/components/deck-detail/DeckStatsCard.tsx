@@ -99,15 +99,27 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
       {pendingForTime > 0 && (
         <div className="flex items-center gap-1.5 px-1">
           <Clock className="h-3 w-3 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">Estimativa: ~{timeLabel}</span>
+          <span className="text-xs text-muted-foreground">Hoje: ~{timeLabel}</span>
           <Popover>
             <PopoverTrigger asChild>
               <button className="text-muted-foreground hover:text-foreground transition-colors">
                 <Info className="h-3 w-3" />
               </button>
             </PopoverTrigger>
-            <PopoverContent side="top" className="text-xs w-56 p-2">
-              {'Tempo estimado para revisar todos os cartões pendentes deste baralho, com base na sua velocidade média de estudo.'}
+            <PopoverContent side="top" className="text-xs w-64 p-3">
+              <div className="space-y-1.5">
+                <p>
+                  <span className="font-semibold">Hoje:</span> {pendingForTime} cartões em ~{timeLabel}
+                </p>
+                {totalAllCards > pendingForTime && (
+                  <p>
+                    <span className="font-semibold">Dominar tudo:</span> {totalAllCards} cartões em ~{totalAllLabel}
+                  </p>
+                )}
+                <p className="text-muted-foreground pt-1 border-t border-border/40">
+                  Baseado na sua velocidade média de estudo.
+                </p>
+              </div>
             </PopoverContent>
           </Popover>
         </div>

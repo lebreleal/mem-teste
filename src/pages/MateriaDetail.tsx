@@ -379,10 +379,20 @@ const MateriaDetail: React.FC = () => {
                 </button>
               </PopoverTrigger>
               <PopoverContent side="bottom" align="center" sideOffset={8} className="w-auto max-w-[18rem] rounded-2xl border border-border bg-background px-3 py-2 text-xs text-foreground shadow-md">
-                <p className="leading-relaxed">
-                  Você é rápido! Em <span className="font-semibold">{studyStats.timeLabel}</span> você termina esses{' '}
-                  <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> {studyStats.totalDue} cartões</span>.
-                </p>
+                <div className="space-y-1.5 leading-relaxed">
+                  <p>
+                    <span className="font-semibold">Hoje:</span>{' '}
+                    <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> {studyStats.totalDue} cartões</span>{' '}
+                    em ~<span className="font-semibold">{studyStats.timeLabel}</span>
+                  </p>
+                  {studyStats.totalAllCards > studyStats.totalDue && (
+                    <p>
+                      <span className="font-semibold">Dominar tudo:</span>{' '}
+                      <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> {studyStats.totalAllCards} cartões</span>{' '}
+                      em ~<span className="font-semibold">{studyStats.totalAllLabel}</span>
+                    </p>
+                  )}
+                </div>
               </PopoverContent>
             </Popover>
           </div>

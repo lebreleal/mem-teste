@@ -374,10 +374,20 @@ const SalaHero = ({
                   sideOffset={8}
                   className="w-auto max-w-[18rem] rounded-2xl border border-border bg-background px-3 py-2 text-xs text-foreground shadow-md"
                 >
-                  <p className="leading-relaxed">
-                    Você é rápido! Em <span className="font-semibold">{salaStudyStats.timeLabel}</span> você termina esses{' '}
-                    <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> {salaStudyStats.totalDue} cartões</span>.
-                  </p>
+                  <div className="space-y-1.5 leading-relaxed">
+                    <p>
+                      <span className="font-semibold">Hoje:</span>{' '}
+                      <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> {salaStudyStats.totalDue} cartões</span>{' '}
+                      em ~<span className="font-semibold">{salaStudyStats.timeLabel}</span>
+                    </p>
+                    {salaStudyStats.totalAllCards > salaStudyStats.totalDue && (
+                      <p>
+                        <span className="font-semibold">Dominar tudo:</span>{' '}
+                        <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> {salaStudyStats.totalAllCards} cartões</span>{' '}
+                        em ~<span className="font-semibold">{salaStudyStats.totalAllLabel}</span>
+                      </p>
+                    )}
+                  </div>
                 </PopoverContent>
               </Popover>
             </div>
