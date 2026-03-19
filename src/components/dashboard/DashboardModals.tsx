@@ -168,8 +168,7 @@ const DashboardModals = (props: DashboardModalsProps) => {
                   <IconInfo className="h-3.5 w-3.5" />
                 </button>
                 <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 shrink-0" />
-              </button>
-              </button>
+               </button>
               <button
                 className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
                 onClick={() => { props.setSalaAddMenuOpen(false); setAddMenuStep('main'); props.onImportCards(); }}

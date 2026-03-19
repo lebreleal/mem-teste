@@ -339,7 +339,6 @@ const DeckMoveDialog = ({
            <Layers className="h-4 w-4" />
            Tirar do baralho-pai (mover para a sala)
          </Button>
-        </Button>
       )}
 
       {!isMateria && materiasInFolder.length === 0 && !currentDeck?.parent_deck_id && (
