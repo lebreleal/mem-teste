@@ -427,24 +427,22 @@ const MateriaDetail: React.FC = () => {
         leaveSalaConfirm={null}
         setLeaveSalaConfirm={noop}
         handleLeaveSala={noop}
-        salaAddMenuOpen={salaAddMenuOpen}
-        setSalaAddMenuOpen={setSalaAddMenuOpen}
-        onCreateDeckManual={() => {
-          createDeck.mutate({ name: 'Novo baralho', parentDeckId: id }, {
-            onSuccess: (newDeck) => {
-              toast({ title: 'Baralho criado' });
-              if (newDeck?.id) navigate(`/decks/${newDeck.id}`);
-            },
-          });
-        }}
-        onCreateDeckAI={() => {
-          navigate(`/dashboard?action=ai-deck&parentDeckId=${id}`);
-        }}
-        onCreateMateria={noop}
-        onImportCards={() => {
-          navigate(`/dashboard?action=import&parentDeckId=${id}`);
-        }}
-        hideCreatePasta
+         salaAddMenuOpen={salaAddMenuOpen}
+         setSalaAddMenuOpen={setSalaAddMenuOpen}
+         onCreateDeckManual={() => {
+           createDeck.mutate({ name: 'Novo subbaralho', parentDeckId: id }, {
+             onSuccess: (newDeck) => {
+               toast({ title: 'Subbaralho criado' });
+               if (newDeck?.id) navigate(`/decks/${newDeck.id}`);
+             },
+           });
+         }}
+         onCreateDeckAI={() => {
+           navigate(`/dashboard?action=ai-deck&parentDeckId=${id}`);
+         }}
+         onImportCards={() => {
+           navigate(`/dashboard?action=import&parentDeckId=${id}`);
+         }}
       />
 
       {/* Edit modal */}
