@@ -53,7 +53,7 @@ const Dashboard = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { plans, allDeckIds, avgSecondsPerCard, realStudyMetrics, metrics, globalCapacity } = useStudyPlan();
+  const { plans, allDeckIds, avgSecondsPerCard, realStudyMetrics, calibrationFactor, metrics, globalCapacity } = useStudyPlan();
   const planRootIdsRef = useRef<Set<string> | undefined>(undefined);
 
   const planDeckOrderEarly = useMemo(() => plans.flatMap(p => p.deck_ids ?? []), [plans]);
