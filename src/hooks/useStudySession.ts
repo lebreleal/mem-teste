@@ -30,8 +30,8 @@ export const useStudySession = (deckId: string, folderId?: string) => {
         user.id, card, rating, algorithmMode, studyQueue.data?.deckConfig, elapsedMs,
       );
     },
-    onSuccess: (result: any) => {
-      queryClient.setQueryData(['study-stats', user?.id], (old: any) => {
+    onSuccess: (result: CardReviewResult) => {
+      queryClient.setQueryData(['study-stats', user?.id], (old: { todayCards?: number } | undefined) => {
         if (!old) return old;
         return { ...old, todayCards: (old.todayCards ?? 0) + 1 };
       });
