@@ -8,7 +8,7 @@ import { useDeckDetail } from './DeckDetailContext';
 import { Button } from '@/components/ui/button';
 import { Play } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { deriveAvgSecondsPerCard, calculateRealStudyTime, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils';
+import { deriveAvgSecondsPerCard, calculateRealStudyTime, DEFAULT_STUDY_METRICS, DEFAULT_CALIBRATION_FACTOR } from '@/lib/studyUtils';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useStudyPlan } from '@/hooks/useStudyPlan';
@@ -27,7 +27,7 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
     dailyReviewLimit,
   } = useDeckDetail();
   const { user } = useAuth();
-  const { realStudyMetrics } = useStudyPlan();
+  const { realStudyMetrics, calibrationFactor } = useStudyPlan();
 
   // === Card classification from server-side RPC (handles any deck size) ===
   const diffCounts = useMemo(() => {
@@ -56,7 +56,8 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
   const dueReview = masteredToday;
   const pendingForTime = dueNew + dueLearning + dueReview;
   const studyMetrics = realStudyMetrics ?? DEFAULT_STUDY_METRICS;
-  const remainingSeconds = calculateRealStudyTime(dueNew, dueLearning, dueReview, studyMetrics);
+  const calFactor = calibrationFactor ?? DEFAULT_CALIBRATION_FACTOR;
+  const remainingSeconds = calculateRealStudyTime(dueNew, dueLearning, dueReview, studyMetrics, calFactor);
   const remainingMin = Math.ceil(remainingSeconds / 60);
   const timeLabel = remainingMin >= 60
     ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
@@ -67,7 +68,7 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
   const allLearning = serverCardCounts?.learning_count ?? 0;
   const allReview = serverCardCounts?.review_count ?? 0;
   const totalAllCards = allNew + allLearning + allReview;
-  const totalAllSeconds = calculateRealStudyTime(allNew, allLearning, allReview, studyMetrics);
+  const totalAllSeconds = calculateRealStudyTime(allNew, allLearning, allReview, studyMetrics, calFactor);
   const totalAllMin = Math.ceil(totalAllSeconds / 60);
   const totalAllLabel = totalAllMin >= 60
     ? `${Math.floor(totalAllMin / 60)}h${totalAllMin % 60 > 0 ? `${totalAllMin % 60}min` : ''}`

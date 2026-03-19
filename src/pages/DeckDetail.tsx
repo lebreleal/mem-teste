@@ -13,7 +13,7 @@ import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft, Settings, Layers, RefreshCw, Pencil, Check, MessageSquare, HelpCircle, ChevronRight, BookOpen, SquarePlus, RotateCcw, CheckCircle2, Info, Clock, Play, SlidersHorizontal } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { calculateRealStudyTime, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils';
+import { calculateRealStudyTime, DEFAULT_STUDY_METRICS, DEFAULT_CALIBRATION_FACTOR } from '@/lib/studyUtils';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useQuery, useQueryClient } from '@tanstack/react-query';

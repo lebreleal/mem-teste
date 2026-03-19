@@ -13,7 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
-import { calculateRealStudyTime } from '@/lib/studyUtils';
+import { calculateRealStudyTime, DEFAULT_CALIBRATION_FACTOR } from '@/lib/studyUtils';
 import { IconTrash, IconImage, IconInfo, IconDeck, IconArchive, IconEdit } from '@/components/icons';
 const GlobalSearchDialog = lazy(() => import('@/components/GlobalSearchDialog'));
 import type { User } from '@supabase/supabase-js';
@@ -55,6 +55,7 @@ interface SalaHeroProps {
   setLeaveSalaConfirm: (v: { folderId: string; turmaId: string } | null) => void;
   setStudySettingsOpen: (v: boolean) => void;
   realStudyMetrics: RealStudyMetrics;
+  calibrationFactor?: number;
   salaDifficultyStats: { novo: number; facil: number; bom: number; dificil: number; errei: number };
   organizeMode: boolean;
   setOrganizeMode: (v: boolean) => void;
@@ -64,7 +65,7 @@ const SalaHero = ({
   state, user, isCommunityFolder, sourceTurmaId, communityTurmaInfo,
   userTurma, publishing, handleTogglePublish, openShareModal,
   setSalaImageOpen, setLeaveSalaConfirm, setStudySettingsOpen,
-  realStudyMetrics, salaDifficultyStats,
+  realStudyMetrics, calibrationFactor, salaDifficultyStats,
   organizeMode, setOrganizeMode,
 }: SalaHeroProps) => {
   const navigate = useNavigate();
@@ -165,14 +166,15 @@ const SalaHero = ({
     const totalSession = totalDue + reviewedToday;
     const progressPct = totalSession > 0 ? Math.round((reviewedToday / totalSession) * 100) : 0;
 
-    const remainingSeconds = calculateRealStudyTime(newCountToday, learningCount, cappedReviewCount, realStudyMetrics);
+    const calF = calibrationFactor ?? DEFAULT_CALIBRATION_FACTOR;
+    const remainingSeconds = calculateRealStudyTime(newCountToday, learningCount, cappedReviewCount, realStudyMetrics, calF);
     const remainingMin = Math.ceil(remainingSeconds / 60);
     const timeLabel = remainingMin >= 60
       ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
       : `${remainingMin}min`;
 
     // Total to finish ALL (no daily limits)
-    const totalAllSeconds = calculateRealStudyTime(rawNewCount, learningCount, reviewCount, realStudyMetrics);
+    const totalAllSeconds = calculateRealStudyTime(rawNewCount, learningCount, reviewCount, realStudyMetrics, calF);
     const totalAllMin = Math.ceil(totalAllSeconds / 60);
     const totalAllLabel = totalAllMin >= 60
       ? `${Math.floor(totalAllMin / 60)}h${totalAllMin % 60 > 0 ? `${totalAllMin % 60}min` : ''}`
@@ -189,7 +191,7 @@ const SalaHero = ({
       totalDue, progressPct, timeLabel, totalCards: effectiveTotal, masteredCount,
       totalAllLabel, totalAllCards, ...ds,
     };
-  }, [state.isInsideSala, state.currentDecks, state.deckMap, state.childrenIndex, salaDifficultyStats, realStudyMetrics]);
+  }, [state.isInsideSala, state.currentDecks, state.deckMap, state.childrenIndex, salaDifficultyStats, realStudyMetrics, calibrationFactor]);
 
   return (
     <>

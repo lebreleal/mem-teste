@@ -25,7 +25,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import DeckRow from '@/components/dashboard/DeckRow';
 import DashboardModals from '@/components/dashboard/DashboardModals';
-import { calculateRealStudyTime } from '@/lib/studyUtils';
+import { calculateRealStudyTime, DEFAULT_CALIBRATION_FACTOR } from '@/lib/studyUtils';
 import { renameDeck, archiveDeck, deleteDeck, updateDeck } from '@/services/deck';
 import { invalidateDeckRelatedQueries } from '@/lib/queryKeys';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
@@ -54,7 +54,7 @@ const MateriaDetail: React.FC = () => {
   const queryClient = useQueryClient();
   const { decks, createDeck } = useDecks();
   const { folders } = useFolders();
-  const { realStudyMetrics } = useStudyPlan();
+  const { realStudyMetrics, calibrationFactor } = useStudyPlan();
 
   const materia = useMemo(() => decks?.find(d => d.id === id), [decks, id]);
   const subDecks = useMemo(
@@ -232,14 +232,14 @@ const MateriaDetail: React.FC = () => {
     const cappedReviewCount = Math.max(0, Math.min(reviewCount, totalDailyReviewLimit - totalReviewReviewedToday));
     const totalDue = newCountTodayByDeckLimits + learningCount + cappedReviewCount;
 
-    const remainingSeconds = calculateRealStudyTime(newCountTodayByDeckLimits, learningCount, cappedReviewCount, realStudyMetrics);
+    const remainingSeconds = calculateRealStudyTime(newCountTodayByDeckLimits, learningCount, cappedReviewCount, realStudyMetrics, calibrationFactor);
     const remainingMin = Math.ceil(remainingSeconds / 60);
     const timeLabel = remainingMin >= 60
       ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
       : `${remainingMin}min`;
 
     // Total to finish ALL (no limits)
-    const totalAllSeconds = calculateRealStudyTime(rawNewCount, learningCount, reviewCount, realStudyMetrics);
+    const totalAllSeconds = calculateRealStudyTime(rawNewCount, learningCount, reviewCount, realStudyMetrics, calibrationFactor);
     const totalAllMin = Math.ceil(totalAllSeconds / 60);
     const totalAllLabel = totalAllMin >= 60
       ? `${Math.floor(totalAllMin / 60)}h${totalAllMin % 60 > 0 ? `${totalAllMin % 60}min` : ''}`
@@ -247,7 +247,7 @@ const MateriaDetail: React.FC = () => {
     const totalAllCards = rawNewCount + learningCount + reviewCount;
 
     return { totalDue, timeLabel, totalAllCards, totalAllLabel };
-  }, [subDecks, childrenIndex, deckMap, realStudyMetrics]);
+  }, [subDecks, childrenIndex, deckMap, realStudyMetrics, calibrationFactor]);
 
   // Deck actions — using service layer (Law 2A)
   const handleRename = useCallback((deck: DeckWithStats) => {
