@@ -95,7 +95,7 @@ const Dashboard = () => {
   const [studyWeightsOpen, setStudyWeightsOpen] = useState(false);
   const [studySalaSheetOpen, setStudySalaSheetOpen] = useState(false);
   const [studySettingsOpen, setStudySettingsOpen] = useState(false);
-  const [addMenuInfoType, setAddMenuInfoType] = useState<'deck' | 'materia' | 'deck-manual' | 'deck-ia' | null>(null);
+  const [addMenuInfoType, setAddMenuInfoType] = useState<'deck' | 'deck-manual' | 'deck-ia' | null>(null);
 
   const [pendingReviewData, setPendingReviewData] = useState<{
     pendingId: string; cards: GeneratedCard[]; deckName: string; folderId: string | null; textSample?: string;
