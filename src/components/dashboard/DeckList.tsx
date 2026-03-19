@@ -185,50 +185,8 @@ const DeckList = ({
         );
       })}
 
-      {/* Baralhos-pai (with sub-decks) */}
-      {deckDrag.displayItems.filter(d => {
-        const subs = deckRowProps.getSubDecks(d.id);
-        return subs.length > 0 || (d.total_cards === 0 && deckRowProps.expandedDecks.has(d.id));
-      }).map(deck => {
-        const dragHandlers = deckDrag.getHandlers(deck);
-        return (
-          <DeckRow
-            key={deck.id}
-            deck={deck}
-            onRename={onRenameDeck}
-            onMove={onMoveDeck}
-            onArchive={onArchiveDeck}
-            onDelete={onDeleteDeck}
-            onDetachCommunityDeck={onDetachCommunityDeck}
-            navigateToCommunity={navigateToCommunity}
-            dragHandlers={dragHandlers}
-            hasPendingUpdate={decksWithPendingUpdates instanceof Set ? decksWithPendingUpdates.has(deck.id) : false}
-            expandedAccordionId={expandedAccordionId}
-            onAccordionToggle={handleAccordionToggle}
-            questionCountMap={undefined}
-            organizeMode={organizeMode}
-            {...deckRowProps}
-          />
-        );
-      })}
-
-      {/* Spacer between parent decks and loose decks */}
-      {(() => {
-        const hasParentDecks = deckDrag.displayItems.some(d => deckRowProps.getSubDecks(d.id).length > 0);
-        const hasLoose = deckDrag.displayItems.some(d => {
-          const subs = deckRowProps.getSubDecks(d.id);
-          const isEmptyParent = subs.length === 0 && d.total_cards === 0 && deckRowProps.expandedDecks.has(d.id);
-          return subs.length === 0 && !isEmptyParent;
-        });
-        return hasParentDecks && hasLoose ? <div className="h-3" /> : null;
-      })()}
-
-      {/* Loose decks */}
-      {deckDrag.displayItems.filter(d => {
-        const subs = deckRowProps.getSubDecks(d.id);
-        const isEmptyParent = subs.length === 0 && d.total_cards === 0 && deckRowProps.expandedDecks.has(d.id);
-        return subs.length === 0 && !isEmptyParent;
-      }).map(deck => {
+      {/* All decks in unified order: error deck first, then parent decks, then loose decks */}
+      {deckDrag.displayItems.map(deck => {
         const dragHandlers = deckDrag.getHandlers(deck);
         return (
           <DeckRow
