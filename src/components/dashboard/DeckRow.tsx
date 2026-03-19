@@ -219,8 +219,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
       navigate(`/materia/${deck.id}`);
       return;
     }
-    if (isEmptyMateria) {
-      // Empty matéria also navigates to its page
+    if (isEmptyParentDeck) {
       navigate(`/materia/${deck.id}`);
       return;
     }
