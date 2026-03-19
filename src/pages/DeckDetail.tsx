@@ -290,6 +290,19 @@ const DeckDetailContent = () => {
 
       <DeckDetailDialogs />
 
+      <Suspense fallback={null}>
+        {studySettingsOpen && rootFolderId && (
+          <StudySettingsSheet
+            open={studySettingsOpen}
+            onOpenChange={setStudySettingsOpen}
+            decks={decks}
+            getSubDecks={getSubDecks}
+            getAggregateStats={getAggregateStats}
+            currentFolderId={rootFolderId}
+          />
+        )}
+      </Suspense>
+
     </div>
   );
 };
