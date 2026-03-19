@@ -63,21 +63,23 @@ const DeckDetailContent = () => {
   const [renameName, setRenameName] = useState('');
   const [activeTab, setActiveTab] = useState('cards');
 
-  const isLinkedDeck = useMemo(() => checkIsLinkedDeck(deck, decks), [deck, decks]);
+  const deckMap = useMemo(() => new Map(decks.map(d => [d.id, d])), [decks]);
+
+  const isLinkedDeck = useMemo(() => checkIsLinkedDeck(deck, deckMap), [deck, deckMap]);
 
   // Resolve folder image for blurred hero background
   const folderImage = useMemo(() => {
-    if (!deck || !decks) return null;
+    if (!deck) return null;
     let folderId = deck.folder_id;
     if (!folderId && deck.parent_deck_id) {
-      let currentDeck: DeckWithStats | undefined = decks.find(d => d.id === deck.parent_deck_id);
+      let currentDeck = deckMap.get(deck.parent_deck_id);
       while (currentDeck?.parent_deck_id) {
-        currentDeck = decks.find(d => d.id === currentDeck!.parent_deck_id);
+        currentDeck = deckMap.get(currentDeck.parent_deck_id);
       }
       folderId = currentDeck?.folder_id ?? null;
     }
     return folderId;
-  }, [deck, decks]);
+  }, [deck, deckMap]);
 
   const { data: folderImageUrl } = useQuery({
     queryKey: ['folder-image', folderImage],
