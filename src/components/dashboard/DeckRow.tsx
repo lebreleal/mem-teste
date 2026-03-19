@@ -1,13 +1,12 @@
 /**
  * DeckRow — a single deck item in the dashboard list.
- * Shows name, card count, 4-color progress bar (novo/aprendendo/revisão/dominado).
- * If the deck has sub-decks, shows an expand/collapse icon.
- * 3-dot menu + play icon: visible on hover for loose decks, on expand for matérias.
+ * Shows name, classification bar, hover actions (play/menu), and chevron.
+ * Unified template for all decks (with or without sub-decks).
  */
 
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Info, ChevronDown, ChevronRight, Layers, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings, Plus, Minus, Play, Sparkles, BookOpen, GripVertical } from 'lucide-react';
+import { ChevronDown, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings, Play, GripVertical } from 'lucide-react';
 import { IconDeck } from '@/components/icons';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { DeckWithStats } from '@/hooks/useDecks';
