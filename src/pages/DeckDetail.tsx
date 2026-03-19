@@ -93,10 +93,10 @@ const DeckDetailContent = () => {
     if (fromDashboardSala && dashboardSalaFolderId) return { label: 'Sala', path: `/dashboard?folder=${dashboardSalaFolderId}` };
     if (fromCommunity && communityTurmaId) return { label: 'Sala', path: `/turmas/${communityTurmaId}` };
     let folderId = deck?.folder_id ?? null;
-    if (!folderId && deck?.parent_deck_id && decks) {
-      let currentDeck: DeckWithStats | undefined = decks.find(d => d.id === deck.parent_deck_id);
+    if (!folderId && deck?.parent_deck_id) {
+      let currentDeck = deckMap.get(deck.parent_deck_id);
       while (currentDeck?.parent_deck_id) {
-        currentDeck = decks.find(d => d.id === currentDeck!.parent_deck_id);
+        currentDeck = deckMap.get(currentDeck.parent_deck_id);
       }
       folderId = currentDeck?.folder_id ?? null;
     }
