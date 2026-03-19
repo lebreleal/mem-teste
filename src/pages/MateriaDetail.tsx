@@ -448,10 +448,11 @@ const MateriaDetail: React.FC = () => {
         handleLeaveSala={noop}
          salaAddMenuOpen={salaAddMenuOpen}
          setSalaAddMenuOpen={setSalaAddMenuOpen}
+         isSubDeckContext
          onCreateDeckManual={() => {
-           createDeck.mutate({ name: 'Novo subbaralho', parentDeckId: id }, {
+           createDeck.mutate({ name: 'Novo sub-baralho', parentDeckId: id }, {
              onSuccess: (newDeck) => {
-               toast({ title: 'Subbaralho criado' });
+               toast({ title: 'Sub-baralho criado' });
                if (newDeck?.id) navigate(`/decks/${newDeck.id}`);
              },
            });

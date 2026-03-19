@@ -43,10 +43,16 @@ interface DashboardModalsProps {
   onCreateDeckManual: () => void;
   onCreateDeckAI: () => void;
   onImportCards: () => void;
+
+  /** When true, labels say "Sub-baralho" instead of "Baralho" (inside a deck pai) */
+  isSubDeckContext?: boolean;
 }
 
 const DashboardModals = (props: DashboardModalsProps) => {
   const [addMenuStep, setAddMenuStep] = useState<'main' | 'create-deck'>('main');
+  const isSub = props.isSubDeckContext ?? false;
+  const deckLabel = isSub ? 'sub-baralho' : 'baralho';
+  const deckLabelCap = isSub ? 'Sub-baralho' : 'Baralho';
 
   return (
     <>
@@ -55,13 +61,13 @@ const DashboardModals = (props: DashboardModalsProps) => {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>
-               {props.addMenuInfoType === 'deck' && 'O que é um Baralho?'}
-               {props.addMenuInfoType === 'deck-manual' && 'Criar baralho manualmente'}
-               {props.addMenuInfoType === 'deck-ia' && 'Criar baralho com IA'}
+               {props.addMenuInfoType === 'deck' && `O que é um ${deckLabelCap}?`}
+               {props.addMenuInfoType === 'deck-manual' && `Criar ${deckLabel} manualmente`}
+               {props.addMenuInfoType === 'deck-ia' && `Criar ${deckLabel} com IA`}
             </DialogTitle>
             <DialogDescription asChild>
             <div className="text-sm text-muted-foreground leading-relaxed pt-2 space-y-2">
-               {props.addMenuInfoType === 'deck' && (
+               {props.addMenuInfoType === 'deck' && !isSub && (
                  <>
                    <p>
                      O <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3.5 w-3.5" /> baralho</span> organiza seus cartões por tema. No <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3.5 w-3.5" /> baralho</span> de <em>"Antibióticos"</em>, por exemplo, ficam guardados todos os seus cartões sobre esse assunto.
@@ -74,9 +80,19 @@ const DashboardModals = (props: DashboardModalsProps) => {
                    </p>
                  </>
                )}
+               {props.addMenuInfoType === 'deck' && isSub && (
+                 <>
+                   <p>
+                     O <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3.5 w-3.5" /> sub-baralho</span> fica dentro de um baralho pai e permite dividir o conteúdo em subtemas. Por exemplo, dentro do baralho <em>"Farmacologia"</em>, você pode ter sub-baralhos como <em>"Antibióticos"</em> e <em>"Anti-inflamatórios"</em>.
+                   </p>
+                   <p>
+                     Cada sub-baralho herda os limites de estudo do baralho pai, mas organiza seus cartões de forma independente.
+                   </p>
+                 </>
+               )}
                {props.addMenuInfoType === 'deck-manual' && (
                  <>
-                   <p>Você escolhe o nome do <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> baralho</span> e adiciona os cartões (flashcards) um a um.</p>
+                   <p>Você escolhe o nome do <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> {deckLabel}</span> e adiciona os cartões (flashcards) um a um.</p>
                    <p>Ideal quando você quer ter controle total sobre o conteúdo dos seus cartões.</p>
                  </>
                )}
@@ -149,7 +165,7 @@ const DashboardModals = (props: DashboardModalsProps) => {
         <SheetContent side="bottom" className="rounded-t-2xl px-4 pb-8 pt-4">
           <SheetHeader className="mb-4">
             <SheetTitle className="text-base font-bold">
-              {addMenuStep === 'main' ? 'Adicionar' : 'Criar baralho'}
+              {addMenuStep === 'main' ? 'Adicionar' : `Criar ${deckLabel}`}
             </SheetTitle>
           </SheetHeader>
 
@@ -160,7 +176,7 @@ const DashboardModals = (props: DashboardModalsProps) => {
                 onClick={() => setAddMenuStep('create-deck')}
               >
                 <IconDeck className="h-5 w-5 text-muted-foreground shrink-0" />
-                <span className="text-sm font-medium text-foreground flex-1">Criar baralho</span>
+                <span className="text-sm font-medium text-foreground flex-1">Criar {deckLabel}</span>
                 <button
                   onClick={(e) => { e.stopPropagation(); props.setAddMenuInfoType('deck'); }}
                   className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
@@ -187,7 +203,7 @@ const DashboardModals = (props: DashboardModalsProps) => {
                 onClick={() => { props.setSalaAddMenuOpen(false); setAddMenuStep('main'); props.onCreateDeckManual(); }}
               >
                 <IconDeck className="h-5 w-5 text-muted-foreground shrink-0" />
-                <span className="text-sm font-medium text-foreground flex-1">Criar baralho manualmente</span>
+                <span className="text-sm font-medium text-foreground flex-1">Criar {deckLabel} manualmente</span>
                 <button
                   onClick={(e) => { e.stopPropagation(); props.setAddMenuInfoType('deck-manual'); }}
                   className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
@@ -201,7 +217,7 @@ const DashboardModals = (props: DashboardModalsProps) => {
                 onClick={() => { props.setSalaAddMenuOpen(false); setAddMenuStep('main'); props.onCreateDeckAI(); }}
               >
                 <IconAIGradient className="h-5 w-5 shrink-0" />
-                <span className="text-sm font-medium text-foreground flex-1">Criar baralho com IA</span>
+                <span className="text-sm font-medium text-foreground flex-1">Criar {deckLabel} com IA</span>
                 <button
                   onClick={(e) => { e.stopPropagation(); props.setAddMenuInfoType('deck-ia'); }}
                   className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"

@@ -6,13 +6,14 @@
 import { useMemo } from 'react';
 import { useDeckDetail } from './DeckDetailContext';
 import { Button } from '@/components/ui/button';
-import { Play, Info, Clock } from 'lucide-react';
+import { Play } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { deriveAvgSecondsPerCard, calculateRealStudyTime, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useStudyPlan } from '@/hooks/useStudyPlan';
 import { fetchDeckHierarchyIds } from '@/services/uiQueryService';
+import { IconDeck, IconInfo } from '@/components/icons';
 
 interface DeckStatsCardProps {
   mode?: 'cards';
@@ -95,30 +96,33 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
 
   return (
     <div className="space-y-1">
-      {/* Time estimate */}
+      {/* Time estimate — matches SalaHero/MateriaDetail pattern */}
       {pendingForTime > 0 && (
-        <div className="flex items-center gap-1.5 px-1">
-          <Clock className="h-3 w-3 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">Hoje: ~{timeLabel}</span>
+        <div className="flex items-center justify-center gap-1.5 w-full py-1 text-xs text-muted-foreground">
+          <IconDeck className="h-3 w-3" />
+          <span>{pendingForTime}</span>
+          <span>em</span>
+          <span>{timeLabel}</span>
           <Popover>
             <PopoverTrigger asChild>
-              <button className="text-muted-foreground hover:text-foreground transition-colors">
-                <Info className="h-3 w-3" />
+              <button type="button" className="ml-0.5 inline-flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors" aria-label="Info">
+                <IconInfo className="h-3 w-3" />
               </button>
             </PopoverTrigger>
-            <PopoverContent side="top" className="text-xs w-64 p-3">
-              <div className="space-y-1.5">
+            <PopoverContent side="bottom" align="center" sideOffset={8} className="w-auto max-w-[18rem] rounded-2xl border border-border bg-background px-3 py-2 text-xs text-foreground shadow-md">
+              <div className="space-y-1.5 leading-relaxed">
                 <p>
-                  <span className="font-semibold">Hoje:</span> {pendingForTime} cartões em ~{timeLabel}
+                  <span className="font-semibold">Hoje:</span>{' '}
+                  <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> {pendingForTime} cartões</span>{' '}
+                  em ~<span className="font-semibold">{timeLabel}</span>
                 </p>
                 {totalAllCards > pendingForTime && (
                   <p>
-                    <span className="font-semibold">Dominar tudo:</span> {totalAllCards} cartões em ~{totalAllLabel}
+                    <span className="font-semibold">Dominar tudo:</span>{' '}
+                    <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> {totalAllCards} cartões</span>{' '}
+                    em ~<span className="font-semibold">{totalAllLabel}</span>
                   </p>
                 )}
-                <p className="text-muted-foreground pt-1 border-t border-border/40">
-                  Baseado na sua velocidade média de estudo.
-                </p>
               </div>
             </PopoverContent>
           </Popover>
@@ -159,7 +163,7 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
                 className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-muted border border-border/50 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                 aria-label={'Classificação dos cards'}
               >
-                <Info className="h-3 w-3" />
+                <IconInfo className="h-3 w-3" />
               </button>
             </PopoverTrigger>
             <PopoverContent className="w-56 p-3" side="bottom" align="start">
