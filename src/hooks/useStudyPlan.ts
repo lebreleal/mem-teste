@@ -378,7 +378,7 @@ export function useStudyPlan(options?: { full?: boolean }) {
     const estimatedReviewsToday = totalReview > 0
       ? Math.min(totalReview, capacityCardsToday)
       : Math.min(totalLearning, Math.ceil(capacityCardsToday * 0.3));
-    const reviewSeconds = calculateRealStudyTime(0, totalLearning, estimatedReviewsToday, rm);
+    const reviewSeconds = calculateRealStudyTime(0, totalLearning, estimatedReviewsToday, rm, calFactor);
     const reviewMinutes = Math.round(reviewSeconds / 60);
     const remainingCapacity = Math.max(0, capacityCardsToday - estimatedReviewsToday);
 
