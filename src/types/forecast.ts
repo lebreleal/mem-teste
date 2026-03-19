@@ -37,6 +37,10 @@ export interface ForecastTiming {
   avg_review_seconds: number;
   avg_learning_seconds: number;
   avg_relearning_seconds: number;
+  /** Median number of interactions a new card generates on its first day. */
+  avg_reviews_per_new_card: number;
+  /** Fraction of review cards (state=2) that lapse (rating=1). */
+  avg_lapse_rate: number;
 }
 
 export interface ForecastParams {

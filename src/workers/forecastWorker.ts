@@ -249,10 +249,12 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
   }
 
   const useAdaptiveTiming = useAdaptive; // total_reviews_90d >= 50
-  const newSecsPerCard = (useAdaptiveTiming && timing?.avg_new_seconds) ? timing.avg_new_seconds : 30;
+  const newSecsPerCard = (useAdaptiveTiming && timing?.avg_new_seconds) ? Math.max(15, timing.avg_new_seconds) : 30;
   const reviewSecsPerCard = (useAdaptiveTiming && timing?.avg_review_seconds) ? timing.avg_review_seconds : 8;
   const learningSecsPerCard = (useAdaptiveTiming && timing?.avg_learning_seconds) ? timing.avg_learning_seconds : 15;
   const relearningSecsPerCard = (useAdaptiveTiming && timing?.avg_relearning_seconds) ? timing.avg_relearning_seconds : 12;
+  const reviewsPerNewCard = Math.max(2, (useAdaptiveTiming && timing?.avg_reviews_per_new_card) ? timing.avg_reviews_per_new_card : 3);
+  const lapseRate = (useAdaptiveTiming && timing?.avg_lapse_rate != null) ? timing.avg_lapse_rate : 0.10;
 
   const points: ForecastPoint[] = [];
   const newCardsIntroducedPerDeck = new Map<string, number>();
@@ -345,9 +347,11 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
       relearningCount++;
     }
 
-    // ── Step 2: Calculate time used by reviews, then limit new cards by remaining capacity ──
-    // Use fractional minutes during calculation to avoid rounding errors that compound over weeks
-    const revMinRaw = (reviewCount * reviewSecsPerCard * scaleFactor) / 60;
+    // ── Step 2: Calculate time — match calculateRealStudyTime logic ──
+    // Reviews: account for lapse rate (lapses generate 2× relearning interactions)
+    const expectedLapses = reviewCount * lapseRate;
+    const successfulReviews = reviewCount - expectedLapses;
+    const revMinRaw = ((successfulReviews * reviewSecsPerCard + expectedLapses * relearningSecsPerCard * 2) * scaleFactor) / 60;
     const learnMinRaw = (learningCount * learningSecsPerCard * scaleFactor) / 60;
     const relearnMinRaw = (relearningCount * relearningSecsPerCard * scaleFactor) / 60;
     const usedMin = revMinRaw + learnMinRaw + relearnMinRaw;
@@ -417,7 +421,9 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
     }
 
     // Calculate minutes — keep raw fractional values, round only for final output
-    const newMinRaw = (newCardsToday * newSecsPerCard * scaleFactor) / 60;
+    // New cards: each generates multiple interactions (learning steps + failures)
+    const newInteractions = newCardsToday * reviewsPerNewCard;
+    const newMinRaw = (newInteractions * newSecsPerCard * scaleFactor) / 60;
     const totalMinRaw = revMinRaw + newMinRaw + learnMinRaw + relearnMinRaw;
 
     points.push({

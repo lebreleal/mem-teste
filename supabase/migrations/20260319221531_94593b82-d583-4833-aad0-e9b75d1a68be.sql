@@ -1,0 +1,1 @@
+ALTER FUNCTION public.get_forecast_params(uuid, uuid[]) SET search_path = 'public';
