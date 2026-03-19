@@ -608,7 +608,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     isImproving, setIsImproving, improvePreview, setImprovePreview, improveModalOpen, setImproveModalOpen,
     occlusionImageUrl, setOcclusionImageUrl, occlusionRects, setOcclusionRects, occlusionCanvasSize, setOcclusionCanvasSize, occlusionModalOpen, setOcclusionModalOpen,
     mcOptions, setMcOptions, mcCorrectIndex, setMcCorrectIndex,
-    energy, spendEnergy, model, setModel, getCost, createExam, addNotification, updateNotification,
+    energy, spendEnergy, model, setModel, getCost, createExam: createExamStub, addNotification, updateNotification,
     resetForm: handlers.resetForm, openNew: handlers.openNew, openEdit: handlers.openEdit,
     handleSave: handlers.handleSave, handleDelete: handlers.handleDelete, handleMoveCard: handlers.handleMoveCard,
     handleBulkMove: handlers.handleBulkMove, handleBulkDelete: handlers.handleBulkDelete,
