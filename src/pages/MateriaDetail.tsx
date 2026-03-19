@@ -147,7 +147,7 @@ const MateriaDetail: React.FC = () => {
     },
     onSuccess: () => {
       invalidateDeckRelatedQueries(queryClient);
-      toast({ title: 'Pasta arquivada' });
+      toast({ title: 'Baralho arquivado' });
       navigate(-1);
     },
     onError: () => { toast({ title: 'Erro ao arquivar', variant: 'destructive' }); },
