@@ -335,9 +335,10 @@ const DeckMoveDialog = ({
 
       {/* Move to root of sala (if currently inside a matéria) */}
       {currentDeck?.parent_deck_id && (
-        <Button variant="outline" size="sm" onClick={handleMoveToRoot} className="w-full max-w-full gap-2 text-sm">
-          <Layers className="h-4 w-4" />
-          Tirar da matéria (mover para a sala)
+         <Button variant="outline" size="sm" onClick={handleMoveToRoot} className="w-full max-w-full gap-2 text-sm">
+           <Layers className="h-4 w-4" />
+           Tirar do baralho-pai (mover para a sala)
+         </Button>
         </Button>
       )}
 
