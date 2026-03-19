@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { IconInfo, IconDeck, IconFolder, IconImport, IconAIGradient } from '@/components/icons';
+import { IconInfo, IconDeck, IconImport, IconAIGradient } from '@/components/icons';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
