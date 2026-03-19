@@ -192,10 +192,10 @@ const MateriaDetail: React.FC = () => {
       return { newCount: nc, newReviewed: nr };
     };
 
+    let rawNewCount = 0;
     let newCountTodayByDeckLimits = 0;
     let learningCount = 0;
     let reviewCount = 0;
-    let reviewedToday = 0;
     let totalDailyReviewLimit = 0;
     let totalReviewReviewedToday = 0;
 
@@ -205,7 +205,6 @@ const MateriaDetail: React.FC = () => {
 
       learningCount += dk.learning_count ?? 0;
       reviewCount += dk.review_count ?? 0;
-      reviewedToday += dk.reviewed_today ?? 0;
       const deckNewGraduatedToday = dk.new_graduated_today ?? 0;
       totalReviewReviewedToday += Math.max(0, (dk.reviewed_today ?? 0) - deckNewGraduatedToday);
 
@@ -216,6 +215,7 @@ const MateriaDetail: React.FC = () => {
         const childNew = collectHierarchyNew(deckId);
         hierarchyNewCount += childNew.newCount;
         hierarchyNewReviewed += childNew.newReviewed;
+        rawNewCount += hierarchyNewCount;
         const remaining = Math.max(0, (dk.daily_new_limit ?? 20) - hierarchyNewReviewed);
         newCountTodayByDeckLimits += Math.min(hierarchyNewCount, remaining);
       }
@@ -237,7 +237,16 @@ const MateriaDetail: React.FC = () => {
     const timeLabel = remainingMin >= 60
       ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
       : `${remainingMin}min`;
-    return { totalDue, timeLabel };
+
+    // Total to finish ALL (no limits)
+    const totalAllSeconds = calculateRealStudyTime(rawNewCount, learningCount, reviewCount, realStudyMetrics);
+    const totalAllMin = Math.ceil(totalAllSeconds / 60);
+    const totalAllLabel = totalAllMin >= 60
+      ? `${Math.floor(totalAllMin / 60)}h${totalAllMin % 60 > 0 ? `${totalAllMin % 60}min` : ''}`
+      : `${totalAllMin}min`;
+    const totalAllCards = rawNewCount + learningCount + reviewCount;
+
+    return { totalDue, timeLabel, totalAllCards, totalAllLabel };
   }, [subDecks, childrenIndex, deckMap, realStudyMetrics]);
 
   // Deck actions — using service layer (Law 2A)
