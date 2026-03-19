@@ -1,6 +1,14 @@
 /**
  * StudySettingsSheet — configure daily new card limits per deck/matéria.
  * Settings are persistent (saved to the decks table).
+ *
+ * Two modes:
+ * 1. Sala mode (currentFolderId set): shows root decks in the folder
+ * 2. Matéria mode (parentDeckId set): shows subdecks of that parent deck
+ *
+ * Subdecks are always toggle-only (parent controls the limit).
+ * Toggling off a subdeck sets its daily_new_limit to 0 (skips new cards today).
+ * Reviews (spaced repetition) still continue regardless.
  */
 
 import { useState, useMemo, useCallback } from 'react';
@@ -20,6 +28,8 @@ interface StudySettingsSheetProps {
   getSubDecks: (parentId: string) => DeckWithStats[];
   getAggregateStats: (deck: DeckWithStats) => { new_count: number; learning_count: number; review_count: number; reviewed_today: number };
   currentFolderId: string | null;
+  /** When set, shows subdecks of this parent instead of folder root decks (Matéria mode). */
+  parentDeckId?: string | null;
 }
 
 interface DeckSetting {
@@ -36,25 +46,34 @@ interface DeckSetting {
 
 const ERROR_NOTEBOOK_PREFIX = '📕';
 
-const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggregateStats, currentFolderId }: StudySettingsSheetProps) => {
+const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggregateStats, currentFolderId, parentDeckId }: StudySettingsSheetProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
+  const isMateriaMode = !!parentDeckId;
+
+  // In Sala mode: root decks in the folder
+  // In Matéria mode: subdecks of the parent
   const salaDecks = useMemo(() => {
+    if (isMateriaMode) {
+      return decks
+        .filter(d => d.parent_deck_id === parentDeckId && !d.is_archived)
+        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name));
+    }
     if (!currentFolderId) return [];
     return decks.filter(d => d.folder_id === currentFolderId && !d.parent_deck_id && !d.is_archived)
       .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name));
-  }, [currentFolderId, decks]);
+  }, [currentFolderId, parentDeckId, isMateriaMode, decks]);
 
   const initialSettings = useMemo(() => {
     const map: Record<string, DeckSetting> = {};
     const order: string[] = [];
 
     for (const d of salaDecks) {
-      const subs = getSubDecks(d.id);
-      const isMateria = subs.length > 0;
+      const subs = isMateriaMode ? [] : getSubDecks(d.id);
+      const isMateria = !isMateriaMode && subs.length > 0;
       const isErrorNotebook = d.name.startsWith(ERROR_NOTEBOOK_PREFIX);
 
       map[d.id] = {
@@ -63,7 +82,7 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
         dailyNewLimit: d.daily_new_limit ?? 20,
         isEnabled: (d.daily_new_limit ?? 20) > 0,
         isMateria,
-        isSubDeck: false,
+        isSubDeck: isMateriaMode, // In matéria mode, ALL items are subdecks
         isErrorNotebook,
         subCount: subs.length,
         totalCards: d.total_cards,
@@ -89,7 +108,7 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
       }
     }
     return { map, order };
-  }, [salaDecks, getSubDecks, decks]);
+  }, [salaDecks, getSubDecks, decks, isMateriaMode]);
 
   const [settings, setSettings] = useState<Record<string, DeckSetting>>(initialSettings.map);
 
@@ -143,7 +162,13 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
     .filter(Boolean)
     .filter(item => !item.isSubDeck);
 
+  // In Matéria mode, all items are subdecks — show them directly
+  const allItems = isMateriaMode
+    ? initialSettings.order.map(id => settings[id]).filter(Boolean)
+    : rootItems;
+
   const subDecksByParent = useMemo(() => {
+    if (isMateriaMode) return {}; // No nesting in matéria mode
     const map: Record<string, DeckSetting[]> = {};
     for (const id of initialSettings.order) {
       const item = settings[id];
@@ -160,7 +185,7 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
       }
     }
     return map;
-  }, [initialSettings.order, settings]);
+  }, [initialSettings.order, settings, isMateriaMode]);
 
   const toggleExpand = useCallback((id: string) => {
     setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
@@ -194,7 +219,7 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
       {/* Row 1: name + toggle */}
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <p className={`font-semibold text-foreground truncate ${indented ? 'text-xs' : 'text-sm'}`}>
+          <p className={`font-semibold text-foreground truncate ${indented || item.isSubDeck ? 'text-xs' : 'text-sm'}`}>
             {item.name}
           </p>
           <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -204,15 +229,25 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
         <Switch checked={item.isEnabled} onCheckedChange={() => toggleEnabled(item.id)} />
       </div>
 
-      {/* Row 2: stepper (only when enabled) */}
-      {item.isEnabled && (
+      {/* Row 2: stepper — only for root/parent decks, NOT for subdecks */}
+      {item.isEnabled && !item.isSubDeck && (
         <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/40">
           <span className="text-xs text-muted-foreground">Novos por dia</span>
           {renderStepper(item)}
         </div>
       )}
+
+      {/* Subdeck info label when toggled on */}
+      {item.isEnabled && item.isSubDeck && (
+        <p className="text-[10px] text-muted-foreground mt-2 pt-2 border-t border-border/40">
+          Cartões novos incluídos na sessão de hoje
+        </p>
+      )}
     </div>
   );
+
+  // Get the parent deck info for matéria mode header
+  const parentDeck = isMateriaMode ? decks.find(d => d.id === parentDeckId) : null;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -224,43 +259,66 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
             </button>
             <div className="flex-1 text-center">
               <SheetTitle className="font-display text-base font-bold">Configurar Estudo</SheetTitle>
-              <p className="text-xs text-muted-foreground mt-0.5">Quantos cards novos ver por dia em cada deck</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {isMateriaMode
+                  ? 'Escolha quais decks estudar hoje'
+                  : 'Quantos cards novos ver por dia em cada deck'}
+              </p>
             </div>
             <div className="w-5" />
           </div>
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
-          {rootItems.map(item => {
-            const subs = subDecksByParent[item.id];
-            const isExpanded = expanded[item.id] ?? false;
+          {/* In matéria mode, show parent deck limit info */}
+          {isMateriaMode && parentDeck && (
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 mb-2">
+              <p className="text-sm font-semibold text-foreground">{parentDeck.name}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Limite diário: <span className="font-bold text-foreground">{parentDeck.daily_new_limit ?? 20}</span> novos por dia
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Desative os subdecks que não quer estudar hoje. Revisões continuam normalmente.
+              </p>
+            </div>
+          )}
 
-            if (item.isMateria && subs?.length) {
-              return (
-                <div key={item.id} className="space-y-2">
-                  {renderDeckCard(item)}
+          {isMateriaMode ? (
+            // Matéria mode: flat list of subdecks (toggle-only)
+            allItems.map(item => renderDeckCard(item))
+          ) : (
+            // Sala mode: root decks with expandable subdecks
+            rootItems.map(item => {
+              const subs = subDecksByParent[item.id];
+              const isExpanded = expanded[item.id] ?? false;
 
-                  {item.isEnabled && (
-                    <button
-                      onClick={() => toggleExpand(item.id)}
-                      className="flex items-center gap-1 ml-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                      {isExpanded ? 'Ocultar decks' : `Ver ${subs.length} decks`}
-                    </button>
-                  )}
+              if (item.isMateria && subs?.length) {
+                return (
+                  <div key={item.id} className="space-y-2">
+                    {renderDeckCard(item)}
 
-                  {isExpanded && subs.map(sub => renderDeckCard(sub, true))}
-                </div>
-              );
-            }
+                    {item.isEnabled && (
+                      <button
+                        onClick={() => toggleExpand(item.id)}
+                        className="flex items-center gap-1 ml-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                        {isExpanded ? 'Ocultar decks' : `Ver ${subs.length} decks`}
+                      </button>
+                    )}
 
-            return renderDeckCard(item);
-          })}
+                    {isExpanded && subs.map(sub => renderDeckCard(sub, true))}
+                  </div>
+                );
+              }
 
-          {rootItems.length === 0 && (
+              return renderDeckCard(item);
+            })
+          )}
+
+          {allItems.length === 0 && rootItems.length === 0 && (
             <div className="py-12 text-center text-sm text-muted-foreground">
-              Nenhum deck nesta sala
+              {isMateriaMode ? 'Nenhum subdeck neste baralho' : 'Nenhum deck nesta sala'}
             </div>
           )}
         </div>
