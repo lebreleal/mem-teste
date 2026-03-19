@@ -487,15 +487,16 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
   let totalMin = 0, overloadedDays = 0;
   let weekdayMin = 0, weekdayCount = 0;
   let allDaysMin = 0, allDaysCount = 0;
+  let totalCardsSum = 0;
   for (let i = 0; i < points.length; i++) {
     const p = points[i];
     totalMin += p.totalMin;
+    totalCardsSum += p.reviewCards + p.newCards + p.learningCards + p.relearningCards;
     if (p.totalMin > peakMin) { peakMin = p.totalMin; peakDate = p.date; }
     if (p.overloaded) overloadedDays++;
-    // Weekday vs all days
     const d = new Date(startDate);
     d.setDate(d.getDate() + i);
-    const dow = d.getDay(); // 0=Sun, 1=Mon ... 6=Sat
+    const dow = d.getDay();
     allDaysMin += p.totalMin;
     allDaysCount++;
     if (dow >= 1 && dow <= 5) {
@@ -513,6 +514,8 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
       peakMin,
       peakDate,
       overloadedDays,
+      avgDailyCards: Math.round(totalCardsSum / Math.max(1, points.length)),
+      totalCards: totalCardsSum,
     },
   };
 }
