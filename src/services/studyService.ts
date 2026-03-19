@@ -134,7 +134,7 @@ export async function fetchStudyQueue(
     deckIds.forEach(buildZeroLimitSet);
 
     const rootId = findRootAncestorId(activeDecks, deckId);
-    deckConfig = activeDecks.find(d => d.id === rootId) as DeckStudyConfig | undefined;
+    deckConfig = deckMap.get(rootId) as DeckStudyConfig | undefined;
     const rootDescendants = collectDescendantIds(activeDecks, rootId);
     limitScopeIds = [rootId, ...rootDescendants];
   }
