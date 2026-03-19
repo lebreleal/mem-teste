@@ -268,6 +268,16 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                 <span>Adicionar Deck</span>
               </button>
             )}
+            {!isEmptyParentDeck && !readOnly && (
+              <ClassificationBar
+                facilPct={classPcts.facilPct}
+                bomPct={classPcts.bomPct}
+                dificilPct={classPcts.dificilPct}
+                erreiPct={classPcts.erreiPct}
+                novoPct={classPcts.novoPct}
+                className="mt-1.5"
+              />
+            )}
           </div>
           <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
         </div>
