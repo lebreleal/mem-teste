@@ -239,7 +239,7 @@ const MateriaDetail: React.FC = () => {
       : `${remainingMin}min`;
 
     // Total to finish ALL (no limits)
-    const totalAllSeconds = calculateRealStudyTime(rawNewCount, learningCount, reviewCount, realStudyMetrics);
+    const totalAllSeconds = calculateRealStudyTime(rawNewCount, learningCount, reviewCount, realStudyMetrics, calibrationFactor);
     const totalAllMin = Math.ceil(totalAllSeconds / 60);
     const totalAllLabel = totalAllMin >= 60
       ? `${Math.floor(totalAllMin / 60)}h${totalAllMin % 60 > 0 ? `${totalAllMin % 60}min` : ''}`
