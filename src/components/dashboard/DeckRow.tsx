@@ -319,9 +319,6 @@ const DeckRow = ({
         </DialogContent>
       </Dialog>
     </>
-  );
-});
-
-DeckRow.displayName = 'DeckRow';
+};
 
 export default React.memo(DeckRow);
