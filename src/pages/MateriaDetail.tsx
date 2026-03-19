@@ -160,7 +160,7 @@ const MateriaDetail: React.FC = () => {
     },
     onSuccess: () => {
       invalidateDeckRelatedQueries(queryClient);
-      toast({ title: 'Pasta excluída' });
+      toast({ title: 'Baralho excluído' });
       navigate(-1);
     },
     onError: () => { toast({ title: 'Erro ao excluir', variant: 'destructive' }); },
