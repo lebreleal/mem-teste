@@ -68,7 +68,7 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
   const allLearning = serverCardCounts?.learning_count ?? 0;
   const allReview = serverCardCounts?.review_count ?? 0;
   const totalAllCards = allNew + allLearning + allReview;
-  const totalAllSeconds = calculateRealStudyTime(allNew, allLearning, allReview, studyMetrics);
+  const totalAllSeconds = calculateRealStudyTime(allNew, allLearning, allReview, studyMetrics, calFactor);
   const totalAllMin = Math.ceil(totalAllSeconds / 60);
   const totalAllLabel = totalAllMin >= 60
     ? `${Math.floor(totalAllMin / 60)}h${totalAllMin % 60 > 0 ? `${totalAllMin % 60}min` : ''}`
