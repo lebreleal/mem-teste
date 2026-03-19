@@ -212,6 +212,21 @@ export function useStudyPlan(options?: { full?: boolean }) {
     staleTime: 5 * 60_000,
   });
 
+  // ─── Calibration factor (individual or global fallback) ───
+  const calibrationQuery = useQuery({
+    queryKey: ['time-calibration', userId],
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC not in generated types
+      const { data, error } = await (supabase.rpc as any)('get_user_time_calibration', { p_user_id: userId });
+      if (error) throw error;
+      const row = typeof data === 'object' && data !== null ? data : {};
+      const factor = Number(row.calibration_factor);
+      return Number.isFinite(factor) && factor > 0 ? factor : DEFAULT_CALIBRATION_FACTOR;
+    },
+    enabled: !!userId,
+    staleTime: 10 * 60_000,
+  });
+
   // Collect descendant IDs for plan decks (so we count new cards across the whole tree)
   const expandedDeckIds = useMemo(() => {
     if (deckHierarchy.length === 0) return allDeckIds;
