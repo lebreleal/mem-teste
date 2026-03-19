@@ -75,6 +75,7 @@ export function DeckStatsTab({ deckId }: DeckStatsTabProps) {
     dailyMinutes: effectiveDailyMinutes,
     weeklyMinutes: weeklyMinutesOverride ?? realWeeklyMinutes,
     weeklyNewCards: weeklyNewCardsOverride ?? realWeeklyNewCards,
+    calibrationFactor,
     enabled: true,
   });
 
