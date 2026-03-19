@@ -18,8 +18,8 @@ import SalaImageCropDialog from '@/components/dashboard/SalaImageCropDialog';
 
 interface DashboardModalsProps {
   // Info dialog
-  addMenuInfoType: 'deck' | 'materia' | 'deck-manual' | 'deck-ia' | null;
-  setAddMenuInfoType: (v: 'deck' | 'materia' | 'deck-manual' | 'deck-ia' | null) => void;
+  addMenuInfoType: 'deck' | 'deck-manual' | 'deck-ia' | null;
+  setAddMenuInfoType: (v: 'deck' | 'deck-manual' | 'deck-ia' | null) => void;
 
   // Detach
   detachTarget: { id: string; name: string } | null;
@@ -42,11 +42,7 @@ interface DashboardModalsProps {
   setSalaAddMenuOpen: (v: boolean) => void;
   onCreateDeckManual: () => void;
   onCreateDeckAI: () => void;
-  onCreateMateria: () => void;
   onImportCards: () => void;
-
-  // Whether we're inside a matéria (pasta) — hides "Criar pasta" option
-  hideCreatePasta?: boolean;
 }
 
 const DashboardModals = (props: DashboardModalsProps) => {
