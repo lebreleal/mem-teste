@@ -106,7 +106,7 @@ const MateriaDetail: React.FC = () => {
 
   // Add menu state (reusing DashboardModals)
   const [salaAddMenuOpen, setSalaAddMenuOpen] = useState(false);
-  const [addMenuInfoType, setAddMenuInfoType] = useState<'deck' | 'materia' | 'deck-manual' | 'deck-ia' | null>(null);
+  const [addMenuInfoType, setAddMenuInfoType] = useState<'deck' | 'deck-manual' | 'deck-ia' | null>(null);
 
   // Listen for + button from BottomNav
   useEffect(() => {
