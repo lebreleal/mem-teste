@@ -21,9 +21,6 @@ import {
 
 const ERROR_DECK_NAME = '📕 Baralho de Erros';
 
-// Removed: getMateriaColor — legacy folder color concept
-
-/**
 /**
  * 5-segment classification bar matching the deck detail gauge:
  *  - info/blue: fácil (d ≤ 3)
