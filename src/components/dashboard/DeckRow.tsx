@@ -174,8 +174,6 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   const { isAdmin } = useIsAdmin();
   const isErrorDeck = deck.name === ERROR_DECK_NAME;
   const [showDevModal, setShowDevModal] = useState(false);
-  const [showAddDeckMenu, setShowAddDeckMenu] = useState(false);
-  const [addDeckInfoType, setAddDeckInfoType] = useState<'manual' | 'ia' | null>(null);
 
   // Auto-detect linked (followed) decks — hide management actions for community-sourced decks
   const isLinkedDeck = useMemo(() => {
