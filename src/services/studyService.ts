@@ -184,39 +184,14 @@ export async function fetchStudyQueue(
   const tzOffsetMinutes = TZ_OFFSET_SP;
   const allActiveDeckIds = activeDecks.map(d => d.id);
 
-  // Paginated fetch for all card IDs (Supabase caps at 1000 rows per query)
-  const fetchAllCardIds = async (): Promise<{ id: string; deck_id: string }[]> => {
-    const PAGE = 1000;
-    const IN_BATCH = 300;
-    const rows: { id: string; deck_id: string }[] = [];
-    for (let i = 0; i < allActiveDeckIds.length; i += IN_BATCH) {
-      const batch = allActiveDeckIds.slice(i, i + IN_BATCH);
-      let offset = 0;
-      let hasMore = true;
-      while (hasMore) {
-        const { data, error } = await supabase
-          .from('cards')
-          .select('id, deck_id')
-          .in('deck_id', batch)
-          .range(offset, offset + PAGE - 1);
-        if (error) throw error;
-        const chunk = data ?? [];
-        rows.push(...chunk);
-        hasMore = chunk.length === PAGE;
-        offset += PAGE;
-      }
-    }
-    return rows;
-  };
-
-  const [cardsResult, allCardRows, plansResult, profileResult] = await Promise.all([
+  const [cardsResult, allCardIdsResult, plansResult, profileResult] = await Promise.all([
     supabase
       .from('cards')
       .select('id, deck_id, front_content, back_content, card_type, state, stability, difficulty, scheduled_date, learning_step, last_reviewed_at, origin_deck_id, created_at')
       .in('deck_id', deckIds)
       .or(`and(state.eq.0,or(scheduled_date.is.null,scheduled_date.lte.${endOfTodayISO})),and(state.in.(1,3),scheduled_date.lte.${endOfTodayISO}),and(state.eq.2,scheduled_date.lte.${nowISO})`)
       .order('created_at', { ascending: true }),
-    fetchAllCardIds(),
+    supabase.rpc('get_all_card_ids_for_user', { p_user_id: userId }),
     supabase
       .from('study_plans')
       .select('deck_ids, priority')
@@ -231,7 +206,8 @@ export async function fetchStudyQueue(
 
   if (cardsResult.error) throw cardsResult.error;
   const cards = cardsResult.data ?? [];
-  // allCardRows already resolved from fetchAllCardIds() above
+  if (allCardIdsResult.error) throw allCardIdsResult.error;
+  const allCardRows = (allCardIdsResult.data ?? []) as { id: string; deck_id: string }[];
   const studyPlans = (plansResult.data ?? []) as unknown as StudyPlanRow[];
   const profileData = profileResult.data as unknown as StudyProfileRow | null;
 
