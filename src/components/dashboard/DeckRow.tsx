@@ -196,11 +196,10 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   const displayName = isErrorDeck ? 'Baralho de Erros' : deck.name;
   const hasDueCards = aggStats.new_count + aggStats.learning_count + aggStats.review_count > 0;
 
-  // A deck is an empty matéria only if it has no children, no cards, and is currently expanded
-  // (expanded state is set when the user explicitly creates a matéria via toggleExpand)
-  const isEmptyMateria = !hasChildren && totalCards === 0 && !isErrorDeck && isExpanded;
-  // Empty matérias stay expanded
-  const effectiveExpanded = isEmptyMateria ? true : isExpanded;
+  // A deck is an empty parent deck only if it has no children, no cards, and is currently expanded
+  const isEmptyParentDeck = !hasChildren && totalCards === 0 && !isErrorDeck && isExpanded;
+  // Empty parent decks stay expanded
+  const effectiveExpanded = isEmptyParentDeck ? true : isExpanded;
 
   const handleClick = () => {
     if (deckSelectionMode) {
