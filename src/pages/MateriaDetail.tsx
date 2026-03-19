@@ -449,7 +449,7 @@ const MateriaDetail: React.FC = () => {
       <Dialog open={showEdit} onOpenChange={setShowEdit}>
         <DialogContent className="max-w-xs">
           <DialogHeader>
-            <DialogTitle>Editar Pasta</DialogTitle>
+            <DialogTitle>Editar Baralho</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <Input
