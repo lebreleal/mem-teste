@@ -223,16 +223,15 @@ function SimulatorTooltip({ active, payload, summary }: any) {
     <div className="rounded-lg border bg-popover p-2.5 text-popover-foreground shadow-md text-[11px] space-y-1.5 min-w-[160px] z-50 relative">
       <p className="font-semibold">{d.day} — {d.date}</p>
       <div className="h-px bg-border" />
-      <p className="font-medium text-sm">{totalCards} cards</p>
-      <div className="space-y-0.5 text-muted-foreground">
-        <p>{d.reviewCards} revisões</p>
-        <p>{d.newCards} novos</p>
-        <p>{d.learningCards + d.relearningCards} aprendendo</p>
+      <div className="flex items-center justify-between gap-3">
+        <p className="font-medium text-sm">{totalCards} cards</p>
+        <p className="font-medium text-sm text-primary">{formatMinutes(d.totalMin)}</p>
       </div>
-      <div className="h-px bg-border" />
-      <p className="text-muted-foreground">
-        {formatMinutes(d.totalMin)} de estudo
-      </p>
+      <div className="space-y-0.5 text-muted-foreground">
+        <p><span className="inline-block h-1.5 w-1.5 rounded-sm bg-[hsl(217_91%_60%)] mr-1" />{d.reviewCards} revisões · {formatMinutes(d.reviewMin)}</p>
+        <p><span className="inline-block h-1.5 w-1.5 rounded-sm bg-[hsl(142_71%_45%)] mr-1" />{d.newCards} novos · {formatMinutes(d.newMin)}</p>
+        <p><span className="inline-block h-1.5 w-1.5 rounded-sm bg-[hsl(38_92%_50%)] mr-1" />{d.learningCards + d.relearningCards} aprendendo · {formatMinutes(d.learningMin + d.relearningMin)}</p>
+      </div>
       {(() => {
         const isWeekly = d.day?.startsWith("S") || d.date?.includes(" - ");
         if (isWeekly) {
@@ -749,6 +748,27 @@ export function ForecastSimulator({
                   <span className="truncate max-w-[80px]">{ol.name}</span>
                 </span>
               ))}
+            </div>
+          )}
+
+          {/* Summary stats strip */}
+          {summary && chartData.length > 0 && !isSimulating && (
+            <div className="grid grid-cols-3 gap-2 pt-1">
+              <div className="flex flex-col items-center rounded-lg bg-muted/40 px-2 py-1.5">
+                <span className="text-[10px] text-muted-foreground">Média/dia</span>
+                <span className="text-sm font-bold text-foreground">{formatMinutes(summary.avgAllDaysMin)}</span>
+                <span className="text-[10px] text-muted-foreground">{summary.avgDailyCards} cards</span>
+              </div>
+              <div className="flex flex-col items-center rounded-lg bg-muted/40 px-2 py-1.5">
+                <span className="text-[10px] text-muted-foreground">Pico</span>
+                <span className="text-sm font-bold text-foreground">{formatMinutes(summary.peakMin)}</span>
+                <span className="text-[10px] text-muted-foreground">{summary.peakDate}</span>
+              </div>
+              <div className="flex flex-col items-center rounded-lg bg-muted/40 px-2 py-1.5">
+                <span className="text-[10px] text-muted-foreground">Total período</span>
+                <span className="text-sm font-bold text-foreground">{summary.totalCards} cards</span>
+                <span className="text-[10px] text-muted-foreground">{formatMinutes(summary.avgDailyMin * chartData.length)}</span>
+              </div>
             </div>
           )}
 

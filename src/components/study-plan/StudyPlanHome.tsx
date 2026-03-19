@@ -40,6 +40,7 @@ interface StudyPlanHomeProps {
   metrics: PlanMetrics | null;
   avgSecondsPerCard: number;
   isPremium: boolean;
+  calibrationFactor?: number;
   updateCapacity: UpdateCapacityMutation;
   updateNewCardsLimit: UpdateNewCardsLimitMutation;
   reorderObjectives: ReorderObjectivesMutation;
@@ -51,7 +52,7 @@ interface StudyPlanHomeProps {
 
 export const StudyPlanHome = ({
   plans, activeDecks, globalCapacity, expandedDeckIds, allDeckIds, metrics,
-  avgSecondsPerCard, isPremium, updateCapacity, updateNewCardsLimit,
+  avgSecondsPerCard, isPremium, calibrationFactor, updateCapacity, updateNewCardsLimit,
   reorderObjectives, updatePlan,
   onNavigateBack, onStartNewPlan, onStartEdit,
 }: StudyPlanHomeProps) => {
@@ -234,7 +235,7 @@ export const StudyPlanHome = ({
           allDeckIds={expandedDeckIds} dailyMinutes={globalCapacity.dailyMinutes}
           weeklyMinutes={globalCapacity.weeklyMinutes} weeklyNewCards={globalCapacity.weeklyNewCards}
           plans={plans} updateCapacity={updateCapacity} metricsTotalNew={metrics?.totalNew}
-          activeDecks={activeDecks}
+          activeDecks={activeDecks} calibrationFactor={calibrationFactor}
         />
 
         {/* MODAL: Confirmar alteração de novos cards */}

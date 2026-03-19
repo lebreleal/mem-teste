@@ -26,11 +26,12 @@ interface ForecastSimulatorSectionProps {
   updateCapacity: { mutateAsync: (input: { daily_study_minutes: number; weekly_study_minutes?: WeeklyMinutes | null }) => Promise<void> };
   metricsTotalNew?: number;
   activeDecks: DeckWithStats[];
+  calibrationFactor?: number;
 }
 
 export function ForecastSimulatorSection({
   allDeckIds, dailyMinutes, weeklyMinutes, weeklyNewCards, plans,
-  updateCapacity, metricsTotalNew, activeDecks,
+  updateCapacity, metricsTotalNew, activeDecks, calibrationFactor,
 }: ForecastSimulatorSectionProps) {
   const { forecastView, setForecastView } = useForecastView();
   const { toast } = useToast();
@@ -109,6 +110,7 @@ export function ForecastSimulatorSection({
     dailyMinutes: effectiveDailyMin,
     weeklyMinutes: effectiveWeeklyMin,
     weeklyNewCards: weeklyNewCardsOverride ?? weeklyNewCards,
+    calibrationFactor,
     enabled: filteredDeckIds.length > 0,
     latestTargetDate,
   });

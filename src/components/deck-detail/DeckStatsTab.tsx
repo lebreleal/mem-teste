@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useForecastSimulator, useForecastView } from '@/hooks/useForecastSimulator';
 import { ForecastSimulator } from '@/components/study-plan/PlanComponents';
 import type { WeeklyMinutes, WeeklyNewCards } from '@/hooks/useStudyPlan';
+import { useStudyPlan } from '@/hooks/useStudyPlan';
 import { useQuery } from '@tanstack/react-query';
 import { fetchProfileCapacity } from '@/services/dashboardService';
 import { useAuth } from '@/hooks/useAuth';
@@ -16,6 +17,7 @@ interface DeckStatsTabProps {
 export function DeckStatsTab({ deckId }: DeckStatsTabProps) {
   const { user } = useAuth();
   const { decks } = useDecks();
+  const { calibrationFactor } = useStudyPlan();
   const { forecastView, setForecastView } = useForecastView();
 
   // Collect this deck + all descendant IDs
@@ -73,6 +75,7 @@ export function DeckStatsTab({ deckId }: DeckStatsTabProps) {
     dailyMinutes: effectiveDailyMinutes,
     weeklyMinutes: weeklyMinutesOverride ?? realWeeklyMinutes,
     weeklyNewCards: weeklyNewCardsOverride ?? realWeeklyNewCards,
+    calibrationFactor,
     enabled: true,
   });
 

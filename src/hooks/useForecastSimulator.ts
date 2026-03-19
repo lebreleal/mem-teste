@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
+import { DEFAULT_CALIBRATION_FACTOR } from '@/lib/studyUtils';
 import type { ForecastView, ForecastParams, SimulatorInput, SimulatorResult, WorkerMessage, WorkerResponse } from '@/types/forecast';
 import type { WeeklyMinutes } from '@/hooks/useStudyPlan';
 
@@ -28,6 +29,7 @@ export interface UseForecastSimulatorOptions {
   dailyMinutes: number;
   weeklyMinutes: WeeklyMinutes | null;
   weeklyNewCards?: Record<string, number> | null;
+  calibrationFactor?: number;
   enabled?: boolean;
   /** Latest target date across all objectives — used to stop adding created cards */
   latestTargetDate?: string | null;
@@ -36,7 +38,7 @@ export interface UseForecastSimulatorOptions {
 export function useForecastSimulator(options: UseForecastSimulatorOptions) {
   const { user } = useAuth();
   const userId = user?.id;
-  const { deckIds, horizonDays, newCardsPerDayOverride, createdCardsPerDayOverride, dailyMinutes, weeklyMinutes, weeklyNewCards, enabled = true, latestTargetDate } = options;
+  const { deckIds, horizonDays, newCardsPerDayOverride, createdCardsPerDayOverride, dailyMinutes, weeklyMinutes, weeklyNewCards, calibrationFactor, enabled = true, latestTargetDate } = options;
 
   const [result, setResult] = useState<SimulatorResult | null>(null);
   const [isSimulating, setIsSimulating] = useState(false);
@@ -122,12 +124,13 @@ export function useForecastSimulator(options: UseForecastSimulatorOptions) {
       weeklyMinutes: weeklyMinutes as Record<string, number> | null,
       weeklyNewCards: weeklyNewCards as Record<string, number> | null ?? null,
       createdCardsStopDay,
+      calibrationFactor: calibrationFactor ?? DEFAULT_CALIBRATION_FACTOR,
     };
 
     setIsSimulating(true);
     setProgress(0);
     workerRef.current.postMessage({ type: 'run', input } as WorkerMessage);
-  }, [paramsQuery.data, horizonDays, newCardsPerDay, createdCardsPerDay, dailyMinutes, weeklyMinutes, weeklyNewCards, latestTargetDate]);
+  }, [paramsQuery.data, horizonDays, newCardsPerDay, createdCardsPerDay, dailyMinutes, weeklyMinutes, weeklyNewCards, calibrationFactor, latestTargetDate]);
 
   // Debounced trigger
   useEffect(() => {

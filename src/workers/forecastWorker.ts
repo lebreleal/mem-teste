@@ -193,7 +193,7 @@ let cancelled = false;
 
 function runSimulation(input: SimulatorInput): SimulatorResult {
   cancelled = false;
-  const { params, horizonDays, newCardsPerDay, createdCardsPerDay, dailyMinutes, weeklyMinutes, weeklyNewCards, createdCardsStopDay } = input;
+  const { params, horizonDays, newCardsPerDay, createdCardsPerDay, dailyMinutes, weeklyMinutes, weeklyNewCards, createdCardsStopDay, calibrationFactor } = input;
   const { decks, cards: rawCards, timing, rating_distribution, total_reviews_90d } = params;
 
   const useAdaptive = total_reviews_90d >= 50;
@@ -249,10 +249,11 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
   }
 
   const useAdaptiveTiming = useAdaptive; // total_reviews_90d >= 50
+  const calFactor = calibrationFactor ?? 1.20; // empirical calibration
   const newSecsPerCard = (useAdaptiveTiming && timing?.avg_new_seconds) ? Math.max(15, timing.avg_new_seconds) : 30;
-  const reviewSecsPerCard = (useAdaptiveTiming && timing?.avg_review_seconds) ? timing.avg_review_seconds : 8;
-  const learningSecsPerCard = (useAdaptiveTiming && timing?.avg_learning_seconds) ? timing.avg_learning_seconds : 15;
-  const relearningSecsPerCard = (useAdaptiveTiming && timing?.avg_relearning_seconds) ? timing.avg_relearning_seconds : 12;
+  const reviewSecsPerCard = (useAdaptiveTiming && timing?.avg_review_seconds) ? Math.max(5, timing.avg_review_seconds) : 8;
+  const learningSecsPerCard = (useAdaptiveTiming && timing?.avg_learning_seconds) ? Math.max(8, timing.avg_learning_seconds) : 15;
+  const relearningSecsPerCard = (useAdaptiveTiming && timing?.avg_relearning_seconds) ? Math.max(8, timing.avg_relearning_seconds) : 12;
   const reviewsPerNewCard = Math.max(2, (useAdaptiveTiming && timing?.avg_reviews_per_new_card) ? timing.avg_reviews_per_new_card : 3);
   const lapseRate = (useAdaptiveTiming && timing?.avg_lapse_rate != null) ? timing.avg_lapse_rate : 0.10;
 
@@ -351,9 +352,9 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
     // Reviews: account for lapse rate (lapses generate 2× relearning interactions)
     const expectedLapses = reviewCount * lapseRate;
     const successfulReviews = reviewCount - expectedLapses;
-    const revMinRaw = ((successfulReviews * reviewSecsPerCard + expectedLapses * relearningSecsPerCard * 2) * scaleFactor) / 60;
-    const learnMinRaw = (learningCount * learningSecsPerCard * scaleFactor) / 60;
-    const relearnMinRaw = (relearningCount * relearningSecsPerCard * scaleFactor) / 60;
+    const revMinRaw = ((successfulReviews * reviewSecsPerCard + expectedLapses * relearningSecsPerCard * 2) * calFactor) / 60;
+    const learnMinRaw = (learningCount * learningSecsPerCard * calFactor) / 60;
+    const relearnMinRaw = (relearningCount * relearningSecsPerCard * calFactor) / 60;
     const usedMin = revMinRaw + learnMinRaw + relearnMinRaw;
     const dayNewCardsLimit = getNewCardsLimitForDay(day, startDate, newCardsPerDay, weeklyNewCards);
     const effectiveNewLimit = dayNewCardsLimit;
@@ -486,15 +487,16 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
   let totalMin = 0, overloadedDays = 0;
   let weekdayMin = 0, weekdayCount = 0;
   let allDaysMin = 0, allDaysCount = 0;
+  let totalCardsSum = 0;
   for (let i = 0; i < points.length; i++) {
     const p = points[i];
     totalMin += p.totalMin;
+    totalCardsSum += p.reviewCards + p.newCards + p.learningCards + p.relearningCards;
     if (p.totalMin > peakMin) { peakMin = p.totalMin; peakDate = p.date; }
     if (p.overloaded) overloadedDays++;
-    // Weekday vs all days
     const d = new Date(startDate);
     d.setDate(d.getDate() + i);
-    const dow = d.getDay(); // 0=Sun, 1=Mon ... 6=Sat
+    const dow = d.getDay();
     allDaysMin += p.totalMin;
     allDaysCount++;
     if (dow >= 1 && dow <= 5) {
@@ -512,6 +514,8 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
       peakMin,
       peakDate,
       overloadedDays,
+      avgDailyCards: Math.round(totalCardsSum / Math.max(1, points.length)),
+      totalCards: totalCardsSum,
     },
   };
 }

@@ -62,6 +62,8 @@ export interface SimulatorInput {
   weeklyNewCards: Record<string, number> | null;
   /** Day index (0-based from today) after which to stop adding created cards. null = no limit */
   createdCardsStopDay: number | null;
+  /** Empirical calibration factor for time estimates (default 1.20). */
+  calibrationFactor: number;
 }
 
 export interface ForecastPoint {
@@ -88,6 +90,8 @@ export interface SimulatorSummary {
   peakMin: number;
   peakDate: string;
   overloadedDays: number;
+  avgDailyCards: number;
+  totalCards: number;
 }
 
 export interface SimulatorResult {
