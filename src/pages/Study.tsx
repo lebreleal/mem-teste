@@ -36,7 +36,7 @@ import type { Rating } from '@/lib/fsrs';
 const FAST_THRESHOLD_MS = 3000;
 const BASE_TUTOR_COST = 2;
 
-function getSiblingIds(card: any, queue: any[]): string[] {
+function getSiblingIds(card: StudyCard, queue: StudyCard[]): string[] {
   if (card.card_type !== 'cloze') return [];
   return queue.filter(c => c.id !== card.id && c.card_type === 'cloze' && c.front_content === card.front_content).map(c => c.id);
 }
@@ -128,7 +128,7 @@ const Study = () => {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const readyIndex = useMemo(() => getNextReadyIndex(localQueue), [localQueue, waitingSeconds, learningTick]);
   const nextCard = readyIndex >= 0 ? localQueue[readyIndex] : null;
-  const [displayedCard, setDisplayedCard] = useState<any>(null);
+  const [displayedCard, setDisplayedCard] = useState<StudyCard | null>(null);
   useEffect(() => { if (!isTransitioning) setDisplayedCard(nextCard); }, [cardKey, isTransitioning, queueInitialized]);
   const currentCard = displayedCard ?? nextCard;
 
@@ -176,7 +176,7 @@ const Study = () => {
 
   const submittingRef = useRef<string | null>(null);
 
-  const executeReview = useCallback((card: any, rating: Rating) => {
+  const executeReview = useCallback((card: StudyCard, rating: Rating) => {
     undo.saveSnapshot({ queue: [...localQueue], reviewCount, cardKey, cardId: card.id, prevCardState: { stability: card.stability, difficulty: card.difficulty, state: card.state, scheduled_date: card.scheduled_date, last_reviewed_at: card.last_reviewed_at ?? null } });
     tutor.abortTutor(); const elapsed = Date.now() - cardShownAt.current;
     if (elapsed < FAST_THRESHOLD_MS) { if (fastWarningTimer.current) clearTimeout(fastWarningTimer.current); fastWarningTimer.current = setTimeout(() => {}, 3000); }

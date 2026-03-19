@@ -38,17 +38,20 @@ export async function fetchStudyQueue(
   let activeDecks = (decksResult.data ?? []).filter(d => !d.is_archived);
   const foldersData = foldersResult.data ?? [];
 
+  // Map-based lookup O(1) instead of .find() O(n) — Lei 1A
+  const deckMap = new Map(activeDecks.map(d => [d.id, d]));
+
   // Builds a set of deck IDs whose new-card limit is 0 (used to exclude their NEW cards only, not reviews)
   const zeroNewLimitDeckIds = new Set<string>();
   const buildZeroLimitSet = (deckIdToCheck: string) => {
-    let current = activeDecks.find(d => d.id === deckIdToCheck);
+    let current = deckMap.get(deckIdToCheck);
     while (current) {
       if ((current.daily_new_limit ?? 20) <= 0) {
         zeroNewLimitDeckIds.add(deckIdToCheck);
         return;
       }
       if (!current.parent_deck_id) break;
-      current = activeDecks.find(d => d.id === current!.parent_deck_id);
+      current = deckMap.get(current.parent_deck_id);
     }
   };
 
@@ -98,6 +101,9 @@ export async function fetchStudyQueue(
         if (refreshError) throw refreshError;
 
         activeDecks = (refreshedDecks ?? []).filter(d => !d.is_archived);
+        // Rebuild deckMap after refresh
+        deckMap.clear();
+        for (const d of activeDecks) deckMap.set(d.id, d);
         rootDeckIds = collectRootDeckIds();
       }
     }
@@ -114,7 +120,7 @@ export async function fetchStudyQueue(
     deckIds.forEach(buildZeroLimitSet);
 
     const rootDecks = rootDeckIds
-      .map(id => activeDecks.find(d => d.id === id))
+      .map(id => deckMap.get(id))
       .filter((d): d is (typeof activeDecks)[number] => !!d);
 
     folderLimitDecks = rootDecks;
@@ -128,7 +134,7 @@ export async function fetchStudyQueue(
     deckIds.forEach(buildZeroLimitSet);
 
     const rootId = findRootAncestorId(activeDecks, deckId);
-    deckConfig = activeDecks.find(d => d.id === rootId) as DeckStudyConfig | undefined;
+    deckConfig = deckMap.get(rootId) as DeckStudyConfig | undefined;
     const rootDescendants = collectDescendantIds(activeDecks, rootId);
     limitScopeIds = [rootId, ...rootDescendants];
   }
@@ -156,12 +162,11 @@ export async function fetchStudyQueue(
     if (error) throw error;
     const cards = data ?? [];
   const isLiveDeck = deckIds.some(id => {
-    const d = activeDecks.find(dd => dd.id === id);
+    const d = deckMap.get(id);
     if (d?.is_live_deck || d?.source_turma_deck_id || d?.source_listing_id) return true;
-    // Walk ancestors to check if any parent is linked
     let parentId = d?.parent_deck_id;
     while (parentId) {
-      const parent = activeDecks.find(dd => dd.id === parentId);
+      const parent = deckMap.get(parentId);
       if (!parent) break;
       if (parent.is_live_deck || parent.source_turma_deck_id || parent.source_listing_id) return true;
       parentId = parent.parent_deck_id;
@@ -322,12 +327,11 @@ export async function fetchStudyQueue(
   const queue = [...allLearning, ...orderedNonLearning];
 
   const isLiveDeck = deckIds.some(id => {
-    const d = activeDecks.find(dd => dd.id === id);
+    const d = deckMap.get(id);
     if (d?.is_live_deck || d?.source_turma_deck_id || d?.source_listing_id) return true;
-    // Walk ancestors to check if any parent is linked
     let parentId = d?.parent_deck_id;
     while (parentId) {
-      const parent = activeDecks.find(dd => dd.id === parentId);
+      const parent = deckMap.get(parentId);
       if (!parent) break;
       if (parent.is_live_deck || parent.source_turma_deck_id || parent.source_listing_id) return true;
       parentId = parent.parent_deck_id;

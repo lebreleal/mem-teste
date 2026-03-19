@@ -3,7 +3,7 @@
  * Returns normalized bounding boxes (0-1) for each text region.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders, handleCors, jsonResponse, getAIConfig } from "../_shared/utils.ts";
+import { corsHeaders, handleCors, jsonResponse, getAIConfig, getModelMap } from "../_shared/utils.ts";
 
 Deno.serve(async (req) => {
   const cors = handleCors(req);
@@ -26,7 +26,8 @@ Deno.serve(async (req) => {
     if (!apiKey) return jsonResponse({ error: "AI não configurada" }, 500);
 
     // Use cheapest Gemini model without thinking
-    const model = "google/gemini-2.5-flash-lite";
+    const modelMap = await getModelMap(null as any);
+    const model = modelMap.flash;
 
     const systemPrompt = `You are an OCR bounding box detector. Given an image, identify ALL text regions (lines, paragraphs, titles, labels).
 Return a JSON array of objects, each with normalized coordinates (0 to 1 relative to image dimensions):

@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import * as studyService from '@/services/studyService';
 import type { Rating } from '@/lib/fsrs';
-import type { StudyQueueResult, StudyCard, DeckStudyConfig } from '@/types/study';
+import type { StudyQueueResult, StudyCard, DeckStudyConfig, CardReviewResult } from '@/types/study';
 
 export type { StudyQueueResult, StudyCard, DeckStudyConfig } from '@/types/study';
 
@@ -30,8 +30,8 @@ export const useStudySession = (deckId: string, folderId?: string) => {
         user.id, card, rating, algorithmMode, studyQueue.data?.deckConfig, elapsedMs,
       );
     },
-    onSuccess: (result: any) => {
-      queryClient.setQueryData(['study-stats', user?.id], (old: any) => {
+    onSuccess: (result: CardReviewResult) => {
+      queryClient.setQueryData(['study-stats', user?.id], (old: { todayCards?: number } | undefined) => {
         if (!old) return old;
         return { ...old, todayCards: (old.todayCards ?? 0) + 1 };
       });
