@@ -409,7 +409,7 @@ const MateriaDetail: React.FC = () => {
       {subDecks.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-center px-4">
           <IconDeck className="h-10 w-10 text-muted-foreground/30 mb-3" />
-          <p className="text-sm text-muted-foreground">Nenhum baralho nesta pasta</p>
+          <p className="text-sm text-muted-foreground">Nenhum subbaralho neste baralho</p>
         </div>
       )}
 
