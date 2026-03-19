@@ -87,7 +87,7 @@ function DeckStudyCard({ deck, aggregateMap, studyMetrics, calibrationFactor = D
   const pendingToday = newAvailable + reviewAvailable + learningAvailable;
   const totalToday = pendingToday + studiedToday;
   const progressPercent = totalToday > 0 ? Math.round((studiedToday / totalToday) * 100) : 0;
-  const estimatedMinutes = Math.round(calculateRealStudyTime(newAvailable, learningAvailable, reviewAvailable, studyMetrics) / 60);
+  const estimatedMinutes = Math.round(calculateRealStudyTime(newAvailable, learningAvailable, reviewAvailable, studyMetrics, calibrationFactor) / 60);
 
   const isComplete = pendingToday === 0 && totalToday > 0;
 
