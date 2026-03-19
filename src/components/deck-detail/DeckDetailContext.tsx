@@ -253,6 +253,20 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const [mcOptions, setMcOptions] = useState<string[]>(['', '', '', '']);
   const [mcCorrectIndex, setMcCorrectIndex] = useState<number>(0);
 
+  // ─── Indexed lookups (O(1) instead of O(n)) ───
+  const { deckMap, childrenIndex } = useMemo(() => {
+    const dm = new Map<string, DeckWithStats>();
+    const ci = new Map<string, DeckWithStats[]>();
+    for (const d of decks) {
+      dm.set(d.id, d);
+      if (d.parent_deck_id && !d.is_archived) {
+        const arr = ci.get(d.parent_deck_id);
+        if (arr) arr.push(d); else ci.set(d.parent_deck_id, [d]);
+      }
+    }
+    return { deckMap: dm, childrenIndex: ci };
+  }, [decks]);
+
   // ─── Queries ───────────────────────────
   const { data: deck, isLoading: deckLoading } = useQuery({
     queryKey: ['deck', deckId],
@@ -267,11 +281,10 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
       const nowISO = new Date().toISOString();
       const allIds: string[] = [deckId];
       let frontier = [deckId];
-      const decksList = decks ?? [];
       while (frontier.length > 0) {
         const nextFrontier: string[] = [];
         for (const fid of frontier) {
-          const children = decksList.filter(d => d.parent_deck_id === fid && !d.is_archived);
+          const children = childrenIndex.get(fid) ?? [];
           for (const child of children) { allIds.push(child.id); nextFrontier.push(child.id); }
         }
         frontier = nextFrontier;
@@ -288,11 +301,11 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     const queue = [deckId];
     while (queue.length > 0) {
       const current = queue.pop()!;
-      const children = decks.filter(d => d.parent_deck_id === current && !d.is_archived);
+      const children = childrenIndex.get(current) ?? [];
       for (const child of children) { result.push(child.id); queue.push(child.id); }
     }
     return result;
-  }, [decks, deckId]);
+  }, [decks, deckId, childrenIndex]);
 
   const allDeckIds = useMemo(() => [deckId, ...descendantIds], [deckId, descendantIds]);
 
