@@ -91,6 +91,7 @@ const StudyPlan = () => {
         metrics={metrics}
         avgSecondsPerCard={avgSecondsPerCard}
         isPremium={isPremium}
+        calibrationFactor={calibrationFactor}
         updateCapacity={updateCapacity}
         updateNewCardsLimit={updateNewCardsLimit}
         reorderObjectives={reorderObjectives}
