@@ -14,7 +14,7 @@ const StudyPlan = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const {
-    plans, allDeckIds, expandedDeckIds, globalCapacity, isLoading, metrics, avgSecondsPerCard,
+    plans, allDeckIds, expandedDeckIds, globalCapacity, isLoading, metrics, avgSecondsPerCard, calibrationFactor,
     calcImpact, createPlan, updatePlan, deletePlan, updateCapacity, updateNewCardsLimit, reorderObjectives,
   } = useStudyPlan({ full: true });
   const { decks, isLoading: decksLoading } = useDecks();
