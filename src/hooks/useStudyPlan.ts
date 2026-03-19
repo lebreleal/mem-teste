@@ -145,13 +145,13 @@ export function useStudyPlan(options?: { full?: boolean }) {
   const plans = plansQuery.data ?? [];
 
   // ─── Deck hierarchy from shared cache (avoids duplicate query) ───
-  interface CachedDeckItem { id: string; parent_deck_id: string | null; is_archived?: boolean }
+  interface CachedDeckItem { id: string; parent_deck_id: string | null; folder_id: string | null; is_archived?: boolean }
   const cachedDecks = qc.getQueryData<CachedDeckItem[]>(['decks', userId]);
   const deckHierarchy = useMemo(() => {
-    if (!cachedDecks) return [] as { id: string; parent_deck_id: string | null }[];
+    if (!cachedDecks) return [] as { id: string; parent_deck_id: string | null; folder_id: string | null }[];
     return cachedDecks
       .filter(d => !d.is_archived)
-      .map(d => ({ id: d.id, parent_deck_id: d.parent_deck_id }));
+      .map(d => ({ id: d.id, parent_deck_id: d.parent_deck_id, folder_id: d.folder_id }));
   }, [cachedDecks]);
 
   const findRoot = useCallback((id: string): string => {
@@ -160,8 +160,17 @@ export function useStudyPlan(options?: { full?: boolean }) {
     return findRoot(deck.parent_deck_id);
   }, [deckHierarchy]);
 
+  // ─── Folders cache to detect community (followed) salas ───
+  interface CachedFolderItem { id: string; source_turma_id?: string | null; is_archived?: boolean }
+  const cachedFolders = qc.getQueryData<CachedFolderItem[]>(['folders', userId]);
+  const communityFolderIds = useMemo(() => {
+    if (!cachedFolders) return new Set<string>();
+    return new Set(cachedFolders.filter(f => !!f.source_turma_id).map(f => f.id));
+  }, [cachedFolders]);
+
   // ─── Aggregate all deck_ids from all objectives (deduplicated) ───
   // When no plans exist, use all active root deck IDs for simulation
+  // Excludes decks in community-followed salas (source_turma_id != null)
   const allDeckIds = useMemo(() => {
     if (plans.length > 0) {
       const ids = new Set<string>();
@@ -170,9 +179,11 @@ export function useStudyPlan(options?: { full?: boolean }) {
       }
       return Array.from(ids);
     }
-    // No plans: use all root decks (no parent)
-    return deckHierarchy.filter(d => !d.parent_deck_id).map(d => d.id);
-  }, [plans, deckHierarchy]);
+    // No plans: use all root decks (no parent), excluding community salas
+    return deckHierarchy
+      .filter(d => !d.parent_deck_id && !communityFolderIds.has(d.folder_id ?? ''))
+      .map(d => d.id);
+  }, [plans, deckHierarchy, communityFolderIds]);
 
   const realMetricsQuery = useQuery({
     queryKey: ['real-study-metrics', userId],

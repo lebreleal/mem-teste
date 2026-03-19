@@ -8,7 +8,7 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Info, ChevronDown, ChevronRight, Layers, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings, Plus, Minus, Play, Sparkles, BookOpen, GripVertical } from 'lucide-react';
-import { IconFolder, IconDeck } from '@/components/icons';
+import { IconDeck } from '@/components/icons';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { DeckWithStats } from '@/hooks/useDecks';
 import type { DragReorderHandlers } from '@/hooks/useDragReorder';
@@ -196,11 +196,10 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   const displayName = isErrorDeck ? 'Baralho de Erros' : deck.name;
   const hasDueCards = aggStats.new_count + aggStats.learning_count + aggStats.review_count > 0;
 
-  // A deck is an empty matéria only if it has no children, no cards, and is currently expanded
-  // (expanded state is set when the user explicitly creates a matéria via toggleExpand)
-  const isEmptyMateria = !hasChildren && totalCards === 0 && !isErrorDeck && isExpanded;
-  // Empty matérias stay expanded
-  const effectiveExpanded = isEmptyMateria ? true : isExpanded;
+  // A deck is an empty parent deck only if it has no children, no cards, and is currently expanded
+  const isEmptyParentDeck = !hasChildren && totalCards === 0 && !isErrorDeck && isExpanded;
+  // Empty parent decks stay expanded
+  const effectiveExpanded = isEmptyParentDeck ? true : isExpanded;
 
   const handleClick = () => {
     if (deckSelectionMode) {
@@ -220,8 +219,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
       navigate(`/materia/${deck.id}`);
       return;
     }
-    if (isEmptyMateria) {
-      // Empty matéria also navigates to its page
+    if (isEmptyParentDeck) {
       navigate(`/materia/${deck.id}`);
       return;
     }
@@ -233,13 +231,13 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
     navigate(`/decks/${deckId}`, readOnlyNavState ? { state: readOnlyNavState } : undefined);
   };
 
-  // Matéria = section header style
-  const isMateria = hasChildren || isEmptyMateria;
+  // Parent deck = section header style (has sub-decks)
+  const isParentDeck = hasChildren || isEmptyParentDeck;
 
   return (
     <>
-      {/* Wrapper for Matéria: rounded container with subtle bg */}
-      {isMateria && (
+      {/* Wrapper for parent deck: rounded container with subtle bg */}
+      {isParentDeck && (
         <div
           {...(dragHandlers ? {
             draggable: dragHandlers.draggable,
@@ -257,11 +255,11 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
              <GripVertical className="h-4 w-4 text-muted-foreground/50 shrink-0 cursor-grab active:cursor-grabbing" />
            )}
            <span className="shrink-0" style={folderColor ? { color: folderColor } : undefined}>
-             <IconFolder className="h-5 w-5" />
-           </span>
+              <IconDeck className="h-5 w-5" />
+            </span>
           <div className="flex-1 min-w-0">
             <h3 className="text-[15px] font-semibold text-foreground truncate">{displayName}</h3>
-            {isEmptyMateria && !readOnly && (
+            {isEmptyParentDeck && !readOnly && (
               <button
                 onClick={(e) => { e.stopPropagation(); setShowAddDeckMenu(true); }}
                 className="flex items-center gap-1.5 mt-0.5 text-xs text-muted-foreground hover:text-primary transition-colors"
@@ -276,8 +274,8 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
       )}
 
 
-      {/* Regular deck (non-matéria) — original flat row */}
-      {!isMateria && (
+      {/* Regular deck (non-parent) — original flat row */}
+      {!isParentDeck && (
         <div
           {...(dragHandlers ? {
             draggable: dragHandlers.draggable,

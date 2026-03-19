@@ -68,13 +68,13 @@ const DeckList = ({
   const [expandedAccordionId, setExpandedAccordionId] = useState<string | null>(null);
 
   const q = searchQuery.toLowerCase();
-  // Sort: error deck first, then matérias (decks with sub-decks), then loose decks
+  // Sort: error deck first, then baralhos-pai (decks with sub-decks), then loose decks
   const sortedDecks = useMemo(() => {
     const errorDeck = currentDecks.filter(d => d.name === ERROR_DECK_NAME);
     const rest = currentDecks.filter(d => d.name !== ERROR_DECK_NAME);
-    const materias = rest.filter(d => deckRowProps.getSubDecks(d.id).length > 0);
+    const parentDecks = rest.filter(d => deckRowProps.getSubDecks(d.id).length > 0);
     const loose = rest.filter(d => deckRowProps.getSubDecks(d.id).length === 0);
-    return [...errorDeck, ...materias, ...loose];
+    return [...errorDeck, ...parentDecks, ...loose];
   }, [currentDecks, deckRowProps.getSubDecks]);
   const filteredDecks = q ? sortedDecks.filter(d => d.name.toLowerCase().includes(q)) : sortedDecks;
 
@@ -185,7 +185,7 @@ const DeckList = ({
         );
       })}
 
-      {/* Matérias */}
+      {/* Baralhos-pai (with sub-decks) */}
       {deckDrag.displayItems.filter(d => {
         const subs = deckRowProps.getSubDecks(d.id);
         return subs.length > 0 || (d.total_cards === 0 && deckRowProps.expandedDecks.has(d.id));
@@ -212,22 +212,22 @@ const DeckList = ({
         );
       })}
 
-      {/* Spacer between matérias and loose decks */}
+      {/* Spacer between parent decks and loose decks */}
       {(() => {
-        const hasMaterias = deckDrag.displayItems.some(d => deckRowProps.getSubDecks(d.id).length > 0);
+        const hasParentDecks = deckDrag.displayItems.some(d => deckRowProps.getSubDecks(d.id).length > 0);
         const hasLoose = deckDrag.displayItems.some(d => {
           const subs = deckRowProps.getSubDecks(d.id);
-          const isEmptyMateria = subs.length === 0 && d.total_cards === 0 && deckRowProps.expandedDecks.has(d.id);
-          return subs.length === 0 && !isEmptyMateria;
+          const isEmptyParent = subs.length === 0 && d.total_cards === 0 && deckRowProps.expandedDecks.has(d.id);
+          return subs.length === 0 && !isEmptyParent;
         });
-        return hasMaterias && hasLoose ? <div className="h-3" /> : null;
+        return hasParentDecks && hasLoose ? <div className="h-3" /> : null;
       })()}
 
       {/* Loose decks */}
       {deckDrag.displayItems.filter(d => {
         const subs = deckRowProps.getSubDecks(d.id);
-        const isEmptyMateria = subs.length === 0 && d.total_cards === 0 && deckRowProps.expandedDecks.has(d.id);
-        return subs.length === 0 && !isEmptyMateria;
+        const isEmptyParent = subs.length === 0 && d.total_cards === 0 && deckRowProps.expandedDecks.has(d.id);
+        return subs.length === 0 && !isEmptyParent;
       }).map(deck => {
         const dragHandlers = deckDrag.getHandlers(deck);
         return (
