@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
+import { useState, useMemo, useCallback, useEffect, lazy, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { DeckWithStats } from '@/types/deck';
 import type { Tables } from '@/integrations/supabase/types';
@@ -11,7 +11,7 @@ import DeckDetailDialogs from '@/components/deck-detail/DeckDetailDialogs';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Settings, Layers, RefreshCw, Pencil, Check, MessageSquare, HelpCircle, ChevronRight, BookOpen, SquarePlus, RotateCcw, CheckCircle2, Info, Clock, Play } from 'lucide-react';
+import { ArrowLeft, Settings, Layers, RefreshCw, Pencil, Check, MessageSquare, HelpCircle, ChevronRight, BookOpen, SquarePlus, RotateCcw, CheckCircle2, Info, Clock, Play, SlidersHorizontal } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { calculateRealStudyTime, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils';
 import { formatDistanceToNow } from 'date-fns';
@@ -20,6 +20,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchLinkedDeckSource, fetchPendingSuggestions, countPendingSuggestions } from '@/services/deck/deckCrud';
 import { fetchFolderImageUrl } from '@/services/folderService';
 import { toast } from '@/hooks/use-toast';
+
+const StudySettingsSheet = lazy(() => import('@/components/dashboard/StudySettingsSheet'));
 
 
 /** Detect if a deck is linked to a community/marketplace source (including linked ancestors) */
@@ -31,12 +33,12 @@ interface LinkableDeck {
   id: string;
 }
 
-function checkIsLinkedDeck(deck: LinkableDeck | null | undefined, decks: LinkableDeck[]): boolean {
+function checkIsLinkedDeck(deck: LinkableDeck | null | undefined, deckMap: Map<string, LinkableDeck>): boolean {
   if (!deck) return false;
   if (deck.source_turma_deck_id || deck.source_listing_id || deck.is_live_deck) return true;
   let parentId = deck.parent_deck_id;
   while (parentId) {
-    const parent = decks.find(d => d.id === parentId);
+    const parent = deckMap.get(parentId);
     if (!parent) break;
     if (parent.source_turma_deck_id || parent.source_listing_id || parent.is_live_deck) return true;
     parentId = parent.parent_deck_id;
@@ -47,277 +49,7 @@ function checkIsLinkedDeck(deck: LinkableDeck | null | undefined, decks: Linkabl
 // resolveSourceDeckId removed — now handled by fetchLinkedDeckSource in deckCrud service
 
 
-/** @deprecated Sub-deck list view — no longer used, kept temporarily for reference */
-const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: string; subDecks: DeckWithStats[]; allDecks: DeckWithStats[] }) => {
-  const navigate = useNavigate();
 
-  const getMastery = (deckId: string): { total: number; mastered: number } => {
-    const deck = allDecks.find(d => d.id === deckId);
-    if (!deck) return { total: 0, mastered: 0 };
-    let total = deck.total_cards ?? 0;
-    let mastered = deck.mastered_cards ?? 0;
-    const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
-    for (const child of children) {
-      const cm = getMastery(child.id);
-      total += cm.total;
-      mastered += cm.mastered;
-    }
-    return { total, mastered };
-  };
-
-  const getDueCount = (deckId: string): number => {
-    const deck = allDecks.find(d => d.id === deckId);
-    if (!deck) return 0;
-    let due = (deck.new_count ?? 0) + (deck.learning_count ?? 0) + (deck.review_count ?? 0);
-    const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
-    for (const child of children) due += getDueCount(child.id);
-    return due;
-  };
-
-  const getNewCount = (deckId: string): number => {
-    const deck = allDecks.find(d => d.id === deckId);
-    if (!deck) return 0;
-    let n = deck.new_count ?? 0;
-    const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
-    for (const child of children) n += getNewCount(child.id);
-    return n;
-  };
-
-  const getLearningCount = (deckId: string): number => {
-    const deck = allDecks.find(d => d.id === deckId);
-    if (!deck) return 0;
-    let l = deck.learning_count ?? 0;
-    const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
-    for (const child of children) l += getLearningCount(child.id);
-    return l;
-  };
-
-  const getReviewCount = (deckId: string): number => {
-    const deck = allDecks.find(d => d.id === deckId);
-    if (!deck) return 0;
-    let r = deck.review_count ?? 0;
-    const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
-    for (const child of children) r += getReviewCount(child.id);
-    return r;
-  };
-
-  // Apply parent deck governance: cap new cards by daily_new_limit
-  const parentDeck = allDecks.find(d => d.id === parentDeckId);
-  const dailyNewLimit = parentDeck?.daily_new_limit ?? 20;
-  const newReviewedToday = parentDeck?.new_reviewed_today ?? 0;
-  // Also account for new_graduated_today from all children
-  const getNewGraduatedToday = (deckId: string): number => {
-    const deck = allDecks.find(d => d.id === deckId);
-    if (!deck) return 0;
-    let n = deck.new_graduated_today ?? 0;
-    const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
-    for (const child of children) n += getNewGraduatedToday(child.id);
-    return n;
-  };
-  const totalNewGraduatedToday = getNewGraduatedToday(parentDeckId);
-  const totalNewReviewedToday = Math.max(newReviewedToday, totalNewGraduatedToday);
-
-  const rawNew = getNewCount(parentDeckId);
-  const remainingNewBudget = Math.max(0, dailyNewLimit - totalNewReviewedToday);
-  const totalNew = Math.min(rawNew, remainingNewBudget);
-  const totalLearning = getLearningCount(parentDeckId);
-  const dailyReviewLimit = parentDeck?.daily_review_limit ?? 100;
-  const rawReview = getReviewCount(parentDeckId);
-  // Compute reviewed today early so we can cap review count
-  const getReviewedTodayEarly = (deckId: string): number => {
-    const dk = allDecks.find(d => d.id === deckId);
-    if (!dk) return 0;
-    let r = dk.reviewed_today ?? 0;
-    const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
-    for (const child of children) r += getReviewedTodayEarly(child.id);
-    return r;
-  };
-  const reviewReviewedToday = Math.max(0, getReviewedTodayEarly(parentDeckId) - totalNewGraduatedToday);
-  const totalReview = Math.max(0, Math.min(rawReview, dailyReviewLimit - reviewReviewedToday));
-  const totalDue = totalNew + totalLearning + totalReview;
-
-  // Fetch question counts for all descendant deck IDs
-  const allDescendantIds = useMemo(() => {
-    const collect = (id: string): string[] => {
-      const children = allDecks.filter(d => d.parent_deck_id === id && !d.is_archived);
-      return [id, ...children.flatMap(c => collect(c.id))];
-    };
-    return collect(parentDeckId);
-  }, [parentDeckId, allDecks]);
-
-
-  const sorted = [...subDecks].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name));
-
-  // Compute reviewed today across hierarchy for progress
-  const getReviewedToday = (deckId: string): number => {
-    const deck = allDecks.find(d => d.id === deckId);
-    if (!deck) return 0;
-    let r = deck.reviewed_today ?? 0;
-    const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
-    for (const child of children) r += getReviewedToday(child.id);
-    return r;
-  };
-  const reviewedToday = getReviewedToday(parentDeckId);
-  const totalSession = totalDue + reviewedToday;
-  const progressPct = totalSession > 0 ? Math.round((reviewedToday / totalSession) * 100) : 0;
-
-  // Estimated remaining time using real study metrics
-  const remainingSeconds = calculateRealStudyTime(totalNew, totalLearning, totalReview, DEFAULT_STUDY_METRICS);
-  const remainingMin = Math.ceil(remainingSeconds / 60);
-  const timeLabel = remainingMin >= 60
-    ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
-    : `${remainingMin}min`;
-
-  return (
-    <div className="space-y-4">
-      {/* Compact study header */}
-      <div className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
-        <div className="flex items-center gap-3">
-          {/* Circular progress */}
-          <div className="relative flex-shrink-0">
-            <svg width="56" height="56" viewBox="0 0 56 56" className="-rotate-90">
-              <circle cx="28" cy="28" r="24" fill="none" stroke="hsl(var(--muted))" strokeWidth="4" />
-              <circle
-                cx="28" cy="28" r="24" fill="none"
-                stroke="hsl(var(--primary))"
-                strokeWidth="4"
-                strokeLinecap="round"
-                strokeDasharray={`${2 * Math.PI * 24}`}
-                strokeDashoffset={`${2 * Math.PI * 24 * (1 - progressPct / 100)}`}
-                className="transition-all duration-500"
-              />
-            </svg>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-xs font-bold text-foreground">{progressPct}%</span>
-            </div>
-          </div>
-
-          {/* Counts inline */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1">
-                <SquarePlus className="h-3.5 w-3.5 text-blue-500" />
-                <span className="text-sm font-bold text-foreground">{totalNew}</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <RotateCcw className="h-3.5 w-3.5 text-amber-500" />
-                <span className="text-sm font-bold text-foreground">{totalLearning}</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <Layers className="h-3.5 w-3.5 text-primary" />
-                <span className="text-sm font-bold text-foreground">{totalReview}</span>
-              </div>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button className="p-0.5 rounded-full hover:bg-muted/50 transition-colors">
-                    <Info className="h-3.5 w-3.5 text-muted-foreground" />
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-56 p-3" side="bottom" align="start">
-                  <p className="text-xs font-semibold text-foreground mb-2">Detalhes do dia</p>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <SquarePlus className="h-3.5 w-3.5 text-blue-500" />
-                        <span className="text-xs text-muted-foreground">Novos</span>
-                      </div>
-                      <span className="text-xs font-semibold text-foreground">{totalNew}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <RotateCcw className="h-3.5 w-3.5 text-amber-500" />
-                        <span className="text-xs text-muted-foreground">Aprendendo</span>
-                      </div>
-                      <span className="text-xs font-semibold text-foreground">{totalLearning}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Layers className="h-3.5 w-3.5 text-primary" />
-                        <span className="text-xs text-muted-foreground">Revisão</span>
-                      </div>
-                      <span className="text-xs font-semibold text-foreground">{totalReview}</span>
-                    </div>
-                    <div className="border-t border-border/50 pt-2 mt-2 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="text-xs text-muted-foreground">Tempo estimado</span>
-                      </div>
-                      <span className="text-xs font-semibold text-foreground">~{timeLabel}</span>
-                    </div>
-                    <p className="text-[10px] text-muted-foreground/70 leading-tight">
-                      Tempo de estudo restante para completar os cartões novos e revisões configurados nos ajustes de hoje, com base na sua velocidade média de estudo.
-                    </p>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
-                        <span className="text-xs text-muted-foreground">Feitos hoje</span>
-                      </div>
-                      <span className="text-xs font-semibold text-foreground">{reviewedToday}</span>
-                    </div>
-                  </div>
-                </PopoverContent>
-              </Popover>
-            </div>
-            <div className="flex items-center gap-2 mt-0.5">
-              <Clock className="h-3 w-3 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">~{timeLabel}</span>
-              {reviewedToday > 0 && (
-                <>
-                  <span className="text-xs text-muted-foreground">·</span>
-                  <span className="text-xs text-green-500 font-medium">{reviewedToday} feitos</span>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Study button - circular icon only */}
-          <Button
-            onClick={() => navigate(`/study/${parentDeckId}`, { replace: true })}
-            size="icon"
-            className="h-10 w-10 rounded-full flex-shrink-0"
-            disabled={totalDue === 0}
-          >
-            <Play className="h-5 w-5" />
-          </Button>
-        </div>
-
-        {/* Full-width progress bar */}
-        <Progress value={progressPct} className="h-1.5 mt-3" />
-      </div>
-
-      {/* Sub-deck list */}
-      <div className="divide-y divide-border/50">
-        {sorted.map(sub => {
-          const mastery = getMastery(sub.id);
-          const masteryPct = mastery.total > 0 ? Math.round((mastery.mastered / mastery.total) * 1000) / 10 : 0;
-          const allCaughtUp = getDueCount(sub.id) === 0 && mastery.mastered > 0;
-
-          return (
-            <div
-              key={sub.id}
-              className="flex items-center gap-3 px-4 py-4 cursor-pointer hover:bg-muted/50 transition-colors"
-              onClick={() => navigate(`/decks/${sub.id}`)}
-            >
-              {allCaughtUp && <CheckCircle2 className="h-5 w-5 text-success shrink-0" />}
-              <div className="flex-1 min-w-0">
-                <h3 className="font-display font-semibold text-foreground truncate">{sub.name}</h3>
-                <div className="flex items-center gap-3 mt-1">
-                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                    <Layers className="h-3 w-3" />
-                    {mastery.total}
-                  </span>
-                  <span className="text-xs text-muted-foreground ml-auto">{masteryPct}%</span>
-                </div>
-                <Progress value={masteryPct} className="h-1 mt-1.5" />
-              </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
 
 const DeckDetailContent = () => {
   const { deck, deckLoading, allCardsLoading, deckId, navigate, toast, setAlgorithmModalOpen, cardCounts, decks } = useDeckDetail();
@@ -332,22 +64,54 @@ const DeckDetailContent = () => {
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameName, setRenameName] = useState('');
   const [activeTab, setActiveTab] = useState('cards');
+  const [studySettingsOpen, setStudySettingsOpen] = useState(false);
 
-  const isLinkedDeck = useMemo(() => checkIsLinkedDeck(deck, decks), [deck, decks]);
+  const deckMap = useMemo(() => new Map(decks.map(d => [d.id, d])), [decks]);
+
+  const isLinkedDeck = useMemo(() => checkIsLinkedDeck(deck, deckMap), [deck, deckMap]);
+
+  // Resolve root ancestor folder for StudySettingsSheet
+  const rootFolderId = useMemo(() => {
+    if (!deck) return null;
+    let current: DeckWithStats | undefined = deck as unknown as DeckWithStats;
+    while (current?.parent_deck_id) {
+      current = deckMap.get(current.parent_deck_id);
+    }
+    return current?.folder_id ?? deck.folder_id ?? null;
+  }, [deck, deckMap]);
+
+  const childrenIndex = useMemo(() => {
+    const ci = new Map<string, DeckWithStats[]>();
+    for (const d of decks) {
+      if (d.parent_deck_id && !d.is_archived) {
+        const arr = ci.get(d.parent_deck_id);
+        if (arr) arr.push(d); else ci.set(d.parent_deck_id, [d]);
+      }
+    }
+    return ci;
+  }, [decks]);
+
+  const getSubDecks = useCallback((parentId: string) => childrenIndex.get(parentId) ?? [], [childrenIndex]);
+  const getAggregateStats = useCallback((d: DeckWithStats) => ({
+    new_count: d.new_count ?? 0,
+    learning_count: d.learning_count ?? 0,
+    review_count: d.review_count ?? 0,
+    reviewed_today: d.reviewed_today ?? 0,
+  }), []);
 
   // Resolve folder image for blurred hero background
   const folderImage = useMemo(() => {
-    if (!deck || !decks) return null;
+    if (!deck) return null;
     let folderId = deck.folder_id;
     if (!folderId && deck.parent_deck_id) {
-      let currentDeck: DeckWithStats | undefined = decks.find(d => d.id === deck.parent_deck_id);
+      let currentDeck = deckMap.get(deck.parent_deck_id);
       while (currentDeck?.parent_deck_id) {
-        currentDeck = decks.find(d => d.id === currentDeck!.parent_deck_id);
+        currentDeck = deckMap.get(currentDeck.parent_deck_id);
       }
       folderId = currentDeck?.folder_id ?? null;
     }
     return folderId;
-  }, [deck, decks]);
+  }, [deck, deckMap]);
 
   const { data: folderImageUrl } = useQuery({
     queryKey: ['folder-image', folderImage],
@@ -361,10 +125,10 @@ const DeckDetailContent = () => {
     if (fromDashboardSala && dashboardSalaFolderId) return { label: 'Sala', path: `/dashboard?folder=${dashboardSalaFolderId}` };
     if (fromCommunity && communityTurmaId) return { label: 'Sala', path: `/turmas/${communityTurmaId}` };
     let folderId = deck?.folder_id ?? null;
-    if (!folderId && deck?.parent_deck_id && decks) {
-      let currentDeck: DeckWithStats | undefined = decks.find(d => d.id === deck.parent_deck_id);
+    if (!folderId && deck?.parent_deck_id) {
+      let currentDeck = deckMap.get(deck.parent_deck_id);
       while (currentDeck?.parent_deck_id) {
-        currentDeck = decks.find(d => d.id === currentDeck!.parent_deck_id);
+        currentDeck = deckMap.get(currentDeck.parent_deck_id);
       }
       folderId = currentDeck?.folder_id ?? null;
     }
@@ -442,9 +206,14 @@ const DeckDetailContent = () => {
                 </>
               )}
               {!isLinkedDeck && (
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/decks/${deckId}/settings`)}>
-                  <Settings className="h-4 w-4" />
-                </Button>
+                <>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setStudySettingsOpen(true)} title="Configurar estudo">
+                    <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/decks/${deckId}/settings`)}>
+                    <Settings className="h-4 w-4" />
+                  </Button>
+                </>
               )}
             </div>
           </div>
@@ -520,6 +289,19 @@ const DeckDetailContent = () => {
       </main>
 
       <DeckDetailDialogs />
+
+      <Suspense fallback={null}>
+        {studySettingsOpen && rootFolderId && (
+          <StudySettingsSheet
+            open={studySettingsOpen}
+            onOpenChange={setStudySettingsOpen}
+            decks={decks}
+            getSubDecks={getSubDecks}
+            getAggregateStats={getAggregateStats}
+            currentFolderId={rootFolderId}
+          />
+        )}
+      </Suspense>
 
     </div>
   );

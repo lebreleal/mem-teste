@@ -210,10 +210,10 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const { cards, isLoading: cardsLoading, createCard, updateCard, deleteCard } = useCards(deckId, { enableQuery: false });
   const { decks } = useDecks();
   const { toast } = useToast();
-  // Exam generation stubs (exams system removed)
-  const createExam = { mutateAsync: async () => ({ id: '' }), isPending: false } as any;
-  const addNotification = (_n: any) => {};
-  const updateNotification = (_id: string, _update: any) => {};
+  // Exam generation stubs (exams system removed) — typed loosely to satisfy AnyMutation in handlers
+  const createExamStub = { mutateAsync: async () => ({ id: '' }), isPending: false };
+  const addNotification: DeckDetailContextValue['addNotification'] = () => {};
+  const updateNotification: DeckDetailContextValue['updateNotification'] = () => {};
   const { energy, spendEnergy } = useEnergy();
   const { model, setModel, getCost } = useAIModel();
 
@@ -253,6 +253,20 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const [mcOptions, setMcOptions] = useState<string[]>(['', '', '', '']);
   const [mcCorrectIndex, setMcCorrectIndex] = useState<number>(0);
 
+  // ─── Indexed lookups (O(1) instead of O(n)) ───
+  const { deckMap, childrenIndex } = useMemo(() => {
+    const dm = new Map<string, DeckWithStats>();
+    const ci = new Map<string, DeckWithStats[]>();
+    for (const d of decks) {
+      dm.set(d.id, d);
+      if (d.parent_deck_id && !d.is_archived) {
+        const arr = ci.get(d.parent_deck_id);
+        if (arr) arr.push(d); else ci.set(d.parent_deck_id, [d]);
+      }
+    }
+    return { deckMap: dm, childrenIndex: ci };
+  }, [decks]);
+
   // ─── Queries ───────────────────────────
   const { data: deck, isLoading: deckLoading } = useQuery({
     queryKey: ['deck', deckId],
@@ -267,11 +281,10 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
       const nowISO = new Date().toISOString();
       const allIds: string[] = [deckId];
       let frontier = [deckId];
-      const decksList = decks ?? [];
       while (frontier.length > 0) {
         const nextFrontier: string[] = [];
         for (const fid of frontier) {
-          const children = decksList.filter(d => d.parent_deck_id === fid && !d.is_archived);
+          const children = childrenIndex.get(fid) ?? [];
           for (const child of children) { allIds.push(child.id); nextFrontier.push(child.id); }
         }
         frontier = nextFrontier;
@@ -288,11 +301,11 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     const queue = [deckId];
     while (queue.length > 0) {
       const current = queue.pop()!;
-      const children = decks.filter(d => d.parent_deck_id === current && !d.is_archived);
+      const children = childrenIndex.get(current) ?? [];
       for (const child of children) { result.push(child.id); queue.push(child.id); }
     }
     return result;
-  }, [decks, deckId]);
+  }, [decks, deckId, childrenIndex]);
 
   const allDeckIds = useMemo(() => [deckId, ...descendantIds], [deckId, descendantIds]);
 
@@ -372,26 +385,26 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const rootId = useMemo(() => {
     let currentId = deckId;
     while (true) {
-      const d = decks.find(dk => dk.id === currentId);
+      const d = deckMap.get(currentId);
       if (!d?.parent_deck_id) return currentId;
       currentId = d.parent_deck_id;
     }
-  }, [decks, deckId]);
+  }, [deckMap, deckId]);
 
-  const rootDeck = decks.find(d => d.id === rootId);
+  const rootDeck = deckMap.get(rootId);
 
   const rootTotals = useMemo(() => {
     const collectAll = (id: string): { newReviewed: number; reviewed: number; newGraduated: number } => {
-      const d = decks.find(dk => dk.id === id);
+      const d = deckMap.get(id);
       let newReviewed = d?.new_reviewed_today ?? 0;
       let reviewed = d?.reviewed_today ?? 0;
       let newGraduated = d?.new_graduated_today ?? 0;
-      const children = decks.filter(dk => dk.parent_deck_id === id && !dk.is_archived);
+      const children = childrenIndex.get(id) ?? [];
       for (const child of children) { const c = collectAll(child.id); newReviewed += c.newReviewed; reviewed += c.reviewed; newGraduated += c.newGraduated; }
       return { newReviewed, reviewed, newGraduated };
     };
     return collectAll(rootId);
-  }, [decks, rootId]);
+  }, [deckMap, childrenIndex, rootId]);
 
   const studyPlansQuery = useQuery({
     queryKey: ['study-plans-for-deck-detail', user?.id],
@@ -415,15 +428,15 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     const scopedRoots = hasPlanActive ? roots.filter(d => planRootIds.has(d.id)) : roots;
     return scopedRoots.reduce((sum, d) => {
       const collectNew = (id: string): number => {
-        const dk = decks.find(x => x.id === id);
+        const dk = deckMap.get(id);
         let nr = dk?.new_reviewed_today ?? 0;
-        const children = decks.filter(x => x.parent_deck_id === id && !x.is_archived);
+        const children = childrenIndex.get(id) ?? [];
         for (const child of children) nr += collectNew(child.id);
         return nr;
       };
       return sum + collectNew(d.id);
     }, 0);
-  }, [decks, hasPlanActive, planRootIds]);
+  }, [decks, deckMap, childrenIndex, hasPlanActive, planRootIds]);
 
   const profileQuery = useProfile();
   const profileData = profileQuery.data;
@@ -566,7 +579,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     examTitle, examTotalQuestions, examWrittenCount, examOptionsCount, examTimeLimit,
     improvePreview,
     createCard, updateCard, deleteCard,
-    createExam, addNotification, updateNotification,
+    createExam: createExamStub as unknown as Parameters<typeof useDeckDetailHandlers>[0]['createExam'], addNotification, updateNotification,
     setFront, setBack, setEditingId, setCardType, setDeleteId,
     setMoveCardId, setMoveTargetDeck, setSelectedCards, setSelectionMode,
     setBulkMoveOpen, setEditorOpen, setOcclusionImageUrl, setOcclusionRects,
@@ -595,7 +608,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     isImproving, setIsImproving, improvePreview, setImprovePreview, improveModalOpen, setImproveModalOpen,
     occlusionImageUrl, setOcclusionImageUrl, occlusionRects, setOcclusionRects, occlusionCanvasSize, setOcclusionCanvasSize, occlusionModalOpen, setOcclusionModalOpen,
     mcOptions, setMcOptions, mcCorrectIndex, setMcCorrectIndex,
-    energy, spendEnergy, model, setModel, getCost, createExam, addNotification, updateNotification,
+    energy, spendEnergy, model, setModel, getCost, createExam: createExamStub, addNotification, updateNotification,
     resetForm: handlers.resetForm, openNew: handlers.openNew, openEdit: handlers.openEdit,
     handleSave: handlers.handleSave, handleDelete: handlers.handleDelete, handleMoveCard: handlers.handleMoveCard,
     handleBulkMove: handlers.handleBulkMove, handleBulkDelete: handlers.handleBulkDelete,
