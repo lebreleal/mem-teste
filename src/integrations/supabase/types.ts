@@ -3220,6 +3220,7 @@ export type Database = {
           total_reviews_90d: number
         }[]
       }
+      get_user_time_calibration: { Args: { p_user_id: string }; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
