@@ -23,10 +23,12 @@ export function handleCors(req: Request): Response | null {
   return null;
 }
 
-/** Centralized AI config */
+/** Centralized AI config — uses Google Gemini API directly via GOOGLE_AI_KEY. */
 export function getAIConfig() {
-  const apiKey = Deno.env.get("LOVABLE_API_KEY");
-  const url = "https://ai.gateway.lovable.dev/v1/chat/completions";
+  const apiKey = Deno.env.get("GOOGLE_AI_KEY") || Deno.env.get("LOVABLE_API_KEY");
+  const url = Deno.env.get("GOOGLE_AI_KEY")
+    ? "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+    : "https://ai.gateway.lovable.dev/v1/chat/completions";
   return { apiKey, url };
 }
 
