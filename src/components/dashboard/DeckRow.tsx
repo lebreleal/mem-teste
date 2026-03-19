@@ -152,7 +152,7 @@ function aggregateClassification(deck: DeckWithStats, getSubDecks: (id: string) 
 }
 
 
-const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
+const DeckRow = ({
   deck, deckSelectionMode, selectedDeckIds,
   toggleDeckSelection, getSubDecks, getAggregateStats,
   onCreateSubDeck, onCreateSubDeckAI,
@@ -164,7 +164,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   disableManagementActions = false,
   readOnlyNavState,
   organizeMode = false,
-}, ref) => {
+}: DeckRowProps) => {
   const navigate = useNavigate();
   const { isAdmin } = useIsAdmin();
   const isErrorDeck = deck.name === ERROR_DECK_NAME;
