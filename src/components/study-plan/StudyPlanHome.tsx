@@ -235,7 +235,7 @@ export const StudyPlanHome = ({
           allDeckIds={expandedDeckIds} dailyMinutes={globalCapacity.dailyMinutes}
           weeklyMinutes={globalCapacity.weeklyMinutes} weeklyNewCards={globalCapacity.weeklyNewCards}
           plans={plans} updateCapacity={updateCapacity} metricsTotalNew={metrics?.totalNew}
-          activeDecks={activeDecks}
+          activeDecks={activeDecks} calibrationFactor={calibrationFactor}
         />
 
         {/* MODAL: Confirmar alteração de novos cards */}
