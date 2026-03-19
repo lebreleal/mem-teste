@@ -1,48 +1,68 @@
 
 
-# Plano: Alinhar cálculo de tempo do Forecast Worker com o da Sala
+# Plano: Remover fallback Lovable Gateway + Eliminar gargalo `fetchAllCardIds`
 
-## Problema
+## Situação Atual
 
-O tempo exibido dentro da Sala (SalaHero) usa `calculateRealStudyTime`, que:
-- Multiplica cartões novos por `avgReviewsPerNewCard` (mín. 2) — conta os passos de aprendizagem
-- Aplica `avgLapseRate` nos cartões de revisão — conta reaprendizagem por lapsos
+### AI Gateway
+- `GOOGLE_AI_KEY` **ja esta configurada** nos secrets do Supabase
+- Porem `getAIConfig()` ainda tem fallback para `LOVABLE_API_KEY` / `ai.gateway.lovable.dev` (linhas 28-32 de `_shared/utils.ts`). No servidor proprio, se `GOOGLE_AI_KEY` estiver setada, funciona. Mas o fallback deve ser removido para evitar confusao.
 
-O Forecast Worker usa cálculo simplificado:
-- `newCards × newSecsPerCard` — trata cada cartão novo como **1 interação** (deveria ser 2-3x)
-- Não aplica taxa de lapso nos reviews
+### Performance — Por que esta lento
 
-Resultado: o simulador **subestima** o tempo real, especialmente para dias com muitos cartões novos.
+O **maior gargalo** é `fetchAllCardIds()` em `studyService.ts` (linhas 188-210). Essa funcao:
+1. Divide todos os deckIds ativos em batches de 300
+2. Para cada batch, pagina de 1000 em 1000 **sequencialmente** com `while (hasMore)`
+3. So depois de terminar TODAS as paginas de TODOS os batches, continua para Round 3
 
-## Solução
+Para um usuario com 50 decks e 5000 cards, isso pode gerar 5-10 round-trips sequenciais ao Supabase. Cada round-trip custa ~100-300ms = **1-3 segundos so nessa etapa**.
 
-### 1. Atualizar RPC `get_forecast_params` para retornar métricas de comportamento
+Alem disso, `fetchAllCardIds` busca IDs de **todos os decks ativos do usuario** (nao so os que vai estudar), porque precisa calcular limites globais. Isso e necessario, mas deve ser feito no servidor, nao com paginacao no cliente.
 
-Adicionar ao JSON retornado:
-- `avg_reviews_per_new_card` — mediana de interações por cartão novo no primeiro dia (dos review_logs)
-- `avg_lapse_rate` — fração de reviews com rating=1 nos últimos 90 dias
+## Mudancas
 
-### 2. Atualizar tipo `ForecastTiming` em `src/types/forecast.ts`
+### 1. Remover fallback do Lovable Gateway
+**Arquivo: `supabase/functions/_shared/utils.ts`**
+- `getAIConfig()`: usar apenas `GOOGLE_AI_KEY`, sem fallback. Se nao existir, lançar erro claro.
+- `getModelMap()`: remover logica de prefixo condicional, usar nomes diretos sempre.
 
-Adicionar campos `avg_reviews_per_new_card` e `avg_lapse_rate`.
-
-### 3. Atualizar `forecastWorker.ts` para usar o mesmo modelo de tempo
-
-Substituir o cálculo flat por lógica equivalente a `calculateRealStudyTime`:
-- `newMinRaw = newCardsToday × avgReviewsPerNewCard × newSecsPerCard / 60`
-- `revMinRaw = (reviewCount × (1 - lapseRate) × reviewSecs + reviewCount × lapseRate × relearnSecs × 2) / 60`
-
-### 4. Migration SQL
-
+### 2. Criar RPC `get_all_card_ids_for_user` (Migration SQL)
 ```sql
--- Adicionar avg_reviews_per_new_card e avg_lapse_rate ao timing do RPC
+CREATE OR REPLACE FUNCTION public.get_all_card_ids_for_user(p_user_id uuid)
+RETURNS TABLE(id uuid, deck_id uuid) 
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT c.id, c.deck_id
+  FROM cards c
+  INNER JOIN decks d ON d.id = c.deck_id
+  WHERE d.user_id = p_user_id
+    AND d.is_archived = false;
+$$;
 ```
+Uma unica query no servidor, sem paginacao, sem batches. Retorna todos os `(id, deck_id)` de uma vez.
 
-Calcular `avg_reviews_per_new_card` como: para cada cartão com state=0 revisado, contar quantas review_logs existem no mesmo dia. Calcular `avg_lapse_rate` como: `COUNT(rating=1) / COUNT(*)` para reviews de state=2.
+### 3. Substituir `fetchAllCardIds` pela RPC
+**Arquivo: `src/services/studyService.ts`**
+- Remover a funcao `fetchAllCardIds` inteira (linhas 188-210)
+- No `Promise.all` do Round 2, trocar `fetchAllCardIds()` por:
+  ```ts
+  supabase.rpc('get_all_card_ids_for_user', { p_user_id: userId })
+  ```
+- Ajustar o resultado para usar `rpcResult.data ?? []`
 
-## Impacto
+### 4. Atualizar tipos no Supabase types
+- O arquivo `src/integrations/supabase/types.ts` sera atualizado automaticamente apos a migration.
 
-- Forecast passa a mostrar tempos consistentes com a Sala
-- Sem mudança de UI — apenas a precisão dos números melhora
-- 4 arquivos: 1 migration, `types/forecast.ts`, `forecastWorker.ts`, fallbacks
+## Arquivos afetados
+
+| Arquivo | Mudanca |
+|---|---|
+| `supabase/functions/_shared/utils.ts` | Remover fallback Lovable, so Google direto |
+| Migration SQL | Criar RPC `get_all_card_ids_for_user` |
+| `src/services/studyService.ts` | Trocar `fetchAllCardIds()` por chamada RPC |
+
+## Impacto esperado
+- **AI**: funciona exclusivamente com `GOOGLE_AI_KEY`, sem dependencia do Lovable
+- **Performance**: eliminacao de 5-10 round-trips sequenciais → 1 unica chamada RPC. Estimativa de melhoria: **1-3 segundos mais rapido** no inicio da sessao de estudo
 
