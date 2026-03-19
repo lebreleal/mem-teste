@@ -90,6 +90,8 @@ export interface SimulatorSummary {
   peakMin: number;
   peakDate: string;
   overloadedDays: number;
+  avgDailyCards: number;
+  totalCards: number;
 }
 
 export interface SimulatorResult {
