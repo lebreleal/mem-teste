@@ -319,6 +319,7 @@ const DeckRow = ({
         </DialogContent>
       </Dialog>
     </>
+  );
 };
 
 export default React.memo(DeckRow);
