@@ -304,12 +304,12 @@ const MateriaDetail: React.FC = () => {
                 <DropdownMenuItem onClick={() => setOrganizeMode(!organizeMode)}>
                   <GripVertical className="h-4 w-4 mr-2" /> {organizeMode ? 'Concluir organização' : 'Organizar baralhos'}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => archiveMutation.mutate()}>
-                  <IconArchive className="h-4 w-4 mr-2" /> Arquivar pasta
-                </DropdownMenuItem>
-                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => deleteMutation.mutate()}>
-                  <IconTrash className="h-4 w-4 mr-2" /> Excluir pasta
-                </DropdownMenuItem>
+                 <DropdownMenuItem onClick={() => archiveMutation.mutate()}>
+                   <IconArchive className="h-4 w-4 mr-2" /> Arquivar baralho
+                 </DropdownMenuItem>
+                 <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => deleteMutation.mutate()}>
+                   <IconTrash className="h-4 w-4 mr-2" /> Excluir baralho
+                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
