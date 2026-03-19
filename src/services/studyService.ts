@@ -38,17 +38,20 @@ export async function fetchStudyQueue(
   let activeDecks = (decksResult.data ?? []).filter(d => !d.is_archived);
   const foldersData = foldersResult.data ?? [];
 
+  // Map-based lookup O(1) instead of .find() O(n) — Lei 1A
+  const deckMap = new Map(activeDecks.map(d => [d.id, d]));
+
   // Builds a set of deck IDs whose new-card limit is 0 (used to exclude their NEW cards only, not reviews)
   const zeroNewLimitDeckIds = new Set<string>();
   const buildZeroLimitSet = (deckIdToCheck: string) => {
-    let current = activeDecks.find(d => d.id === deckIdToCheck);
+    let current = deckMap.get(deckIdToCheck);
     while (current) {
       if ((current.daily_new_limit ?? 20) <= 0) {
         zeroNewLimitDeckIds.add(deckIdToCheck);
         return;
       }
       if (!current.parent_deck_id) break;
-      current = activeDecks.find(d => d.id === current!.parent_deck_id);
+      current = deckMap.get(current.parent_deck_id);
     }
   };
 
