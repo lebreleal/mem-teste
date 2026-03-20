@@ -664,6 +664,25 @@ Retorne o front com a sintaxe {{c1::resposta}} e back vazio.`;
         handleImprove={handleImprove}
         addMcOption={addMcOption}
         removeMcOption={removeMcOption}
+        extraContent={isEditingMCRef.current ? (
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 space-y-2">
+            <p className="text-xs text-muted-foreground">
+              Este cartão é de <span className="font-semibold text-foreground">múltipla escolha</span>. 
+              Converta-o para <span className="font-semibold text-foreground">cloze</span> para melhor memorização.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleConvertMCToCloze}
+              disabled={isConvertingMC}
+              className="w-full gap-2 border-primary/30 text-primary hover:bg-primary/10"
+            >
+              {isConvertingMC ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <IconAIGradient className="h-3.5 w-3.5" />}
+              {isConvertingMC ? 'Convertendo...' : 'Converter para Cloze com IA'}
+              <span className="text-[10px] text-muted-foreground ml-auto">1 crédito</span>
+            </Button>
+          </div>
+        ) : undefined}
       />
 
       {/* AI Improve preview dialog */}
