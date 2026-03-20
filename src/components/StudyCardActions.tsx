@@ -296,7 +296,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
       back_content: JSON.stringify({ clozeTarget: n, extra: userBack }),
     }));
     const deletedIds = numsToRemove.map(n => existingTargets.get(n)!);
-    onCardUpdated({ front_content: frontStr, back_content: JSON.stringify({ clozeTarget: numsToKeep[0] ?? 1, extra: userBack }) });
+    onCardUpdated(editCardIdRef.current, { front_content: frontStr, back_content: JSON.stringify({ clozeTarget: numsToKeep[0] ?? 1, extra: userBack }) });
     onSiblingsUpdated?.(updatedSiblings, deletedIds);
   };
 
