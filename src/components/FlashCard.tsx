@@ -197,6 +197,15 @@ const FlashCard = ({
 
   const effectiveCardType = useMemo(() => {
     if (cardType === 'image_occlusion') return 'image_occlusion';
+    // Auto-detect image_occlusion from JSON content even if card_type is wrong
+    if (cardType !== 'image_occlusion') {
+      try {
+        const parsed = JSON.parse(frontContent);
+        if (parsed && typeof parsed === 'object' && 'imageUrl' in parsed && ('rects' in parsed || 'allRects' in parsed)) {
+          return 'image_occlusion';
+        }
+      } catch {}
+    }
     if (cardType === 'multiple_choice') return 'multiple_choice';
     if (cardType === 'cloze' || hasClozeMarkers(frontContent)) return 'cloze';
     return 'basic';
