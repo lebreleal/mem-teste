@@ -16,7 +16,7 @@ import { useAIModel } from '@/hooks/useAIModel';
 import AIModelSelector from '@/components/AIModelSelector';
 import ProModelConfirmDialog from '@/components/ProModelConfirmDialog';
 import ReactMarkdown from 'react-markdown';
-import { withRetryAndClassify, type AppError } from '@/lib/errors';
+import { withRetryAndClassify, AppError } from '@/lib/errors';
 
 const BASE_COST = 2;
 
@@ -238,11 +238,10 @@ const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, is
         }
       }
     } catch (e: unknown) {
-      const err = e as AppError | Error;
-      const msg = 'userMessage' in (err as Record<string, unknown>)
-        ? String((err as AppError).userMessage)
-        : err instanceof Error
-          ? err.message
+      const msg = e instanceof AppError
+        ? e.userMessage
+        : e instanceof Error
+          ? e.message
           : 'Erro desconhecido';
 
       toast({ title: 'Erro no chat IA', description: msg, variant: 'destructive' });

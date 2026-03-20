@@ -260,18 +260,18 @@ export const CardEditorDialog = ({
 
           {/* Editor area — mirrors ManageDeck layout */}
           <div className={cn(
-            'flex-1 min-h-0',
-            occlusionModalOpen ? 'overflow-hidden' : 'overflow-y-auto',
+            'flex-1 min-h-0 overflow-hidden',
+            occlusionModalOpen && 'overflow-hidden',
           )}>
             <div className={cn(
-              'mx-auto flex min-h-full w-full max-w-2xl flex-col gap-2 p-3 sm:p-5',
+              'mx-auto flex h-full w-full max-w-2xl flex-col gap-1.5 p-3 sm:p-5',
               occlusionModalOpen && 'pointer-events-none select-none blur-[1px] scale-[0.985] transition-all',
             )}>
               {/* Front card */}
-              <div className="relative flex min-h-[280px] flex-1 flex-col overflow-hidden rounded-xl border border-border/60 bg-card sm:min-h-[320px]">
+              <div className="relative flex min-h-[100px] flex-1 flex-col overflow-hidden rounded-xl border border-border/60 bg-card">
                 {(!editorFront || editorFront === '<p></p>') && !hasOcclusion && frontAttachedImages.length === 0 && !occlusionImageUrl ? (
-                  <div className="pointer-events-none absolute left-4 top-4 z-10">
-                    <span className="text-sm font-medium text-muted-foreground/40">Frente</span>
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                    <span className="text-base font-medium text-muted-foreground/30">Frente</span>
                   </div>
                 ) : null}
                 <LazyRichEditor
@@ -311,15 +311,11 @@ export const CardEditorDialog = ({
                     }
                   }}
                   onOcclusionImageReady={(imageUrl) => {
-                    setPreviewAttachment({
-                      attachment: { url: imageUrl, isOcclusion: false, hasOcclusionRects: false },
-                      allowOcclusion: true,
-                    });
-                    rebuildFront(editorFront, frontAttachedImages, '', [], null);
-                    setOcclusionImageUrl('');
+                    setOcclusionImageUrl(imageUrl);
                     setOcclusionRects([]);
                     setOcclusionCanvasSize(null);
-                    setOcclusionDraftWasNew(false);
+                    setOcclusionDraftWasNew(true);
+                    setOcclusionModalOpen(true);
                   }}
                   onAICreate={handleAICreate}
                   isAICreating={isAICreating}
@@ -327,10 +323,10 @@ export const CardEditorDialog = ({
               </div>
 
               {/* Back card */}
-              <div className="relative flex min-h-[220px] flex-1 flex-col overflow-hidden rounded-xl border border-border/60 bg-card sm:min-h-[260px]">
+              <div className="relative flex min-h-[100px] flex-1 flex-col overflow-hidden rounded-xl border border-border/60 bg-card">
                 {!editorBack || editorBack === '<p></p>' ? (
-                  <div className="pointer-events-none absolute left-4 top-4 z-10">
-                    <span className="text-sm font-medium text-muted-foreground/40">Verso</span>
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                    <span className="text-base font-medium text-muted-foreground/30">Verso</span>
                   </div>
                 ) : null}
                 <LazyRichEditor
@@ -435,7 +431,7 @@ export const CardEditorDialog = ({
             setOcclusionCanvasSize(null);
             setOcclusionDraftWasNew(true);
             setPreviewAttachment(null);
-            setOcclusionModalOpen(true);
+            requestAnimationFrame(() => setOcclusionModalOpen(true));
           }
         }}
       />

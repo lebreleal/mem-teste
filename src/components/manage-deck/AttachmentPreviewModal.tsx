@@ -2,6 +2,7 @@ import { X } from 'lucide-react';
 import { IconImageOcclusion } from '@/components/icons';
 
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 
 interface AttachmentPreviewModalProps {
   open: boolean;
@@ -21,14 +22,8 @@ const AttachmentPreviewModal = ({
   if (!open || !imageUrl) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className="relative w-full max-w-md rounded-3xl border border-border bg-background shadow-2xl"
-        onClick={(event) => event.stopPropagation()}
-      >
+    <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
+      <DialogContent className="w-full max-w-md overflow-hidden rounded-3xl border border-border bg-background p-0 shadow-2xl sm:rounded-3xl [&>button]:hidden">
         <button
           type="button"
           onClick={onClose}
@@ -39,11 +34,11 @@ const AttachmentPreviewModal = ({
         </button>
 
         <div className="space-y-4 p-4 pt-12">
-          <div className="flex min-h-[14rem] items-center justify-center rounded-2xl bg-muted/20 p-4">
+          <div className="flex min-h-[18rem] items-center justify-center rounded-2xl bg-muted/20 p-4">
             <img
               src={imageUrl}
               alt="Pré-visualização do anexo"
-              className="h-[200px] w-[250px] max-w-full rounded-xl object-contain"
+              className="max-h-[55dvh] w-auto max-w-full rounded-xl object-contain"
             />
           </div>
 
@@ -56,8 +51,8 @@ const AttachmentPreviewModal = ({
             </div>
           ) : null}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 
