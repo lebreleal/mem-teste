@@ -314,7 +314,9 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
     const cappedReviewIndices: number[] = [];
     for (const [deckId, indices] of reviewByDeck) {
       const dk = deckMap.get(deckId);
-      const limit = dk?.daily_review_limit ?? 9999;
+      // Scale limit DOWN when using sampling so output * scaleFactor ≈ real limit
+      const rawLimit = dk?.daily_review_limit ?? 9999;
+      const limit = scaleFactor > 1 ? Math.max(1, Math.round(rawLimit / scaleFactor)) : rawLimit;
       // Take up to limit; overflow cards keep their scheduledDay so they appear tomorrow
       for (let i = 0; i < indices.length; i++) {
         if (i < limit) {
