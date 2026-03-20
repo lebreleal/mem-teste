@@ -71,8 +71,11 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
   const [improveModalOpen, setImproveModalOpen] = useState(false);
   const [suggestOpen, setSuggestOpen] = useState(false);
 
-  // Capture card ID at edit-open time to prevent stale references
+  // Capture FULL card snapshot at edit-open time to prevent stale references
   const editCardIdRef = useRef<string>(card.id);
+  const editCardDeckIdRef = useRef<string>(card.deck_id);
+  const editCardTypeRef = useRef<string>(card.card_type);
+  const editCardBackRef = useRef<string>(card.back_content);
   // Store original front_content to find siblings
   const originalFrontRef = useRef<string>('');
 
