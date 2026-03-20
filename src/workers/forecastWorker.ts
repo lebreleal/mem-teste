@@ -303,8 +303,29 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
     }
 
     // ── Step 1: Process reviews/learning/relearning FIRST to know time used ──
-    let reviewCount = 0;
+    // Group review indices by deck and enforce daily_review_limit per deck
+    const reviewByDeck = new Map<string, number[]>();
     for (const idx of dueReview) {
+      const deckId = simCards[idx].deck_id;
+      if (!reviewByDeck.has(deckId)) reviewByDeck.set(deckId, []);
+      reviewByDeck.get(deckId)!.push(idx);
+    }
+
+    const cappedReviewIndices: number[] = [];
+    for (const [deckId, indices] of reviewByDeck) {
+      const dk = deckMap.get(deckId);
+      const limit = dk?.daily_review_limit ?? 9999;
+      // Take up to limit; overflow cards keep their scheduledDay so they appear tomorrow
+      for (let i = 0; i < indices.length; i++) {
+        if (i < limit) {
+          cappedReviewIndices.push(indices[i]);
+        }
+        // Cards beyond limit are NOT processed — they stay due for next day
+      }
+    }
+
+    let reviewCount = 0;
+    for (const idx of cappedReviewIndices) {
       const c = simCards[idx];
       const dk = deckMap.get(c.deck_id);
       const retention = dk?.requested_retention ?? 0.9;
@@ -423,9 +444,9 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
 
     // Calculate minutes — keep raw fractional values, round only for final output
     // New cards: 1 first-see (new speed) + remaining interactions at learning speed
-    const firstSeeMin = (newCardsToday * newSecsPerCard * scaleFactor) / 60;
+    const firstSeeMin = (newCardsToday * newSecsPerCard * scaleFactor * calFactor) / 60;
     const newLearningInteractions = newCardsToday * Math.max(0, reviewsPerNewCard - 1);
-    const newLearningMin = (newLearningInteractions * learningSecsPerCard * scaleFactor) / 60;
+    const newLearningMin = (newLearningInteractions * learningSecsPerCard * scaleFactor * calFactor) / 60;
     const newMinRaw = firstSeeMin + newLearningMin;
     const totalMinRaw = revMinRaw + newMinRaw + learnMinRaw + relearnMinRaw;
 
