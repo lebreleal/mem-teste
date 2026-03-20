@@ -16,6 +16,7 @@ import { useAIModel } from '@/hooks/useAIModel';
 import AIModelSelector from '@/components/AIModelSelector';
 import ProModelConfirmDialog from '@/components/ProModelConfirmDialog';
 import ReactMarkdown from 'react-markdown';
+import { withRetryAndClassify, type AppError } from '@/lib/errors';
 
 const BASE_COST = 2;
 
@@ -134,27 +135,41 @@ const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, is
         { role: 'user' as const, content: text },
       ];
 
-      const token = await getAccessToken();
+      const resp = await withRetryAndClassify(async () => {
+        const token = await getAccessToken();
 
-      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        },
-        body: JSON.stringify({
-          messages: apiMessages,
-          aiModel: model,
-          energyCost: cost,
-          skipPersist: true, // Don't save to DB
-        }),
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({
+            messages: apiMessages,
+            aiModel: model,
+            energyCost: cost,
+            skipPersist: true,
+          }),
+        });
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          const message = errData.error || 'Erro ao consultar IA';
+          const error = new Error(message) as Error & { status?: number };
+          error.status = response.status;
+          throw error;
+        }
+
+        if (!response.body) {
+          throw new Error('No stream');
+        }
+
+        return response;
+      }, {
+        maxRetries: 2,
+        context: { feature: 'study_chat' },
       });
-
-      if (!resp.ok) {
-        const errData = await resp.json().catch(() => ({}));
-        throw new Error(errData.error || 'Erro ao consultar IA');
-      }
 
       const reader = resp.body?.getReader();
       if (!reader) throw new Error('No stream');
@@ -223,8 +238,14 @@ const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, is
         }
       }
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Erro desconhecido';
-      toast({ title: 'Erro', description: msg, variant: 'destructive' });
+      const err = e as AppError | Error;
+      const msg = 'userMessage' in (err as Record<string, unknown>)
+        ? String((err as AppError).userMessage)
+        : err instanceof Error
+          ? err.message
+          : 'Erro desconhecido';
+
+      toast({ title: 'Erro no chat IA', description: msg, variant: 'destructive' });
       setMessages(prev => prev.filter(m => !(m.role === 'assistant' && m.content === '')));
     } finally {
       setIsStreaming(false);
