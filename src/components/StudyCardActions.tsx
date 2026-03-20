@@ -252,7 +252,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
     const frontStr = JSON.stringify(frontData);
 
     // Fetch existing siblings
-    const allSiblingCards = await fetchClozeSiblings([card.deck_id], originalFrontRef.current);
+    const allSiblingCards = await fetchClozeSiblings([editCardDeckIdRef.current], originalFrontRef.current);
     const existingTargets = new Map<number, string>();
     allSiblingCards.forEach(c => {
       try {
