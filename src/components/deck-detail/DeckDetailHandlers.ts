@@ -4,20 +4,69 @@
  */
 
 import { useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchCardFrontContent } from '@/services/uiQueryService';
+
+import { getCurrentUserId, invokeEdgeFunction } from '@/services/authService';
 import * as cardService from '@/services/cardService';
 import * as deckService from '@/services/deckService';
 import { invalidateDeckRelatedQueries } from '@/lib/queryKeys';
+import { OCCLUSION_COLORS } from '@/lib/occlusionColors';
 import type { CardRow } from '@/types/deck';
 import type { useToast } from '@/hooks/use-toast';
 import type { QueryClient } from '@tanstack/react-query';
 
+import type { UseMutationResult } from '@tanstack/react-query';
+
+/** Minimal deck shape needed by handlers */
+interface HandlerDeck {
+  name?: string;
+  folder_id?: string | null;
+  algorithm_mode?: string;
+}
+
+/** Shape of an occlusion rectangle */
+export interface OcclusionRect {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  type: 'rect' | 'ellipse' | 'polygon' | 'text';
+  text?: string;
+  groupId?: string;
+  color?: string;
+  points?: { x: number; y: number }[];
+}
+
+/** Shape returned by deckService.createAlgorithmCopy / detachCommunityDeck */
+interface CreatedDeck {
+  id: string;
+  name: string;
+}
+
+/** Generic mutation shape for createCard/updateCard/deleteCard */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyMutation = UseMutationResult<any, unknown, any, any>;
+
+/** Subdeck import shape (matches SubdeckNode from deckImport) */
+interface ImportSubdeck {
+  name: string;
+  card_indices: number[];
+  children?: ImportSubdeck[];
+}
+
+/** Subdeck import shape */
+interface ImportSubdeck {
+  name: string;
+  cards: { frontContent: string; backContent: string; cardType?: string }[];
+}
+
 interface HandlerDeps {
   deckId: string;
-  deck: any;
+  deck: HandlerDeck | null | undefined;
   allCards: CardRow[];
   allDeckIds: string[];
-  user: any;
+  user: { id: string } | null;
   toast: ReturnType<typeof useToast>['toast'];
   queryClient: QueryClient;
   navigate: (path: string) => void;
@@ -32,7 +81,7 @@ interface HandlerDeps {
   selectedCards: Set<string>;
   filteredCards: CardRow[];
   occlusionImageUrl: string;
-  occlusionRects: any[];
+  occlusionRects: OcclusionRect[];
   occlusionCanvasSize: { w: number; h: number } | null;
   mcOptions: string[];
   mcCorrectIndex: number;
@@ -46,13 +95,13 @@ interface HandlerDeps {
   examTimeLimit: number;
   improvePreview: { front: string; back: string } | null;
   // Mutations from useCards
-  createCard: any;
-  updateCard: any;
-  deleteCard: any;
+  createCard: AnyMutation;
+  updateCard: AnyMutation;
+  deleteCard: AnyMutation;
   // From hooks
-  createExam: any;
-  addNotification: any;
-  updateNotification: any;
+  createExam: AnyMutation;
+  addNotification: (n: { id: string; title: string; examId: string; status: string; message: string }) => void;
+  updateNotification: (id: string, update: Record<string, unknown>) => void;
   // State setters (callbacks)
   setFront: (v: string) => void;
   setBack: (v: string) => void;
@@ -66,7 +115,7 @@ interface HandlerDeps {
   setBulkMoveOpen: (v: boolean) => void;
   setEditorOpen: (v: boolean) => void;
   setOcclusionImageUrl: (v: string) => void;
-  setOcclusionRects: (v: any[]) => void;
+  setOcclusionRects: (v: OcclusionRect[]) => void;
   setOcclusionCanvasSize: (v: { w: number; h: number } | null) => void;
   setOcclusionModalOpen: (v: boolean) => void;
   setMcOptions: (v: string[]) => void;
@@ -105,45 +154,11 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
     setMcOptions(['', '', '', '']); setMcCorrectIndex(0);
   }, [setFront, setBack, setEditingId, setCardType, setOcclusionImageUrl, setOcclusionRects, setOcclusionCanvasSize, setMcOptions, setMcCorrectIndex]);
 
-  const openNew = useCallback(() => { resetForm(); setEditorOpen(true); }, [resetForm, setEditorOpen]);
+  const openNew = useCallback(() => { navigate(`/decks/${deckId}/manage`); }, [navigate, deckId]);
 
   const openEdit = useCallback((card: CardRow) => {
-    setEditingId(card.id);
-    setCardType(card.card_type ?? 'basic');
-    if (card.card_type === 'image_occlusion') {
-      try {
-        const data = JSON.parse(card.front_content);
-        setOcclusionImageUrl(data.imageUrl || '');
-        setOcclusionRects(data.allRects || data.rects || []);
-        setOcclusionCanvasSize(data.canvasWidth ? { w: data.canvasWidth, h: data.canvasHeight } : null);
-        setFront(data.frontText || '');
-        setBack(card.back_content);
-      } catch { setFront(''); setBack(card.back_content); }
-    } else if (card.card_type === 'multiple_choice') {
-      setFront(card.front_content);
-      try {
-        const data = JSON.parse(card.back_content);
-        setMcOptions(data.options || ['', '', '', '']);
-        setMcCorrectIndex(data.correctIndex ?? 0);
-      } catch { setBack(card.back_content); }
-    } else if (card.card_type === 'cloze') {
-      setFront(card.front_content);
-      try {
-        const parsed = JSON.parse(card.back_content);
-        if (typeof parsed.clozeTarget === 'number') {
-          setBack(parsed.extra || '');
-        } else {
-          setBack(card.back_content);
-        }
-      } catch {
-        setBack(card.back_content);
-      }
-    } else {
-      setFront(card.front_content);
-      setBack(card.back_content);
-    }
-    setEditorOpen(true);
-  }, [setEditingId, setCardType, setOcclusionImageUrl, setOcclusionRects, setOcclusionCanvasSize, setFront, setBack, setMcOptions, setMcCorrectIndex, setEditorOpen]);
+    navigate(`/decks/${deckId}/manage?cardId=${card.id}`);
+  }, [navigate, deckId]);
 
   const handleSave = useCallback(async (addAnother: boolean) => {
     if (!front.trim() && !occlusionImageUrl) {
@@ -159,28 +174,105 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
       } else { setEditorOpen(false); resetForm(); }
     };
 
-    // Image occlusion
+    // Image occlusion — color-based siblings
     if (occlusionImageUrl && occlusionRects.length > 0) {
       const allRects = occlusionRects;
       const userBack = back;
-      const groups: Record<string, any[]> = {};
-      const ungrouped: any[] = [];
-      allRects.forEach((r: any) => {
-        if (r.groupId) { if (!groups[r.groupId]) groups[r.groupId] = []; groups[r.groupId].push(r); }
-        else ungrouped.push(r);
-      });
-      const cardEntries: { activeRectIds: string[] }[] = [];
-      ungrouped.forEach(r => cardEntries.push({ activeRectIds: [r.id] }));
-      Object.values(groups).forEach(groupRects => { cardEntries.push({ activeRectIds: groupRects.map((r: any) => r.id) }); });
       const cw = occlusionCanvasSize?.w ?? undefined;
       const ch = occlusionCanvasSize?.h ?? undefined;
       const frontText = front.trim() ? front : undefined;
+
+      // Collect unique color nums from image
+      const usedColors = new Set(allRects.map((r: OcclusionRect) => r.color || OCCLUSION_COLORS[0].fill));
+      const imageNums: number[] = [];
+      usedColors.forEach(color => {
+        const idx = OCCLUSION_COLORS.findIndex(c => c.fill === color);
+        if (idx >= 0) imageNums.push(idx + 1);
+      });
+
+      // Also collect text cloze nums
+      const textPlain = front.replace(/<[^>]*>/g, '');
+      const textClozeMatches = [...textPlain.matchAll(/\{\{c(\d+)::/g)];
+      const textNums = textClozeMatches.map(m => parseInt(m[1]));
+
+      const allNums = [...new Set([...imageNums, ...textNums])].sort((a, b) => a - b);
+
+      // Build colorGroups
+      const colorGroups: Record<string, string[]> = {};
+      allRects.forEach((r: OcclusionRect) => {
+        const color = r.color || OCCLUSION_COLORS[0].fill;
+        if (!colorGroups[color]) colorGroups[color] = [];
+        colorGroups[color].push(r.id);
+      });
+
+      const frontData = JSON.stringify({
+        imageUrl: occlusionImageUrl, allRects, activeRectIds: allRects.map((r: OcclusionRect) => r.id),
+        canvasWidth: cw, canvasHeight: ch, colorGroups,
+        ...(frontText ? { frontText } : {}),
+      });
+
       if (editingId) {
-        const frontData = JSON.stringify({ imageUrl: occlusionImageUrl, allRects, activeRectIds: cardEntries[0]?.activeRectIds ?? [], canvasWidth: cw, canvasHeight: ch, ...(frontText ? { frontText } : {}) });
-        updateCard.mutate({ id: editingId, frontContent: frontData, backContent: userBack }, { onSuccess });
+        // Sibling reconciliation for image occlusion edit
+        const editingCard = allCards.find(c => c.id === editingId);
+        const frontContentForSiblings = editingCard?.front_content;
+        const allSiblingCards = frontContentForSiblings
+          ? await cardService.fetchClozeSiblings(allDeckIds, frontContentForSiblings)
+          : [];
+
+        const existingTargets = new Map<number, string>();
+        allSiblingCards.forEach(c => {
+          try {
+            const parsed = JSON.parse(c.back_content);
+            if (typeof parsed.clozeTarget === 'number') {
+              existingTargets.set(parsed.clozeTarget, c.id);
+              return;
+            }
+          } catch {}
+          const assignedNum = allNums.find(n => !existingTargets.has(n)) ?? 1;
+          existingTargets.set(assignedNum, c.id);
+        });
+
+        const existingNums = [...existingTargets.keys()];
+        const numsToKeep = allNums.filter(n => existingTargets.has(n));
+        const numsToAdd = allNums.filter(n => !existingTargets.has(n));
+        const numsToRemove = existingNums.filter(n => !allNums.includes(n));
+
+        try {
+          const updatePromises = numsToKeep.map(n => {
+            const cardId = existingTargets.get(n)!;
+            const backJson = JSON.stringify({ clozeTarget: n, extra: userBack });
+            return cardService.updateCard(cardId, frontData, backJson);
+          });
+          const deletePromises = numsToRemove.map(n => {
+            const cardId = existingTargets.get(n)!;
+            return cardService.deleteCard(cardId);
+          });
+          await Promise.all([...updatePromises, ...deletePromises]);
+          if (numsToAdd.length > 0) {
+            const newCards = numsToAdd.map(n => ({
+              frontContent: frontData,
+              backContent: JSON.stringify({ clozeTarget: n, extra: userBack }),
+              cardType: 'image_occlusion',
+            }));
+            await cardService.createCards(deckId, newCards);
+          }
+          invalidateDeckRelatedQueries(queryClient, deckId);
+          onSuccess();
+        } catch {
+          toast({ title: 'Erro ao salvar oclusão', variant: 'destructive' });
+        }
       } else {
-        const cards = cardEntries.map(entry => ({ frontContent: JSON.stringify({ imageUrl: occlusionImageUrl, allRects, activeRectIds: entry.activeRectIds, canvasWidth: cw, canvasHeight: ch, ...(frontText ? { frontText } : {}) }), backContent: userBack, cardType: 'image_occlusion' }));
-        createCard.mutate({ cards } as any, { onSuccess });
+        // New card(s)
+        const cards = allNums.map(n => ({
+          frontContent: frontData,
+          backContent: JSON.stringify({ clozeTarget: n, extra: userBack }),
+          cardType: 'image_occlusion',
+        }));
+        if (cards.length <= 1) {
+          createCard.mutate({ frontContent: cards[0].frontContent, backContent: cards[0].backContent, cardType: 'image_occlusion' }, { onSuccess });
+        } else {
+          createCard.mutate({ cards } as any, { onSuccess });
+        }
       }
       return;
     }
@@ -205,8 +297,7 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
         const editingCard = allCards.find(c => c.id === editingId);
         let frontContentForCloze = editingCard?.front_content;
         if (!frontContentForCloze && editingId) {
-          const { data } = await supabase.from('cards').select('front_content').eq('id', editingId).single();
-          frontContentForCloze = data?.front_content;
+          frontContentForCloze = await fetchCardFrontContent(editingId);
         }
         const allSiblingCards = frontContentForCloze
           ? await cardService.fetchClozeSiblings(allDeckIds, frontContentForCloze)
@@ -277,26 +368,27 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
   const handleDelete = useCallback(async () => {
     if (!deleteId) return;
     const card = allCards.find(c => c.id === deleteId);
-    const isCloze = card?.card_type === 'cloze';
-    if (isCloze) {
+    const hasSiblings = card?.card_type === 'cloze' || card?.card_type === 'image_occlusion';
+    if (hasSiblings) {
       let frontContent = card?.front_content;
       if (!frontContent) {
-        const { data } = await supabase.from('cards').select('front_content').eq('id', deleteId).single();
-        frontContent = data?.front_content;
+        frontContent = await fetchCardFrontContent(deleteId);
       }
       const siblings = frontContent ? await cardService.fetchClozeSiblings(allDeckIds, frontContent) : [];
       const ids = siblings.map(c => c.id);
-      try {
-        await cardService.bulkDeleteCards(ids);
-        invalidateDeckRelatedQueries(queryClient, deckId);
-        toast({ title: `${ids.length} card${ids.length > 1 ? 's' : ''} cloze excluído${ids.length > 1 ? 's' : ''}` });
-      } catch {
-        toast({ title: 'Erro ao excluir', variant: 'destructive' });
+      if (ids.length > 0) {
+        try {
+          await cardService.bulkDeleteCards(ids);
+          invalidateDeckRelatedQueries(queryClient, deckId);
+          toast({ title: `${ids.length} cartão${ids.length > 1 ? 'ões' : ''} excluído${ids.length > 1 ? 's' : ''}` });
+        } catch {
+          toast({ title: 'Erro ao excluir', variant: 'destructive' });
+        }
+        setDeleteId(null);
+        return;
       }
-      setDeleteId(null);
-    } else {
-      deleteCardMutation.mutate(deleteId, { onSuccess: () => { setDeleteId(null); toast({ title: 'Card excluído' }); } });
     }
+    deleteCardMutation.mutate(deleteId, { onSuccess: () => { setDeleteId(null); toast({ title: 'Card excluído' }); } });
   }, [deleteId, deleteCardMutation, toast, allCards, allDeckIds, deckId, queryClient, setDeleteId]);
 
   const handleMoveCard = useCallback(async () => {
@@ -346,7 +438,7 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
       const url = await cardService.uploadCardImage(user.id, file);
       setOcclusionImageUrl(url);
       setOcclusionModalOpen(true);
-    } catch (e: any) { toast({ title: e.message || 'Erro no upload', variant: 'destructive' }); }
+    } catch (e: unknown) { toast({ title: e instanceof Error ? e.message : 'Erro no upload', variant: 'destructive' }); }
   }, [user, toast, setOcclusionImageUrl, setOcclusionModalOpen]);
 
   const handleOcclusionAttach = useCallback(async () => {
@@ -388,7 +480,7 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
       queryClient.invalidateQueries({ queryKey: ['profile'] });
       setImprovePreview({ front: data.front, back: data.back });
       setImproveModalOpen(true);
-    } catch (e: any) { toast({ title: 'Erro ao melhorar card', description: e.message, variant: 'destructive' }); }
+    } catch (e: unknown) { toast({ title: 'Erro ao melhorar card', description: e instanceof Error ? e.message : 'Erro desconhecido', variant: 'destructive' }); }
     finally { setIsImproving(false); }
   }, [front, back, cardType, mcOptions, mcCorrectIndex, energy, model, queryClient, toast, setIsImproving, setImprovePreview, setImproveModalOpen]);
 
@@ -402,27 +494,23 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
     toast({ title: 'Melhoria aplicada!' });
   }, [improvePreview, cardType, mcOptions, mcCorrectIndex, toast, setFront, setBack, setMcOptions, setMcCorrectIndex, setImproveModalOpen, setImprovePreview]);
 
-  const handleImportCards = useCallback(async (subDeckName: string, importedCards: { frontContent: string; backContent: string; cardType?: string }[], subdecks?: any[]) => {
+  const handleImportCards = useCallback(async (subDeckName: string, importedCards: { frontContent: string; backContent: string; cardType?: string }[], subdecks?: ImportSubdeck[]) => {
     if (!deckId) return;
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+      const userId = await getCurrentUserId();
+      if (!userId) throw new Error('Not authenticated');
 
       if (subdecks && subdecks.length > 0) {
         await deckService.importDeckWithSubdecks(
-          user.id, subDeckName, deck?.folder_id ?? null,
+          userId, subDeckName, deck?.folder_id ?? null,
           importedCards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType || 'basic' })),
           subdecks, deck?.algorithm_mode,
         );
         toast({ title: `${importedCards.length} cartões importados em subdecks!` });
       } else {
         const newName = subDeckName || 'Importado';
-        const { data: newDeck, error } = await supabase
-          .from('decks')
-          .insert({ name: newName, user_id: user.id, folder_id: deck?.folder_id ?? null, parent_deck_id: deckId, algorithm_mode: deck?.algorithm_mode || 'sm2' } as any)
-          .select().single();
-        if (error || !newDeck) throw error;
-        await cardService.createCards((newDeck as any).id, importedCards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType || 'basic' })));
+        const newDeck = await deckService.createDeck(userId, newName, deck?.folder_id ?? null, deckId, deck?.algorithm_mode || 'sm2');
+        await cardService.createCards((newDeck as unknown as { id: string }).id, importedCards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType || 'basic' })));
         toast({ title: `${importedCards.length} cartões importados como subdeck "${newName}"!` });
       }
       invalidateDeckRelatedQueries(queryClient, deckId);
@@ -450,9 +538,10 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
     try {
       const newDeck = await deckService.createAlgorithmCopy(user.id, deckId, algorithmConfirm.value, algorithmConfirm.label);
       invalidateDeckRelatedQueries(queryClient);
-      toast({ title: 'Cópia criada!', description: `"${(newDeck as any).name}" como sub-baralho.` });
+      const created = newDeck as unknown as CreatedDeck;
+      toast({ title: 'Cópia criada!', description: `"${created.name}" como sub-baralho.` });
       setAlgorithmConfirm(null); setAlgorithmModalOpen(false);
-      navigate(`/decks/${(newDeck as any).id}`);
+      navigate(`/decks/${created.id}`);
     } catch { toast({ title: 'Erro ao criar cópia', variant: 'destructive' }); }
   }, [algorithmConfirm, deckId, user, queryClient, toast, navigate, setAlgorithmConfirm, setAlgorithmModalOpen]);
 
@@ -462,7 +551,7 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
     const mcCount = Math.max(0, examTotalQuestions - examWrittenCount);
     const totalCost = examTotalQuestions * 2;
     const notifId = crypto.randomUUID();
-    const eTitle = examTitle.trim() || `Prova - ${(deck as any)?.name || 'Sem nome'}`;
+    const eTitle = examTitle.trim() || `Prova - ${deck?.name || 'Sem nome'}`;
     addNotification({ id: notifId, title: eTitle, examId: '', status: 'generating', message: 'Gerando questões com IA...' });
     toast({ title: '🧠 Gerando prova...', description: 'Você será notificado quando estiver pronta.' });
     setExamModalOpen(false); setExamGenerating(false);
@@ -476,13 +565,11 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
         return `Q: ${fr}\nA: ${bk}`;
       }).join('\n\n');
 
-      const { data: aiData, error: fnError } = await supabase.functions.invoke('generate-deck', {
-        body: {
-          textContent, cardCount: examTotalQuestions, detailLevel: 'standard',
-          cardFormats: [...(mcCount > 0 ? ['multiple_choice'] : []), ...(examWrittenCount > 0 ? ['qa'] : [])],
-          customInstructions: `PROVA ACADÊMICA. Gere ${mcCount} questões de múltipla escolha (${examOptionsCount} alternativas cada) e ${examWrittenCount} dissertativas.\nCada questão DEVE ter um ENUNCIADO (caso clínico, situação-problema ou texto-base) na "front", separado da pergunta por "---".\nDissertativas: "front" = enunciado + pergunta, "back" = resposta completa.\nBaseie-se APENAS no material fornecido. Varie a dificuldade.`,
-          aiModel: model, energyCost: totalCost,
-        },
+      const { data: aiData, error: fnError } = await invokeEdgeFunction<{ cards: Array<{ front: string; back: string; type: string; options?: string[]; correctIndex?: number }>; error?: string }>('generate-deck', {
+        textContent, cardCount: examTotalQuestions, detailLevel: 'standard',
+        cardFormats: [...(mcCount > 0 ? ['multiple_choice'] : []), ...(examWrittenCount > 0 ? ['qa'] : [])],
+        customInstructions: `PROVA ACADÊMICA. Gere ${mcCount} questões de múltipla escolha (${examOptionsCount} alternativas cada) e ${examWrittenCount} dissertativas.\nCada questão DEVE ter um ENUNCIADO (caso clínico, situação-problema ou texto-base) na "front", separado da pergunta por "---".\nDissertativas: "front" = enunciado + pergunta, "back" = resposta completa.\nBaseie-se APENAS no material fornecido. Varie a dificuldade.`,
+        aiModel: model, energyCost: totalCost,
       });
       if (fnError || aiData?.error) throw new Error(aiData?.error || 'Erro na geração');
       queryClient.invalidateQueries({ queryKey: ['profile'] });
@@ -496,9 +583,9 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
       });
       const exam = await createExam.mutateAsync({ deckId, title: eTitle, questions, timeLimitSeconds: examTimeLimit > 0 ? examTimeLimit * 60 : undefined });
       updateNotification(notifId, { status: 'ready', examId: exam.id, message: 'Prova pronta!' });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      updateNotification(notifId, { status: 'error', message: err.message || 'Erro ao gerar prova' });
+      updateNotification(notifId, { status: 'error', message: err instanceof Error ? err.message : 'Erro ao gerar prova' });
     }
   }, [deckId, deck, examTotalQuestions, examWrittenCount, examTitle, examOptionsCount, examTimeLimit, model, addNotification, updateNotification, createExam, queryClient, toast, setExamModalOpen, setExamGenerating]);
 

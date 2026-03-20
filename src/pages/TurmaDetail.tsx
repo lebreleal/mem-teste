@@ -14,7 +14,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TurmaDetailProvider, useTurmaDetail } from '@/components/turma-detail/TurmaDetailContext';
 import { Button } from '@/components/ui/button';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchSalaDecksData, insertTurmaMember, getOrCreateTurmaFolder, fetchTurmaFolderId } from '@/services/adminService';
 import { ChevronLeft, Star, FolderOpen, Share2, Play, Plus, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -30,64 +30,13 @@ function useSalaDecks(turmaId: string) {
   return useQuery<DeckWithStats[]>({
     queryKey: ['sala-decks', turmaId],
     queryFn: async () => {
-      const { data: turmaDecks } = await supabase
-        .from('turma_decks')
-        .select('id, deck_id, is_published')
-        .eq('turma_id', turmaId)
-        .eq('is_published', true);
+      const { decks, rootDeckIds, cardCountMap } = await fetchSalaDecksData(turmaId);
+      if (!decks || decks.length === 0) return [];
 
-      if (!turmaDecks || turmaDecks.length === 0) return [];
-
-      const rootDeckIds = turmaDecks.map((td: any) => td.deck_id);
-
-      const { data: childDecks } = await supabase
-        .from('decks')
-        .select('id')
-        .in('parent_deck_id', rootDeckIds)
-        .eq('is_archived', false);
-
-      const allDeckIds = [...rootDeckIds, ...(childDecks ?? []).map((d: any) => d.id)];
-
-      const { data: decks } = await supabase
-        .from('decks')
-        .select('*')
-        .in('id', allDeckIds);
-
-      if (!decks) return [];
-
-      // Fetch card stats
-      const cardCountMap = new Map<string, { total: number; mastered: number; novo: number; facil: number; bom: number; dificil: number; errei: number }>();
-      const PAGE = 1000;
-
-      for (let i = 0; i < allDeckIds.length; i += 200) {
-        const batch = allDeckIds.slice(i, i + 200);
-        let offset = 0;
-        let hasMore = true;
-        while (hasMore) {
-          const { data: cards } = await supabase
-            .from('cards')
-            .select('id, deck_id, state, difficulty')
-            .in('deck_id', batch)
-            .order('id', { ascending: true })
-            .range(offset, offset + PAGE - 1);
-          if (cards) {
-            for (const c of cards as any[]) {
-              const entry = cardCountMap.get(c.deck_id) ?? { total: 0, mastered: 0, novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
-              entry.total++;
-              // Always show cards as "new" in the public Explore view
-              // Owner's personal progress (state/difficulty) must not leak
-              entry.novo++;
-              cardCountMap.set(c.deck_id, entry);
-            }
-          }
-          hasMore = (cards?.length ?? 0) === PAGE;
-          offset += PAGE;
-        }
-      }
-
+      interface SalaDeckRow { id: string; name: string; created_at: string; updated_at: string; folder_id: string | null; parent_deck_id: string | null; is_archived: boolean; daily_new_limit: number; daily_review_limit: number }
       return decks
-        .filter((d: any) => !d.name?.includes('Caderno de Erros'))
-        .map((d: any) => {
+        .filter((d: SalaDeckRow) => !d.name?.includes('Baralho de Erros'))
+        .map((d: SalaDeckRow) => {
           const cc = cardCountMap.get(d.id) ?? { total: 0, mastered: 0, novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
           return {
             id: d.id,
@@ -95,7 +44,7 @@ function useSalaDecks(turmaId: string) {
             created_at: d.created_at,
             updated_at: d.updated_at,
             folder_id: d.folder_id,
-            parent_deck_id: rootDeckIds.includes(d.id) ? null : d.parent_deck_id,
+            parent_deck_id: rootDeckIds?.includes(d.id) ? null : d.parent_deck_id,
             is_archived: d.is_archived,
             new_count: cc.novo,
             learning_count: 0,
@@ -115,8 +64,8 @@ function useSalaDecks(turmaId: string) {
           } satisfies DeckWithStats;
         })
         .sort((a: DeckWithStats, b: DeckWithStats) => {
-          const aHasChildren = decks.some((d: any) => d.parent_deck_id === a.id);
-          const bHasChildren = decks.some((d: any) => d.parent_deck_id === b.id);
+          const aHasChildren = decks.some((d: SalaDeckRow) => d.parent_deck_id === a.id);
+          const bHasChildren = decks.some((d: SalaDeckRow) => d.parent_deck_id === b.id);
           if (aHasChildren && !bHasChildren) return -1;
           if (!aHasChildren && bHasChildren) return 1;
           return 0;
@@ -154,26 +103,11 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
     return latest || null;
   }, [salaDecks]);
 
-  // Question counts per deck
   const allDeckIds = useMemo(() => salaDecks.map(d => d.id), [salaDecks]);
-  const { data: questionCountMap } = useQuery({
-    queryKey: ['sala-question-counts', turmaId, allDeckIds.join(',')],
-    queryFn: async () => {
-      if (allDeckIds.length === 0) return new Map<string, number>();
-      const { data } = await supabase.from('deck_questions').select('deck_id').in('deck_id', allDeckIds);
-      const counts = new Map<string, number>();
-      for (const row of data ?? []) {
-        counts.set(row.deck_id, (counts.get(row.deck_id) ?? 0) + 1);
-      }
-      return counts;
-    },
-    enabled: allDeckIds.length > 0,
-    staleTime: 60_000,
-  });
 
   // Aggregated stats
   const totalStats = useMemo(() => {
-    let totalCards = 0, mastered = 0, novo = 0, facil = 0, bom = 0, dificil = 0, errei = 0, totalQuestions = 0;
+    let totalCards = 0, mastered = 0, novo = 0, facil = 0, bom = 0, dificil = 0, errei = 0;
     for (const d of salaDecks) {
       totalCards += d.total_cards;
       mastered += d.mastered_cards;
@@ -183,12 +117,9 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
       dificil += d.class_dificil ?? 0;
       errei += d.class_errei ?? 0;
     }
-    if (questionCountMap) {
-      for (const c of questionCountMap.values()) totalQuestions += c;
-    }
     const progressPct = totalCards > 0 ? Math.round(((totalCards - novo) / totalCards) * 100) : 0;
-    return { totalCards, mastered, novo, facil, bom, dificil, errei, totalQuestions, progressPct };
-  }, [salaDecks, questionCountMap]);
+    return { totalCards, mastered, novo, facil, bom, dificil, errei, progressPct };
+  }, [salaDecks]);
 
   // DeckRow helpers
   const rootDecks = useMemo(
@@ -232,19 +163,8 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
     if (!user) { navigate('/auth'); return; }
     setFollowing(true);
     try {
-      await supabase.from('turma_members').insert({ turma_id: turmaId, user_id: user.id } as any);
-      const { data: existingFolders } = await supabase.from('folders')
-        .select('id').eq('user_id', user.id).eq('source_turma_id', turmaId);
-      let folderId: string;
-      if (!existingFolders || existingFolders.length === 0) {
-        const { data: newFolder } = await supabase.from('folders')
-          .insert({ user_id: user.id, name: turma?.name || 'Sala', section: 'community', source_turma_id: turmaId } as any)
-          .select('id').single();
-        folderId = (newFolder as any)?.id;
-      } else {
-        folderId = existingFolders[0].id;
-      }
-      // Bootstrap local deck copies
+      await insertTurmaMember(turmaId, user.id);
+      const folderId = await getOrCreateTurmaFolder(user.id, turmaId, turma?.name || 'Sala');
       if (folderId) {
         const { bootstrapFollowerDecks } = await import('@/services/followerBootstrap');
         await bootstrapFollowerDecks(user.id, turmaId, folderId);
@@ -254,8 +174,9 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
       queryClient.invalidateQueries({ queryKey: ['folders'] });
       queryClient.invalidateQueries({ queryKey: ['decks'] });
       toast({ title: '✅ Seguindo sala! Ela aparece agora no seu menu Início.' });
-    } catch (e: any) {
-      if (e.code === '23505') {
+    } catch (e: unknown) {
+      const err = e as { code?: string };
+      if (err.code === '23505') {
         toast({ title: 'Você já segue esta sala' });
       } else {
         toast({ title: 'Erro ao seguir', variant: 'destructive' });
@@ -281,21 +202,10 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
   // Study handler — auto-follow + navigate to first deck with cards
   const handleStudy = async () => {
     if (!user) { navigate('/auth'); return; }
-    // Auto-follow if not already a follower
     if (!isFollower) {
       try {
-        await supabase.from('turma_members').insert({ turma_id: turmaId, user_id: user.id } as any);
-        const { data: existingFolders } = await supabase.from('folders')
-          .select('id').eq('user_id', user.id).eq('source_turma_id', turmaId);
-        let folderId: string | undefined;
-        if (!existingFolders || existingFolders.length === 0) {
-          const { data: newFolder } = await supabase.from('folders')
-            .insert({ user_id: user.id, name: turma?.name || 'Sala', section: 'community', source_turma_id: turmaId } as any)
-            .select('id').single();
-          folderId = (newFolder as any)?.id;
-        } else {
-          folderId = existingFolders[0].id;
-        }
+        await insertTurmaMember(turmaId, user.id);
+        const folderId = await getOrCreateTurmaFolder(user.id, turmaId, turma?.name || 'Sala');
         if (folderId) {
           const { bootstrapFollowerDecks } = await import('@/services/followerBootstrap');
           await bootstrapFollowerDecks(user.id, turmaId, folderId);
@@ -305,16 +215,14 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
         queryClient.invalidateQueries({ queryKey: ['folders'] });
         queryClient.invalidateQueries({ queryKey: ['decks'] });
         toast({ title: '✅ Sala adicionada ao seu menu Início!' });
-      } catch (e: any) {
-        if (e.code !== '23505') {
+      } catch (e: unknown) {
+        const err = e as { code?: string };
+        if (err.code !== '23505') {
           toast({ title: 'Erro ao entrar na sala', variant: 'destructive' });
         }
       }
     }
-    // Navigate to Dashboard — open the sala folder directly
-    const { data: folderData } = await supabase.from('folders')
-      .select('id').eq('user_id', user.id).eq('source_turma_id', turmaId).limit(1);
-    const targetFolderId = folderData?.[0]?.id;
+    const targetFolderId = await fetchTurmaFolderId(user.id, turmaId);
     navigate(targetFolderId ? `/dashboard?folder=${targetFolderId}` : '/dashboard');
   };
 
@@ -387,9 +295,6 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
             <div className="flex items-center gap-3 text-[11px] text-muted-foreground mb-2">
               <span>{rootDecks.length} {rootDecks.length === 1 ? 'deck' : 'decks'}</span>
               <span>{totalStats.totalCards} {totalStats.totalCards === 1 ? 'cartão' : 'cartões'}</span>
-              {totalStats.totalQuestions > 0 && (
-                <span>{totalStats.totalQuestions} {totalStats.totalQuestions === 1 ? 'questão' : 'questões'}</span>
-              )}
             </div>
           )}
 
@@ -474,7 +379,7 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
                 toggleExpand={toggleExpand}
                 expandedAccordionId={expandedAccordionId}
                 onAccordionToggle={(id) => setExpandedAccordionId(prev => prev === id ? null : id)}
-                questionCountMap={questionCountMap}
+                questionCountMap={undefined}
               />
             ))}
           </div>

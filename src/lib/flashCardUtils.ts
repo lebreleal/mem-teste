@@ -8,8 +8,18 @@ import { sm2PreviewIntervals, type SM2Card, type SM2Params } from '@/lib/sm2';
 import { parseStepToMinutes } from '@/lib/studyUtils';
 import type { Rating } from '@/lib/fsrs';
 
+/** Deck config shape relevant to preview interval calculation */
+export interface DeckPreviewConfig {
+  learning_steps?: string[];
+  max_interval?: number;
+  requested_retention?: number;
+  easy_graduating_interval?: number;
+  easy_bonus?: number;
+  interval_modifier?: number;
+}
+
 /** Build SM2/FSRS params from deck config so preview intervals match actual scheduling */
-export function buildPreviewParams(deckConfig: any, algorithmMode: string): { sm2?: SM2Params; fsrs?: FSRSParams } {
+export function buildPreviewParams(deckConfig: DeckPreviewConfig | null | undefined, algorithmMode: string): { sm2?: SM2Params; fsrs?: FSRSParams } {
   if (!deckConfig) return {};
   const learningStepsRaw: string[] = deckConfig.learning_steps || ['1m', '10m'];
   const learningStepsMinutes = learningStepsRaw.map(parseStepToMinutes);
@@ -43,7 +53,7 @@ export function buildPreviewParams(deckConfig: any, algorithmMode: string): { sm
 /** Compute preview intervals for a card based on algorithm mode */
 export function getPreviewIntervals(
   algorithmMode: string,
-  deckConfig: any,
+  deckConfig: DeckPreviewConfig | null | undefined,
   card: { stability: number; difficulty: number; state: number; scheduledDate: string; learningStep: number; lastReviewedAt?: string },
 ): Record<Rating, string> {
   const previewParams = buildPreviewParams(deckConfig, algorithmMode);

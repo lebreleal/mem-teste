@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { calculateRealStudyTime, type RealStudyMetrics, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils';
+import { calculateRealStudyTime, type RealStudyMetrics, DEFAULT_STUDY_METRICS, DEFAULT_CALIBRATION_FACTOR } from '@/lib/studyUtils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
@@ -223,16 +223,15 @@ function SimulatorTooltip({ active, payload, summary }: any) {
     <div className="rounded-lg border bg-popover p-2.5 text-popover-foreground shadow-md text-[11px] space-y-1.5 min-w-[160px] z-50 relative">
       <p className="font-semibold">{d.day} — {d.date}</p>
       <div className="h-px bg-border" />
-      <p className="font-medium text-sm">{totalCards} cards</p>
-      <div className="space-y-0.5 text-muted-foreground">
-        <p>{d.reviewCards} revisões</p>
-        <p>{d.newCards} novos</p>
-        <p>{d.learningCards + d.relearningCards} aprendendo</p>
+      <div className="flex items-center justify-between gap-3">
+        <p className="font-medium text-sm">{totalCards} cards</p>
+        <p className="font-medium text-sm text-primary">{formatMinutes(d.totalMin)}</p>
       </div>
-      <div className="h-px bg-border" />
-      <p className="text-muted-foreground">
-        {formatMinutes(d.totalMin)} de estudo
-      </p>
+      <div className="space-y-0.5 text-muted-foreground">
+        <p><span className="inline-block h-1.5 w-1.5 rounded-sm bg-[hsl(217_91%_60%)] mr-1" />{d.reviewCards} revisões · {formatMinutes(d.reviewMin)}</p>
+        <p><span className="inline-block h-1.5 w-1.5 rounded-sm bg-[hsl(142_71%_45%)] mr-1" />{d.newCards} novos · {formatMinutes(d.newMin)}</p>
+        <p><span className="inline-block h-1.5 w-1.5 rounded-sm bg-[hsl(38_92%_50%)] mr-1" />{d.learningCards + d.relearningCards} aprendendo · {formatMinutes(d.learningMin + d.relearningMin)}</p>
+      </div>
       {(() => {
         const isWeekly = d.day?.startsWith("S") || d.date?.includes(" - ");
         if (isWeekly) {
@@ -498,6 +497,7 @@ export function ForecastSimulator({
   onDailyMinutesChange, onWeeklyMinutesChange,
   onApplyCapacity, hasAnyOverride,
   realWeeklyNewCards, weeklyNewCardsOverride, onWeeklyNewCardsChange,
+  folderOptions, selectedFolderId, onFolderChange,
 }: {
   data: ForecastPoint[];
   summary: SimulatorSummary | null;
@@ -528,6 +528,9 @@ export function ForecastSimulator({
   realWeeklyNewCards: WeeklyNewCards | null;
   weeklyNewCardsOverride: WeeklyNewCards | undefined;
   onWeeklyNewCardsChange: (v: WeeklyNewCards | undefined) => void;
+  folderOptions?: { id: string; name: string }[];
+  selectedFolderId?: string | null;
+  onFolderChange?: (id: string | null) => void;
 }) {
   const [showDatePicker, setShowDatePicker] = useState(false);
 
@@ -624,7 +627,7 @@ export function ForecastSimulator({
       {/* Block 2: Chart */}
       <Card>
         <CardContent className="p-4 space-y-3">
-          {/* Header with info tooltip */}
+          {/* Header with info tooltip and folder filter */}
           <div className="flex items-center gap-1.5">
             <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
             <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Carga Diária Prevista</h3>
@@ -643,6 +646,21 @@ export function ForecastSimulator({
                 </div>
               </PopoverContent>
             </Popover>
+            {/* Folder (Sala) filter */}
+            {folderOptions && folderOptions.length > 0 && onFolderChange && (
+              <div className="ml-auto">
+                <select
+                  value={selectedFolderId ?? ''}
+                  onChange={(e) => onFolderChange(e.target.value || null)}
+                  className="text-[11px] h-7 rounded-md border border-border bg-background px-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="">Todas as salas</option>
+                  {folderOptions.map(f => (
+                    <option key={f.id} value={f.id}>{f.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           {/* View chips */}
@@ -730,6 +748,27 @@ export function ForecastSimulator({
                   <span className="truncate max-w-[80px]">{ol.name}</span>
                 </span>
               ))}
+            </div>
+          )}
+
+          {/* Summary stats strip */}
+          {summary && chartData.length > 0 && !isSimulating && (
+            <div className="grid grid-cols-3 gap-2 pt-1">
+              <div className="flex flex-col items-center rounded-lg bg-muted/40 px-2 py-1.5">
+                <span className="text-[10px] text-muted-foreground">Média/dia</span>
+                <span className="text-sm font-bold text-foreground">{formatMinutes(summary.avgAllDaysMin)}</span>
+                <span className="text-[10px] text-muted-foreground">{summary.avgDailyCards} cards</span>
+              </div>
+              <div className="flex flex-col items-center rounded-lg bg-muted/40 px-2 py-1.5">
+                <span className="text-[10px] text-muted-foreground">Pico</span>
+                <span className="text-sm font-bold text-foreground">{formatMinutes(summary.peakMin)}</span>
+                <span className="text-[10px] text-muted-foreground">{summary.peakDate}</span>
+              </div>
+              <div className="flex flex-col items-center rounded-lg bg-muted/40 px-2 py-1.5">
+                <span className="text-[10px] text-muted-foreground">Total período</span>
+                <span className="text-sm font-bold text-foreground">{summary.totalCards} cards</span>
+                <span className="text-[10px] text-muted-foreground">{formatMinutes(summary.avgDailyMin * chartData.length)}</span>
+              </div>
             </div>
           )}
 
@@ -836,7 +875,7 @@ export const CompactDeckRow = React.forwardRef<HTMLDivElement, {
   const studied = deck.reviewed_today ?? 0;
   const total = pending + studied;
   const pct = total > 0 ? Math.round((studied / total) * 100) : 0;
-  const est = Math.round(calculateRealStudyTime(newAvail, learningCards, reviewCards, DEFAULT_STUDY_METRICS) / 60);
+  const est = Math.round(calculateRealStudyTime(newAvail, learningCards, reviewCards, DEFAULT_STUDY_METRICS, DEFAULT_CALIBRATION_FACTOR) / 60);
 
   return (
     <div

@@ -11,15 +11,24 @@ export interface RankingEntry {
   current_streak: number;
 }
 
+interface RankingRpcRow {
+  user_id: string;
+  user_name: string;
+  cards_30d: number | string;
+  minutes_30d: number | string;
+  current_streak: number | string;
+}
+
 export function useRanking() {
   const { user } = useAuth();
 
   const query = useQuery<RankingEntry[]>({
     queryKey: ['ranking'],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_user_ranking' as any);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- get_user_ranking RPC not in generated types
+      const { data, error } = await (supabase.rpc as (fn: string) => ReturnType<typeof supabase.rpc>)('get_user_ranking');
       if (error) throw error;
-      return (data as any[]).map(r => ({
+      return ((data ?? []) as unknown as RankingRpcRow[]).map(r => ({
         user_id: r.user_id,
         user_name: r.user_name,
         cards_30d: Number(r.cards_30d),
@@ -34,6 +43,11 @@ export function useRanking() {
   return query;
 }
 
+interface ProfileCache {
+  is_profile_public?: boolean;
+  [key: string]: unknown;
+}
+
 export function useTogglePublicProfile() {
   const { user } = useAuth();
   const profile = useProfile();
@@ -44,14 +58,14 @@ export function useTogglePublicProfile() {
       if (!user) throw new Error('Not authenticated');
       const { error } = await supabase
         .from('profiles')
-        .update({ is_profile_public: isPublic } as any)
+        .update({ is_profile_public: isPublic })
         .eq('id', user.id);
       if (error) throw error;
     },
     onMutate: async (isPublic) => {
       if (!user) return;
       await queryClient.cancelQueries({ queryKey: profileQueryKey(user.id) });
-      queryClient.setQueryData(profileQueryKey(user.id), (old: any) =>
+      queryClient.setQueryData(profileQueryKey(user.id), (old: ProfileCache | undefined) =>
         old ? { ...old, is_profile_public: isPublic } : old
       );
     },

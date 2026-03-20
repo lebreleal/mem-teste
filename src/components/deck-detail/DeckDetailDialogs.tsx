@@ -11,8 +11,6 @@ import ImageOcclusion from '@/components/ImageOcclusion';
 import AICreateDeckDialog from '@/components/AICreateDeckDialog';
 import ImportCardsDialog from '@/components/ImportCardsDialog';
 import AIModelSelector from '@/components/AIModelSelector';
-import { TagInput } from '@/components/TagInput';
-import { useCardTags, useCardTagMutations } from '@/hooks/useTags';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -29,24 +27,6 @@ import {
   Tag as TagIcon,
 } from 'lucide-react';
 
-/** Tag editor for card edit dialog */
-const CardTagEditor = ({ cardId }: { cardId: string }) => {
-  const { data: tags = [] } = useCardTags(cardId);
-  const { addTag, removeTag } = useCardTagMutations(cardId);
-  return (
-    <div className="space-y-1.5 border-t border-border/50 pt-3">
-      <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-        <TagIcon className="h-3 w-3" /> Tags do card
-      </p>
-      <TagInput
-        tags={tags}
-        onAdd={(tag) => addTag.mutate(tag)}
-        onRemove={(tagId) => removeTag.mutate(tagId)}
-        placeholder="Adicionar tag ao card..."
-      />
-    </div>
-  );
-};
 
 const DeckDetailDialogs = () => {
   const ctx = useDeckDetail();
@@ -57,7 +37,7 @@ const DeckDetailDialogs = () => {
       <Dialog open={ctx.editorOpen && !ctx.occlusionModalOpen} onOpenChange={open => { if (!open) { ctx.setEditorOpen(false); ctx.resetForm(); } }}>
         <DialogContent className="max-h-[85dvh] sm:max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="font-display">{ctx.editingId ? 'Editar Card' : 'Novo Card'}</DialogTitle>
+            <DialogTitle className="font-display">{ctx.editingId ? 'Editar Cartão' : 'Novo Cartão'}</DialogTitle>
           </DialogHeader>
 
           {!ctx.editingId && ctx.cardType === null ? (
@@ -168,38 +148,6 @@ const DeckDetailDialogs = () => {
                 </div>
               )}
 
-              {ctx.cardType === 'cloze' && (
-                <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-2">
-                  <div className="flex items-center gap-1.5">
-                    <PenLine className="h-3.5 w-3.5 text-primary" />
-                    <p className="text-[11px] font-bold text-primary">Como usar Cloze</p>
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className="flex items-start gap-2">
-                      <span className="shrink-0 mt-0.5 flex items-center justify-center h-5 w-5 rounded border border-primary/30 bg-card">
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="3" y="3" width="18" height="18" rx="3" strokeDasharray="4 3" />
-                        </svg>
-                      </span>
-                      <p className="text-[11px] text-muted-foreground leading-relaxed">
-                        Selecione o texto e clique para criar um <strong className="text-foreground">cloze</strong>. Clozes com mesmo número viram o <strong className="text-foreground">mesmo card</strong>.
-                      </p>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span className="shrink-0 mt-0.5 flex items-center justify-center h-5 w-5 rounded border border-primary/30 bg-card">
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="3" y="3" width="18" height="18" rx="3" strokeDasharray="4 3" />
-                          <path d="M12 9v6" />
-                          <path d="M9 12h6" />
-                        </svg>
-                      </span>
-                      <p className="text-[11px] text-muted-foreground leading-relaxed">
-                        Cria um cloze com <strong className="text-foreground">número novo</strong>, gerando um <strong className="text-foreground">card separado</strong>.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
 
               {(ctx.cardType === 'basic' || ctx.cardType === 'image_occlusion' || ctx.cardType === 'cloze') && (
                 <div>
@@ -216,10 +164,6 @@ const DeckDetailDialogs = () => {
                 </Button>
               )}
 
-              {/* Card Tags (only when editing existing card) */}
-              {ctx.editingId && (
-                <CardTagEditor cardId={ctx.editingId} />
-              )}
 
               <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
                 <Button variant="outline" onClick={() => { ctx.setEditorOpen(false); ctx.resetForm(); }}>Cancelar</Button>

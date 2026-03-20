@@ -7,13 +7,13 @@ import { useAIModel } from '@/hooks/useAIModel';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { sanitizeHtml } from '@/lib/sanitize';
+import { OCCLUSION_COLORS } from '@/lib/occlusionColors';
 
 export type EditorCardType = 'basic' | 'cloze' | 'image_occlusion';
 
 export const CARD_TYPES: { value: EditorCardType; label: string; desc: string }[] = [
   { value: 'basic', label: 'Texto', desc: 'Pergunta na frente, resposta no verso' },
-  { value: 'cloze', label: 'Cloze', desc: 'Texto com lacunas para preencher' },
-  { value: 'image_occlusion', label: 'Oclusão de imagem', desc: 'Oculte partes de uma imagem' },
+  { value: 'cloze', label: 'Oclusão de Texto e Imagem', desc: 'Lacunas de texto e/ou oclusão de imagem' },
 ];
 
 export function useManageDeck() {
@@ -36,6 +36,7 @@ export function useManageDeck() {
   const [mcOptions, setMcOptions] = useState<string[]>(['', '', '', '']);
   const [mcCorrectIndex, setMcCorrectIndex] = useState<number>(0);
   const [isImproving, setIsImproving] = useState(false);
+  const [isAICreating, setIsAICreating] = useState(false);
   const [improvePreview, setImprovePreview] = useState<{ front: string; back: string } | null>(null);
   const [improveModalOpen, setImproveModalOpen] = useState(false);
 
@@ -51,7 +52,7 @@ export function useManageDeck() {
 
   const resetForm = useCallback(() => {
     setFront(''); setBack(''); setEditingId(null);
-    setEditorType(null);
+    setEditorType('basic');
     setMcOptions(['', '', '', '']); setMcCorrectIndex(0);
   }, []);
 
@@ -59,21 +60,28 @@ export function useManageDeck() {
 
   const openEdit = useCallback((card: { id: string; front_content: string; back_content: string; card_type: string }) => {
     setEditingId(card.id);
-    setFront(card.front_content);
-    if (card.card_type === 'cloze') {
-      setEditorType('cloze');
+    // For all types, extract frontText if it's occlusion JSON
+    try {
+      const parsed = JSON.parse(card.front_content);
+      if (parsed && typeof parsed === 'object' && 'imageUrl' in parsed) {
+        // Keep full JSON in front for image occlusion
+        setFront(card.front_content);
+      } else {
+        setFront(card.front_content);
+      }
+    } catch { setFront(card.front_content); }
+
+    // Handle back content for cloze-type cards
+    if (card.card_type === 'cloze' || card.card_type === 'image_occlusion') {
       try {
         const parsed = JSON.parse(card.back_content);
         setBack(typeof parsed.clozeTarget === 'number' ? (parsed.extra || '') : card.back_content);
       } catch { setBack(card.back_content); }
-    } else if (card.card_type === 'image_occlusion') {
-      setEditorType('image_occlusion');
-      try { JSON.parse(card.front_content); } catch {}
-      setBack(card.back_content);
     } else {
-      setEditorType('basic');
       setBack(card.back_content);
     }
+
+    setEditorType('basic'); // unified editor, type auto-detected on save
     setEditorOpen(true);
   }, []);
 
@@ -95,71 +103,90 @@ export function useManageDeck() {
       toast({ title: 'Preencha a pergunta', variant: 'destructive' });
       return;
     }
-    let cardType: string;
-    let backContent: string;
 
-    if (editorType === 'cloze') {
-      if (!front.includes('{{c')) {
-        toast({ title: 'Use a sintaxe {{c1::resposta}} para criar lacunas', variant: 'destructive' });
-        return;
-      }
-      const plainForNumbers = front.replace(/<[^>]*>/g, '');
-      const clozeNumMatches = [...plainForNumbers.matchAll(/\{\{c(\d+)::/g)];
-      const uniqueNums = [...new Set(clozeNumMatches.map(m => parseInt(m[1])))].sort((a, b) => a - b);
-      if (editingId) {
-        const backJson = JSON.stringify({ clozeTarget: uniqueNums[0] || 1, extra: back });
-        updateCard.mutate({ id: editingId, frontContent: front, backContent: backJson }, {
-          onSuccess: () => {
-            toast({ title: 'Card atualizado!' });
-            if (addAnother) { setFront(''); setBack(''); setEditingId(null); setMcOptions(['', '', '', '']); setMcCorrectIndex(0); }
-            else { setEditorOpen(false); resetForm(); }
-          },
-        });
-      } else {
-        if (uniqueNums.length <= 1) {
-          const backJson = JSON.stringify({ clozeTarget: uniqueNums[0] || 1, extra: back });
-          createCard.mutate({ frontContent: front, backContent: backJson, cardType: 'cloze' }, {
-            onSuccess: () => {
-              toast({ title: 'Card criado!' });
-              if (addAnother) { setFront(''); setBack(''); setEditingId(null); setMcOptions(['', '', '', '']); setMcCorrectIndex(0); }
-              else { setEditorOpen(false); resetForm(); }
-            },
-          });
-        } else {
-          const cards = uniqueNums.map(n => ({
-            frontContent: front,
-            backContent: JSON.stringify({ clozeTarget: n, extra: back }),
-            cardType: 'cloze',
-          }));
-          createCard.mutate({ cards }, {
-            onSuccess: () => {
-              toast({ title: `${uniqueNums.length} cards criados!` });
-              if (addAnother) { setFront(''); setBack(''); setEditingId(null); setMcOptions(['', '', '', '']); setMcCorrectIndex(0); }
-              else { setEditorOpen(false); resetForm(); }
-            },
-          });
-        }
-      }
-      return;
-    } else {
-      cardType = editorType === 'image_occlusion' ? 'image_occlusion' : 'basic';
-      backContent = back;
-    }
-    const onSuccess = () => {
-      toast({ title: editingId ? 'Card atualizado!' : 'Card criado!' });
+    const onSuccessFn = (msg: string) => () => {
+      toast({ title: msg });
       if (addAnother) { setFront(''); setBack(''); setEditingId(null); setMcOptions(['', '', '', '']); setMcCorrectIndex(0); }
       else { setEditorOpen(false); resetForm(); }
     };
-    if (editingId) {
-      updateCard.mutate({ id: editingId, frontContent: front, backContent }, { onSuccess });
-    } else {
-      createCard.mutate({ frontContent: front, backContent, cardType }, { onSuccess });
+
+    // Auto-detect content type from front content
+    let hasImage = false;
+    let frontText = front;
+    try {
+      const parsed = JSON.parse(front);
+      if (parsed && typeof parsed === 'object' && 'imageUrl' in parsed) {
+        hasImage = true;
+        frontText = parsed.frontText || '';
+      }
+    } catch {}
+
+    const plainText = frontText.replace(/<[^>]*>/g, '');
+    const clozeNumMatches = [...plainText.matchAll(/\{\{c(\d+)::/g)];
+    const textNums = [...new Set(clozeNumMatches.map(m => parseInt(m[1])))];
+
+    // Collect image occlusion color nums
+    const imageNums: number[] = [];
+    if (hasImage) {
+      try {
+        const parsed = JSON.parse(front);
+        const allRects: { color?: string }[] = parsed.allRects || parsed.rects || [];
+        const usedColors = new Set(allRects.map(r => r.color || OCCLUSION_COLORS[0].fill));
+        usedColors.forEach(color => {
+          const idx = OCCLUSION_COLORS.findIndex(c => c.fill === color);
+          if (idx >= 0) imageNums.push(idx + 1);
+        });
+      } catch {}
     }
-  }, [front, back, editorType, mcOptions, mcCorrectIndex, editingId, createCard, updateCard, toast, resetForm]);
+
+    // Merge all unique nums
+    const allNums = [...new Set([...textNums, ...imageNums])].sort((a, b) => a - b);
+    const hasNums = allNums.length > 0;
+
+    // Determine card type based on content
+    const detectedType = hasImage ? 'image_occlusion' : textNums.length > 0 ? 'cloze' : 'basic';
+
+    if (hasNums) {
+      // Create one card per unique number (text cloze + image occlusion colors)
+      if (editingId) {
+        const backJson = JSON.stringify({ clozeTarget: allNums[0] || 1, extra: back });
+        updateCard.mutate({ id: editingId, frontContent: front, backContent: backJson }, {
+          onSuccess: onSuccessFn('Cartão atualizado!'),
+        });
+      } else if (allNums.length <= 1) {
+        const backJson = JSON.stringify({ clozeTarget: allNums[0] || 1, extra: back });
+        createCard.mutate({ frontContent: front, backContent: backJson, cardType: detectedType }, {
+          onSuccess: onSuccessFn('Cartão criado!'),
+        });
+      } else {
+        const cards = allNums.map(n => ({
+          frontContent: front,
+          backContent: JSON.stringify({ clozeTarget: n, extra: back }),
+          cardType: detectedType,
+        }));
+        createCard.mutate({ cards }, {
+          onSuccess: onSuccessFn(`${allNums.length} cartões criados!`),
+        });
+      }
+      return;
+    }
+
+    // Basic card (no cloze, no image occlusion)
+    const backContent = back;
+    if (editingId) {
+      updateCard.mutate({ id: editingId, frontContent: front, backContent }, {
+        onSuccess: onSuccessFn('Cartão atualizado!'),
+      });
+    } else {
+      createCard.mutate({ frontContent: front, backContent, cardType: detectedType }, {
+        onSuccess: onSuccessFn('Cartão criado!'),
+      });
+    }
+  }, [front, back, editingId, createCard, updateCard, toast, resetForm]);
 
   const handleDelete = useCallback(() => {
     if (!deleteId) return;
-    deleteCard.mutate(deleteId, { onSuccess: () => { setDeleteId(null); toast({ title: 'Card excluído' }); } });
+    deleteCard.mutate(deleteId, { onSuccess: () => { setDeleteId(null); toast({ title: 'Cartão excluído' }); } });
   }, [deleteId, deleteCard, toast]);
 
   const handleImprove = useCallback(async () => {
@@ -201,6 +228,42 @@ export function useManageDeck() {
     toast({ title: 'Melhoria aplicada!' });
   }, [improvePreview, toast]);
 
+  const handleAICreate = useCallback(async (templatePrompt: string) => {
+    const strippedFront = front.replace(/<[^>]*>/g, '').trim();
+    if (!strippedFront) {
+      toast({ title: 'Escreva algo na frente do cartão primeiro', variant: 'destructive' });
+      return;
+    }
+    if (energy < 1) {
+      toast({ title: 'Créditos insuficientes', description: 'Você precisa de 1 crédito IA.', variant: 'destructive' });
+      return;
+    }
+    setIsAICreating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('enhance-card', {
+        body: {
+          front,
+          back,
+          cardType: 'basic',
+          aiModel: model,
+          energyCost: 1,
+          customPrompt: templatePrompt,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) { toast({ title: data.error, variant: 'destructive' }); return; }
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      if (data?.front) setFront(data.front);
+      if (data?.back) setBack(data.back);
+      toast({ title: '✨ Cartão gerado com IA!' });
+    } catch (e: any) {
+      console.error('AI Create error:', e);
+      toast({ title: 'Erro ao gerar cartão', description: e.message, variant: 'destructive' });
+    } finally {
+      setIsAICreating(false);
+    }
+  }, [front, back, energy, model, queryClient, toast]);
+
   return {
     deckId, navigate, cards, isLoading, isCommunityDeck,
     editorOpen, setEditorOpen, editingId, front, setFront, back, setBack,
@@ -208,9 +271,9 @@ export function useManageDeck() {
     occlusionModalOpen, setOcclusionModalOpen,
     suggestCard, setSuggestCard,
     mcOptions, setMcOptions, mcCorrectIndex, setMcCorrectIndex,
-    isImproving, improvePreview, improveModalOpen, setImproveModalOpen,
+    isImproving, isAICreating, improvePreview, improveModalOpen, setImproveModalOpen,
     isSaving: createCard.isPending || updateCard.isPending,
     resetForm, openNew, openEdit, addMcOption, removeMcOption,
-    handleSave, handleDelete, handleImprove, applyImprovement,
+    handleSave, handleDelete, handleImprove, applyImprovement, handleAICreate,
   };
 }

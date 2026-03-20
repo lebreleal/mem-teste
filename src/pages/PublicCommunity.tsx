@@ -7,7 +7,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchTurmaBySlugOrId, fetchOwnerName, fetchTurmaMemberCount, fetchPublicCommunityDecks } from '@/services/adminService';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -76,12 +76,7 @@ const PublicCommunity = () => {
   // Fetch turma by slug or ID
   const { data: turma, isLoading: turmaLoading } = useQuery({
     queryKey: ['public-community', slugOrId],
-    queryFn: async () => {
-      const { data: bySlug } = await supabase.from('turmas').select('*').eq('share_slug', slugOrId!).maybeSingle();
-      if (bySlug) return bySlug;
-      const { data: byId } = await supabase.from('turmas').select('*').eq('id', slugOrId!).maybeSingle();
-      return byId;
-    },
+    queryFn: () => fetchTurmaBySlugOrId(slugOrId!),
     enabled: !!slugOrId,
   });
 
@@ -95,50 +90,21 @@ const PublicCommunity = () => {
   // Fetch owner name
   const { data: ownerProfile } = useQuery({
     queryKey: ['public-community-owner', turma?.owner_id],
-    queryFn: async () => {
-      const { data } = await supabase.from('profiles').select('name').eq('id', turma!.owner_id).single();
-      return data;
-    },
+    queryFn: async () => ({ name: await fetchOwnerName(turma!.owner_id) }),
     enabled: !!turma?.owner_id,
   });
 
   // Fetch member count
   const { data: memberCount = 0 } = useQuery({
     queryKey: ['public-community-members', turma?.id],
-    queryFn: async () => {
-      const { count } = await supabase.from('turma_members').select('id', { count: 'exact', head: true }).eq('turma_id', turma!.id);
-      return count ?? 0;
-    },
+    queryFn: () => fetchTurmaMemberCount(turma!.id),
     enabled: !!turma?.id,
   });
 
   // Fetch published decks
   const { data: publishedDecks = [], isLoading: decksLoading } = useQuery({
     queryKey: ['public-community-decks', turma?.id],
-    queryFn: async () => {
-      const { data: tDecks } = await supabase
-        .from('turma_decks')
-        .select('id, deck_id, is_published')
-        .eq('turma_id', turma!.id)
-        .eq('is_published', true);
-      if (!tDecks || tDecks.length === 0) return [];
-
-      const deckIds = tDecks.map((d: any) => d.deck_id);
-      const { data: deckInfo } = await supabase.from('decks').select('id, name').in('id', deckIds);
-      const nameMap = new Map((deckInfo ?? []).map((d: any) => [d.id, d.name]));
-
-      const { data: countRows } = await supabase.rpc('count_cards_per_deck', { p_deck_ids: deckIds });
-      const countMap = new Map((countRows ?? []).map((r: any) => [r.deck_id, Number(r.card_count)]));
-
-      return tDecks
-        .map((td: any) => ({
-          turmaDeckId: td.id,
-          deckId: td.deck_id,
-          name: nameMap.get(td.deck_id) ?? 'Sem nome',
-          cardCount: countMap.get(td.deck_id) ?? 0,
-        }))
-        .filter((d: any) => !d.name.includes('Caderno de Erros'));
-    },
+    queryFn: () => fetchPublicCommunityDecks(turma!.id),
     enabled: !!turma?.id,
   });
 

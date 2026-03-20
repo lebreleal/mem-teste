@@ -8,11 +8,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { mapCardRow, type Card, type CardState } from '@/types/domain';
 import type { ICardRepository, CardFilter, CardPage } from '@/types/repositories';
 
+const CARD_COLS = 'id, deck_id, front_content, back_content, card_type, state, stability, difficulty, scheduled_date, learning_step, last_reviewed_at, origin_deck_id, created_at, updated_at' as const;
+
 export class SupabaseCardRepository implements ICardRepository {
   async findById(id: string): Promise<Card | null> {
     const { data, error } = await supabase
       .from('cards')
-      .select('*')
+      .select(CARD_COLS)
       .eq('id', id)
       .maybeSingle();
     if (error) throw error;
@@ -20,7 +22,7 @@ export class SupabaseCardRepository implements ICardRepository {
   }
 
   async findMany(filter: CardFilter, limit = 200, offset = 0): Promise<CardPage> {
-    let query = supabase.from('cards').select('*', { count: 'exact' });
+    let query = supabase.from('cards').select(CARD_COLS, { count: 'exact' });
 
     if (filter.deckId) query = query.eq('deck_id', filter.deckId);
     if (filter.deckIds?.length) query = query.in('deck_id', filter.deckIds);
@@ -69,14 +71,14 @@ export class SupabaseCardRepository implements ICardRepository {
     }));
 
     const BATCH_SIZE = 500;
-    const allData: any[] = [];
+    const allData: unknown[] = [];
     for (let i = 0; i < rows.length; i += BATCH_SIZE) {
       const batch = rows.slice(i, i + BATCH_SIZE);
       const { data, error } = await supabase.from('cards').insert(batch).select();
       if (error) throw error;
       if (data) allData.push(...data);
     }
-    return allData.map(mapCardRow);
+    return (allData as import('@/types/domain').CardDbRow[]).map(mapCardRow);
   }
 
   async update(id: string, frontContent: string, backContent: string): Promise<Card> {
@@ -96,14 +98,15 @@ export class SupabaseCardRepository implements ICardRepository {
   }
 
   async move(ids: string[], targetDeckId: string): Promise<void> {
-    const { error } = await supabase.from('cards').update({ deck_id: targetDeckId } as any).in('id', ids);
+    const { error } = await supabase.from('cards').update({ deck_id: targetDeckId }).in('id', ids);
     if (error) throw error;
   }
 
   async countByState(deckId: string): Promise<Record<CardState, number>> {
     const { data, error } = await supabase.rpc('count_descendant_cards_by_state', { p_deck_id: deckId });
     if (error) throw error;
-    const row: any = Array.isArray(data) ? data[0] : data;
+    interface CountRow { new_count?: number; learning_count?: number; review_count?: number }
+    const row = (Array.isArray(data) ? data[0] : data) as CountRow | null;
     return {
       new: Number(row?.new_count ?? 0),
       learning: Number(row?.learning_count ?? 0),

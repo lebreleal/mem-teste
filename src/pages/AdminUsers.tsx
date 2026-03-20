@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { useAuth } from '@/hooks/useAuth';
 import { useAdminUsers, type AdminProfile, type UserDeck, type TokenUsageSummary, type TokenUsageEntry, type StudyDay, type PremiumGiftPlan } from '@/hooks/useAdminUsers';
-import { supabase } from '@/integrations/supabase/client';
+import { invokeImpersonate, verifyOtp, fetchProfilePremiumExpiry } from '@/services/adminService';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -18,10 +18,9 @@ import { useToast } from '@/hooks/use-toast';
 
 // Feature key → friendly name
 const FEATURE_NAMES: Record<string, string> = {
-  generate_deck: 'Gerar Deck', ai_tutor: 'Tutor IA', grade_exam: 'Corrigir Prova',
+  generate_deck: 'Gerar Deck', ai_tutor: 'Tutor IA',
   enhance_card: 'Aprimorar Card', enhance_import: 'Aprimorar Importação', ai_chat: 'Chat IA',
-  generate_onboarding: 'Onboarding IA', auto_tag: 'Auto-Tag', suggest_tags: 'Sugerir Tags',
-  detect_import_format: 'Detectar Formato', organize_import: 'Organizar Importação', tts: 'Text-to-Speech',
+  detect_import_format: 'Detectar Formato', organize_import: 'Organizar Importação',
 };
 
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
@@ -32,8 +31,6 @@ const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   'gpt-4o-mini': { input: 0.15, output: 0.60 },
   'gpt-4o': { input: 2.50, output: 10.00 },
   'gpt-3.5-turbo': { input: 0.50, output: 1.50 },
-  'tts-1': { input: 15.00, output: 0 },
-  'google-neural2': { input: 4.00, output: 0 },
 };
 
 const calcCostUSD = (model: string, promptTokens: number, completionTokens: number, totalTokens: number): number => {
@@ -78,18 +75,10 @@ const AdminUsers = () => {
         refresh_token: session.refresh_token,
       }));
       sessionStorage.setItem('impersonated_name', user.name || user.email);
-      const { data, error } = await supabase.functions.invoke('admin-impersonate', {
-        body: { target_user_id: user.id },
-      });
-      if (error || !data?.token) {
-        sessionStorage.removeItem('admin_session');
-        sessionStorage.removeItem('impersonated_name');
-        toast({ title: 'Erro', description: 'Falha ao impersonar usuário.', variant: 'destructive' });
-        setImpersonating(false);
-        return;
-      }
-      const { error: otpError } = await supabase.auth.verifyOtp({ token_hash: data.token, type: 'magiclink' });
-      if (otpError) {
+      const result = await invokeImpersonate(user.id);
+      try {
+        await verifyOtp(result.token);
+      } catch {
         sessionStorage.removeItem('admin_session');
         sessionStorage.removeItem('impersonated_name');
         toast({ title: 'Erro', description: 'Falha na autenticação.', variant: 'destructive' });
@@ -137,9 +126,8 @@ const AdminUsers = () => {
     setGrantingPremium(true);
     const ok = await grantPremium(selectedUser.id, giftPlan);
     if (ok) {
-      // Refresh user data
-      const { data } = await supabase.from('profiles').select('premium_expires_at').eq('id', selectedUser.id).single();
-      setSelectedUser(prev => prev ? { ...prev, premium_expires_at: (data as any)?.premium_expires_at ?? null } : null);
+      const premiumExpiry = await fetchProfilePremiumExpiry(selectedUser.id);
+      setSelectedUser(prev => prev ? { ...prev, premium_expires_at: premiumExpiry } : null);
     }
     setGrantingPremium(false);
   };

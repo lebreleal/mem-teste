@@ -17,7 +17,6 @@ export async function logError({
   severity = "error",
   metadata = {},
 }: LogErrorParams) {
-  // Prevent recursive logging
   if (isLogging) return;
   isLogging = true;
 
@@ -25,7 +24,7 @@ export async function logError({
     const { data: { session } } = await supabase.auth.getSession();
     const userId = session?.user?.id ?? null;
 
-    await (supabase as any).from("app_error_logs").insert({
+    await (supabase as unknown as { from(table: string): { insert(row: Record<string, unknown>): Promise<unknown> } }).from("app_error_logs").insert({
       user_id: userId,
       error_message: message.slice(0, 2000),
       error_stack: (stack || "").slice(0, 5000),

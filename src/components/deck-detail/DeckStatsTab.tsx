@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { useForecastSimulator, useForecastView } from '@/hooks/useForecastSimulator';
 import { ForecastSimulator } from '@/components/study-plan/PlanComponents';
 import type { WeeklyMinutes, WeeklyNewCards } from '@/hooks/useStudyPlan';
+import { useStudyPlan } from '@/hooks/useStudyPlan';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchProfileCapacity } from '@/services/dashboardService';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2 } from 'lucide-react';
 import { collectDescendantIds } from '@/lib/studyUtils';
@@ -16,6 +17,7 @@ interface DeckStatsTabProps {
 export function DeckStatsTab({ deckId }: DeckStatsTabProps) {
   const { user } = useAuth();
   const { decks } = useDecks();
+  const { calibrationFactor } = useStudyPlan();
   const { forecastView, setForecastView } = useForecastView();
 
   // Collect this deck + all descendant IDs
@@ -37,12 +39,7 @@ export function DeckStatsTab({ deckId }: DeckStatsTabProps) {
   const profileQuery = useQuery({
     queryKey: ['profile-capacity', user?.id],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('profiles')
-        .select('daily_study_minutes, weekly_study_minutes, weekly_new_cards')
-        .eq('id', user!.id)
-        .single();
-      return data as any;
+      return fetchProfileCapacity(user!.id);
     },
     enabled: !!user,
     staleTime: 5 * 60_000,
@@ -78,6 +75,7 @@ export function DeckStatsTab({ deckId }: DeckStatsTabProps) {
     dailyMinutes: effectiveDailyMinutes,
     weeklyMinutes: weeklyMinutesOverride ?? realWeeklyMinutes,
     weeklyNewCards: weeklyNewCardsOverride ?? realWeeklyNewCards,
+    calibrationFactor,
     enabled: true,
   });
 

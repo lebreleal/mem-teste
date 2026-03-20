@@ -280,7 +280,7 @@ const DeckMoveDialog = ({
           if (materiasInNewFolder.length === 0) return null;
           return (
             <div className="space-y-1 min-w-0">
-              <p className="text-xs text-muted-foreground font-medium px-1">Mover para dentro de uma matéria:</p>
+              <p className="text-xs text-muted-foreground font-medium px-1">Mover para dentro de um baralho-pai:</p>
               <div className="max-h-40 w-full min-w-0 overflow-y-auto overflow-x-hidden rounded-lg border border-border divide-y divide-border">
                 {materiasInNewFolder.map(m => (
                   <button
@@ -317,7 +317,7 @@ const DeckMoveDialog = ({
 
       {!isMateria && materiasInFolder.length > 0 && (
         <div className="space-y-1 min-w-0">
-          <p className="text-xs text-muted-foreground font-medium px-1">Mover para uma matéria:</p>
+          <p className="text-xs text-muted-foreground font-medium px-1">Mover para um baralho-pai:</p>
           <div className="max-h-48 w-full min-w-0 overflow-y-auto overflow-x-hidden rounded-lg border border-border divide-y divide-border">
             {materiasInFolder.map(m => (
               <button
@@ -335,15 +335,15 @@ const DeckMoveDialog = ({
 
       {/* Move to root of sala (if currently inside a matéria) */}
       {currentDeck?.parent_deck_id && (
-        <Button variant="outline" size="sm" onClick={handleMoveToRoot} className="w-full max-w-full gap-2 text-sm">
-          <Layers className="h-4 w-4" />
-          Tirar da matéria (mover para a sala)
-        </Button>
+         <Button variant="outline" size="sm" onClick={handleMoveToRoot} className="w-full max-w-full gap-2 text-sm">
+           <Layers className="h-4 w-4" />
+           Tirar do baralho-pai (mover para a sala)
+         </Button>
       )}
 
       {!isMateria && materiasInFolder.length === 0 && !currentDeck?.parent_deck_id && (
         <div className="px-4 py-4 text-center text-sm text-muted-foreground rounded-lg border border-border">
-          Nenhuma matéria nesta sala para mover
+          Nenhum baralho-pai nesta sala para mover
         </div>
       )}
 
@@ -377,11 +377,11 @@ const DashboardDialogs = (props: DashboardDialogsProps) => {
         <DialogContent className="sm:max-w-md max-w-[calc(100vw-2rem)]">
           <DialogHeader>
             <DialogTitle className="font-display text-center">
-              {props.createType === 'folder' ? 'Criar nova Sala' : props.createParentDeckId === '__materia__' ? 'Nova Matéria' : 'Novo Deck'}
+              {props.createType === 'folder' ? 'Criar nova Sala' : props.createParentDeckId ? 'Novo Subbaralho' : 'Novo Baralho'}
             </DialogTitle>
             {props.createType === 'folder' && (
               <p className="text-sm text-muted-foreground text-center pt-1">
-                Uma sala organiza seus decks e matérias em um só lugar. (ex: "Medicina 2026", "Concurso Federal", "Residência Cardio")
+                Uma sala organiza seus baralhos e matérias em um só lugar. (ex: "Medicina 2026", "Concurso Federal", "Residência Cardio")
               </p>
             )}
           </DialogHeader>

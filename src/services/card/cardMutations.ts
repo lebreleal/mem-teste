@@ -6,20 +6,29 @@
 import { supabase } from '@/integrations/supabase/client';
 import { compressImage } from '@/lib/imageUtils';
 
-/** Create a single card. */
-export async function createCard(deckId: string, input: { frontContent: string; backContent: string; cardType?: string }) {
+/** Create a single card. Accepts optional created_at for positional insertion. */
+export async function createCard(deckId: string, input: { frontContent: string; backContent: string; cardType?: string; createdAt?: string }) {
+  const insertData: { deck_id: string; front_content: string; back_content: string; card_type: string; created_at?: string } = {
+    deck_id: deckId,
+    front_content: input.frontContent,
+    back_content: input.backContent,
+    card_type: input.cardType ?? 'basic',
+  };
+  if (input.createdAt) insertData.created_at = input.createdAt;
   const { data, error } = await supabase
     .from('cards')
-    .insert({ deck_id: deckId, front_content: input.frontContent, back_content: input.backContent, card_type: input.cardType ?? 'basic' })
+    .insert(insertData)
     .select()
     .single();
   if (error) throw error;
   return data;
 }
 
-/** Create multiple cards at once (batch insert). Uses parallel batches for speed. */
-export async function createCards(deckId: string, cards: { frontContent: string; backContent: string; cardType: string }[]) {
-  const baseTime = Date.now();
+/** Create multiple cards at once (batch insert). Uses parallel batches for speed.
+ *  @param baseCreatedAt optional ISO string — siblings will get created_at = base + 1ms, base + 2ms, etc.
+ */
+export async function createCards(deckId: string, cards: { frontContent: string; backContent: string; cardType: string }[], baseCreatedAt?: string) {
+  const baseTime = baseCreatedAt ? new Date(baseCreatedAt).getTime() : Date.now();
   const rows = cards.map((c, idx) => ({
     deck_id: deckId,
     front_content: c.frontContent,
@@ -28,7 +37,7 @@ export async function createCards(deckId: string, cards: { frontContent: string;
     state: 0,
     stability: 0,
     difficulty: 0,
-    created_at: new Date(baseTime + idx).toISOString(),
+    created_at: new Date(baseTime + (idx + 1) * 0.001).toISOString(),
   }));
   const BATCH_SIZE = 500;
   const CONCURRENT = 5;
@@ -84,6 +93,79 @@ export async function bulkMoveCards(ids: string[], targetDeckId: string) {
 export async function bulkDeleteCards(ids: string[]) {
   const { error } = await supabase.from('cards').delete().in('id', ids);
   if (error) throw error;
+}
+
+/** Bury cards by pushing their scheduled_date to a given ISO date. */
+export async function buryCards(cardIds: string[], scheduledDate: string) {
+  if (cardIds.length === 0) return;
+  const { error } = await supabase
+    .from('cards')
+    .update({ scheduled_date: scheduledDate })
+    .in('id', cardIds);
+  if (error) throw error;
+}
+
+/** Freeze a card (push scheduled_date 100 years ahead and set state to review). */
+export async function freezeCard(cardId: string) {
+  const farFuture = new Date();
+  farFuture.setFullYear(farFuture.getFullYear() + 100);
+  const { error } = await supabase
+    .from('cards')
+    .update({ scheduled_date: farFuture.toISOString(), state: 2 })
+    .eq('id', cardId);
+  if (error) throw error;
+}
+
+/** Unfreeze a card (reset to new state). */
+export async function unfreezeCard(cardId: string) {
+  const { error } = await supabase
+    .from('cards')
+    .update({ scheduled_date: new Date().toISOString(), state: 0, stability: 0, difficulty: 0 })
+    .eq('id', cardId);
+  if (error) throw error;
+}
+
+/** Bury a single card until tomorrow. */
+export async function burySingleCard(cardId: string) {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0);
+  const { error } = await supabase
+    .from('cards')
+    .update({ scheduled_date: tomorrow.toISOString() })
+    .eq('id', cardId);
+  if (error) throw error;
+}
+
+/** Patch specific fields on a card row. */
+export async function patchCard(cardId: string, fields: { front_content?: string; back_content?: string }) {
+  const { error } = await supabase
+    .from('cards')
+    .update(fields)
+    .eq('id', cardId);
+  if (error) throw error;
+}
+
+/** Count review-state cards due now across multiple deck IDs. */
+export async function countReviewDueCards(deckIds: string[], nowISO: string): Promise<number> {
+  const { count, error } = await supabase
+    .from('cards')
+    .select('id', { count: 'exact', head: true })
+    .in('deck_id', deckIds)
+    .eq('state', 2)
+    .lte('scheduled_date', nowISO);
+  if (error) throw error;
+  return count ?? 0;
+}
+
+/** Fetch study plan deck_ids for a user. */
+export async function fetchStudyPlanDeckIds(userId: string): Promise<Array<{ deck_ids: string[] | null }>> {
+  const { data, error } = await supabase
+    .from('study_plans')
+    .select('deck_ids')
+    .eq('user_id', userId);
+  if (error) throw error;
+  return (data ?? []) as Array<{ deck_ids: string[] | null }>;
 }
 
 /** Upload a card image to storage. Returns the public URL. */

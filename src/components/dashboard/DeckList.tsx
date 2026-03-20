@@ -6,16 +6,16 @@
 
 import { useState, useMemo } from 'react';
 import {
-  GraduationCap, ChevronRight, Loader2, Search, Tag as TagIcon, CheckCircle2, XCircle,
+  GraduationCap, ChevronRight, Loader2, Search, CheckCircle2, XCircle,
 } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Progress } from '@/components/ui/progress';
 import DeckRow from './DeckRow';
 import { usePendingDecks, type PendingDeck } from '@/stores/usePendingDecks';
 import { useDragReorder } from '@/hooks/useDragReorder';
 import type { DeckWithStats } from '@/hooks/useDecks';
+
+const ERROR_DECK_NAME = '📕 Baralho de Erros';
 
 interface DeckListProps {
   isLoading: boolean;
@@ -50,6 +50,9 @@ interface DeckListProps {
 
   // Pending deck click handler
   onPendingClick?: (pending: PendingDeck) => void;
+  
+  // Organize mode
+  organizeMode?: boolean;
 }
 
 const DeckList = ({
@@ -57,50 +60,21 @@ const DeckList = ({
   onRenameDeck, onMoveDeck, onArchiveDeck, onDeleteDeck, onDetachCommunityDeck,
   navigateToCommunity, onReorderDecks,
   decksWithPendingUpdates, onPendingClick,
+  organizeMode = false,
   ...deckRowProps
 }: DeckListProps) => {
-  const { user } = useAuth();
   const { pendingDecks } = usePendingDecks();
 
-  // Fetch question counts per deck (including sub-decks so matérias aggregate)
-  const allDeckIdsWithSubs = useMemo(() => {
-    const ids = new Set<string>();
-    const collect = (parentId: string) => {
-      ids.add(parentId);
-      const subs = deckRowProps.getSubDecks(parentId);
-      for (const s of subs) collect(s.id);
-    };
-    for (const d of currentDecks) collect(d.id);
-    return [...ids];
-  }, [currentDecks, deckRowProps.getSubDecks]);
-
-  const { data: questionCountMap } = useQuery({
-    queryKey: ['deck-question-counts-list', user?.id, allDeckIdsWithSubs.join(',')],
-    queryFn: async () => {
-      if (allDeckIdsWithSubs.length === 0) return new Map<string, number>();
-      const { data } = await supabase
-        .from('deck_questions')
-        .select('deck_id')
-        .in('deck_id', allDeckIdsWithSubs);
-      const counts = new Map<string, number>();
-      for (const row of data ?? []) {
-        counts.set(row.deck_id, (counts.get(row.deck_id) ?? 0) + 1);
-      }
-      return counts;
-    },
-    enabled: !!user && allDeckIdsWithSubs.length > 0,
-    staleTime: 60_000,
-  });
   const [expandedAccordionId, setExpandedAccordionId] = useState<string | null>(null);
 
   const q = searchQuery.toLowerCase();
-  // Sort: error deck first, then matérias (decks with sub-decks), then loose decks
+  // Sort: error deck first, then baralhos-pai (decks with sub-decks), then loose decks
   const sortedDecks = useMemo(() => {
-    const errorDeck = currentDecks.filter(d => d.name === '📕 Caderno de Erros');
-    const rest = currentDecks.filter(d => d.name !== '📕 Caderno de Erros');
-    const materias = rest.filter(d => deckRowProps.getSubDecks(d.id).length > 0);
+    const errorDeck = currentDecks.filter(d => d.name === ERROR_DECK_NAME);
+    const rest = currentDecks.filter(d => d.name !== ERROR_DECK_NAME);
+    const parentDecks = rest.filter(d => deckRowProps.getSubDecks(d.id).length > 0);
     const loose = rest.filter(d => deckRowProps.getSubDecks(d.id).length === 0);
-    return [...errorDeck, ...materias, ...loose];
+    return [...errorDeck, ...parentDecks, ...loose];
   }, [currentDecks, deckRowProps.getSubDecks]);
   const filteredDecks = q ? sortedDecks.filter(d => d.name.toLowerCase().includes(q)) : sortedDecks;
 
@@ -145,7 +119,7 @@ const DeckList = ({
         <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
           <GraduationCap className="h-7 w-7 text-primary" />
         </div>
-        <h3 className="font-display text-lg font-bold text-foreground">Nenhum baralho nesta classe</h3>
+        <h3 className="font-display text-lg font-bold text-foreground">Nenhum baralho nesta sala</h3>
         <p className="mt-1 max-w-xs text-sm text-muted-foreground">Crie seu primeiro baralho para começar a estudar.</p>
         <p className="mt-3 text-xs text-muted-foreground">Use o botão <strong>+</strong> para adicionar</p>
       </div>
@@ -160,20 +134,20 @@ const DeckList = ({
       }
       return 'Salvando...';
     }
-    if (pending.status === 'done') return 'Criando tags...';
+    if (pending.status === 'done') return 'Finalizando...';
     if (pending.status === 'error') return 'Erro — toque para remover';
     return `Gerando lote ${pending.progress.current}/${pending.progress.total}`;
   };
 
   const getPendingIcon = (pending: PendingDeck) => {
     if (pending.status === 'review_ready') return <CheckCircle2 className="h-5 w-5 text-success animate-in zoom-in-50" />;
-    if (pending.status === 'done') return <TagIcon className="h-5 w-5 text-primary animate-pulse" />;
+    if (pending.status === 'done') return <Loader2 className="h-5 w-5 text-primary animate-pulse" />;
     if (pending.status === 'error') return <XCircle className="h-5 w-5 text-destructive" />;
     return <Loader2 className="h-5 w-5 text-primary animate-spin" />;
   };
 
   return (
-    <div className="divide-y divide-border/50">
+    <div>
       {/* Pending (background generating) decks */}
       {visiblePending.map(pending => {
         const progressPct = pending.progress.total > 0 ? (pending.progress.current / pending.progress.total) * 100 : 0;
@@ -211,7 +185,7 @@ const DeckList = ({
         );
       })}
 
-      {/* Decks (Matérias) with accordion */}
+      {/* All decks in unified order: error deck first, then parent decks, then loose decks */}
       {deckDrag.displayItems.map(deck => {
         const dragHandlers = deckDrag.getHandlers(deck);
         return (
@@ -225,10 +199,11 @@ const DeckList = ({
             onDetachCommunityDeck={onDetachCommunityDeck}
             navigateToCommunity={navigateToCommunity}
             dragHandlers={dragHandlers}
-            hasPendingUpdate={decksWithPendingUpdates?.has(deck.id)}
+            hasPendingUpdate={decksWithPendingUpdates instanceof Set ? decksWithPendingUpdates.has(deck.id) : false}
             expandedAccordionId={expandedAccordionId}
             onAccordionToggle={handleAccordionToggle}
-            questionCountMap={questionCountMap}
+            questionCountMap={undefined}
+            organizeMode={organizeMode}
             {...deckRowProps}
           />
         );

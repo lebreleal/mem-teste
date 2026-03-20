@@ -16,4 +16,5 @@ export interface Folder {
   source_turma_id?: string | null;
   source_turma_subject_id?: string | null;
   image_url?: string | null;
+  sort_order?: number;
 }

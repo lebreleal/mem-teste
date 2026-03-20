@@ -1,13 +1,14 @@
 /**
  * DeckRow — a single deck item in the dashboard list.
- * Shows name, card count, 4-color progress bar (novo/aprendendo/revisão/dominado).
- * If the deck has sub-decks, shows an expand/collapse icon.
- * 3-dot menu + play icon: visible on hover for loose decks, on expand for matérias.
+ * Shows name, classification bar, hover actions (play/menu), and chevron.
+ * Unified template for all decks (with or without sub-decks).
  */
 
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Info, ChevronDown, Layers, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings, Plus, Minus, Play, Sparkles, BookOpen } from 'lucide-react';
+import { ChevronDown, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings, Play, GripVertical } from 'lucide-react';
+import { IconDeck } from '@/components/icons';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { DeckWithStats } from '@/hooks/useDecks';
 import type { DragReorderHandlers } from '@/hooks/useDragReorder';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
@@ -18,9 +19,8 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-const ERROR_DECK_NAME = '📕 Caderno de Erros';
+const ERROR_DECK_NAME = '📕 Baralho de Erros';
 
-/**
 /**
  * 5-segment classification bar matching the deck detail gauge:
  *  - info/blue: fácil (d ≤ 3)
@@ -120,6 +120,8 @@ interface DeckRowProps {
   disableManagementActions?: boolean;
   /** Navigation state passed when clicking decks in readOnly mode (e.g. { from: 'community', turmaId }) */
   readOnlyNavState?: Record<string, any>;
+  /** When true, shows drag handles for reordering */
+  organizeMode?: boolean;
 }
 
 /** Aggregate 5-segment classification counts across deck + descendants */
@@ -147,7 +149,7 @@ function aggregateClassification(deck: DeckWithStats, getSubDecks: (id: string) 
 }
 
 
-const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
+const DeckRow = ({
   deck, deckSelectionMode, selectedDeckIds,
   toggleDeckSelection, getSubDecks, getAggregateStats,
   onCreateSubDeck, onCreateSubDeckAI,
@@ -158,37 +160,28 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   readOnly = false,
   disableManagementActions = false,
   readOnlyNavState,
-}, ref) => {
+  organizeMode = false,
+}: DeckRowProps) => {
   const navigate = useNavigate();
   const { isAdmin } = useIsAdmin();
   const isErrorDeck = deck.name === ERROR_DECK_NAME;
-  const [showInfoModal, setShowInfoModal] = useState(false);
   const [showDevModal, setShowDevModal] = useState(false);
-  const [showAddDeckMenu, setShowAddDeckMenu] = useState(false);
-  const [addDeckInfoType, setAddDeckInfoType] = useState<'manual' | 'ia' | null>(null);
 
   // Auto-detect linked (followed) decks — hide management actions for community-sourced decks
   const isLinkedDeck = useMemo(() => {
-    const isLinked = (d: any) => d?.source_turma_deck_id || d?.source_listing_id || d?.is_live_deck;
-    return isLinked(deck);
+    return !!(deck.source_turma_deck_id || deck.source_listing_id || deck.is_live_deck);
   }, [deck]);
   const effectiveDisableManagement = disableManagementActions || isLinkedDeck;
 
   const subDecks = useMemo(() => getSubDecks(deck.id), [deck.id, getSubDecks]);
   const hasChildren = subDecks.length > 0;
-  const isExpanded = expandedAccordionId === deck.id;
 
   // Aggregate classification across deck + all descendants
   const classPcts = useMemo(() => aggregateClassification(deck, getSubDecks), [deck, getSubDecks]);
   const totalCards = classPcts.totalCards;
   const aggStats = useMemo(() => getAggregateStats(deck), [deck, getAggregateStats]);
-  const displayName = isErrorDeck ? 'Caderno de Erros' : deck.name;
+  const displayName = isErrorDeck ? 'Baralho de Erros' : deck.name;
   const hasDueCards = aggStats.new_count + aggStats.learning_count + aggStats.review_count > 0;
-
-  // A deck with no sub-decks and no cards is an empty matéria — expand inline instead of navigating
-  const isEmptyMateria = !hasChildren && totalCards === 0 && !isErrorDeck;
-  // Empty matérias are always "expanded" — no toggle needed
-  const effectiveExpanded = isEmptyMateria ? true : isExpanded;
 
   const handleClick = () => {
     if (deckSelectionMode) {
@@ -203,14 +196,12 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
       }
       return;
     }
+    // Deck with children → navigate to materia detail page
     if (hasChildren) {
-      onAccordionToggle?.(deck.id);
-    } else if (isEmptyMateria) {
-      // do nothing — always expanded, no navigation
+      navigate(`/materia/${deck.id}`);
       return;
-    } else {
-      navigate(`/decks/${deck.id}`, readOnlyNavState ? { state: readOnlyNavState } : undefined);
     }
+    navigate(`/decks/${deck.id}`, readOnlyNavState ? { state: readOnlyNavState } : undefined);
   };
 
   const handleStudy = (e: React.MouseEvent, deckId: string) => {
@@ -220,6 +211,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
 
   return (
     <>
+      {/* Unified deck row — same template for all decks */}
       <div
         {...(dragHandlers ? {
           draggable: dragHandlers.draggable,
@@ -233,65 +225,35 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
         className={`group flex items-center gap-3 px-4 py-4 cursor-pointer transition-all hover:bg-muted/50 ${dragHandlers ? dragHandlers.className : ''}`}
         onClick={handleClick}
       >
-        {/* Expand/collapse icon for decks with children */}
-        {hasChildren && (
-          isExpanded
-            ? <Minus className="h-4 w-4 text-muted-foreground shrink-0" />
-            : <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
+        {organizeMode && (
+          <GripVertical className="h-4 w-4 text-muted-foreground/50 shrink-0 cursor-grab active:cursor-grabbing" />
         )}
-
+        <IconDeck solid={isErrorDeck} className={`h-5 w-5 shrink-0 ${isErrorDeck ? 'text-destructive' : 'text-muted-foreground'}`} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h3 className="font-display font-semibold text-foreground truncate">{displayName}</h3>
+            <h3 className="font-display text-[13px] font-semibold truncate text-foreground">{displayName}</h3>
             {isErrorDeck && (
-              <button
-                onClick={(e) => { e.stopPropagation(); setShowInfoModal(true); }}
-                className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Info className="h-4 w-4" />
-              </button>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    onClick={(e) => e.stopPropagation()}
+                    className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <HelpCircle className="h-4 w-4" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent side="bottom" align="center" sideOffset={8} className="w-auto max-w-[17rem] rounded-2xl border border-border bg-background px-3 py-2.5 text-xs text-foreground shadow-md" onClick={(e) => e.stopPropagation()}>
+                  <p className="leading-relaxed">
+                    Errou? Vem pra cá! 🧠 Quando você corrige seus erros, o cérebro grava de verdade. Estude esse baralho pra dominar o que te pega e nunca mais esquecer.
+                  </p>
+                </PopoverContent>
+              </Popover>
             )}
             {hasPendingUpdate && (
               <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-destructive animate-pulse" title="Atualização disponível" />
             )}
           </div>
-          {/* Empty matéria: "+ Adicionar Deck" right below title */}
-          {isEmptyMateria && !readOnly && (
-            <button
-              onClick={(e) => { e.stopPropagation(); setShowAddDeckMenu(true); }}
-              className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground hover:text-primary transition-colors"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              <span>Adicionar Deck</span>
-            </button>
-          )}
-          {!isEmptyMateria && (
-            <div className="flex items-center gap-2 mt-1">
-              <p className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
-                {hasChildren && (
-                  <span>{subDecks.length} {subDecks.length === 1 ? 'deck' : 'decks'}</span>
-                )}
-                {totalCards > 0 && (
-                  <span>{totalCards} {totalCards === 1 ? 'cartão' : 'cartões'}</span>
-                )}
-                {(() => {
-                  const qCount = questionCountMap ? (() => {
-                    const ids = [deck.id];
-                    const collectIds = (parentId: string) => {
-                      const subs = getSubDecks(parentId);
-                      for (const s of subs) { ids.push(s.id); collectIds(s.id); }
-                    };
-                    collectIds(deck.id);
-                    return ids.reduce((sum, id) => sum + (questionCountMap.get(id) ?? 0), 0);
-                  })() : 0;
-                  return qCount > 0 ? (
-                    <span>{qCount} {qCount === 1 ? 'questão' : 'questões'}</span>
-                  ) : null;
-                })()}
-              </p>
-            </div>
-          )}
-          {!isErrorDeck && !readOnly && !isEmptyMateria && (
+          {!isErrorDeck && !readOnly && (
             <ClassificationBar
               facilPct={classPcts.facilPct}
               bomPct={classPcts.bomPct}
@@ -303,13 +265,9 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           )}
         </div>
 
-        {/* Actions on hover for loose decks, always when matéria expanded */}
+        {/* Actions on hover */}
         {!isErrorDeck && !deckSelectionMode && !readOnly && (
-          <div className={`flex items-center gap-1.5 shrink-0 transition-opacity duration-200 ${
-            hasChildren && isExpanded
-              ? 'opacity-100'
-              : isEmptyMateria ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-          }`}>
+          <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
             {hasDueCards && (
               <button
                 onClick={(e) => handleStudy(e, deck.id)}
@@ -325,161 +283,11 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           </div>
         )}
 
-        {/* Chevron arrow for navigation (loose decks only, hidden on hover) */}
-        {!deckSelectionMode && !isErrorDeck && !hasChildren && !isEmptyMateria && (
+        {/* Chevron for navigation */}
+        {!deckSelectionMode && !isErrorDeck && (
           <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 -rotate-90 group-hover:hidden" />
         )}
       </div>
-
-      {/* Sub-decks (expanded) */}
-      {hasChildren && isExpanded && (
-        <div className="bg-muted/30">
-          {subDecks.map(sub => {
-            const subStats = getAggregateStats(sub);
-            const subClass = aggregateClassification(sub, getSubDecks);
-            const subHasDue = subStats.new_count + subStats.learning_count + subStats.review_count > 0;
-            return (
-              <div
-                key={sub.id}
-                className="group/sub flex items-center gap-3 pl-10 pr-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors border-t border-border/30"
-                onClick={() => navigate(`/decks/${sub.id}`, readOnlyNavState ? { state: readOnlyNavState } : undefined)}
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-sm font-medium text-foreground truncate">{sub.name}</h4>
-                  </div>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-[11px] text-muted-foreground">
-                      {sub.total_cards} {sub.total_cards === 1 ? 'cartão' : 'cartões'}
-                    </span>
-                    {questionCountMap && (questionCountMap.get(sub.id) ?? 0) > 0 && (
-                      <span className="text-[11px] text-muted-foreground">
-                        {questionCountMap.get(sub.id)} {(questionCountMap.get(sub.id) ?? 0) === 1 ? 'questão' : 'questões'}
-                      </span>
-                    )}
-                  </div>
-                  {!readOnly && (
-                    <ClassificationBar
-                      facilPct={subClass.facilPct}
-                      bomPct={subClass.bomPct}
-                      dificilPct={subClass.dificilPct}
-                      erreiPct={subClass.erreiPct}
-                      novoPct={subClass.novoPct}
-                      className="mt-1"
-                    />
-                  )}
-                </div>
-                {!readOnly && (
-                  <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover/sub:opacity-100 transition-opacity duration-200">
-                    {subHasDue && (
-                      <button
-                        onClick={(e) => handleStudy(e, sub.id)}
-                        className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                        aria-label="Estudar"
-                      >
-                        <Play className="h-3 w-3 fill-current" />
-                      </button>
-                    )}
-                    {!effectiveDisableManagement && (
-                      <DeckMenu deck={sub} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
-                    )}
-                  </div>
-                )}
-                <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 -rotate-90 group-hover/sub:hidden" />
-              </div>
-            );
-          })}
-          {/* Add deck row at bottom of expanded matéria */}
-          {!readOnly && !effectiveDisableManagement && (
-            <div className="flex items-center gap-3 pl-10 pr-4 py-3 border-t border-border/30">
-              <button
-                onClick={(e) => { e.stopPropagation(); setShowAddDeckMenu(true); }}
-                className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                <span>Adicionar Deck</span>
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-
-
-
-      {/* Add deck modal */}
-      <Dialog open={showAddDeckMenu} onOpenChange={setShowAddDeckMenu}>
-        <DialogContent className="max-w-xs">
-          <DialogHeader>
-            <DialogTitle>Novo deck em {deck.name}</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col gap-2 pt-1">
-            <button
-              onClick={() => { setShowAddDeckMenu(false); onCreateSubDeck(deck.id); }}
-              className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
-            >
-              <span className="text-sm font-medium text-foreground">Criar deck manualmente</span>
-              <button
-                onClick={(e) => { e.stopPropagation(); setAddDeckInfoType('manual'); }}
-                className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
-              >
-                <Info className="h-3.5 w-3.5" />
-              </button>
-              <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 ml-auto shrink-0" />
-            </button>
-            {onCreateSubDeckAI && (
-              <button
-                onClick={() => { setShowAddDeckMenu(false); onCreateSubDeckAI(deck.id); }}
-                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-2"
-              >
-                <span className="text-sm font-medium text-foreground">Criar deck com IA</span>
-                <button
-                  onClick={(e) => { e.stopPropagation(); setAddDeckInfoType('ia'); }}
-                  className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                >
-                  <Info className="h-3.5 w-3.5" />
-                </button>
-                <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 ml-auto shrink-0" />
-              </button>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Info modal for add deck options */}
-      <Dialog open={addDeckInfoType !== null} onOpenChange={(v) => { if (!v) setAddDeckInfoType(null); }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>{addDeckInfoType === 'manual' ? 'Criar deck manualmente' : 'Criar deck com IA'}</DialogTitle>
-            <DialogDescription className="text-sm text-muted-foreground leading-relaxed pt-2 space-y-2">
-              {addDeckInfoType === 'manual' ? (
-                <>
-                  <p>Você escolhe o nome do deck e adiciona os cartões (flashcards) um a um.</p>
-                  <p>Ideal quando você quer ter controle total sobre o conteúdo dos seus cartões.</p>
-                </>
-              ) : (
-                <>
-                  <p>Envie seu material de estudo (PDF, imagem ou texto) e a inteligência artificial gera os cartões automaticamente.</p>
-                  <p>Ideal para transformar anotações, slides ou apostilas em flashcards rapidamente.</p>
-                </>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-        </DialogContent>
-      </Dialog>
-
-
-      <Dialog open={showInfoModal} onOpenChange={setShowInfoModal}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>📕 Caderno de Erros</DialogTitle>
-            <DialogDescription className="text-sm text-muted-foreground leading-relaxed pt-2">
-              Este deck reúne automaticamente os cartões que você errou durante suas sessões de estudo.
-              Revise-os aqui para fortalecer os pontos mais fracos e melhorar sua retenção geral.
-            </DialogDescription>
-          </DialogHeader>
-        </DialogContent>
-      </Dialog>
 
       {/* Dev modal for non-admin users */}
       <Dialog open={showDevModal} onOpenChange={setShowDevModal}>
@@ -491,11 +299,11 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
             </DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground leading-relaxed pt-3 space-y-3">
               <p>
-                O <strong>Caderno de Erros</strong> é uma funcionalidade especial que estamos preparando para você!
+                O <strong>Baralho de Erros</strong> é uma funcionalidade especial que estamos preparando para você!
               </p>
               <p>Veja como vai funcionar:</p>
               <ul className="list-disc pl-4 space-y-1.5 text-left">
-                <li>Quando você errar um cartão (avaliação "De novo"), ele será <strong>automaticamente movido</strong> para o Caderno de Erros.</li>
+                <li>Quando você errar um cartão (avaliação "De novo"), ele será <strong>automaticamente movido</strong> para o Baralho de Erros.</li>
                 <li>Você poderá revisar seus pontos fracos em um só lugar, com foco total na recuperação.</li>
                 <li>Quando dominar o cartão (estado "Dominado"), ele <strong>voltará automaticamente</strong> ao deck original.</li>
                 <li>Questões erradas em simulados também gerarão cartões de revisão aqui.</li>
@@ -509,8 +317,6 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
       </Dialog>
     </>
   );
-});
+};
 
-DeckRow.displayName = 'DeckRow';
-
-export default DeckRow;
+export default React.memo(DeckRow);

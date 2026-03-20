@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
+import { DEFAULT_CALIBRATION_FACTOR } from '@/lib/studyUtils';
 import type { ForecastView, ForecastParams, SimulatorInput, SimulatorResult, WorkerMessage, WorkerResponse } from '@/types/forecast';
 import type { WeeklyMinutes } from '@/hooks/useStudyPlan';
 
@@ -28,6 +29,7 @@ export interface UseForecastSimulatorOptions {
   dailyMinutes: number;
   weeklyMinutes: WeeklyMinutes | null;
   weeklyNewCards?: Record<string, number> | null;
+  calibrationFactor?: number;
   enabled?: boolean;
   /** Latest target date across all objectives — used to stop adding created cards */
   latestTargetDate?: string | null;
@@ -36,7 +38,7 @@ export interface UseForecastSimulatorOptions {
 export function useForecastSimulator(options: UseForecastSimulatorOptions) {
   const { user } = useAuth();
   const userId = user?.id;
-  const { deckIds, horizonDays, newCardsPerDayOverride, createdCardsPerDayOverride, dailyMinutes, weeklyMinutes, weeklyNewCards, enabled = true, latestTargetDate } = options;
+  const { deckIds, horizonDays, newCardsPerDayOverride, createdCardsPerDayOverride, dailyMinutes, weeklyMinutes, weeklyNewCards, calibrationFactor, enabled = true, latestTargetDate } = options;
 
   const [result, setResult] = useState<SimulatorResult | null>(null);
   const [isSimulating, setIsSimulating] = useState(false);
@@ -49,7 +51,8 @@ export function useForecastSimulator(options: UseForecastSimulatorOptions) {
     queryKey: ['forecast-params', userId, deckIds],
     queryFn: async () => {
       if (!userId || deckIds.length === 0) return null;
-      const { data, error } = await supabase.rpc('get_forecast_params' as any, {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC not in generated types
+      const { data, error } = await (supabase.rpc as (fn: string, params: Record<string, unknown>) => ReturnType<typeof supabase.rpc>)('get_forecast_params', {
         p_user_id: userId,
         p_deck_ids: deckIds,
       });
@@ -121,12 +124,13 @@ export function useForecastSimulator(options: UseForecastSimulatorOptions) {
       weeklyMinutes: weeklyMinutes as Record<string, number> | null,
       weeklyNewCards: weeklyNewCards as Record<string, number> | null ?? null,
       createdCardsStopDay,
+      calibrationFactor: calibrationFactor ?? DEFAULT_CALIBRATION_FACTOR,
     };
 
     setIsSimulating(true);
     setProgress(0);
     workerRef.current.postMessage({ type: 'run', input } as WorkerMessage);
-  }, [paramsQuery.data, horizonDays, newCardsPerDay, createdCardsPerDay, dailyMinutes, weeklyMinutes, weeklyNewCards, latestTargetDate]);
+  }, [paramsQuery.data, horizonDays, newCardsPerDay, createdCardsPerDay, dailyMinutes, weeklyMinutes, weeklyNewCards, calibrationFactor, latestTargetDate]);
 
   // Debounced trigger
   useEffect(() => {
@@ -167,7 +171,7 @@ export function useForecastView() {
         .eq('id', userId!)
         .single();
       if (error) throw error;
-      return ((data as any)?.forecast_view as ForecastView) ?? '7d';
+      return ((data as { forecast_view?: string } | null)?.forecast_view as ForecastView) ?? '7d';
     },
     enabled: !!userId,
     staleTime: Infinity,
@@ -179,7 +183,7 @@ export function useForecastView() {
     queryClient.setQueryData(['forecast-view', userId], view);
     await supabase
       .from('profiles')
-      .update({ forecast_view: view } as any)
+      .update({ forecast_view: view })
       .eq('id', userId);
   }, [userId, queryClient]);
 

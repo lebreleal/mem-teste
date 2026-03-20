@@ -8,8 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeft, FileText, Download, ChevronRight, Sparkles, AlertTriangle, Package, Loader2, FolderTree, X } from 'lucide-react';
-import ankiLogo from '@/assets/anki-logo.svg';
-import { supabase } from '@/integrations/supabase/client';
+// anki-logo removed
+import { invokeDetectImportFormat } from '@/services/turma/turmaContent';
 import { useToast } from '@/hooks/use-toast';
 import type { AnkiParseResult } from '@/lib/ankiParser';
 
@@ -271,10 +271,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
     if (!text.trim() || text.length < 10) return;
     setAutoDetecting(true);
     try {
-      const { data, error } = await supabase.functions.invoke('detect-import-format', {
-        body: { sample: text.slice(0, 2000) },
-      });
-      if (error) throw error;
+      const data = await invokeDetectImportFormat(text.slice(0, 2000));
       if (data?.fieldSep) {
         if (data.fieldSep === 'tab') { setFieldSep('tab'); setUseRFC(true); }
         else if (data.fieldSep === 'comma') { setFieldSep('comma'); setUseRFC(true); }
@@ -356,9 +353,9 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
             : undefined,
         duration: result.missingMediaCount > 0 ? 10000 : 5000,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Anki parse error:', err);
-      const msg = err?.message || 'Erro desconhecido';
+      const msg = err instanceof Error ? err.message : 'Erro desconhecido';
       toast({ 
         title: 'Erro ao ler arquivo Anki', 
         description: msg.length > 200 ? msg.slice(0, 200) + '...' : msg, 
@@ -556,36 +553,30 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
               <DialogDescription>Escolha o formato do arquivo:</DialogDescription>
             </DialogHeader>
             <div className="space-y-2">
-              {/* CSV / TSV / TXT */}
-              <button
-                onClick={handleCsvFormatClick}
-                className="flex w-full items-center gap-4 rounded-xl border border-border p-4 text-left transition-colors hover:bg-muted/50"
-              >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent">
-                  <FileText className="h-5 w-5 text-accent-foreground" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-card-foreground">CSV / TSV / TXT</p>
-                  <p className="text-xs text-muted-foreground">Separado por vírgula, tab ou personalizado</p>
-                </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-              </button>
+               {/* CSV / TSV / TXT */}
+               <button
+                 onClick={handleCsvFormatClick}
+                 className="flex w-full items-center gap-4 rounded-xl border border-border p-4 text-left transition-colors hover:bg-muted/50"
+               >
+                 <div className="flex-1 min-w-0">
+                   <p className="font-semibold text-card-foreground">CSV / TSV / TXT</p>
+                   <p className="text-xs text-muted-foreground">Separado por vírgula, tab ou personalizado</p>
+                 </div>
+                 <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+               </button>
 
-              {/* Anki */}
-              <button
-                onClick={handleAnkiFormatClick}
-                className="flex w-full items-center gap-4 rounded-xl border border-border p-4 text-left transition-colors hover:bg-muted/50"
-              >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent p-1.5">
-                  <img src={ankiLogo} alt="Anki" className="h-full w-full object-contain" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-card-foreground">Anki</p>
-                  <p className="text-xs text-muted-foreground">Formatos .apkg, .colpkg, .ofc</p>
-                </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-              </button>
-            </div>
+               {/* Anki */}
+               <button
+                 onClick={handleAnkiFormatClick}
+                 className="flex w-full items-center gap-4 rounded-xl border border-border p-4 text-left transition-colors hover:bg-muted/50"
+               >
+                 <div className="flex-1 min-w-0">
+                   <p className="font-semibold text-card-foreground">Anki</p>
+                   <p className="text-xs text-muted-foreground">Formatos .apkg, .colpkg, .ofc</p>
+                 </div>
+                 <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+               </button>
+             </div>
           </>
         ) : source === 'anki' ? (
           /* ── Anki import flow ── */

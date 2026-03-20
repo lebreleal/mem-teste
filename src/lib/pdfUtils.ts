@@ -38,7 +38,7 @@ export async function extractPDFPages(
     // Extract text
     const textData = await page.getTextContent();
     const textContent = textData.items
-      .map((item: any) => item.str)
+      .map((item: Record<string, unknown>) => (item as { str?: string }).str ?? '')
       .join(' ')
       .replace(/\s+/g, ' ')
       .trim();

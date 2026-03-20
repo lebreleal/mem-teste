@@ -68,19 +68,17 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
 
   const doCreate = useCallback((name: string) => {
     if (state.createType === 'deck') {
-      const isMateria = state.createParentDeckId === '__materia__';
-      const actualParentDeckId = isMateria ? null : state.createParentDeckId;
       state.createDeck.mutate(
-        { name, folderId: actualParentDeckId ? null : state.currentFolderId, parentDeckId: actualParentDeckId, algorithmMode: defaultAlgorithm },
+        { name, folderId: state.createParentDeckId ? null : state.currentFolderId, parentDeckId: state.createParentDeckId, algorithmMode: defaultAlgorithm },
         {
-          onSuccess: (newDeck: any) => {
+          onSuccess: (newDeck: { id: string } | undefined) => {
             state.setCreateType(null); state.setCreateName('');
-            if (isMateria && newDeck?.id) {
-              toast({ title: 'Matéria criada!' });
-              state.toggleExpand(newDeck.id);
+            if (state.createParentDeckId) {
+              toast({ title: 'Subbaralho criado!' });
+              state.toggleExpand(state.createParentDeckId);
             } else {
               toast({ title: 'Baralho criado!' });
-              if (state.createParentDeckId) state.toggleExpand(state.createParentDeckId);
+              if (newDeck?.id) state.toggleExpand(newDeck.id);
             }
             state.setCreateParentDeckId(null);
           },
@@ -89,8 +87,8 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
       );
     } else {
       state.createFolder.mutate({ name, parentId: state.currentFolderId, section: state.dashboardSection }, {
-        onSuccess: () => { state.setCreateType(null); state.setCreateName(''); toast({ title: 'Classe criada!' }); },
-        onError: () => toast({ title: 'Erro ao criar classe', variant: 'destructive' }),
+        onSuccess: () => { state.setCreateType(null); state.setCreateName(''); toast({ title: 'Sala criada!' }); },
+        onError: () => toast({ title: 'Erro ao criar sala', variant: 'destructive' }),
       });
     }
   }, [state, defaultAlgorithm, toast]);
@@ -110,10 +108,8 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
 
     let finalName = trimmed;
     if (state.createType === 'deck') {
-      const isMateria = state.createParentDeckId === '__materia__';
-      const actualParent = isMateria ? null : state.createParentDeckId;
-      const siblings = actualParent
-        ? state.decks.filter(d => d.parent_deck_id === actualParent && !d.is_archived)
+      const siblings = state.createParentDeckId
+        ? state.decks.filter(d => d.parent_deck_id === state.createParentDeckId && !d.is_archived)
         : state.decks.filter(d => d.folder_id === state.currentFolderId && !d.parent_deck_id && !d.is_archived);
       finalName = getUniqueName(trimmed, siblings.map(d => d.name));
     } else {
@@ -152,9 +148,9 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
     try {
       if (state.deleteTarget.type === 'folder') {
         // Move all decks out of this folder before deleting (avoid FK constraint)
-        await supabase.from('decks').update({ folder_id: null } as any).eq('folder_id', state.deleteTarget.id);
+        await supabase.from('decks').update({ folder_id: null }).eq('folder_id', state.deleteTarget.id);
         // Clear source_turma references before deleting to avoid FK issues
-        await supabase.from('folders').update({ source_turma_id: null, source_turma_subject_id: null } as any).eq('id', state.deleteTarget.id);
+        await supabase.from('folders').update({ source_turma_id: null, source_turma_subject_id: null }).eq('id', state.deleteTarget.id);
         const { error } = await supabase.from('folders').delete().eq('id', state.deleteTarget.id);
         if (error) throw error;
         toast({ title: 'Classe excluída' });

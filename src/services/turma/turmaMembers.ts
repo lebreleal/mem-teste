@@ -10,13 +10,35 @@ import { supabase } from '@/integrations/supabase/client';
 import { calculateStreak, getMascotState } from '@/lib/streakUtils';
 import type { TurmaMember, TurmaMemberWithStats, TurmaRole } from '@/types/turma';
 
+// ── Row interfaces ──
+
+interface RankingRpcRow {
+  user_id: string;
+  user_name: string | null;
+  streak: number | null;
+  last_study_at: string | null;
+  total_reviews: number | string;
+}
+
+interface MemberRow {
+  user_id: string;
+  role: string;
+  is_subscriber: boolean;
+}
+
+interface PublicProfileRow {
+  id: string;
+  name: string | null;
+}
+
 /** Fetch members with stats using optimized RPC (eliminates N+1 loop). */
 export async function fetchTurmaMembersWithStats(turmaId: string): Promise<TurmaMemberWithStats[]> {
   // Try optimized RPC first
   try {
-    const { data, error } = await supabase.rpc('get_turma_members_ranking' as any, { p_turma_id: turmaId } as any);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC not in generated types
+    const { data, error } = await (supabase.rpc as (fn: string, params: Record<string, unknown>) => ReturnType<typeof supabase.rpc>)('get_turma_members_ranking', { p_turma_id: turmaId });
     if (!error && data) {
-      return (data as any[]).map(row => ({
+      return (data as unknown as RankingRpcRow[]).map(row => ({
         user_id: row.user_id,
         user_name: row.user_name || 'Anônimo',
         user_email: '',
@@ -33,7 +55,7 @@ export async function fetchTurmaMembersWithStats(turmaId: string): Promise<Turma
   // Legacy fallback (N+1)
   const { data: members } = await supabase.from('turma_members').select('user_id, role').eq('turma_id', turmaId);
   if (!members) return [];
-  const userIds = members.map(m => (m as any).user_id);
+  const userIds = members.map(m => m.user_id);
   const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: userIds });
   if (!profiles) return [];
 
@@ -41,7 +63,7 @@ export async function fetchTurmaMembersWithStats(turmaId: string): Promise<Turma
   const results: TurmaMemberWithStats[] = [];
 
   for (const profile of profiles) {
-    const p = profile as any;
+    const p = profile as unknown as PublicProfileRow;
     const { data: logs } = await supabase.from('review_logs').select('reviewed_at').eq('user_id', p.id)
       .gte('reviewed_at', thirtyDaysAgo.toISOString()).order('reviewed_at', { ascending: false });
     const totalReviews = logs?.length ?? 0;
@@ -70,29 +92,33 @@ export async function fetchTurmaRole(userId: string, turmaId: string): Promise<T
     .order('role', { ascending: true }) // admin < member < moderator alphabetically
     .limit(1)
     .maybeSingle();
-  return (data as any)?.role ?? null;
+  return (data as { role: TurmaRole } | null)?.role ?? null;
 }
 
 export async function fetchTurmaMembers(turmaId: string): Promise<TurmaMember[]> {
   const { data: members } = await supabase.from('turma_members').select('user_id, role, is_subscriber').eq('turma_id', turmaId);
   if (!members) return [];
   const seen = new Set<string>();
-  const unique = (members as any[]).filter(m => {
+  const unique = (members as unknown as MemberRow[]).filter(m => {
     if (seen.has(m.user_id)) return false;
     seen.add(m.user_id);
     return true;
   });
   const userIds = unique.map(m => m.user_id);
   const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: userIds });
-  const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
-  return unique.map((m: any) => {
-    const p = profileMap.get(m.user_id) as any;
-    return { user_id: m.user_id, role: m.role, user_name: p?.name || 'Anônimo', user_email: '', is_subscriber: m.is_subscriber ?? false };
+  const profileMap = new Map((profiles ?? []).map((p: unknown) => {
+    const row = p as PublicProfileRow;
+    return [row.id, row] as const;
+  }));
+  return unique.map((m) => {
+    const p = profileMap.get(m.user_id);
+    return { user_id: m.user_id, role: m.role as TurmaRole, user_name: p?.name || 'Anônimo', user_email: '', is_subscriber: m.is_subscriber ?? false };
   });
 }
 
 export async function changeMemberRole(turmaId: string, userId: string, role: TurmaRole) {
-  const { error } = await supabase.from('turma_members').update({ role } as any).eq('turma_id', turmaId).eq('user_id', userId);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- partial update not in generated types
+  const { error } = await supabase.from('turma_members').update({ role } as Record<string, unknown>).eq('turma_id', turmaId).eq('user_id', userId);
   if (error) throw error;
 }
 
@@ -102,6 +128,7 @@ export async function removeMember(turmaId: string, userId: string) {
 }
 
 export async function toggleSubscriber(turmaId: string, userId: string, isSubscriber: boolean) {
-  const { error } = await supabase.from('turma_members').update({ is_subscriber: isSubscriber } as any).eq('turma_id', turmaId).eq('user_id', userId);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- partial update not in generated types
+  const { error } = await supabase.from('turma_members').update({ is_subscriber: isSubscriber } as Record<string, unknown>).eq('turma_id', turmaId).eq('user_id', userId);
   if (error) throw error;
 }

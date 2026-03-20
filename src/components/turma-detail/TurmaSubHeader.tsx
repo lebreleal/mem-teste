@@ -3,14 +3,17 @@
  * Removed: invite codes, community creation.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { fetchMyTurmaRating, submitTurmaRating, fetchAllTurmaRatings } from '@/services/turma/turmaContent';
+import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
-import CreatorPanelSheet from '@/components/turma-detail/CreatorPanelSheet';
+
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { useMyTurmaRating, useAllTurmaRatings } from '@/hooks/useTurmaRating';
+
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -51,18 +54,35 @@ const TurmaSubHeader = ({
   const [showSubscribeModal, setShowSubscribeModal] = useState(false);
   const [showRating, setShowRating] = useState(false);
   const [showCreatorPanel, setShowCreatorPanel] = useState(false);
-
-  // Rating
-  const { myRating, submitRating } = useMyTurmaRating(turmaId);
-  const { data: allRatings = [] } = useAllTurmaRatings(turmaId, showRating);
   const [ratingValue, setRatingValue] = useState(0);
   const [ratingComment, setRatingComment] = useState('');
-  const [ratingInited, setRatingInited] = useState(false);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  const { data: myRating } = useQuery({
+    queryKey: ['turma-my-rating', turmaId, user?.id],
+    queryFn: () => fetchMyTurmaRating(turmaId, user!.id),
+    enabled: !!user && !!turmaId,
+  });
+
+  const { data: allRatings = [] } = useQuery({
+    queryKey: ['turma-all-ratings', turmaId],
+    queryFn: () => fetchAllTurmaRatings(turmaId),
+    enabled: !!turmaId,
+  });
+
+  const submitRating = useMutation({
+    mutationFn: (vars: { rating: number; comment: string }) =>
+      submitTurmaRating(turmaId, user!.id, vars.rating, vars.comment),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['turma-my-rating', turmaId] });
+      queryClient.invalidateQueries({ queryKey: ['turma-all-ratings', turmaId] });
+    },
+  });
 
   const openRatingDialog = () => {
     setRatingValue(myRating?.rating ?? 0);
     setRatingComment(myRating?.comment ?? '');
-    setRatingInited(true);
     setShowRating(true);
   };
 
@@ -246,10 +266,6 @@ const TurmaSubHeader = ({
         </DialogContent>
       </Dialog>
 
-      {/* Creator Panel Sheet */}
-      {isAdmin && (
-        <CreatorPanelSheet open={showCreatorPanel} onOpenChange={setShowCreatorPanel} turmaId={turmaId} />
-      )}
     </>
   );
 };

@@ -23,9 +23,10 @@ export function handleCors(req: Request): Response | null {
   return null;
 }
 
-/** Centralized AI config */
+/** Centralized AI config — uses Google Gemini API directly via GOOGLE_AI_KEY. */
 export function getAIConfig() {
   const apiKey = Deno.env.get("GOOGLE_AI_KEY");
+  if (!apiKey) throw new Error("GOOGLE_AI_KEY not configured in Supabase secrets");
   const url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
   return { apiKey, url };
 }

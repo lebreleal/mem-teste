@@ -251,6 +251,7 @@ export type Database = {
           learning_step: number
           origin_deck_id: string | null
           scheduled_date: string
+          search_vector: unknown
           stability: number
           state: number
           updated_at: string
@@ -267,6 +268,7 @@ export type Database = {
           learning_step?: number
           origin_deck_id?: string | null
           scheduled_date?: string
+          search_vector?: unknown
           stability?: number
           state?: number
           updated_at?: string
@@ -283,6 +285,7 @@ export type Database = {
           learning_step?: number
           origin_deck_id?: string | null
           scheduled_date?: string
+          search_vector?: unknown
           stability?: number
           state?: number
           updated_at?: string
@@ -750,6 +753,7 @@ export type Database = {
           name: string
           parent_deck_id: string | null
           requested_retention: number
+          search_vector: unknown
           shuffle_cards: boolean
           sort_order: number
           source_listing_id: string | null
@@ -783,6 +787,7 @@ export type Database = {
           name: string
           parent_deck_id?: string | null
           requested_retention?: number
+          search_vector?: unknown
           shuffle_cards?: boolean
           sort_order?: number
           source_listing_id?: string | null
@@ -816,6 +821,7 @@ export type Database = {
           name?: string
           parent_deck_id?: string | null
           requested_retention?: number
+          search_vector?: unknown
           shuffle_cards?: boolean
           sort_order?: number
           source_listing_id?: string | null
@@ -3017,6 +3023,13 @@ export type Database = {
         }
         Returns: Json
       }
+      get_all_card_ids_for_user: {
+        Args: { p_user_id: string }
+        Returns: {
+          deck_id: string
+          id: string
+        }[]
+      }
       get_all_user_card_counts: {
         Args: { p_user_id: string }
         Returns: {
@@ -3097,6 +3110,7 @@ export type Database = {
           learning_step: number
           origin_deck_id: string | null
           scheduled_date: string
+          search_vector: unknown
           stability: number
           state: number
           updated_at: string
@@ -3136,6 +3150,20 @@ export type Database = {
           creator_tier: number
           id: string
           name: string
+        }[]
+      }
+      get_recent_cards: {
+        Args: { p_folder_id?: string; p_limit?: number; p_user_id: string }
+        Returns: {
+          back_content: string
+          card_id: string
+          card_type: string
+          deck_id: string
+          deck_name: string
+          folder_name: string
+          front_content: string
+          parent_deck_name: string
+          updated_at: string
         }[]
       }
       get_retention_over_time: {
@@ -3192,6 +3220,7 @@ export type Database = {
           total_reviews_90d: number
         }[]
       }
+      get_user_time_calibration: { Args: { p_user_id: string }; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -3232,6 +3261,40 @@ export type Database = {
       restore_subscription_status: {
         Args: { p_turma_id: string }
         Returns: boolean
+      }
+      search_user_content: {
+        Args: {
+          p_folder_id?: string
+          p_limit?: number
+          p_query: string
+          p_user_id: string
+        }
+        Returns: {
+          back_content: string
+          card_id: string
+          card_type: string
+          deck_id: string
+          deck_name: string
+          folder_name: string
+          front_content: string
+          parent_deck_name: string
+          rank: number
+          result_type: string
+          snippet: string
+        }[]
+      }
+      strip_html: { Args: { p_text: string }; Returns: string }
+      validate_forecast_accuracy: {
+        Args: { p_days?: number; p_user_id: string }
+        Returns: {
+          actual_learning_cards: number
+          actual_new_cards: number
+          actual_relearning_cards: number
+          actual_review_cards: number
+          actual_total_cards: number
+          actual_total_seconds: number
+          review_date: string
+        }[]
       }
     }
     Enums: {

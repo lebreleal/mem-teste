@@ -84,7 +84,7 @@ describe('mapStudyStatsRow', () => {
       today_cards: 50,
       energy: 100,
       daily_energy_earned: 5,
-      mascot_state: 'happy',
+      mascot_state: 'happy' as const,
       last_study_date: '2026-03-08T10:00:00Z',
     };
 

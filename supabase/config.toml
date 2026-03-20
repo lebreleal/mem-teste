@@ -3,19 +3,10 @@ project_id = "paqlevwlsedkthdswiyy"
 [functions.generate-deck]
 verify_jwt = false
 
-[functions.grade-exam]
-verify_jwt = false
-
 [functions.enhance-import]
 verify_jwt = false
 
 [functions.enhance-card]
-verify_jwt = false
-
-[functions.ai-study-plan]
-verify_jwt = false
-
-[functions.generate-onboarding]
 verify_jwt = false
 
 [functions.ai-tutor]
@@ -39,20 +30,8 @@ verify_jwt = false
 [functions.customer-portal]
 verify_jwt = false
 
-[functions.tts]
+[functions.detect-import-format]
 verify_jwt = false
 
-[functions.suggest-tags]
-verify_jwt = false
-
-[functions.auto-tag-cards]
-verify_jwt = false
-
-[functions.generate-questions]
-verify_jwt = false
-
-[functions.parse-questions]
-verify_jwt = false
-
-[functions.map-prerequisites]
+[functions.detect-occlusion]
 verify_jwt = false

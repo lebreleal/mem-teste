@@ -3,9 +3,10 @@
  * Orphan decks (without folder) are shown directly at root, not in a virtual classe.
  */
 
+import { useMemo } from 'react';
 import { GraduationCap } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchCommunityFolderMeta } from '@/services/dashboardService';
 import { useAuth } from '@/hooks/useAuth';
 import SalaCard from './SalaCard';
 import type { Folder } from '@/types/folder';
@@ -18,7 +19,6 @@ interface SalaInfo {
   deckCount: number;
   totalCards: number;
   masteredCards: number;
-  questionCount: number;
   dueCount: number;
   ownerName?: string;
   lastUpdated?: string;
@@ -32,161 +32,118 @@ interface SalaListProps {
   onSalaClick: (folderId: string) => void;
 }
 
-/** Count all decks recursively (root + sub-decks) */
-const countAllDecks = (rootDecks: DeckWithStats[], allDecks: DeckWithStats[]): number => {
-  let count = rootDecks.length;
-  const collectSubs = (parentIds: string[]) => {
-    const subs = allDecks.filter(s => s.parent_deck_id && parentIds.includes(s.parent_deck_id) && !s.is_archived);
-    count += subs.length;
-    if (subs.length > 0) collectSubs(subs.map(s => s.id));
-  };
-  collectSubs(rootDecks.map(d => d.id));
-  return count;
-};
-
-/** Collect all deck IDs recursively */
-const collectAllDeckIds = (rootDecks: DeckWithStats[], allDecks: DeckWithStats[]): string[] => {
-  const ids = rootDecks.map(d => d.id);
-  const collectSubs = (parentIds: string[]) => {
-    const subs = allDecks.filter(s => s.parent_deck_id && parentIds.includes(s.parent_deck_id) && !s.is_archived);
-    subs.forEach(s => ids.push(s.id));
-    if (subs.length > 0) collectSubs(subs.map(s => s.id));
-  };
-  collectSubs(rootDecks.map(d => d.id));
-  return ids;
-};
-
 const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }: SalaListProps) => {
-  const { user } = useAuth();
-  const rootDecks = decks.filter(d => !d.parent_deck_id && !d.is_archived);
 
-  // Fetch question counts per deck (batch query) — only at root level (not inside a sala)
-  const allDeckIds = decks.filter(d => !d.is_archived).map(d => d.id);
-  const { data: questionCounts } = useQuery({
-    queryKey: ['deck-question-counts', user?.id],
-    queryFn: async () => {
-      if (allDeckIds.length === 0) return new Map<string, number>();
-      const { data } = await supabase
-        .from('deck_questions')
-        .select('deck_id')
-        .in('deck_id', allDeckIds);
-      const counts = new Map<string, number>();
-      for (const row of data ?? []) {
-        counts.set(row.deck_id, (counts.get(row.deck_id) ?? 0) + 1);
+  // Build O(1) lookup indexes once
+  const { childrenIndex, decksByFolder } = useMemo(() => {
+    const ci = new Map<string, DeckWithStats[]>();
+    const df = new Map<string, DeckWithStats[]>();
+    for (const d of decks) {
+      if (d.is_archived) continue;
+      if (d.parent_deck_id) {
+        const arr = ci.get(d.parent_deck_id) ?? [];
+        arr.push(d);
+        ci.set(d.parent_deck_id, arr);
       }
-      return counts;
-    },
-    enabled: !!user && allDeckIds.length > 0 && !isLoading,
-    staleTime: 120_000,
-  });
+      if (d.folder_id && !d.parent_deck_id) {
+        const arr = df.get(d.folder_id) ?? [];
+        arr.push(d);
+        df.set(d.folder_id, arr);
+      }
+    }
+    return { childrenIndex: ci, decksByFolder: df };
+  }, [decks]);
 
-  const getQuestionCount = (deckIds: string[]): number => {
-    if (!questionCounts) return 0;
-    return deckIds.reduce((sum, id) => sum + (questionCounts.get(id) ?? 0), 0);
+  /** Count all decks recursively using childrenIndex O(1) lookups */
+  const countAllDecksRecursive = (rootDecks: DeckWithStats[]): number => {
+    let count = rootDecks.length;
+    const collectSubs = (parents: DeckWithStats[]) => {
+      for (const p of parents) {
+        const subs = childrenIndex.get(p.id) ?? [];
+        count += subs.length;
+        if (subs.length > 0) collectSubs(subs);
+      }
+    };
+    collectSubs(rootDecks);
+    return count;
   };
+
+  /** Collect all deck IDs recursively using childrenIndex */
+  const collectAllDeckIds = (rootDecks: DeckWithStats[]): string[] => {
+    const ids: string[] = [];
+    const collect = (parents: DeckWithStats[]) => {
+      for (const p of parents) {
+        ids.push(p.id);
+        const subs = childrenIndex.get(p.id) ?? [];
+        if (subs.length > 0) collect(subs);
+      }
+    };
+    collect(rootDecks);
+    return ids;
+  };
+
+  // Fetch question counts removed
 
   // Identify community-followed folders
-  const communityFolderIds = folders
-    .filter(f => !f.parent_id && !f.is_archived && f.source_turma_id)
-    .map(f => ({ folderId: f.id, turmaId: f.source_turma_id! }));
+  const communityFolderIds = useMemo(() =>
+    folders
+      .filter(f => !f.parent_id && !f.is_archived && f.source_turma_id)
+      .map(f => ({ folderId: f.id, turmaId: f.source_turma_id! })),
+    [folders]
+  );
 
   // Fetch owner names and last updated for community folders
-  const turmaIds = communityFolderIds.map(c => c.turmaId);
+  const turmaIds = useMemo(() => communityFolderIds.map(c => c.turmaId), [communityFolderIds]);
   const { data: communityMeta } = useQuery({
     queryKey: ['sala-list-community-meta', turmaIds.join(',')],
-    queryFn: async () => {
-      if (turmaIds.length === 0) return new Map<string, { ownerName: string; lastUpdated: string; coverUrl: string | null; deckCount: number; cardCount: number }>();
-      // Fetch turmas + profiles + turma_decks in parallel
-      const [turmasRes, turmaDecksRes] = await Promise.all([
-        supabase.from('turmas').select('id, owner_id, cover_image_url').in('id', turmaIds),
-        supabase.from('turma_decks').select('turma_id, deck_id').in('turma_id', turmaIds).eq('is_published', true),
-      ]);
-      const turmas = turmasRes.data;
-      if (!turmas) return new Map();
-
-      const ownerIds = [...new Set((turmas as any[]).map(t => t.owner_id))];
-      const deckIdsByTurma = new Map<string, string[]>();
-      for (const td of (turmaDecksRes.data ?? []) as any[]) {
-        const arr = deckIdsByTurma.get(td.turma_id) ?? [];
-        arr.push(td.deck_id);
-        deckIdsByTurma.set(td.turma_id, arr);
-      }
-      const allTDeckIds = (turmaDecksRes.data ?? []).map((td: any) => td.deck_id);
-
-      // Fetch profiles + deck dates in parallel
-      const [profilesRes, tDecksRes] = await Promise.all([
-        supabase.rpc('get_public_profiles' as any, { p_user_ids: ownerIds }),
-        allTDeckIds.length > 0
-          ? supabase.from('decks').select('id, updated_at').in('id', allTDeckIds)
-          : Promise.resolve({ data: [] }),
-      ]);
-
-      const profileMap = new Map((profilesRes.data as any[] ?? []).map((p: any) => [p.id, p.name]));
-      const lastUpdatedMap = new Map<string, string>();
-      for (const d of ((tDecksRes as any).data ?? []) as any[]) {
-        for (const [tid, dids] of deckIdsByTurma.entries()) {
-          if (dids.includes(d.id)) {
-            const cur = lastUpdatedMap.get(tid) ?? '';
-            if (d.updated_at > cur) lastUpdatedMap.set(tid, d.updated_at);
-          }
-        }
-      }
-      const result = new Map<string, { ownerName: string; lastUpdated: string; coverUrl: string | null; deckCount: number; cardCount: number }>();
-      for (const t of turmas as any[]) {
-        result.set(t.id, {
-          ownerName: profileMap.get(t.owner_id) || 'Anônimo',
-          lastUpdated: lastUpdatedMap.get(t.id) ?? '',
-          coverUrl: t.cover_image_url,
-          deckCount: deckIdsByTurma.get(t.id)?.length ?? 0,
-          cardCount: 0,
-        });
-      }
-      return result;
-    },
+    queryFn: () => fetchCommunityFolderMeta(turmaIds),
     enabled: turmaIds.length > 0,
     staleTime: 60_000,
   });
 
   // Build sala info for each real folder
-  const realSalas: SalaInfo[] = folders
-    .filter(f => !f.parent_id && !f.is_archived)
-    .sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0) || a.name.localeCompare(b.name))
-    .map(f => {
-      const isCommunity = !!f.source_turma_id;
-      const meta = isCommunity && communityMeta ? communityMeta.get(f.source_turma_id!) : undefined;
+  const realSalas: SalaInfo[] = useMemo(() =>
+    folders
+      .filter(f => !f.parent_id && !f.is_archived)
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name))
+      .map(f => {
+        const isCommunity = !!f.source_turma_id;
+        const meta = isCommunity && communityMeta ? communityMeta.get(f.source_turma_id!) : undefined;
 
-      const folderDecks = rootDecks.filter(d => d.folder_id === f.id);
-      let totalCards = 0, masteredCards = 0, dueCount = 0;
-      for (const d of folderDecks) {
-        totalCards += d.total_cards;
-        masteredCards += Math.max(0, (d.total_cards ?? 0) - (d.class_novo ?? 0));
-        const collectSubs = (parentId: string) => {
-          const subs = decks.filter(s => s.parent_deck_id === parentId && !s.is_archived);
-          for (const sub of subs) {
-            totalCards += sub.total_cards;
-            masteredCards += Math.max(0, (sub.total_cards ?? 0) - (sub.class_novo ?? 0));
-            collectSubs(sub.id);
+        const folderDecks = decksByFolder.get(f.id) ?? [];
+        let totalCards = 0, masteredCards = 0, dueCount = 0;
+
+        const collectStats = (deckList: DeckWithStats[]) => {
+          for (const d of deckList) {
+            totalCards += d.total_cards;
+            masteredCards += Math.max(0, (d.total_cards ?? 0) - (d.class_novo ?? 0));
+            const subs = childrenIndex.get(d.id) ?? [];
+            if (subs.length > 0) collectStats(subs);
           }
         };
-        collectSubs(d.id);
-        const stats = getAggregateStats(d);
-        dueCount += stats.new_count + stats.learning_count + stats.review_count;
-      }
-      const allIds = collectAllDeckIds(folderDecks, decks);
+        collectStats(folderDecks);
 
-      return {
-        id: f.id,
-        name: f.name,
-        imageUrl: isCommunity && meta?.coverUrl ? meta.coverUrl : f.image_url,
-        deckCount: countAllDecks(folderDecks, decks),
-        totalCards,
-        masteredCards,
-        questionCount: getQuestionCount(allIds),
-        dueCount,
-        ownerName: meta?.ownerName,
-        lastUpdated: meta?.lastUpdated,
-      };
-    });
+        for (const d of folderDecks) {
+          const stats = getAggregateStats(d);
+          dueCount += stats.new_count + stats.learning_count + stats.review_count;
+        }
+
+        const allIds = collectAllDeckIds(folderDecks);
+
+        return {
+          id: f.id,
+          name: f.name,
+          imageUrl: isCommunity && meta?.coverUrl ? meta.coverUrl : f.image_url,
+          deckCount: countAllDecksRecursive(folderDecks),
+          totalCards,
+          masteredCards,
+          dueCount,
+          ownerName: meta?.ownerName,
+          lastUpdated: meta?.lastUpdated,
+        };
+      }),
+    [folders, decksByFolder, childrenIndex, communityMeta, getAggregateStats]
+  );
 
   if (isLoading) {
     return (
@@ -226,7 +183,6 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
           deckCount={sala.deckCount}
           totalCards={sala.totalCards}
           masteredCards={sala.masteredCards}
-          questionCount={sala.questionCount}
           dueCount={sala.dueCount}
           imageUrl={sala.imageUrl}
           ownerName={sala.ownerName}

@@ -3,6 +3,19 @@
  * No React or Supabase dependencies.
  */
 
+const IMG_SRC_RE = /<img[^>]+src="([^"]+)"/g;
+
+/** Extract all image URLs from an HTML string. */
+export function extractImageUrls(html: string): string[] {
+  const urls: string[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = IMG_SRC_RE.exec(html)) !== null) {
+    urls.push(match[1]);
+  }
+  IMG_SRC_RE.lastIndex = 0;
+  return urls;
+}
+
 /** Real study metrics per card state (from user's historical data). */
 export interface RealStudyMetrics {
   avgNewSeconds: number;
@@ -29,34 +42,48 @@ export const DEFAULT_STUDY_METRICS: RealStudyMetrics = {
   avgLapseRate: 0.10,
 };
 
+/** Default calibration factor (empirically measured ~18% gap between elapsed_ms and wall-clock). */
+export const DEFAULT_CALIBRATION_FACTOR = 1.20;
+
 /**
  * Calculate study time using REAL per-state seconds from user history.
- * Accounts for:
- * - New cards generating multiple interactions (learning steps + failures)
- * - Review cards that lapse and become relearning cards
+ * Uses raw user metrics directly — no artificial floors or blending.
+ * The calibration factor (from get_user_time_calibration) already accounts
+ * for between-card gaps, so we trust the user's actual speed.
  */
 export function calculateRealStudyTime(
   newCards: number,
   learningCards: number,
   reviewCards: number,
   metrics: RealStudyMetrics,
+  calibrationFactor?: number,
 ): number {
-  // Guardrails to avoid unrealistically low estimates (common with sparse/biased history)
-  const reviewsPerNewCard = Math.max(2, metrics.avgReviewsPerNewCard || DEFAULT_STUDY_METRICS.avgReviewsPerNewCard);
-  const avgNewSeconds = Math.max(15, metrics.avgNewSeconds || DEFAULT_STUDY_METRICS.avgNewSeconds);
+  const factor = calibrationFactor ?? DEFAULT_CALIBRATION_FACTOR;
 
-  // New cards: each generates multiple interactions on the first day
-  const newInteractions = newCards * reviewsPerNewCard;
+  const avgNewSec = metrics.avgNewSeconds || DEFAULT_STUDY_METRICS.avgNewSeconds;
+  const avgLearnSec = metrics.avgLearningSeconds || DEFAULT_STUDY_METRICS.avgLearningSeconds;
+  const avgReviewSec = metrics.avgReviewSeconds || DEFAULT_STUDY_METRICS.avgReviewSeconds;
+  const avgRelearnSec = metrics.avgRelearningSeconds || DEFAULT_STUDY_METRICS.avgRelearningSeconds;
+
+  const reviewsPerNewCard = Math.max(2, metrics.avgReviewsPerNewCard || DEFAULT_STUDY_METRICS.avgReviewsPerNewCard);
+
+  // New cards: 1 first-see (new speed) + remaining interactions at learning speed
+  const firstSeeTime = newCards * avgNewSec;
+  const learningInteractions = newCards * Math.max(0, reviewsPerNewCard - 1);
+  const newLearningTime = learningInteractions * avgLearnSec;
+
+  // Existing learning cards in queue
+  const learningTime = learningCards * avgLearnSec;
+
   // Review cards: some will lapse → become relearning (each lapse ≈ 2 extra interactions)
   const expectedLapses = reviewCards * metrics.avgLapseRate;
   const successfulReviews = reviewCards - expectedLapses;
+  const reviewTime = successfulReviews * avgReviewSec;
+  const relearningTime = expectedLapses * avgRelearnSec * 2;
 
-  return Math.round(
-    (newInteractions * avgNewSeconds) +
-    (learningCards * metrics.avgLearningSeconds) +
-    (successfulReviews * metrics.avgReviewSeconds) +
-    (expectedLapses * metrics.avgRelearningSeconds * 2)
-  );
+  const rawSeconds = firstSeeTime + newLearningTime + learningTime + reviewTime + relearningTime;
+
+  return Math.round(rawSeconds * factor);
 }
 
 /**

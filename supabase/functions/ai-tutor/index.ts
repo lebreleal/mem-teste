@@ -20,7 +20,7 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { frontContent, backContent, action, mcOptions, correctIndex, selectedIndex, aiModel, energyCost, type, question, options, correctIndex: qCorrectIndex, userAnswer, concept, deckId } = body;
     const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
-    if (!AI_KEY) return jsonResponse({ error: "GOOGLE_AI_KEY não configurada" }, 500);
+    if (!AI_KEY) return jsonResponse({ error: "AI API key não configurada" }, 500);
 
     // Support flashcard tutor, question hint/explain, concept extraction, concept card generation, concept explanation, and option explanation
     const isQuestionMode = type === 'question-hint' || type === 'question-explain';
@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
 
     const promptConfig = await fetchPromptConfig(supabase, "ai_tutor");
     const MODEL_MAP = await getModelMap(supabase);
-    const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gemini-2.5-flash";
+    const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "google/gemini-2.5-flash";
 
     // ─── Concept Extraction (non-streaming, returns JSON) ───
     if (isConceptMode) {

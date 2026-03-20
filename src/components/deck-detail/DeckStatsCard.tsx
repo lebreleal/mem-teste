@@ -6,16 +6,17 @@
 import { useMemo } from 'react';
 import { useDeckDetail } from './DeckDetailContext';
 import { Button } from '@/components/ui/button';
-import { Play, Info, Clock, HelpCircle } from 'lucide-react';
+import { Play } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { deriveAvgSecondsPerCard, calculateRealStudyTime, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils';
+import { deriveAvgSecondsPerCard, calculateRealStudyTime, DEFAULT_STUDY_METRICS, DEFAULT_CALIBRATION_FACTOR } from '@/lib/studyUtils';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useStudyPlan } from '@/hooks/useStudyPlan';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchDeckHierarchyIds } from '@/services/uiQueryService';
+import { IconDeck, IconInfo } from '@/components/icons';
 
 interface DeckStatsCardProps {
-  mode?: 'cards' | 'questions';
+  mode?: 'cards';
 }
 
 const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
@@ -26,7 +27,7 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
     dailyReviewLimit,
   } = useDeckDetail();
   const { user } = useAuth();
-  const { realStudyMetrics } = useStudyPlan();
+  const { realStudyMetrics, calibrationFactor } = useStudyPlan();
 
   // === Card classification from server-side RPC (handles any deck size) ===
   const diffCounts = useMemo(() => {
@@ -40,124 +41,90 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
     };
   }, [serverCardCounts]);
 
-  // === Question stats (always fetch so hooks are stable) ===
-  const { data: questionData } = useQuery({
-    queryKey: ['deck-stats-questions', deckId],
-    queryFn: async () => {
-      // Get all descendant deck IDs
-      const allIds: string[] = [deckId!];
-      let frontier = [deckId!];
-      while (frontier.length > 0) {
-        const { data: children } = await supabase
-          .from('decks').select('id').in('parent_deck_id', frontier);
-        if (!children || children.length === 0) break;
-        const childIds = children.map((d: any) => d.id);
-        allIds.push(...childIds);
-        frontier = childIds;
-      }
-      // Get questions
-      const { data: questions } = await supabase
-        .from('deck_questions' as any).select('id').in('deck_id', allIds);
-      const qIds = (questions ?? []).map((q: any) => q.id);
-      if (qIds.length === 0) return { total: 0, correct: 0, wrong: 0, unanswered: 0 };
-      // Get latest attempts
-      const { data: attempts } = await supabase
-        .from('deck_question_attempts' as any)
-        .select('question_id, is_correct, answered_at')
-        .eq('user_id', user!.id)
-        .in('question_id', qIds);
-      const latestMap = new Map<string, { is_correct: boolean; answered_at: string }>();
-      for (const a of (attempts ?? []) as any[]) {
-        const prev = latestMap.get(a.question_id);
-        if (!prev || a.answered_at > prev.answered_at) latestMap.set(a.question_id, a);
-      }
-      let correct = 0, wrong = 0;
-      for (const [, a] of latestMap) {
-        if (a.is_correct) correct++; else wrong++;
-      }
-      const unanswered = qIds.length - latestMap.size;
-      return { total: qIds.length, correct, wrong, unanswered };
-    },
-    enabled: !!deckId && !!user,
-    staleTime: 30_000,
-  });
+  // Question stats removed
 
-  const isQMode = mode === 'questions';
-  const qd = questionData ?? { total: 0, correct: 0, wrong: 0, unanswered: 0 };
+  const qd = { total: 0, correct: 0, wrong: 0, unanswered: 0 };
 
   // Progress — use server total, not paginated allCards.length
   const serverTotal = serverCardCounts?.total ?? 0;
-  const total = isQMode ? qd.total : serverTotal;
-  const progressPct = isQMode
-    ? (qd.total > 0 ? Math.round((qd.correct / qd.total) * 100) : 0)
-    : (serverTotal > 0 ? Math.round(((serverTotal - diffCounts.novo) / serverTotal) * 100) : 0);
+  const total = serverTotal;
+  const progressPct = serverTotal > 0 ? Math.round(((serverTotal - diffCounts.novo) / serverTotal) * 100) : 0;
 
   // Time estimate — based on today's due cards (capped by daily limits from context)
-  const dueNew = isQMode ? qd.unanswered + qd.wrong : newCountToday;
-  const dueLearning = isQMode ? 0 : ctxLearningCount;
-  const dueReview = isQMode ? 0 : masteredToday;
-  const pendingForTime = isQMode ? (qd.unanswered + qd.wrong) : (dueNew + dueLearning + dueReview);
+  const dueNew = newCountToday;
+  const dueLearning = ctxLearningCount;
+  const dueReview = masteredToday;
+  const pendingForTime = dueNew + dueLearning + dueReview;
   const studyMetrics = realStudyMetrics ?? DEFAULT_STUDY_METRICS;
-  const remainingSeconds = isQMode
-    ? pendingForTime * deriveAvgSecondsPerCard(studyMetrics)
-    : calculateRealStudyTime(dueNew, dueLearning, dueReview, studyMetrics);
+  const calFactor = calibrationFactor ?? DEFAULT_CALIBRATION_FACTOR;
+  const remainingSeconds = calculateRealStudyTime(dueNew, dueLearning, dueReview, studyMetrics, calFactor);
   const remainingMin = Math.ceil(remainingSeconds / 60);
   const timeLabel = remainingMin >= 60
     ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
     : `${remainingMin}min`;
 
+  // Total to finish ALL cards (no daily limits)
+  const allNew = serverCardCounts?.new_count ?? 0;
+  const allLearning = serverCardCounts?.learning_count ?? 0;
+  const allReview = serverCardCounts?.review_count ?? 0;
+  const totalAllCards = allNew + allLearning + allReview;
+  const totalAllSeconds = calculateRealStudyTime(allNew, allLearning, allReview, studyMetrics, calFactor);
+  const totalAllMin = Math.ceil(totalAllSeconds / 60);
+  const totalAllLabel = totalAllMin >= 60
+    ? `${Math.floor(totalAllMin / 60)}h${totalAllMin % 60 > 0 ? `${totalAllMin % 60}min` : ''}`
+    : `${totalAllMin}min`;
+
   // Gauge segments
   const R = 22;
   const C = 2 * Math.PI * R;
 
-  const segments = isQMode
-    ? (qd.total > 0 ? [
-        { pct: qd.correct / qd.total, color: 'hsl(var(--success))', key: 'correct' },
-        { pct: qd.wrong / qd.total, color: 'hsl(var(--destructive))', key: 'wrong' },
-        { pct: qd.unanswered / qd.total, color: 'hsl(var(--muted))', key: 'unanswered' },
-      ] : [])
-    : (serverTotal > 0 ? [
+  const segments = serverTotal > 0 ? [
         { pct: diffCounts.facil / serverTotal, color: 'hsl(var(--info))', key: 'facil' },
         { pct: diffCounts.bom / serverTotal, color: 'hsl(var(--success))', key: 'bom' },
         { pct: diffCounts.dificil / serverTotal, color: 'hsl(var(--warning))', key: 'dificil' },
         { pct: diffCounts.errei / serverTotal, color: 'hsl(var(--destructive))', key: 'errei' },
         { pct: diffCounts.novo / serverTotal, color: 'hsl(var(--muted))', key: 'novo' },
-      ] : []);
+      ] : [];
 
   let offset = 0;
 
   // Study action
   const handleStudy = () => {
-    if (isQMode) {
-      // Navigate to question practice (the tab handles it via autoStart)
-      // We need a way to trigger practice - use a custom event or state
-      window.dispatchEvent(new CustomEvent('start-question-practice'));
-    } else {
-      navigate(`/study/${deckId}`, { replace: true });
-    }
+    navigate(`/study/${deckId}`, { replace: true });
   };
 
-  const canStudy = isQMode
-    ? qd.total > 0
-    : (isQuickReview ? totalCards > 0 : studyPending > 0);
+  const canStudy = isQuickReview ? totalCards > 0 : studyPending > 0;
 
   return (
     <div className="space-y-1">
-      {/* Time estimate */}
+      {/* Time estimate — matches SalaHero/MateriaDetail pattern */}
       {pendingForTime > 0 && (
-        <div className="flex items-center gap-1.5 px-1">
-          <Clock className="h-3 w-3 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">Estimativa: ~{timeLabel}</span>
+        <div className="flex items-center justify-center gap-1.5 w-full py-1 text-xs text-muted-foreground">
+          <IconDeck className="h-3 w-3" />
+          <span>{pendingForTime}</span>
+          <span>em</span>
+          <span>{timeLabel}</span>
           <Popover>
             <PopoverTrigger asChild>
-              <button className="text-muted-foreground hover:text-foreground transition-colors">
-                <Info className="h-3 w-3" />
+              <button type="button" className="ml-0.5 inline-flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors" aria-label="Info">
+                <IconInfo className="h-3 w-3" />
               </button>
             </PopoverTrigger>
-            <PopoverContent side="top" className="text-xs w-56 p-2">
-              {isQMode
-                ? 'Tempo estimado para praticar todas as questões pendentes.'
-                : 'Tempo estimado para revisar todos os cartões pendentes deste baralho, com base na sua velocidade média de estudo.'}
+            <PopoverContent side="bottom" align="center" sideOffset={8} className="w-auto max-w-[18rem] rounded-2xl border border-border bg-background px-3 py-2 text-xs text-foreground shadow-md">
+              <div className="space-y-1.5 leading-relaxed">
+                <p>
+                  <span className="font-semibold">Hoje:</span>{' '}
+                  <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> {pendingForTime} cartões</span>{' '}
+                  em ~<span className="font-semibold">{timeLabel}</span>
+                </p>
+                {totalAllCards > pendingForTime && (
+                  <p>
+                    <span className="font-semibold">Dominar tudo:</span>{' '}
+                    <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> {totalAllCards} cartões</span>{' '}
+                    em ~<span className="font-semibold">{totalAllLabel}</span>
+                  </p>
+                )}
+              </div>
             </PopoverContent>
           </Popover>
         </div>
@@ -195,44 +162,12 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
             <PopoverTrigger asChild>
               <button
                 className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-muted border border-border/50 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                aria-label={isQMode ? 'Desempenho nas questões' : 'Classificação dos cards'}
+                aria-label={'Classificação dos cards'}
               >
-                <Info className="h-3 w-3" />
+                <IconInfo className="h-3 w-3" />
               </button>
             </PopoverTrigger>
             <PopoverContent className="w-56 p-3" side="bottom" align="start">
-              {isQMode ? (
-                <>
-                  <p className="text-xs font-semibold text-foreground mb-2">Desempenho nas questões</p>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2.5 w-2.5 rounded-full bg-success" />
-                        <span className="text-xs text-muted-foreground">Corretas</span>
-                      </div>
-                      <span className="text-xs font-semibold text-foreground">{qd.correct}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2.5 w-2.5 rounded-full bg-destructive" />
-                        <span className="text-xs text-muted-foreground">Erradas</span>
-                      </div>
-                      <span className="text-xs font-semibold text-foreground">{qd.wrong}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2.5 w-2.5 rounded-full bg-muted" />
-                        <span className="text-xs text-muted-foreground">A responder</span>
-                      </div>
-                      <span className="text-xs font-semibold text-foreground">{qd.unanswered}</span>
-                    </div>
-                    <div className="border-t border-border/50 pt-2 mt-2 flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">Total</span>
-                      <span className="text-xs font-semibold text-foreground">{qd.total}</span>
-                    </div>
-                  </div>
-                </>
-              ) : (
                 <>
                   <p className="text-xs font-semibold text-foreground mb-2">Classificação dos cards</p>
                   <div className="space-y-2">
@@ -277,7 +212,6 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
                     </div>
                   </div>
                 </>
-              )}
             </PopoverContent>
           </Popover>
         </div>

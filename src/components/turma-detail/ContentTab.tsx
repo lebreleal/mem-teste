@@ -6,12 +6,11 @@
 
 import { useState, useMemo, lazy, Suspense } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { countTurmaDeckDownloads, countTurmaFilesByLesson, countTurmaExamsByLesson } from '@/services/turma/turmaContent';
 import { useTurmaDetail } from './TurmaDetailContext';
 import { useContentMutations } from './content/useContentMutations';
 import { useContentImport } from './content/useContentImport';
-import { useDeckTagsBatch, useTagDescendants } from '@/hooks/useTags';
-import type { Tag } from '@/types/tag';
+import type { TurmaDeck, TurmaSubject, TurmaExam } from '@/types/turma';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -34,8 +33,6 @@ import {
   Search, Sparkles, ArrowLeft, TrendingUp, Paperclip, Share2,
 } from 'lucide-react';
 
-import SubscriberGateDialog from '@/components/turma-detail/SubscriberGateDialog';
-import TrialStudyModal from '@/components/turma-detail/TrialStudyModal';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -57,12 +54,11 @@ const DeckListItem = ({
   onEditPricing,
   onRemove,
   onTogglePublish,
-  tags,
   downloads,
   fileCount,
   examCount,
 }: {
-  td: any;
+  td: TurmaDeck;
   onClick: () => void;
   inCollection: boolean;
   subscriberOnly: boolean;
@@ -72,7 +68,6 @@ const DeckListItem = ({
   onEditPricing: () => void;
   onRemove: () => void;
   onTogglePublish?: () => void;
-  tags?: Tag[];
   downloads?: number;
   fileCount?: number;
   examCount?: number;
@@ -96,7 +91,7 @@ const DeckListItem = ({
           <p className="flex items-center gap-1"><EyeOff className="h-3 w-3" /> Rascunho</p>
         )}
         {subscriberOnly && (
-          <p className="flex items-center gap-1"><Crown className="h-3.5 w-3.5 shrink-0 text-purple-500 fill-purple-500/20" /> Assinantes</p>
+          <p className="flex items-center gap-1"><Crown className="h-3.5 w-3.5 shrink-0 text-primary fill-primary/20" /> Assinantes</p>
         )}
         {inCollection && (
           <p className="flex items-center gap-1 text-primary font-semibold">
@@ -169,7 +164,7 @@ const FolderItem = ({
   onEdit,
   onDelete,
 }: {
-  folder: any;
+  folder: TurmaSubject;
   deckCount: number;
   cardCount?: number;
   attachmentCount?: number;
@@ -241,7 +236,7 @@ const TopDeckCard = ({
   fileCount,
   examCount,
 }: {
-  td: any;
+  td: TurmaDeck;
   onClick: () => void;
   inCollection: boolean;
   downloads: number;
@@ -307,72 +302,34 @@ const ContentTab = () => {
 
   // ── Local state ──
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
   const [showAddDeck, setShowAddDeck] = useState(false);
   const [addDeckSectionId, setAddDeckSectionId] = useState<string | null>(null);
   const [selectedDeckIds, setSelectedDeckIds] = useState<Set<string>>(new Set());
   const [deckSearchQuery, setDeckSearchQuery] = useState('');
   const [priceType, setPriceType] = useState<'free' | 'money' | 'credits'>('free');
   const [allowDownload, setAllowDownload] = useState(false);
-  const [editingDeck, setEditingDeck] = useState<any>(null);
+  const [editingDeck, setEditingDeck] = useState<TurmaDeck | null>(null);
   const [editPriceType, setEditPriceType] = useState<'free' | 'money' | 'credits'>('free');
   const [editAllowDownload, setEditAllowDownload] = useState(false);
-  const [confirmImportItem, setConfirmImportItem] = useState<{ type: 'deck' | 'exam'; data: any } | null>(null);
-  const [gateDeck, setGateDeck] = useState<any>(null);
+  const [confirmImportItem, setConfirmImportItem] = useState<{ type: 'deck' | 'exam'; data: TurmaDeck | TurmaExam } | null>(null);
+  const [gateDeck, setGateDeck] = useState<TurmaDeck | null>(null);
   const [trialDeck, setTrialDeck] = useState<{ deckId: string; deckName: string } | null>(null);
-  
-
-  // ── Batch tags for all community decks ──
-  const allDeckIds = useMemo(() => turmaDecks.map((d: any) => d.deck_id), [turmaDecks]);
-  const { data: deckTagsMap = {} } = useDeckTagsBatch(allDeckIds);
-
-  // ── Collect unique tags from community decks for filter chips ──
-  const communityTags = useMemo(() => {
-    const tagMap = new Map<string, Tag>();
-    Object.values(deckTagsMap).forEach((tags: Tag[]) => {
-      tags.forEach(tag => { if (!tagMap.has(tag.id)) tagMap.set(tag.id, tag); });
-    });
-    return Array.from(tagMap.values())
-      .sort((a, b) => {
-        if (a.is_official !== b.is_official) return a.is_official ? -1 : 1;
-        return b.usage_count - a.usage_count;
-      });
-  }, [deckTagsMap]);
-
-  // ── Get descendant tag IDs for inclusive filtering ──
-  const { data: descendantIds = [] } = useTagDescendants(selectedTagId);
-  const activeTagIds = useMemo(() => {
-    if (!selectedTagId) return null;
-    return new Set([selectedTagId, ...descendantIds]);
-  }, [selectedTagId, descendantIds]);
 
   // ── Subscriber-only validation ──
   const canSetSubscribersOnly = (turma?.subscription_price ?? 0) > 0;
 
-  const handleSetDeckPriceType = (newPriceType: string, setter: (v: any) => void) => {
+  const handleSetDeckPriceType = (newPriceType: string, setter: (v: 'free' | 'money' | 'credits') => void) => {
     if (newPriceType === 'members_only' && !canSetSubscribersOnly) {
       toast({ title: 'Defina um preço de assinatura primeiro', description: 'Vá em Configurações → Assinatura para definir o preço.', variant: 'destructive' });
       return;
     }
-    setter(newPriceType);
+    setter(newPriceType as 'free' | 'money' | 'credits');
   };
 
   // ── Count downloads (inscrições) per turma_deck ──
   const { data: downloadCounts = {} } = useQuery({
     queryKey: ['turma-deck-downloads', turmaId],
-    queryFn: async () => {
-      const turmaDeckIds = turmaDecks.map((td: any) => td.id);
-      if (turmaDeckIds.length === 0) return {};
-      const { data } = await supabase
-        .from('decks')
-        .select('source_turma_deck_id')
-        .in('source_turma_deck_id', turmaDeckIds);
-      const counts: Record<string, number> = {};
-      (data ?? []).forEach((d: any) => {
-        counts[d.source_turma_deck_id] = (counts[d.source_turma_deck_id] || 0) + 1;
-      });
-      return counts;
-    },
+    queryFn: () => countTurmaDeckDownloads(turmaDecks.map(td => td.id)),
     enabled: turmaDecks.length > 0,
     staleTime: 5 * 60_000,
   });
@@ -380,17 +337,7 @@ const ContentTab = () => {
   // ── Count files per lesson_id ──
   const { data: fileCountsByLesson = {} } = useQuery({
     queryKey: ['turma-file-counts', turmaId],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('turma_lesson_files' as any)
-        .select('lesson_id')
-        .eq('turma_id', turmaId);
-      const counts: Record<string, number> = {};
-      (data ?? []).forEach((f: any) => {
-        counts[f.lesson_id] = (counts[f.lesson_id] || 0) + 1;
-      });
-      return counts;
-    },
+    queryFn: () => countTurmaFilesByLesson(turmaId),
     enabled: !!turmaId,
     staleTime: 5 * 60_000,
   });
@@ -398,81 +345,65 @@ const ContentTab = () => {
   // ── Count exams per lesson_id ──
   const { data: examCountsByLesson = {} } = useQuery({
     queryKey: ['turma-exam-counts-by-lesson', turmaId],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('turma_exams' as any)
-        .select('lesson_id')
-        .eq('turma_id', turmaId)
-        .eq('is_published', true);
-      const counts: Record<string, number> = {};
-      (data ?? []).forEach((e: any) => {
-        if (e.lesson_id) counts[e.lesson_id] = (counts[e.lesson_id] || 0) + 1;
-      });
-      return counts;
-    },
+    queryFn: () => countTurmaExamsByLesson(turmaId),
     enabled: !!turmaId,
     staleTime: 5 * 60_000,
   });
 
   // ── Helper: get file/exam count for a turma_deck ──
-  const getDeckFilesCount = (td: any) => td.lesson_id ? (fileCountsByLesson[td.lesson_id] || 0) : 0;
-  const getDeckExamsCount = (td: any) => td.lesson_id ? (examCountsByLesson[td.lesson_id] || 0) : 0;
+  const getDeckFilesCount = (td: TurmaDeck) => td.lesson_id ? (fileCountsByLesson[td.lesson_id] || 0) : 0;
+  const getDeckExamsCount = (td: TurmaDeck) => td.lesson_id ? (examCountsByLesson[td.lesson_id] || 0) : 0;
 
   const currentFolders = useMemo(() => {
     return subjects
-      .filter((s: any) => (s.parent_id ?? null) === contentFolderId)
-      .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+      .filter(s => (s.parent_id ?? null) === contentFolderId)
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
   }, [subjects, contentFolderId]);
 
   // ── Count decks recursively in a folder ──
   const countDecksInFolder = (folderId: string): number => {
-    const direct = turmaDecks.filter((d: any) => d.subject_id === folderId && (isAdmin || d.is_published !== false)).length;
-    const childFolders = subjects.filter((s: any) => s.parent_id === folderId);
-    return direct + childFolders.reduce((sum: number, cf: any) => sum + countDecksInFolder(cf.id), 0);
+    const direct = turmaDecks.filter(d => d.subject_id === folderId && (isAdmin || d.is_published !== false)).length;
+    const childFolders = subjects.filter(s => s.parent_id === folderId);
+    return direct + childFolders.reduce((sum, cf) => sum + countDecksInFolder(cf.id), 0);
   };
 
   // ── Count cards recursively in a folder ──
   const getFolderCardCount = (folderId: string): number => {
     const directCards = turmaDecks
-      .filter((d: any) => d.subject_id === folderId && (isAdmin || d.is_published !== false))
-      .reduce((sum: number, d: any) => sum + (d.card_count || 0), 0);
-    const childFolders = subjects.filter((s: any) => s.parent_id === folderId);
-    return directCards + childFolders.reduce((sum: number, cf: any) => sum + getFolderCardCount(cf.id), 0);
+      .filter(d => d.subject_id === folderId && (isAdmin || d.is_published !== false))
+      .reduce((sum, d) => sum + (d.card_count || 0), 0);
+    const childFolders = subjects.filter(s => s.parent_id === folderId);
+    return directCards + childFolders.reduce((sum, cf) => sum + getFolderCardCount(cf.id), 0);
   };
 
   // ── Count attachments (files + exams) recursively in a folder ──
   const getFolderAttachmentCount = (folderId: string): number => {
-    const folderDecks = turmaDecks.filter((d: any) => d.subject_id === folderId && (isAdmin || d.is_published !== false));
+    const folderDecks = turmaDecks.filter(d => d.subject_id === folderId && (isAdmin || d.is_published !== false));
     let count = 0;
-    folderDecks.forEach((d: any) => {
+    folderDecks.forEach(d => {
       if (d.lesson_id) {
         count += (fileCountsByLesson[d.lesson_id] || 0) + (examCountsByLesson[d.lesson_id] || 0);
       }
     });
-    const childFolders = subjects.filter((s: any) => s.parent_id === folderId);
-    return count + childFolders.reduce((sum: number, cf: any) => sum + getFolderAttachmentCount(cf.id), 0);
+    const childFolders = subjects.filter(s => s.parent_id === folderId);
+    return count + childFolders.reduce((sum, cf) => sum + getFolderAttachmentCount(cf.id), 0);
   };
 
-  // ── Current folder's decks (when tag is active, search across ALL folders) ──
+  // ── Current folder's decks ──
   const currentDecks = useMemo(() => {
     const q = searchQuery.toLowerCase();
-    const skipFolderFilter = !!activeTagIds || !!q; // search and tag filter across ALL folders
+    const skipFolderFilter = !!q;
     return turmaDecks
-      .filter((d: any) => skipFolderFilter ? true : d.subject_id === contentFolderId)
-      .filter((d: any) => isAdmin || d.is_published !== false)
-      .filter((d: any) => !q || (d.deck_name || '').toLowerCase().includes(q))
-      .filter((d: any) => {
-        if (!activeTagIds) return true;
-        const tags = deckTagsMap[d.deck_id] as Tag[] | undefined;
-        return tags?.some(t => activeTagIds.has(t.id)) ?? false;
-      });
-  }, [turmaDecks, contentFolderId, searchQuery, isAdmin, activeTagIds, deckTagsMap]);
+      .filter(d => skipFolderFilter ? true : d.subject_id === contentFolderId)
+      .filter(d => isAdmin || d.is_published !== false)
+      .filter(d => !q || (d.deck_name || '').toLowerCase().includes(q));
+  }, [turmaDecks, contentFolderId, searchQuery, isAdmin]);
 
   // ── Top decks (most subscribed across the entire community) ──
   const topDecks = useMemo(() => {
     return [...turmaDecks]
-      .filter((d: any) => isAdmin || d.is_published !== false)
-      .sort((a: any, b: any) => (downloadCounts[b.id] || 0) - (downloadCounts[a.id] || 0))
+      .filter(d => isAdmin || d.is_published !== false)
+      .sort((a, b) => (downloadCounts[b.id] || 0) - (downloadCounts[a.id] || 0))
       .slice(0, 8);
   }, [turmaDecks, downloadCounts, isAdmin]);
 
@@ -548,7 +479,6 @@ const ContentTab = () => {
       <div className="flex items-center gap-2">
         {!isRoot && (
           <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => {
-            // Go up one level
             const currentFolder = subjects.find((s: any) => s.id === contentFolderId);
             setContentFolderId(currentFolder?.parent_id ?? null);
           }}>
@@ -577,35 +507,6 @@ const ContentTab = () => {
           </div>
         )}
       </div>
-
-      {/* Tag filter chips */}
-      {communityTags.length > 0 && (
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-          <button
-            onClick={() => setSelectedTagId(null)}
-            className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${
-              !selectedTagId
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-muted text-muted-foreground hover:bg-muted/80'
-            }`}
-          >
-            Todos
-          </button>
-          {communityTags.map(tag => (
-            <button
-              key={tag.id}
-              onClick={() => setSelectedTagId(selectedTagId === tag.id ? null : tag.id)}
-              className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${
-                selectedTagId === tag.id
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
-              }`}
-            >
-              {tag.name}
-            </button>
-          ))}
-        </div>
-      )}
 
       {/* Content */}
       {!hasContent ? (
@@ -678,7 +579,6 @@ const ContentTab = () => {
                         onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
                       });
                     } : undefined}
-                    tags={deckTagsMap[td.deck_id]}
                     downloads={downloadCounts[td.id] || 0}
                     fileCount={getDeckFilesCount(td)}
                     examCount={getDeckExamsCount(td)}
@@ -713,20 +613,20 @@ const ContentTab = () => {
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
             {confirmImportItem?.type === 'deck'
-              ? `O baralho "${confirmImportItem?.data?.deck_name}" será adicionado à sua pasta "${turma?.name}".`
-              : `A prova "${confirmImportItem?.data?.title}" será adicionada à sua coleção de provas.`}
+              ? `O baralho "${(confirmImportItem?.data as TurmaDeck)?.deck_name}" será adicionado à sua pasta "${turma?.name}".`
+              : `A prova "${(confirmImportItem?.data as TurmaExam)?.title}" será adicionada à sua coleção de provas.`}
           </p>
           <div className="flex justify-end gap-2 mt-2">
             <Button variant="outline" size="sm" onClick={() => setConfirmImportItem(null)}>Cancelar</Button>
             <Button size="sm" onClick={() => {
               if (confirmImportItem?.type === 'deck') {
                 importLogic.addToCollection.mutate(
-                  confirmImportItem.data,
-                  { onSuccess: (newDeck: any) => { if (newDeck?.id) navigate(`/decks/${newDeck.id}`, { state: { from: 'community', turmaId } }); } },
+                  confirmImportItem.data as TurmaDeck,
+                  { onSuccess: (newDeck) => { if (newDeck?.id) navigate(`/decks/${newDeck.id}`, { state: { from: 'community', turmaId } }); } },
                 );
               } else if (confirmImportItem?.type === 'exam') {
-                importLogic.addExamToCollection.mutate(confirmImportItem.data, {
-                  onSuccess: (result: any) => { if (result?.examId) navigate(`/exam/${result.examId}`, { state: { from: 'community', turmaId } }); },
+                importLogic.addExamToCollection.mutate(confirmImportItem.data as TurmaExam, {
+                  onSuccess: (result) => { if (result?.examId) navigate(`/exam/${result.examId}`, { state: { from: 'community', turmaId } }); },
                 });
               }
               setConfirmImportItem(null);
@@ -891,31 +791,6 @@ const ContentTab = () => {
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Subscriber Gate Dialog */}
-      <SubscriberGateDialog
-        open={!!gateDeck}
-        onOpenChange={open => !open && setGateDeck(null)}
-        deckName={gateDeck?.deck_name || ''}
-        cardCount={gateDeck?.card_count ?? 0}
-        onTrial={() => {
-          const deck = gateDeck;
-          setGateDeck(null);
-          setTrialDeck({ deckId: deck.deck_id, deckName: deck.deck_name });
-        }}
-        onSubscribe={() => {
-          setGateDeck(null);
-          ctx.handleSubscribe?.();
-        }}
-      />
-
-      {/* Trial Study Modal */}
-      <TrialStudyModal
-        open={!!trialDeck}
-        onOpenChange={open => !open && setTrialDeck(null)}
-        deckId={trialDeck?.deckId || ''}
-        deckName={trialDeck?.deckName || ''}
-      />
 
     </div>
   );

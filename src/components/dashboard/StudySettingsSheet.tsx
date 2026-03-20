@@ -1,16 +1,23 @@
 /**
  * StudySettingsSheet — configure daily new card limits per deck/matéria.
  * Settings are persistent (saved to the decks table).
+ *
+ * Two modes:
+ * 1. Sala mode (currentFolderId set): shows root decks in the folder
+ * 2. Matéria mode (parentDeckId set): shows subdecks of that parent deck
+ *
+ * Subdecks are always toggle-only (parent controls the limit).
+ * Toggling off a subdeck sets its daily_new_limit to 0 (skips new cards today).
+ * Reviews (spaced repetition) still continue regardless.
  */
 
 import { useState, useMemo, useCallback } from 'react';
-import { ArrowLeft, ChevronDown, Info, Minus, Plus, RotateCcw } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Minus, Plus } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { updateDeckDailyLimits } from '@/services/uiQueryService';
 import { useQueryClient } from '@tanstack/react-query';
 import type { DeckWithStats } from '@/hooks/useDecks';
 
@@ -21,6 +28,8 @@ interface StudySettingsSheetProps {
   getSubDecks: (parentId: string) => DeckWithStats[];
   getAggregateStats: (deck: DeckWithStats) => { new_count: number; learning_count: number; review_count: number; reviewed_today: number };
   currentFolderId: string | null;
+  /** When set, shows subdecks of this parent instead of folder root decks (Matéria mode). */
+  parentDeckId?: string | null;
 }
 
 interface DeckSetting {
@@ -37,25 +46,34 @@ interface DeckSetting {
 
 const ERROR_NOTEBOOK_PREFIX = '📕';
 
-const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggregateStats, currentFolderId }: StudySettingsSheetProps) => {
+const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggregateStats, currentFolderId, parentDeckId }: StudySettingsSheetProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
+  const isMateriaMode = !!parentDeckId;
+
+  // In Sala mode: root decks in the folder
+  // In Matéria mode: subdecks of the parent
   const salaDecks = useMemo(() => {
+    if (isMateriaMode) {
+      return decks
+        .filter(d => d.parent_deck_id === parentDeckId && !d.is_archived)
+        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name));
+    }
     if (!currentFolderId) return [];
     return decks.filter(d => d.folder_id === currentFolderId && !d.parent_deck_id && !d.is_archived)
-      .sort((a, b) => (a as any).sort_order - (b as any).sort_order || a.name.localeCompare(b.name));
-  }, [currentFolderId, decks]);
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name));
+  }, [currentFolderId, parentDeckId, isMateriaMode, decks]);
 
   const initialSettings = useMemo(() => {
     const map: Record<string, DeckSetting> = {};
     const order: string[] = [];
 
     for (const d of salaDecks) {
-      const subs = getSubDecks(d.id).filter(s => s.folder_id === currentFolderId);
-      const isMateria = subs.length > 0;
+      const subs = isMateriaMode ? [] : getSubDecks(d.id);
+      const isMateria = !isMateriaMode && subs.length > 0;
       const isErrorNotebook = d.name.startsWith(ERROR_NOTEBOOK_PREFIX);
 
       map[d.id] = {
@@ -64,7 +82,7 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
         dailyNewLimit: d.daily_new_limit ?? 20,
         isEnabled: (d.daily_new_limit ?? 20) > 0,
         isMateria,
-        isSubDeck: false,
+        isSubDeck: isMateriaMode, // In matéria mode, ALL items are subdecks
         isErrorNotebook,
         subCount: subs.length,
         totalCards: d.total_cards,
@@ -72,7 +90,7 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
       order.push(d.id);
 
       if (isMateria) {
-        const sortedSubs = [...subs].sort((a, b) => (a as any).sort_order - (b as any).sort_order || a.name.localeCompare(b.name));
+        const sortedSubs = [...subs].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name));
         for (const sub of sortedSubs) {
           map[sub.id] = {
             id: sub.id,
@@ -90,7 +108,7 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
       }
     }
     return { map, order };
-  }, [salaDecks, getSubDecks, decks]);
+  }, [salaDecks, getSubDecks, decks, isMateriaMode]);
 
   const [settings, setSettings] = useState<Record<string, DeckSetting>>(initialSettings.map);
 
@@ -119,10 +137,8 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
-      const updates = Object.values(settings).map(s =>
-        supabase.from('decks').update({ daily_new_limit: s.dailyNewLimit }).eq('id', s.id)
-      );
-      await Promise.all(updates);
+      const updates = Object.values(settings).map(s => ({ id: s.id, daily_new_limit: s.dailyNewLimit }));
+      await updateDeckDailyLimits(updates);
       queryClient.invalidateQueries({ queryKey: ['decks'] });
       toast({ title: 'Configurações salvas!' });
       onOpenChange(false);
@@ -146,7 +162,13 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
     .filter(Boolean)
     .filter(item => !item.isSubDeck);
 
+  // In Matéria mode, all items are subdecks — show them directly
+  const allItems = isMateriaMode
+    ? initialSettings.order.map(id => settings[id]).filter(Boolean)
+    : rootItems;
+
   const subDecksByParent = useMemo(() => {
+    if (isMateriaMode) return {}; // No nesting in matéria mode
     const map: Record<string, DeckSetting[]> = {};
     for (const id of initialSettings.order) {
       const item = settings[id];
@@ -163,93 +185,69 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
       }
     }
     return map;
-  }, [initialSettings.order, settings]);
+  }, [initialSettings.order, settings, isMateriaMode]);
 
   const toggleExpand = useCallback((id: string) => {
     setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
   }, []);
 
-  const renderNewLimitControl = (item: DeckSetting) => (
-    <div className="flex items-center justify-between bg-muted/50 rounded-lg px-3 py-2">
-      <div className="flex items-center gap-1">
-        <span className="text-xs text-muted-foreground">Novos por dia</span>
-        <Popover>
-          <PopoverTrigger asChild>
-            <button className="text-muted-foreground hover:text-foreground transition-colors">
-              <Info className="h-3.5 w-3.5" />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent side="top" className="w-64 text-xs">
-            <p className="font-semibold text-foreground mb-1">Limite de novos cards por dia</p>
-            <p className="text-muted-foreground">
-              Define quantos cards novos (nunca estudados) serão introduzidos por dia neste deck. 
-              Cards de revisão (já estudados anteriormente) não são afetados por este limite e continuarão aparecendo normalmente.
-            </p>
-          </PopoverContent>
-        </Popover>
-      </div>
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => updateLimit(item.id, -5)}
-          className="flex h-7 w-7 items-center justify-center rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-        >
-          <Minus className="h-3.5 w-3.5" />
-        </button>
-        <span className="text-sm font-bold text-foreground tabular-nums w-10 text-center">
-          {item.dailyNewLimit}
-        </span>
-        <button
-          onClick={() => updateLimit(item.id, 5)}
-          className="flex h-7 w-7 items-center justify-center rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-        >
-          <Plus className="h-3.5 w-3.5" />
-        </button>
-      </div>
+  const renderStepper = (item: DeckSetting) => (
+    <div className="flex items-center gap-1.5">
+      <button
+        onClick={() => updateLimit(item.id, -5)}
+        className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors active:scale-95"
+      >
+        <Minus className="h-4 w-4" />
+      </button>
+      <span className="text-base font-bold text-foreground tabular-nums w-10 text-center">
+        {item.dailyNewLimit}
+      </span>
+      <button
+        onClick={() => updateLimit(item.id, 5)}
+        className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors active:scale-95"
+      >
+        <Plus className="h-4 w-4" />
+      </button>
     </div>
   );
 
-  const renderSubtitle = (item: DeckSetting) => {
-    if (item.isMateria) return `${item.subCount} decks`;
-    return `${item.totalCards} cards`;
-  };
-
-  const renderDeckRow = (item: DeckSetting, indented = false) => (
+  const renderDeckCard = (item: DeckSetting, indented = false) => (
     <div
       key={item.id}
-      className={`px-4 py-3 transition-opacity ${item.isEnabled ? '' : 'opacity-40'} ${indented ? 'pl-8 bg-muted/20' : ''}`}
+      className={`rounded-xl border border-border/60 bg-card p-3 transition-opacity ${item.isEnabled ? '' : 'opacity-40'} ${indented ? 'ml-4' : ''}`}
     >
-      <div className="flex items-center gap-3 mb-2">
+      {/* Row 1: name + toggle */}
+      <div className="flex items-center justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <h3 className={`font-display font-semibold text-foreground truncate ${indented ? 'text-xs' : 'text-sm'}`}>
-              {item.name}
-            </h3>
-            {item.isErrorNotebook && (
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button className="text-muted-foreground hover:text-foreground transition-colors shrink-0">
-                    <Info className="h-3.5 w-3.5" />
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent side="top" className="w-64 text-xs">
-                  <p className="font-semibold text-foreground mb-1">Caderno de Erros</p>
-                  <p className="text-muted-foreground">
-                    Cards que você errou são movidos automaticamente para cá. 
-                    Quando você dominar o card novamente (estado "Dominado"), ele volta automaticamente para o deck original. 
-                    Isso garante que seus pontos fracos recebam atenção extra.
-                  </p>
-                </PopoverContent>
-              </Popover>
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground">{renderSubtitle(item)}</p>
+          <p className={`font-semibold text-foreground truncate ${indented || item.isSubDeck ? 'text-xs' : 'text-sm'}`}>
+            {item.name}
+          </p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            {item.isMateria ? `${item.subCount} decks` : `${item.totalCards} cards`}
+          </p>
         </div>
         <Switch checked={item.isEnabled} onCheckedChange={() => toggleEnabled(item.id)} />
       </div>
 
-      {item.isEnabled && !item.isSubDeck && renderNewLimitControl(item)}
+      {/* Row 2: stepper — only for root/parent decks, NOT for subdecks */}
+      {item.isEnabled && !item.isSubDeck && (
+        <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/40">
+          <span className="text-xs text-muted-foreground">Novos por dia</span>
+          {renderStepper(item)}
+        </div>
+      )}
+
+      {/* Subdeck info label when toggled on */}
+      {item.isEnabled && item.isSubDeck && (
+        <p className="text-[10px] text-muted-foreground mt-2 pt-2 border-t border-border/40">
+          Cartões novos incluídos na sessão de hoje
+        </p>
+      )}
     </div>
   );
+
+  // Get the parent deck info for matéria mode header
+  const parentDeck = isMateriaMode ? decks.find(d => d.id === parentDeckId) : null;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -261,69 +259,75 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
             </button>
             <div className="flex-1 text-center">
               <SheetTitle className="font-display text-base font-bold">Configurar Estudo</SheetTitle>
-              <p className="text-xs text-muted-foreground mt-0.5">Limite de cards novos por dia</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {isMateriaMode
+                  ? 'Escolha quais decks estudar hoje'
+                  : 'Quantos cards novos ver por dia em cada deck'}
+              </p>
             </div>
             <div className="w-5" />
           </div>
         </SheetHeader>
 
-        <div className="flex-1 overflow-y-auto divide-y divide-border/50">
-          {rootItems.map(item => {
-            const subs = subDecksByParent[item.id];
-            const isExpanded = expanded[item.id] ?? false;
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+          {/* In matéria mode, show parent deck limit info */}
+          {isMateriaMode && parentDeck && (
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 mb-2">
+              <p className="text-sm font-semibold text-foreground">{parentDeck.name}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Limite diário: <span className="font-bold text-foreground">{parentDeck.daily_new_limit ?? 20}</span> novos por dia
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Desative os subdecks que não quer estudar hoje. Revisões continuam normalmente.
+              </p>
+            </div>
+          )}
 
-            if (item.isMateria && subs?.length) {
-              return (
-                <div key={item.id}>
-                  <div className={`px-4 py-3 transition-opacity ${item.isEnabled ? '' : 'opacity-40'}`}>
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="min-w-0 flex-1">
-                        <h3 className="font-display font-semibold text-sm text-foreground truncate">{item.name}</h3>
-                        <p className="text-xs text-muted-foreground">{item.subCount} decks</p>
-                      </div>
-                      <Switch checked={item.isEnabled} onCheckedChange={() => toggleEnabled(item.id)} />
-                    </div>
+          {isMateriaMode ? (
+            // Matéria mode: flat list of subdecks (toggle-only)
+            allItems.map(item => renderDeckCard(item))
+          ) : (
+            // Sala mode: root decks with expandable subdecks
+            rootItems.map(item => {
+              const subs = subDecksByParent[item.id];
+              const isExpanded = expanded[item.id] ?? false;
 
-                    {item.isEnabled && renderNewLimitControl(item)}
+              if (item.isMateria && subs?.length) {
+                return (
+                  <div key={item.id} className="space-y-2">
+                    {renderDeckCard(item)}
 
-                    <button
-                      onClick={() => toggleExpand(item.id)}
-                      className="flex items-center gap-1 mt-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                      {isExpanded ? 'Ocultar decks' : `Ver ${subs.length} decks`}
-                    </button>
+                    {item.isEnabled && (
+                      <button
+                        onClick={() => toggleExpand(item.id)}
+                        className="flex items-center gap-1 ml-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                        {isExpanded ? 'Ocultar decks' : `Ver ${subs.length} decks`}
+                      </button>
+                    )}
+
+                    {isExpanded && subs.map(sub => renderDeckCard(sub, true))}
                   </div>
+                );
+              }
 
-                  {isExpanded && subs.map(sub => renderDeckRow(sub, true))}
-                </div>
-              );
-            }
+              return renderDeckCard(item);
+            })
+          )}
 
-            return renderDeckRow(item);
-          })}
-
-          {rootItems.length === 0 && (
-            <div className="px-4 py-12 text-center text-sm text-muted-foreground">
-              Nenhum deck nesta sala
+          {allItems.length === 0 && rootItems.length === 0 && (
+            <div className="py-12 text-center text-sm text-muted-foreground">
+              {isMateriaMode ? 'Nenhum subdeck neste baralho' : 'Nenhum deck nesta sala'}
             </div>
           )}
         </div>
 
-        <div className="p-4 border-t border-border/50 flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setSettings(initialSettings.map)}
-            disabled={!hasChanges}
-            className="gap-1.5"
-          >
-            <RotateCcw className="h-4 w-4" />
-            Resetar
-          </Button>
+        <div className="p-4 border-t border-border/50">
           <Button
             onClick={handleSave}
             disabled={!hasChanges || saving}
-            className="flex-1 h-11 rounded-full text-base font-bold"
+            className="w-full h-11 rounded-full text-base font-bold"
             size="lg"
           >
             {saving ? 'Salvando...' : 'Salvar'}

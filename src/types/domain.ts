@@ -107,7 +107,23 @@ export function mapCardType(dbType: string): CardType {
   return 'basic';
 }
 
-export function mapCardRow(row: any): Card {
+/** Raw card DB row shape (snake_case). */
+export interface CardDbRow {
+  id: string;
+  deck_id: string;
+  front_content: string;
+  back_content: string;
+  card_type: string;
+  state: number | null;
+  stability: number | null;
+  difficulty: number | null;
+  scheduled_date: string;
+  last_reviewed_at: string | null;
+  learning_step: number | null;
+  created_at: string;
+}
+
+export function mapCardRow(row: CardDbRow): Card {
   return {
     id: row.id,
     deckId: row.deck_id,
@@ -124,7 +140,19 @@ export function mapCardRow(row: any): Card {
   };
 }
 
-export function mapStudyStatsRow(row: any): StudySnapshot {
+export interface StudyStatsDbRow {
+  streak?: number;
+  freezes_available?: number;
+  today_minutes?: number;
+  avg_minutes_7d?: number;
+  today_cards?: number;
+  energy?: number;
+  daily_energy_earned?: number;
+  mascot_state?: 'happy' | 'tired' | 'sleeping';
+  last_study_date?: string | null;
+}
+
+export function mapStudyStatsRow(row: StudyStatsDbRow): StudySnapshot {
   return {
     streak: row.streak ?? 0,
     freezesAvailable: row.freezes_available ?? 0,
@@ -138,7 +166,25 @@ export function mapStudyStatsRow(row: any): StudySnapshot {
   };
 }
 
-export function mapActivityBreakdown(data: any): ActivitySummary {
+export interface ActivityBreakdownData {
+  dayMap?: Record<string, {
+    date: string;
+    cards?: number;
+    minutes?: number;
+    newCards?: number;
+    learning?: number;
+    review?: number;
+    relearning?: number;
+  }>;
+  streak?: number;
+  bestStreak?: number;
+  totalActiveDays?: number;
+  freezesAvailable?: number;
+  freezesUsed?: number;
+  frozenDays?: string[];
+}
+
+export function mapActivityBreakdown(data: ActivityBreakdownData): ActivitySummary {
   const dayMap: Record<string, DayActivity> = {};
   if (data?.dayMap) {
     for (const [key, val] of Object.entries(data.dayMap as Record<string, any>)) {

@@ -33,7 +33,7 @@ export function useSubscription() {
           .select('premium_expires_at')
           .eq('id', user.id)
           .single();
-        const expiresAt = (profile as any)?.premium_expires_at as string | null;
+        const expiresAt = (profile as { premium_expires_at?: string | null } | null)?.premium_expires_at ?? null;
         const isPremium = !!expiresAt && new Date(expiresAt) > new Date();
         return { subscribed: isPremium, subscription_end: expiresAt ?? undefined };
       }

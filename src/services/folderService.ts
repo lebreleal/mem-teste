@@ -8,7 +8,7 @@ import type { Folder, FolderSection } from '@/types/folder';
 export async function fetchFolders(userId: string): Promise<Folder[]> {
   const { data, error } = await supabase
     .from('folders')
-    .select('*')
+    .select('id, name, parent_id, is_archived, created_at, updated_at, user_id, section, source_turma_id, source_turma_subject_id, image_url, sort_order')
     .eq('user_id', userId)
     .order('sort_order', { ascending: true })
     .order('name', { ascending: true });
@@ -52,10 +52,41 @@ export async function moveFolder(id: string, parentId: string | null) {
   if (error) throw error;
 }
 
+/** Clear turma link from a folder (before leaving a sala). */
+export async function clearFolderTurmaLink(folderId: string) {
+  const { error } = await supabase
+    .from('folders')
+    .update({ source_turma_id: null, source_turma_subject_id: null } as any)
+    .eq('id', folderId);
+  if (error) throw error;
+}
+
+/** Upload a sala cover image and update the folder's image_url. */
+export async function uploadFolderImage(folderId: string, file: File): Promise<string> {
+  const ext = file.name.split('.').pop() || 'jpg';
+  const filePath = `sala-images/${folderId}.${ext}`;
+  const { error: uploadErr } = await supabase.storage
+    .from('deck-covers')
+    .upload(filePath, file, { upsert: true });
+  if (uploadErr) throw uploadErr;
+  const { data: urlData } = supabase.storage.from('deck-covers').getPublicUrl(filePath);
+  const imageUrl = urlData.publicUrl + '?t=' + Date.now();
+  const { error } = await supabase.from('folders').update({ image_url: imageUrl } as any).eq('id', folderId);
+  if (error) throw error;
+  return imageUrl;
+}
+
 /** Batch-update sort_order for a list of folder IDs. */
 export async function reorderFolders(orderedIds: string[]) {
   for (let i = 0; i < orderedIds.length; i++) {
     const { error } = await supabase.from('folders').update({ sort_order: i } as any).eq('id', orderedIds[i]);
     if (error) throw error;
   }
+}
+
+/** Fetch image_url for a folder. */
+export async function fetchFolderImageUrl(folderId: string): Promise<string | null> {
+  const { data, error } = await supabase.from('folders').select('image_url').eq('id', folderId).single();
+  if (error) return null;
+  return data?.image_url ?? null;
 }

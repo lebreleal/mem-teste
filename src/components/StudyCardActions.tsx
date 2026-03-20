@@ -16,15 +16,17 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import LazyRichEditor from '@/components/LazyRichEditor';
+import { CardEditorForm } from '@/components/card-editor/CardEditorForm';
 import ImageOcclusion from '@/components/ImageOcclusion';
-import { supabase } from '@/integrations/supabase/client';
+import { freezeCard as freezeCardService, burySingleCard, patchCard } from '@/services/card/cardMutations';
+import { fetchClozeSiblings } from '@/services/card/cardQueries';
+import { enhanceCard } from '@/services/card/cardAI';
 import { useEnergy } from '@/hooks/useEnergy';
 import { useAIModel } from '@/hooks/useAIModel';
 import { useToast } from '@/hooks/use-toast';
 import * as cardService from '@/services/cardService';
 
-const SuggestCorrectionModal = lazy(() => import('@/components/SuggestCorrectionModal'));
+
 
 interface StudyCardActionsProps {
   card: {
@@ -144,13 +146,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
 
   const handleFreeze = async () => {
     try {
-      const farFuture = new Date();
-      farFuture.setFullYear(farFuture.getFullYear() + 100);
-      const { error } = await supabase
-        .from('cards')
-        .update({ scheduled_date: farFuture.toISOString(), state: 2 })
-        .eq('id', card.id);
-      if (error) throw error;
+      await freezeCardService(card.id);
       toast({ title: '❄️ Card congelado', description: 'Este card não aparecerá mais nas revisões.' });
       setFreezeConfirmOpen(false);
       onCardFrozen();
@@ -161,14 +157,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
 
   const handleBury = async () => {
     try {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      tomorrow.setHours(0, 0, 0, 0);
-      const { error } = await supabase
-        .from('cards')
-        .update({ scheduled_date: tomorrow.toISOString() })
-        .eq('id', card.id);
-      if (error) throw error;
+      await burySingleCard(card.id);
       toast({ title: '⛏️ Card enterrado', description: 'Ele voltará amanhã.' });
       setBuryConfirmOpen(false);
       onCardBuried?.();
@@ -207,7 +196,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
       setIsSaving(true);
       try {
         await cardService.updateCard(editCardIdRef.current, front, backContent);
-        toast({ title: 'Card atualizado!' });
+         toast({ title: 'Cartão atualizado!' });
         setEditOpen(false);
         queryClient.invalidateQueries({ queryKey: ['cards'] });
         onCardUpdated({ front_content: front, back_content: backContent });
@@ -229,14 +218,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
         const uniqueNums = [...new Set(clozeNumMatches.map(m => parseInt(m[1])))].sort((a, b) => a - b);
 
         // Fetch all cloze siblings from DB (same front_content as original)
-        const { data: siblings } = await supabase
-          .from('cards')
-          .select('id, front_content, back_content, card_type')
-          .eq('deck_id', card.deck_id)
-          .eq('card_type', 'cloze')
-          .eq('front_content', originalFrontRef.current);
-
-        const allSiblingCards = siblings || [];
+        const allSiblingCards = await fetchClozeSiblings([card.deck_id], originalFrontRef.current);
 
         // Map existing cloze targets to card IDs
         const existingTargets = new Map<number, string>();
@@ -308,7 +290,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
         }
 
         queryClient.invalidateQueries({ queryKey: ['cards'] });
-        toast({ title: 'Card atualizado!' });
+         toast({ title: 'Cartão atualizado!' });
         setEditOpen(false);
       } catch {
         toast({ title: 'Erro ao salvar cloze', variant: 'destructive' });
@@ -338,7 +320,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
           ...(frontText ? { frontText } : {}),
         });
         await cardService.updateCard(editCardIdRef.current, frontContent, back);
-        toast({ title: 'Card atualizado!' });
+         toast({ title: 'Cartão atualizado!' });
         setEditOpen(false);
         queryClient.invalidateQueries({ queryKey: ['cards'] });
         onCardUpdated({ front_content: frontContent, back_content: back });
@@ -354,7 +336,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
     setIsSaving(true);
     try {
       await cardService.updateCard(editCardIdRef.current, front, back);
-      toast({ title: 'Card atualizado!' });
+      toast({ title: 'Cartão atualizado!' });
       setEditOpen(false);
       queryClient.invalidateQueries({ queryKey: ['cards'] });
       onCardUpdated({ front_content: front, back_content: back });
@@ -384,11 +366,10 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
         backToSend = JSON.stringify({ options: mcOptions.filter(o => o.trim()), correctIndex: mcCorrectIndex });
       }
 
-      const { data, error } = await supabase.functions.invoke('enhance-card', {
-        body: { front, back: backToSend, cardType: editorType || 'basic', aiModel: model, energyCost: 1 },
+      const data = await enhanceCard({
+        front, back: backToSend, cardType: editorType || 'basic', aiModel: model, energyCost: 1,
       });
 
-      if (error) throw error;
       if (data.error) {
         toast({ title: data.error, variant: 'destructive' });
         return;
@@ -429,11 +410,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
 
     // Auto-save to DB and update the study session immediately
     try {
-      const { error } = await supabase
-        .from('cards')
-        .update({ front_content: improvePreview.front, back_content: backContent })
-        .eq('id', card.id);
-      if (error) throw error;
+      await patchCard(card.id, { front_content: improvePreview.front, back_content: backContent });
       onCardUpdated({ front_content: improvePreview.front, back_content: backContent });
       queryClient.invalidateQueries({ queryKey: ['cards'] });
     } catch {
@@ -518,13 +495,13 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
               <button
                 onClick={openEdit}
                 className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                aria-label="Editar card"
+                aria-label="Editar cartão"
                 disabled={editLoading}
               >
                 {editLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pencil className="h-3.5 w-3.5" />}
               </button>
             </TooltipTrigger>
-            <TooltipContent><p>Editar card</p></TooltipContent>
+            <TooltipContent><p>Editar cartão</p></TooltipContent>
           </Tooltip>
         )}
       </div>
@@ -566,150 +543,29 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Pencil className="h-4 w-4" /> Editar Card
+              <Pencil className="h-4 w-4" /> Editar Cartão
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <div>
-              <Label className="mb-1.5 block">
-                {editorType === 'multiple_choice'
-                  ? 'Pergunta'
-                  : editorType === 'cloze'
-                    ? 'Frente'
-                    : editorType === 'image_occlusion'
-                      ? 'Frente (Pergunta)'
-                      : 'Frente (Pergunta)'}
-              </Label>
-              <LazyRichEditor
-                content={front}
-                onChange={setFront}
-                placeholder={editorType === 'image_occlusion' ? 'Pergunta ou contexto (opcional)' : 'Pergunta...'}
-              />
-            </div>
-
-            {editorType === 'multiple_choice' ? (
-              <div className="space-y-2">
-                <Label className="block">Opções</Label>
-                <div className="rounded-xl border border-border overflow-hidden divide-y divide-border">
-                  {mcOptions.map((opt, idx) => (
-                    <div
-                      key={idx}
-                      onClick={() => setMcCorrectIndex(idx)}
-                      className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ${
-                        mcCorrectIndex === idx ? 'bg-success/10' : 'hover:bg-muted/50'
-                      }`}
-                    >
-                      <div className={`flex-shrink-0 h-5 w-5 rounded border-2 flex items-center justify-center transition-colors ${
-                        mcCorrectIndex === idx ? 'border-success bg-success text-white' : 'border-muted-foreground/30'
-                      }`}>
-                        {mcCorrectIndex === idx && <span className="text-[10px] font-bold">✓</span>}
-                      </div>
-                      <Input
-                        value={opt}
-                        onChange={e => {
-                          e.stopPropagation();
-                          const newOpts = [...mcOptions];
-                          newOpts[idx] = e.target.value;
-                          setMcOptions(newOpts);
-                        }}
-                        onClick={e => e.stopPropagation()}
-                        placeholder={`Opção ${idx + 1}`}
-                        className="flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0 px-0 h-auto py-0"
-                      />
-                      {mcOptions.length > 2 && (
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0" onClick={(e) => { e.stopPropagation(); removeMcOption(idx); }}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                {mcOptions.length < 6 && (
-                  <Button variant="ghost" size="sm" onClick={addMcOption} className="gap-1 w-full text-muted-foreground hover:text-foreground">
-                    <Plus className="h-3 w-3" /> Adicionar opção
-                  </Button>
-                )}
-                <p className="text-[10px] text-muted-foreground">Clique na linha para marcar a resposta correta</p>
-              </div>
-            ) : editorType === 'cloze' ? (
-              <div className="rounded-xl border border-warning/40 bg-warning/5 p-3 space-y-1.5">
-                <p className="text-xs font-bold text-warning flex items-center gap-1.5">
-                  <Pencil className="h-3 w-3" /> Como usar Cloze
-                </p>
-                <p className="text-[11px] text-muted-foreground">
-                  Selecione o texto e clique para criar um <strong>cloze</strong>.
-                  Clozes com mesmo número viram o <strong>mesmo card</strong>.
-                </p>
-                <p className="text-[11px] text-muted-foreground">
-                  Cria um cloze com <strong>número novo</strong>, gerando um <strong>card separado</strong>.
-                </p>
-              </div>
-            ) : editorType === 'image_occlusion' ? (
-              <div className="space-y-2">
-                <Label className="mb-1.5 block">Imagem de oclusão</Label>
-                {occlusionImageUrl ? (
-                  <div className="inline-flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setOcclusionModalOpen(true)}
-                      className="relative inline-block rounded-lg overflow-hidden border border-border"
-                      title="Editar oclusões"
-                    >
-                      <img src={occlusionImageUrl} alt="Imagem de oclusão" className="h-14 w-14 object-cover rounded-lg" />
-                      <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center bg-primary/80 py-0.5">
-                        <ImageIcon className="h-3 w-3 text-primary-foreground" />
-                      </div>
-                    </button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={() => { setOcclusionImageUrl(''); setOcclusionRects([]); setOcclusionActiveRectIds([]); setOcclusionCanvasSize(null); setOcclusionModalOpen(false); }}
-                      title="Remover imagem"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground">Cole (Ctrl+V) ou anexe uma imagem no campo Frente para criar oclusões.</p>
-                )}
-              </div>
-            ) : null}
-
-            {(editorType === 'basic' || editorType === 'image_occlusion') && (
-              <div>
-                <Label className="mb-1.5 block">Verso (Resposta)</Label>
-                <LazyRichEditor content={back} onChange={setBack} placeholder="Resposta..." hideCloze />
-              </div>
-            )}
-
-            {/* AI Improve button */}
-            {canImprove && (
-              <Button
-                variant="outline"
-                onClick={handleImprove}
-                disabled={isImproving}
-                className="w-full gap-2 border-primary/30 text-primary hover:bg-primary/5 hover:text-primary"
-              >
-                {isImproving ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Sparkles className="h-4 w-4" />
-                )}
-                {isImproving ? 'Melhorando...' : 'Melhorar com IA'}
-                <span className="text-[10px] text-muted-foreground ml-auto">1 crédito</span>
-              </Button>
-            )}
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setEditOpen(false)}>Cancelar</Button>
-              <Button onClick={handleSave} disabled={isSaving}>
-                {isSaving ? 'Salvando...' : 'Salvar'}
-              </Button>
-            </div>
-          </div>
+          <CardEditorForm
+            front={front}
+            onFrontChange={setFront}
+            back={back}
+            onBackChange={setBack}
+            cardType={editorType}
+            mcOptions={mcOptions}
+            onMcOptionsChange={setMcOptions}
+            mcCorrectIndex={mcCorrectIndex}
+            onMcCorrectIndexChange={setMcCorrectIndex}
+            occlusionImageUrl={occlusionImageUrl}
+            onOpenOcclusion={occlusionImageUrl ? () => setOcclusionModalOpen(true) : undefined}
+            onRemoveOcclusion={() => { setOcclusionImageUrl(''); setOcclusionRects([]); setOcclusionActiveRectIds([]); setOcclusionCanvasSize(null); }}
+            onImprove={canImprove ? handleImprove : undefined}
+            isImproving={isImproving}
+            onSave={handleSave}
+            onCancel={() => setEditOpen(false)}
+            isSaving={isSaving}
+          />
         </DialogContent>
       </Dialog>
 
@@ -773,17 +629,6 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
         </DialogContent>
       </Dialog>
 
-      {/* Suggest correction modal for live decks */}
-      {isLiveDeck && (
-        <Suspense fallback={null}>
-          <SuggestCorrectionModal
-            open={suggestOpen}
-            onOpenChange={setSuggestOpen}
-            card={card}
-            deckId={card.deck_id}
-          />
-        </Suspense>
-      )}
     </>
   );
 };

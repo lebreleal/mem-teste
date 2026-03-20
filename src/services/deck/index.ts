@@ -20,13 +20,18 @@ export {
   bulkArchiveDecks,
   bulkDeleteDecks,
   fetchDeck,
+  updateDeck,
   changeAlgorithm,
   createAlgorithmCopy,
   getTurmaDeckNavInfo,
   archiveDeck,
   duplicateDeck,
+  detachCommunityDeck,
   reorderDecks,
   resetDeckProgress,
+  fetchLinkedDeckSource,
+  fetchPendingSuggestions,
+  countPendingSuggestions,
 } from './deckCrud';
 
 // Import operations

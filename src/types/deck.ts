@@ -11,6 +11,7 @@ export interface DeckWithStats {
   folder_id: string | null;
   parent_deck_id: string | null;
   is_archived: boolean;
+  sort_order?: number;
   new_count: number;
   learning_count: number;
   review_count: number;
@@ -23,6 +24,8 @@ export interface DeckWithStats {
   source_author?: string | null;
   source_turma_deck_id?: string | null;
   community_id?: string | null;
+  /** Whether this is a live-synced deck */
+  is_live_deck?: boolean;
   /** The original (source) deck's updated_at timestamp, for community decks */
   source_updated_at?: string | null;
   /** Total number of cards in this deck */
@@ -41,4 +44,5 @@ export interface DeckWithStats {
 export type { Tables } from '@/integrations/supabase/types';
 
 import type { Tables } from '@/integrations/supabase/types';
-export type CardRow = Tables<'cards'>;
+export type CardRow = Omit<Tables<'cards'>, 'search_vector'>;
+export type DeckRow = Omit<Tables<'decks'>, 'search_vector'>;

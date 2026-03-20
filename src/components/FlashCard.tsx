@@ -1,12 +1,14 @@
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
+import { OCCLUSION_COLORS } from '@/lib/occlusionColors';
 import type { Rating } from '@/lib/fsrs';
+import type { DeckStudyConfig } from '@/types/study';
 import { buildPreviewParams, getPreviewIntervals, getCardDifficulty, getDifficultyColor, getDifficultyBgColor } from '@/lib/flashCardUtils';
 import type { DifficultyData } from '@/lib/flashCardUtils';
 import { Lightbulb, Sparkles, CheckCircle2, XCircle, Gauge, RotateCcw, BookOpen, Keyboard, Undo2, Check, Loader2, X } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import TutorLoadingAnimation from '@/components/TutorLoadingAnimation';
-import TtsButton, { extractExplanationSection } from '@/components/TtsButton';
+
 import PersonalNotes from '@/components/PersonalNotes';
 import ReactMarkdown from 'react-markdown';
 import MultipleChoiceCard from '@/components/FlashCardMultipleChoice';
@@ -50,7 +52,7 @@ interface FlashCardProps {
   isSubmitting: boolean;
   quickReview?: boolean;
   algorithmMode?: string;
-  deckConfig?: any;
+  deckConfig?: DeckStudyConfig;
   energy?: number;
   tutorCost?: number;
   onTutorRequest?: (options?: { action?: string; mcOptions?: string[]; correctIndex?: number; selectedIndex?: number }) => void;
@@ -81,45 +83,90 @@ function renderCloze(html: string, revealed: boolean, targetNum?: number): strin
   });
 }
 
-function renderOcclusion(frontContent: string, revealed: boolean, fallbackCanvas?: { w: number; h: number }): string {
+/** Occlusion rect shape */
+interface OcclusionRect {
+  id: string;
+  x: number; y: number; w: number; h: number;
+  type?: string; text?: string;
+  points?: { x: number; y: number }[];
+  color?: string;
+}
+
+interface OcclusionData {
+  imageUrl?: string;
+  allRects?: OcclusionRect[];
+  rects?: OcclusionRect[];
+  activeRectIds?: string[];
+  colorGroups?: Record<string, string[]>;
+  canvasWidth?: number;
+  canvasHeight?: number;
+  frontText?: string;
+}
+
+/** Extract RGB components from rgba/rgb color string */
+function parseColorRgb(color: string): { r: string; g: string; b: string } {
+  const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+  return m ? { r: m[1], g: m[2], b: m[3] } : { r: '59', g: '130', b: '246' };
+}
+
+function renderShapeSvg(r: OcclusionRect, fill: string, stroke: string): string {
+  const shapeType = r.type || 'rect';
+  const textW = r.w || Math.max(48, ((r.text ?? '').toString().length * 9) + 16);
+  const textH = r.h || 30;
+  const safeText = (r.text ?? '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  if (shapeType === 'text') return `<g><rect x="${r.x}" y="${r.y}" width="${textW}" height="${textH}" rx="6" fill="${fill}" stroke="${stroke}" stroke-width="2"/><text x="${r.x + textW / 2}" y="${r.y + textH / 2}" fill="white" font-size="16" font-weight="700" text-anchor="middle" dominant-baseline="middle">${safeText || '?'}</text></g>`;
+  if (shapeType === 'ellipse') return `<ellipse cx="${r.x + r.w/2}" cy="${r.y + r.h/2}" rx="${Math.abs(r.w/2)}" ry="${Math.abs(r.h/2)}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
+  if (shapeType === 'polygon' && r.points) { const pts = r.points.map(p => `${p.x},${p.y}`).join(' '); return `<polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`; }
+  if (shapeType === 'freehand' && r.points && r.points.length > 1) {
+    const d = r.points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
+    return `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>`;
+  }
+  return `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${fill}" stroke="${stroke}" stroke-width="2" rx="4"/>`;
+}
+
+function renderOcclusion(frontContent: string, revealed: boolean, fallbackCanvas?: { w: number; h: number }, clozeTarget?: number): string {
   try {
-    const data = JSON.parse(frontContent);
+    const data: OcclusionData = JSON.parse(frontContent);
     const { imageUrl } = data;
     if (!imageUrl) return '<p>Erro ao carregar</p>';
-    const allRects: any[] = data.allRects || data.rects || [];
-    const activeRectIds: string[] = data.activeRectIds || allRects.map((r: any) => r.id);
+    const allRects: OcclusionRect[] = data.allRects || data.rects || [];
     if (allRects.length === 0) return `<img src="${imageUrl}" style="max-width:100%;border-radius:0.5rem" />`;
 
-    const svgShapes = allRects.map((r: any) => {
-      const isActive = activeRectIds.includes(r.id);
-      if (!isActive) return '';
-      const shapeType = r.type || 'rect';
-      const textW = r.w || Math.max(48, ((r.text ?? '').toString().length * 9) + 16);
-      const textH = r.h || 30;
-      const safeText = (r.text ?? '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    // Determine which shapes are "active" (occluded for this card) based on clozeTarget
+    let activeIds: Set<string>;
+    if (clozeTarget != null && clozeTarget > 0) {
+      const targetFill = OCCLUSION_COLORS[clozeTarget - 1]?.fill;
+      if (targetFill) {
+        activeIds = new Set(allRects.filter(r => (r.color || OCCLUSION_COLORS[0].fill) === targetFill).map(r => r.id));
+      } else {
+        activeIds = new Set(data.activeRectIds || allRects.map(r => r.id));
+      }
+    } else {
+      activeIds = new Set(data.activeRectIds || allRects.map(r => r.id));
+    }
+
+    const svgShapes = allRects.map((r: OcclusionRect) => {
+      const isActive = activeIds.has(r.id);
+      const rgb = parseColorRgb(r.color || OCCLUSION_COLORS[0].fill);
+
+      if (!isActive) {
+        // Non-active shapes: hide completely (only show current card's occlusions)
+        return '';
+      }
 
       if (revealed) {
-        const fill = 'rgba(59,130,246,0.25)';
-        const stroke = 'rgba(59,130,246,0.5)';
-        if (shapeType === 'text') return `<g><rect x="${r.x}" y="${r.y}" width="${textW}" height="${textH}" rx="6" fill="${fill}" stroke="${stroke}" stroke-width="2"/><text x="${r.x + textW / 2}" y="${r.y + textH / 2}" fill="white" font-size="16" font-weight="700" text-anchor="middle" dominant-baseline="middle">${safeText || '?'}</text></g>`;
-        if (shapeType === 'ellipse') return `<ellipse cx="${r.x + r.w/2}" cy="${r.y + r.h/2}" rx="${Math.abs(r.w/2)}" ry="${Math.abs(r.h/2)}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
-        if (shapeType === 'polygon' && r.points) { const pts = (r.points as {x:number,y:number}[]).map((p: any) => `${p.x},${p.y}`).join(' '); return `<polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`; }
-        return `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${fill}" stroke="${stroke}" stroke-width="2" rx="4"/>`;
+        return renderShapeSvg(r, `rgba(${rgb.r},${rgb.g},${rgb.b},0.25)`, `rgba(${rgb.r},${rgb.g},${rgb.b},0.5)`);
       }
-      const fill = 'rgb(59,130,246)';
-      const stroke = 'rgb(49,120,236)';
-      if (shapeType === 'text') return `<g><rect x="${r.x}" y="${r.y}" width="${textW}" height="${textH}" rx="6" fill="${fill}" stroke="${stroke}" stroke-width="2"/></g>`;
-      if (shapeType === 'ellipse') return `<ellipse cx="${r.x + r.w/2}" cy="${r.y + r.h/2}" rx="${Math.abs(r.w/2)}" ry="${Math.abs(r.h/2)}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
-      if (shapeType === 'polygon' && r.points) { const pts = (r.points as {x:number,y:number}[]).map((p: any) => `${p.x},${p.y}`).join(' '); return `<polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`; }
-      return `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${fill}" stroke="${stroke}" stroke-width="2" rx="4"/>`;
+      // Occluded (hidden)
+      return renderShapeSvg(r, `rgb(${rgb.r},${rgb.g},${rgb.b})`, `rgba(${rgb.r},${rgb.g},${rgb.b},0.8)`);
     }).join('');
 
     const vbW = data.canvasWidth || fallbackCanvas?.w || (() => {
-      const xs = allRects.flatMap((r: any) => r.points ? r.points.map((p: any) => p.x) : [r.x, r.x + r.w]);
+      const xs = allRects.flatMap((r: OcclusionRect) => r.points ? r.points.map(p => p.x) : [r.x, r.x + r.w]);
       return Math.max(...xs, 100) * 1.02;
     })();
     const vbH = data.canvasHeight || fallbackCanvas?.h || (() => {
-      const ys = allRects.flatMap((r: any) => r.points ? r.points.map((p: any) => p.y) : [r.y, r.y + r.h]);
+      const ys = allRects.flatMap((r: OcclusionRect) => r.points ? r.points.map(p => p.y) : [r.y, r.y + r.h]);
       return Math.max(...ys, 100) * 1.02;
     })();
 
@@ -238,15 +285,51 @@ const FlashCard = ({
   let occlusionBackText = '';
 
   if (isOcclusion) {
-    displayFront = renderOcclusion(frontContent, false, occlusionFallbackCanvas ?? undefined);
-    displayBack = renderOcclusion(frontContent, true, occlusionFallbackCanvas ?? undefined);
+    // Extract clozeTarget from backContent for per-color-group occlusion
+    let occlusionTarget: number | undefined;
+    try {
+      const parsed = JSON.parse(backContent);
+      if (typeof parsed.clozeTarget === 'number') occlusionTarget = parsed.clozeTarget;
+    } catch {}
+    displayFront = renderOcclusion(frontContent, false, occlusionFallbackCanvas ?? undefined, occlusionTarget);
+    displayBack = renderOcclusion(frontContent, true, occlusionFallbackCanvas ?? undefined, occlusionTarget);
     try {
       const occData = JSON.parse(frontContent);
-      const strippedFront = typeof occData.frontText === 'string' ? occData.frontText.replace(/<[^>]*>/g, '').trim() : '';
-      if (strippedFront) occlusionFrontText = sanitizeHtml(occData.frontText);
+      const rawFrontText = typeof occData.frontText === 'string' ? occData.frontText : '';
+      const strippedFront = rawFrontText.replace(/<[^>]*>/g, '').trim();
+      if (strippedFront) {
+        // Process cloze markers within frontText if present
+        const hasCloze = hasClozeMarkers(rawFrontText);
+        if (hasCloze) {
+          let clozeTarget: number | undefined;
+          try {
+            const parsed = JSON.parse(backContent);
+            if (typeof parsed.clozeTarget === 'number') clozeTarget = parsed.clozeTarget;
+          } catch {}
+          occlusionFrontText = sanitizeHtml(renderCloze(rawFrontText, false, clozeTarget));
+          // For back: show revealed cloze
+          occlusionBackText = sanitizeHtml(renderCloze(rawFrontText, true, clozeTarget));
+        } else {
+          occlusionFrontText = sanitizeHtml(rawFrontText);
+        }
+      }
     } catch {}
     const backStripped = backContent ? backContent.replace(/<[^>]*>/g, '').trim() : '';
-    if (backStripped) occlusionBackText = sanitizeHtml(backContent);
+    // Parse extra back content (skip clozeTarget JSON wrapper)
+    if (backStripped) {
+      try {
+        const parsed = JSON.parse(backContent);
+        if (typeof parsed.clozeTarget === 'number') {
+          if (parsed.extra && parsed.extra.replace(/<[^>]*>/g, '').trim()) {
+            occlusionBackText = (occlusionBackText ? occlusionBackText + '<hr style="margin:1rem 0;border-color:hsl(var(--border))" />' : '') + sanitizeHtml(parsed.extra);
+          }
+        } else {
+          occlusionBackText = (occlusionBackText ? occlusionBackText + '<hr style="margin:1rem 0;border-color:hsl(var(--border))" />' : '') + sanitizeHtml(backContent);
+        }
+      } catch {
+        occlusionBackText = (occlusionBackText ? occlusionBackText + '<hr style="margin:1rem 0;border-color:hsl(var(--border))" />' : '') + sanitizeHtml(backContent);
+      }
+    }
   } else if (isCloze) {
     let clozeTarget: number | undefined;
     let extraBack = '';
@@ -360,11 +443,16 @@ const FlashCard = ({
                   {isOcclusion ? (
                     <div className="w-full space-y-4">
                       <div className="w-full flex justify-center" dangerouslySetInnerHTML={{ __html: peekingFront ? displayFront : displayBack }} />
-                      {occlusionFrontText && (
-                        <div className="prose prose-sm max-w-none text-left text-card-foreground" dangerouslySetInnerHTML={{ __html: occlusionFrontText }} />
-                      )}
-                      {!peekingFront && occlusionBackText && (
-                        <div className="prose prose-sm max-w-none text-left text-muted-foreground pt-3 border-t border-border/30" dangerouslySetInnerHTML={{ __html: occlusionBackText }} />
+                      {peekingFront ? (
+                        occlusionFrontText && (
+                          <div className="prose prose-sm max-w-none text-left text-card-foreground" dangerouslySetInnerHTML={{ __html: occlusionFrontText }} />
+                        )
+                      ) : (
+                        <>
+                          {occlusionBackText && (
+                            <div className="prose prose-sm max-w-none text-left text-card-foreground" dangerouslySetInnerHTML={{ __html: occlusionBackText }} />
+                          )}
+                        </>
                       )}
                     </div>
                   ) : (
@@ -387,7 +475,7 @@ const FlashCard = ({
               <div className="flex items-center gap-2 mb-2">
                 <Lightbulb className="h-4 w-4 text-primary" />
                 <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Tutor IA</span>
-                {hintResponse && <TtsButton text={hintResponse} isStreaming={isTutorLoading} />}
+                
               </div>
               <div className="max-h-[40vh] overflow-y-auto scrollbar-hide">
                 <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0" style={{ overflowWrap: 'anywhere' }}>
@@ -404,7 +492,7 @@ const FlashCard = ({
               <div className="flex items-center gap-2 mb-2">
                 <BookOpen className="h-4 w-4 text-primary" />
                 <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Explicação IA</span>
-                {explainResponse && <TtsButton text={extractExplanationSection(explainResponse)} isStreaming={isTutorLoading} />}
+                
               </div>
               <div className="max-h-[40vh] overflow-y-auto scrollbar-hide">
                 <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0" style={{ overflowWrap: 'anywhere' }}>
@@ -569,4 +657,4 @@ const FlashCard = ({
   );
 };
 
-export default FlashCard;
+export default React.memo(FlashCard);

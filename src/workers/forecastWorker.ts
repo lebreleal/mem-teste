@@ -193,7 +193,7 @@ let cancelled = false;
 
 function runSimulation(input: SimulatorInput): SimulatorResult {
   cancelled = false;
-  const { params, horizonDays, newCardsPerDay, createdCardsPerDay, dailyMinutes, weeklyMinutes, weeklyNewCards, createdCardsStopDay } = input;
+  const { params, horizonDays, newCardsPerDay, createdCardsPerDay, dailyMinutes, weeklyMinutes, weeklyNewCards, createdCardsStopDay, calibrationFactor } = input;
   const { decks, cards: rawCards, timing, rating_distribution, total_reviews_90d } = params;
 
   const useAdaptive = total_reviews_90d >= 50;
@@ -249,10 +249,13 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
   }
 
   const useAdaptiveTiming = useAdaptive; // total_reviews_90d >= 50
+  const calFactor = calibrationFactor ?? 1.20;
   const newSecsPerCard = (useAdaptiveTiming && timing?.avg_new_seconds) ? timing.avg_new_seconds : 30;
   const reviewSecsPerCard = (useAdaptiveTiming && timing?.avg_review_seconds) ? timing.avg_review_seconds : 8;
   const learningSecsPerCard = (useAdaptiveTiming && timing?.avg_learning_seconds) ? timing.avg_learning_seconds : 15;
-  const relearningSecsPerCard = (useAdaptiveTiming && (timing as any)?.avg_relearning_seconds) ? (timing as any).avg_relearning_seconds : 12;
+  const relearningSecsPerCard = (useAdaptiveTiming && timing?.avg_relearning_seconds) ? timing.avg_relearning_seconds : 12;
+  const reviewsPerNewCard = Math.max(2, (useAdaptiveTiming && timing?.avg_reviews_per_new_card) ? timing.avg_reviews_per_new_card : 3);
+  const lapseRate = (useAdaptiveTiming && timing?.avg_lapse_rate != null) ? timing.avg_lapse_rate : 0.10;
 
   const points: ForecastPoint[] = [];
   const newCardsIntroducedPerDeck = new Map<string, number>();
@@ -300,8 +303,31 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
     }
 
     // ── Step 1: Process reviews/learning/relearning FIRST to know time used ──
-    let reviewCount = 0;
+    // Group review indices by deck and enforce daily_review_limit per deck
+    const reviewByDeck = new Map<string, number[]>();
     for (const idx of dueReview) {
+      const deckId = simCards[idx].deck_id;
+      if (!reviewByDeck.has(deckId)) reviewByDeck.set(deckId, []);
+      reviewByDeck.get(deckId)!.push(idx);
+    }
+
+    const cappedReviewIndices: number[] = [];
+    for (const [deckId, indices] of reviewByDeck) {
+      const dk = deckMap.get(deckId);
+      // Scale limit DOWN when using sampling so output * scaleFactor ≈ real limit
+      const rawLimit = dk?.daily_review_limit ?? 9999;
+      const limit = scaleFactor > 1 ? Math.max(1, Math.round(rawLimit / scaleFactor)) : rawLimit;
+      // Take up to limit; overflow cards keep their scheduledDay so they appear tomorrow
+      for (let i = 0; i < indices.length; i++) {
+        if (i < limit) {
+          cappedReviewIndices.push(indices[i]);
+        }
+        // Cards beyond limit are NOT processed — they stay due for next day
+      }
+    }
+
+    let reviewCount = 0;
+    for (const idx of cappedReviewIndices) {
       const c = simCards[idx];
       const dk = deckMap.get(c.deck_id);
       const retention = dk?.requested_retention ?? 0.9;
@@ -345,11 +371,13 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
       relearningCount++;
     }
 
-    // ── Step 2: Calculate time used by reviews, then limit new cards by remaining capacity ──
-    // Use fractional minutes during calculation to avoid rounding errors that compound over weeks
-    const revMinRaw = (reviewCount * reviewSecsPerCard * scaleFactor) / 60;
-    const learnMinRaw = (learningCount * learningSecsPerCard * scaleFactor) / 60;
-    const relearnMinRaw = (relearningCount * relearningSecsPerCard * scaleFactor) / 60;
+    // ── Step 2: Calculate time — match calculateRealStudyTime logic ──
+    // Reviews: account for lapse rate (lapses generate 2× relearning interactions)
+    const expectedLapses = reviewCount * lapseRate;
+    const successfulReviews = reviewCount - expectedLapses;
+    const revMinRaw = ((successfulReviews * reviewSecsPerCard + expectedLapses * relearningSecsPerCard * 2) * calFactor) / 60;
+    const learnMinRaw = (learningCount * learningSecsPerCard * calFactor) / 60;
+    const relearnMinRaw = (relearningCount * relearningSecsPerCard * calFactor) / 60;
     const usedMin = revMinRaw + learnMinRaw + relearnMinRaw;
     const dayNewCardsLimit = getNewCardsLimitForDay(day, startDate, newCardsPerDay, weeklyNewCards);
     const effectiveNewLimit = dayNewCardsLimit;
@@ -417,23 +445,34 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
     }
 
     // Calculate minutes — keep raw fractional values, round only for final output
-    const newMinRaw = (newCardsToday * newSecsPerCard * scaleFactor) / 60;
-    const totalMinRaw = revMinRaw + newMinRaw + learnMinRaw + relearnMinRaw;
+    // New cards: NOT multiplied by scaleFactor — they are hard-limited by daily cap
+    const firstSeeMin = (newCardsToday * newSecsPerCard * calFactor) / 60;
+    const newLearningInteractions = newCardsToday * Math.max(0, reviewsPerNewCard - 1);
+    const newLearningMin = (newLearningInteractions * learningSecsPerCard * calFactor) / 60;
+    const newMinRaw = firstSeeMin + newLearningMin;
+    // Review/learning/relearning time already uses scaleFactor-adjusted counts implicitly
+    // (the sampled simulation produces proportional counts, multiplied by scaleFactor below)
+    const revMinScaled = revMinRaw * scaleFactor;
+    const learnMinScaled = learnMinRaw * scaleFactor;
+    const relearnMinScaled = relearnMinRaw * scaleFactor;
+    const totalMinRaw = revMinScaled + newMinRaw + learnMinScaled + relearnMinScaled;
 
     points.push({
       date, day: dayLabel,
+      // Review/learning/relearning scale with collection size
       reviewCards: Math.round(reviewCount * scaleFactor),
-      newCards: Math.round(newCardsToday * scaleFactor),
       learningCards: Math.round(learningCount * scaleFactor),
       relearningCards: Math.round(relearningCount * scaleFactor),
-      reviewMin: Math.round(revMinRaw),
-      learningMin: Math.round(learnMinRaw),
-      relearningMin: Math.round(relearnMinRaw),
+      // New cards are hard-limited — do NOT scale
+      newCards: newCardsToday,
+      reviewMin: Math.round(revMinScaled),
+      learningMin: Math.round(learnMinScaled),
+      relearningMin: Math.round(relearnMinScaled),
       newMin: Math.round(newMinRaw),
       totalMin: Math.round(totalMinRaw),
       capacityMin,
       overloaded: totalMinRaw > capacityMin,
-      createdCards: Math.round(newCreatedStudiedToday * scaleFactor),
+      createdCards: newCreatedStudiedToday,
     });
   }
 
@@ -478,15 +517,16 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
   let totalMin = 0, overloadedDays = 0;
   let weekdayMin = 0, weekdayCount = 0;
   let allDaysMin = 0, allDaysCount = 0;
+  let totalCardsSum = 0;
   for (let i = 0; i < points.length; i++) {
     const p = points[i];
     totalMin += p.totalMin;
+    totalCardsSum += p.reviewCards + p.newCards + p.learningCards + p.relearningCards;
     if (p.totalMin > peakMin) { peakMin = p.totalMin; peakDate = p.date; }
     if (p.overloaded) overloadedDays++;
-    // Weekday vs all days
     const d = new Date(startDate);
     d.setDate(d.getDate() + i);
-    const dow = d.getDay(); // 0=Sun, 1=Mon ... 6=Sat
+    const dow = d.getDay();
     allDaysMin += p.totalMin;
     allDaysCount++;
     if (dow >= 1 && dow <= 5) {
@@ -504,6 +544,8 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
       peakMin,
       peakDate,
       overloadedDays,
+      avgDailyCards: Math.round(totalCardsSum / Math.max(1, points.length)),
+      totalCards: totalCardsSum,
     },
   };
 }
@@ -518,8 +560,8 @@ self.onmessage = (e: MessageEvent<WorkerMessage>) => {
     try {
       const result = runSimulation(e.data.input);
       self.postMessage({ type: 'result', result } as WorkerResponse);
-    } catch (err: any) {
-      self.postMessage({ type: 'error', error: err.message || 'Simulation error' } as WorkerResponse);
+    } catch (err: unknown) {
+      self.postMessage({ type: 'error', error: err instanceof Error ? err.message : 'Simulation error' } as WorkerResponse);
     }
   }
 };

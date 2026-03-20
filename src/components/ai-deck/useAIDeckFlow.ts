@@ -18,14 +18,14 @@ import { usePendingDecks } from '@/stores/usePendingDecks';
 import * as aiService from '@/services/aiService';
 import * as deckService from '@/services/deckService';
 import * as cardService from '@/services/cardService';
-import * as tagService from '@/services/tagService';
 import { supabase } from '@/integrations/supabase/client';
-import type { Tag } from '@/types/tag';
 import type { Step, GenProgress, LoadProgress, GeneratedCard, DetailLevel, CardFormat, PageItem } from './types';
 
 interface UseAIDeckFlowParams {
   onOpenChange: (open: boolean) => void;
   folderId?: string | null;
+  /** Parent deck ID — creates the new deck as a sub-deck */
+  parentDeckId?: string | null;
   existingDeckId?: string | null;
   existingDeckName?: string | null;
   /** Pre-loaded cards from a pending background deck (opens review directly) */
@@ -38,7 +38,7 @@ interface UseAIDeckFlowParams {
   } | null;
 }
 
-export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existingDeckName, pendingReviewData }: UseAIDeckFlowParams) {
+export function useAIDeckFlow({ onOpenChange, folderId, parentDeckId, existingDeckId, existingDeckName, pendingReviewData }: UseAIDeckFlowParams) {
   const { user } = useAuth();
   const { energy } = useEnergy();
   const { isPremium } = usePremium();
@@ -89,14 +89,34 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Sync state when pendingReviewData changes (e.g. clicking a review_ready pending deck while dialog is already mounted)
+  // When pendingReviewData arrives, auto-save and navigate to ManageDeck
   useEffect(() => {
-    if (pendingReviewData) {
-      setStep('review');
-      setCards(pendingReviewData.cards);
-      setDeckName(pendingReviewData.deckName);
-      textSampleRef.current = pendingReviewData.textSample || '';
-    }
+    if (!pendingReviewData || !user) return;
+    let cancelled = false;
+    (async () => {
+      setIsSaving(true);
+      try {
+        const targetDeckId = await saveCardsToDeck(pendingReviewData.cards, pendingReviewData.deckName);
+        removePending(pendingReviewData.pendingId);
+        if (!cancelled) {
+          toast({ title: '🧠 Baralho criado!', description: `${pendingReviewData.cards.length} cartões salvos` });
+          resetState(); onOpenChange(false);
+          if (targetDeckId) navigate(`/decks/${targetDeckId}/manage`);
+        }
+      } catch (err: unknown) {
+        if (!cancelled) {
+          toast({ title: 'Erro ao salvar', description: err instanceof Error ? err.message : 'Erro desconhecido', variant: 'destructive' });
+          // Fallback: show review step
+          setStep('review');
+          setCards(pendingReviewData.cards);
+          setDeckName(pendingReviewData.deckName);
+          textSampleRef.current = pendingReviewData.textSample || '';
+        }
+      } finally {
+        if (!cancelled) setIsSaving(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [pendingReviewData]);
 
   const selectedPages = pages.filter(p => p.selected);
@@ -160,24 +180,9 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
       setPages(textPages.map(p => ({ ...p, selected: true })));
       setStep('pages');
     } else {
-      setStep('loading-pages');
-      try {
-        const { extractDocumentText } = await import('@/lib/docUtils');
-        const text = await extractDocumentText(file);
-        const cleaned = text.trim();
-        if (cleaned.length > 50) {
-          const textPages = splitTextIntoPages(cleaned);
-          setPages(textPages.map(p => ({ ...p, selected: true })));
-          setStep('pages');
-        } else {
-          toast({ title: 'Conteúdo limitado', description: 'Para melhores resultados, copie e cole o texto.', variant: 'destructive' });
-          setStep('upload'); setInputMode('text'); setFileName('');
-        }
-      } catch (err: any) {
-        console.error('Document extraction error:', err);
-        toast({ title: 'Erro ao processar arquivo', description: err?.message || 'Tente colar o texto diretamente.', variant: 'destructive' });
-        setStep('upload'); setInputMode(null); setFileName('');
-      }
+      // Unsupported file type — ask user to paste text
+      toast({ title: 'Formato não suportado', description: 'Use PDF, TXT ou cole o texto diretamente.', variant: 'destructive' });
+      setStep('upload'); setInputMode('text'); setFileName('');
     }
   }, [deckName, toast, user, saveFileSource]);
 
@@ -224,7 +229,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     } else {
       // Resolve unique name to avoid duplicates
       const uniqueName = await deckService.resolveUniqueDeckName(user.id, name.trim());
-      const deck = await deckService.createDeck(user.id, uniqueName, folderId ?? null, null, 'fsrs');
+      const deck = await deckService.createDeck(user.id, uniqueName, folderId ?? null, parentDeckId ?? null, 'fsrs');
       targetDeckId = (deck as any).id;
     }
 
@@ -249,7 +254,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
 
     try {
       await cardService.createCards(targetDeckId, rows);
-    } catch (cErr: any) {
+    } catch (cErr: unknown) {
       if (!existingDeckId) await deckService.deleteDeck(targetDeckId);
       throw cErr;
     }
@@ -257,7 +262,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     queryClient.invalidateQueries({ queryKey: ['decks'] });
     queryClient.invalidateQueries({ queryKey: ['cards', targetDeckId] });
     return targetDeckId;
-  }, [user, existingDeckId, folderId, queryClient]);
+  }, [user, existingDeckId, folderId, parentDeckId, queryClient]);
 
   // === Deduplication helper (Bloco 4) ===
   const deduplicateCards = useCallback((cards: GeneratedCard[]): GeneratedCard[] => {
@@ -423,13 +428,23 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
 
     if (isBackgroundRef.current && pendingIdRef.current) {
       if (dedupedCards.length > 0) {
-        // Store cards for review instead of auto-saving
-        updatePending(pendingIdRef.current, {
-          status: 'review_ready',
-          cards: dedupedCards,
-          textSample: textSampleRef.current,
-        });
-        toast({ title: '✅ Cartões prontos para revisão', description: `${dedupedCards.length} cartões aguardando revisão.` });
+        // Auto-save cards in background and navigate to ManageDeck
+        try {
+          updatePending(pendingIdRef.current, { status: 'saving' });
+          const targetDeckId = await saveCardsToDeck(dedupedCards, deckName);
+          removePending(pendingIdRef.current);
+          toast({ title: '🧠 Baralho criado!', description: `${dedupedCards.length} cartões salvos` });
+          queryClient.invalidateQueries({ queryKey: ['decks'] });
+          if (targetDeckId) navigate(`/manage/${targetDeckId}`);
+        } catch {
+          // Fallback: store for review
+          updatePending(pendingIdRef.current, {
+            status: 'review_ready',
+            cards: dedupedCards,
+            textSample: textSampleRef.current,
+          });
+          toast({ title: '⚠️ Erro ao salvar automaticamente', description: 'Cartões aguardando revisão manual.', variant: 'destructive' });
+        }
       } else {
         const allFailed = failedCount === totalBatches;
         toast({
@@ -455,10 +470,23 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
         variant: 'destructive',
       });
       setStep('config');
+      setIsLoading(false);
     } else {
-      setCards(dedupedCards); setStep('review');
+      // Auto-save cards and navigate to ManageDeck editor
+      try {
+        setIsSaving(true);
+        const targetDeckId = await saveCardsToDeck(dedupedCards, deckName);
+        toast({ title: existingDeckId ? '🧠 Cartões adicionados!' : '🧠 Baralho criado!', description: `${dedupedCards.length} cartões salvos` });
+        resetState(); onOpenChange(false);
+        if (targetDeckId) navigate(`/decks/${targetDeckId}/manage`);
+      } catch (err: unknown) {
+        toast({ title: 'Erro ao salvar', description: err instanceof Error ? err.message : 'Erro desconhecido', variant: 'destructive' });
+        // Fallback to review step so user doesn't lose cards
+        setCards(dedupedCards); setStep('review');
+      } finally {
+        setIsSaving(false); setIsLoading(false);
+      }
     }
-    setIsLoading(false);
   }, [pages, targetCardCount, detailLevel, cardFormats, customInstructions, model, getCost, toast, queryClient, deckName, saveCardsToDeck, updatePending, removePending, resetState, MODEL_CONFIG, deduplicateCards, isPremium]);
 
   // === Dismiss to background ===
@@ -479,26 +507,11 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
   }, [deckName, folderId, genProgress, addPending, onOpenChange, toast]);
 
   // === Save (foreground) — now accepts tags ===
-  const handleSave = useCallback(async (selectedTags?: (Tag | string)[]) => {
+  const handleSave = useCallback(async () => {
     if (!user || cards.length === 0) return;
     setIsSaving(true);
     try {
       const targetDeckId = await saveCardsToDeck(cards, deckName);
-      
-      // Apply deck-level tags
-      if (selectedTags && selectedTags.length > 0 && targetDeckId) {
-        for (const tag of selectedTags) {
-          try {
-            if (typeof tag === 'string') {
-              const created = await tagService.createTag(tag, user.id);
-              await tagService.addDeckTag(targetDeckId, created.id, user.id);
-            } else {
-              await tagService.addDeckTag(targetDeckId, tag.id, user.id);
-            }
-          } catch (e) { console.error('Failed to add deck tag:', e); }
-        }
-        queryClient.invalidateQueries({ queryKey: ['tags'] });
-      }
 
       // Auto-tagging removed — tags are only applied when user explicitly selects them
 
@@ -510,8 +523,8 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
 
       toast({ title: existingDeckId ? '🧠 Cartões adicionados!' : '🧠 Baralho criado!', description: `${cards.length} cartões salvos` });
       resetState(); onOpenChange(false);
-      if (!existingDeckId && targetDeckId) navigate(`/decks/${targetDeckId}`);
-    } catch (err: any) { toast({ title: 'Erro ao salvar', description: err?.message, variant: 'destructive' }); }
+      if (targetDeckId) navigate(`/decks/${targetDeckId}/manage`);
+    } catch (err: unknown) { toast({ title: 'Erro ao salvar', description: err instanceof Error ? err.message : 'Erro desconhecido', variant: 'destructive' }); }
     finally { setIsSaving(false); }
   }, [user, cards, existingDeckId, deckName, toast, resetState, onOpenChange, navigate, saveCardsToDeck, queryClient, pendingReviewData, removePending]);
 

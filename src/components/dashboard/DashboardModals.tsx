@@ -1,0 +1,240 @@
+/**
+ * DashboardModals — Extra modals extracted from Dashboard.tsx.
+ * Includes: Info dialog, Detach alert, Sala image crop dialog,
+ * Leave sala alert, Add menu sheet.
+ */
+
+import { useState } from 'react';
+import { ChevronDown, ChevronLeft } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { IconInfo, IconDeck, IconImport, IconAIGradient } from '@/components/icons';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import SalaImageCropDialog from '@/components/dashboard/SalaImageCropDialog';
+
+interface DashboardModalsProps {
+  // Info dialog
+  addMenuInfoType: 'deck' | 'deck-manual' | 'deck-ia' | null;
+  setAddMenuInfoType: (v: 'deck' | 'deck-manual' | 'deck-ia' | null) => void;
+
+  // Detach
+  detachTarget: { id: string; name: string } | null;
+  setDetachTarget: (v: { id: string; name: string } | null) => void;
+  detaching: boolean;
+  handleDetachDeck: () => void;
+
+  // Sala image (crop dialog)
+  salaImageOpen: boolean;
+  setSalaImageOpen: (v: boolean) => void;
+  onSalaImageCropped: (file: File) => void;
+
+  // Leave sala
+  leaveSalaConfirm: { folderId: string; turmaId: string } | null;
+  setLeaveSalaConfirm: (v: { folderId: string; turmaId: string } | null) => void;
+  handleLeaveSala: () => void;
+
+  // Add menu sheet
+  salaAddMenuOpen: boolean;
+  setSalaAddMenuOpen: (v: boolean) => void;
+  onCreateDeckManual: () => void;
+  onCreateDeckAI: () => void;
+  onImportCards: () => void;
+
+  /** When true, labels say "Sub-baralho" instead of "Baralho" (inside a deck pai) */
+  isSubDeckContext?: boolean;
+}
+
+const DashboardModals = (props: DashboardModalsProps) => {
+  const [addMenuStep, setAddMenuStep] = useState<'main' | 'create-deck'>('main');
+  const isSub = props.isSubDeckContext ?? false;
+  const deckLabel = isSub ? 'sub-baralho' : 'baralho';
+  const deckLabelCap = isSub ? 'Sub-baralho' : 'Baralho';
+
+  return (
+    <>
+      {/* Info modal for add menu items */}
+      <Dialog open={props.addMenuInfoType !== null} onOpenChange={(v) => { if (!v) props.setAddMenuInfoType(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+               {props.addMenuInfoType === 'deck' && `O que é um ${deckLabelCap}?`}
+               {props.addMenuInfoType === 'deck-manual' && `Criar ${deckLabel} manualmente`}
+               {props.addMenuInfoType === 'deck-ia' && `Criar ${deckLabel} com IA`}
+            </DialogTitle>
+            <DialogDescription asChild>
+            <div className="text-sm text-muted-foreground leading-relaxed pt-2 space-y-2">
+               {props.addMenuInfoType === 'deck' && !isSub && (
+                 <>
+                   <p>
+                     O <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3.5 w-3.5" /> baralho</span> organiza seus cartões por tema. No <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3.5 w-3.5" /> baralho</span> de <em>"Antibióticos"</em>, por exemplo, ficam guardados todos os seus cartões sobre esse assunto.
+                   </p>
+                   <p>
+                     Lá dentro, cada cartão tem <strong>Frente</strong> e <strong>Verso</strong>.
+                   </p>
+                   <p>
+                     Você pode criar os seus manualmente ou deixar que nossa <span className="inline-flex items-center gap-0.5 font-semibold"><IconAIGradient className="inline h-3.5 w-3.5" /> IA</span> gere tudo no automático usando seu material de estudo.
+                   </p>
+                 </>
+               )}
+               {props.addMenuInfoType === 'deck' && isSub && (
+                 <>
+                   <p>
+                     O <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3.5 w-3.5" /> sub-baralho</span> fica dentro de um baralho pai e permite dividir o conteúdo em subtemas. Por exemplo, dentro do baralho <em>"Farmacologia"</em>, você pode ter sub-baralhos como <em>"Antibióticos"</em> e <em>"Anti-inflamatórios"</em>.
+                   </p>
+                   <p>
+                     Cada sub-baralho herda os limites de estudo do baralho pai, mas organiza seus cartões de forma independente.
+                   </p>
+                 </>
+               )}
+               {props.addMenuInfoType === 'deck-manual' && (
+                 <>
+                   <p>Você escolhe o nome do <span className="inline-flex items-center gap-0.5 font-semibold"><IconDeck className="inline h-3 w-3" /> {deckLabel}</span> e adiciona os cartões (flashcards) um a um.</p>
+                   <p>Ideal quando você quer ter controle total sobre o conteúdo dos seus cartões.</p>
+                 </>
+               )}
+               {props.addMenuInfoType === 'deck-ia' && (
+                 <>
+                   <p>Envie seu material de estudo (PDF, imagem ou texto) e a <span className="inline-flex items-center gap-0.5 font-semibold"><IconAIGradient className="inline h-3.5 w-3.5" /> IA</span> gera os cartões automaticamente.</p>
+                   <p>Ideal para transformar anotações, slides ou apostilas em flashcards rapidamente.</p>
+                 </>
+               )}
+            </div>
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
+
+      {/* Detach community deck alert */}
+      <AlertDialog open={!!props.detachTarget} onOpenChange={(open) => !open && props.setDetachTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Copiar para meu deck pessoal</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>Uma cópia independente de <strong>"{props.detachTarget?.name}"</strong> será criada no seu deck pessoal.</p>
+              <p>A cópia:</p>
+              <ul className="list-disc pl-5 space-y-1 text-sm">
+                <li>Será um deck <strong>pessoal e editável</strong></li>
+                <li><strong>Não receberá</strong> atualizações automáticas da comunidade</li>
+                <li>O deck original da comunidade <strong>permanecerá intacto</strong></li>
+              </ul>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={props.detaching}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={props.handleDetachDeck} disabled={props.detaching}>
+              {props.detaching ? 'Copiando...' : 'Confirmar cópia'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Sala image crop dialog */}
+      <SalaImageCropDialog
+        open={props.salaImageOpen}
+        onOpenChange={props.setSalaImageOpen}
+        onSave={props.onSalaImageCropped}
+      />
+
+      {/* Leave Sala Confirmation */}
+      <AlertDialog open={!!props.leaveSalaConfirm} onOpenChange={(open) => { if (!open) props.setLeaveSalaConfirm(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sair da sala?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <span>Tem certeza que deseja sair desta sala?</span>
+              <span className="block text-sm font-medium text-foreground/80 mt-2">
+                📊 Suas estatísticas e progresso de estudo ficam salvos por 30 dias. Se voltar a entrar nesse período, tudo estará como antes.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={props.handleLeaveSala} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Sair da sala
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Add menu sheet for own sala */}
+      <Sheet open={props.salaAddMenuOpen} onOpenChange={(v) => { props.setSalaAddMenuOpen(v); if (!v) setAddMenuStep('main'); }}>
+        <SheetContent side="bottom" className="rounded-t-2xl px-4 pb-8 pt-4">
+          <SheetHeader className="mb-4">
+            <SheetTitle className="text-base font-bold">
+              {addMenuStep === 'main' ? 'Adicionar' : `Criar ${deckLabel}`}
+            </SheetTitle>
+          </SheetHeader>
+
+          {addMenuStep === 'main' && (
+            <div className="flex flex-col gap-1">
+              <button
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
+                onClick={() => setAddMenuStep('create-deck')}
+              >
+                <IconDeck className="h-5 w-5 text-muted-foreground shrink-0" />
+                <span className="text-sm font-medium text-foreground flex-1">Criar {deckLabel}</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); props.setAddMenuInfoType('deck'); }}
+                  className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                >
+                  <IconInfo className="h-3.5 w-3.5" />
+                </button>
+                <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 shrink-0" />
+               </button>
+              <button
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
+                onClick={() => { props.setSalaAddMenuOpen(false); setAddMenuStep('main'); props.onImportCards(); }}
+              >
+                <IconImport className="h-5 w-5 text-muted-foreground shrink-0" />
+                <span className="text-sm font-medium text-foreground flex-1">Importar cartões</span>
+                <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 shrink-0" />
+              </button>
+            </div>
+          )}
+
+          {addMenuStep === 'create-deck' && (
+            <div className="flex flex-col gap-1">
+              <button
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
+                onClick={() => { props.setSalaAddMenuOpen(false); setAddMenuStep('main'); props.onCreateDeckManual(); }}
+              >
+                <IconDeck className="h-5 w-5 text-muted-foreground shrink-0" />
+                <span className="text-sm font-medium text-foreground flex-1">Criar {deckLabel} manualmente</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); props.setAddMenuInfoType('deck-manual'); }}
+                  className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                >
+                  <IconInfo className="h-3.5 w-3.5" />
+                </button>
+                <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 shrink-0" />
+              </button>
+              <button
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
+                onClick={() => { props.setSalaAddMenuOpen(false); setAddMenuStep('main'); props.onCreateDeckAI(); }}
+              >
+                <IconAIGradient className="h-5 w-5 shrink-0" />
+                <span className="text-sm font-medium text-foreground flex-1">Criar {deckLabel} com IA</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); props.setAddMenuInfoType('deck-ia'); }}
+                  className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                >
+                  <IconInfo className="h-3.5 w-3.5" />
+                </button>
+                <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 shrink-0" />
+              </button>
+              <Button variant="ghost" size="sm" className="mt-2 self-start text-xs gap-1" onClick={() => setAddMenuStep('main')}>
+                <ChevronLeft className="h-3.5 w-3.5" /> Voltar
+              </Button>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+    </>
+  );
+};
+
+export default DashboardModals;

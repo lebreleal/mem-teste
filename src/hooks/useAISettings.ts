@@ -16,11 +16,11 @@ export const useAISettings = () => {
 
   const fetchSettings = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('ai_settings').select('*').order('key');
+    const { data, error } = await supabase.from('ai_settings').select('id, key, value, updated_at').order('key');
     if (error) {
       toast({ title: 'Erro', description: 'Falha ao carregar configurações.', variant: 'destructive' });
     } else {
-      setSettings((data as any[]) || []);
+      setSettings((data ?? []) as AISetting[]);
     }
     setLoading(false);
   }, [toast]);
@@ -30,7 +30,7 @@ export const useAISettings = () => {
   const updateSetting = async (key: string, value: string) => {
     const { error } = await supabase
       .from('ai_settings')
-      .update({ value, updated_at: new Date().toISOString() } as any)
+      .update({ value, updated_at: new Date().toISOString() })
       .eq('key', key);
     if (error) {
       toast({ title: 'Erro', description: 'Falha ao salvar.', variant: 'destructive' });

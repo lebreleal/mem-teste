@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
 import * as deckService from '@/services/deckService';
+import { fetchCardsForExport } from '@/services/card/cardQueries';
+import { fetchStudyPlanDeckIds } from '@/services/studyService';
 import { useAuth } from '@/hooks/useAuth';
 import { useDecks } from '@/hooks/useDecks';
 import { useToast } from '@/hooks/use-toast';
@@ -11,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Separator } from '@/components/ui/separator';
+
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
@@ -21,12 +22,12 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   ArrowLeft, ChevronRight, Layers, Zap, Volume2, Palette,
-  Share2, Store, Sparkles, Download, Edit3, FolderInput, Copy,
-  RotateCcw, Archive, Upload, Trash2, Loader2, Plus, X,
-  Shuffle, BookOpen, Mail, Globe, BarChart3, Settings,
+  Share2, Sparkles, Download, Edit3, FolderInput, Copy,
+  RotateCcw, Archive, Upload, Trash2, Loader2, X,
+  BookOpen, Globe, BarChart3, Settings,
 } from 'lucide-react';
 import { DeckStatsTab } from '@/components/deck-detail/DeckStatsTab';
-import ankiLogo from '@/assets/anki-logo.svg';
+// anki-logo removed — using Package icon instead
 import { exportAsApkg } from '@/lib/ankiExport';
 import DeckSettingsModals from '@/pages/DeckSettingsModals';
 
@@ -116,14 +117,7 @@ const DeckSettings = () => {
 
   const studyPlansQuery = useQuery({
     queryKey: ['study-plans-lock', user?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('study_plans')
-        .select('deck_ids')
-        .eq('user_id', user!.id);
-      if (error) throw error;
-      return (data ?? []) as Array<{ deck_ids: string[] | null }>;
-    },
+    queryFn: () => fetchStudyPlanDeckIds(user!.id),
     enabled: !!user,
     staleTime: 30_000,
   });
@@ -164,50 +158,49 @@ const DeckSettings = () => {
 
   useEffect(() => {
     if (!deckId || !user) return;
-    supabase.from('decks').select('*').eq('id', deckId).single().then(({ data, error }) => {
-      if (error || !data) {
-        toast({ title: 'Erro', description: 'Baralho não encontrado.', variant: 'destructive' });
-        navigate('/dashboard');
-        return;
-      }
+    deckService.fetchDeck(deckId).then((data) => {
       setName(data.name);
       setDailyNewLimit(data.daily_new_limit);
       setDailyReviewLimit(data.daily_review_limit);
       setAlgorithmMode(data.algorithm_mode === 'quick_review' ? 'quick_review' : 'fsrs');
-      setRequestedRetention((data as any).requested_retention ?? 0.85);
+      setRequestedRetention(data.requested_retention ?? 0.85);
       setShuffleCards(data.shuffle_cards ?? true);
       setLearningSteps(data.learning_steps || ['1m', '10m']);
       setEasyBonus(data.easy_bonus ?? 130);
       setIntervalModifier(data.interval_modifier ?? 100);
       setMaxInterval(data.max_interval ?? 1000);
-      setEasyGraduatingInterval((data as any).easy_graduating_interval ?? 15);
+      setEasyGraduatingInterval(data.easy_graduating_interval ?? 15);
       setParentDeckId(data.parent_deck_id ?? null);
-      setIsPublic((data as any).is_public ?? true);
-      setAllowDuplication((data as any).allow_duplication ?? false);
+      setIsPublic(data.is_public ?? true);
+      setAllowDuplication(data.allow_duplication ?? false);
       setSourceTurmaDeckId(data.source_turma_deck_id ?? null);
-      setSourceListingId((data as any).source_listing_id ?? null);
-      setCommunityId((data as any).community_id ?? null);
-      setBuryNewSiblings((data as any).bury_new_siblings !== false);
-      setBuryReviewSiblings((data as any).bury_review_siblings !== false);
-      setBuryLearningSiblings((data as any).bury_learning_siblings !== false);
+      setSourceListingId(data.source_listing_id ?? null);
+      setCommunityId(data.community_id ?? null);
+      setBuryNewSiblings(data.bury_new_siblings !== false);
+      setBuryReviewSiblings(data.bury_review_siblings !== false);
+      setBuryLearningSiblings(data.bury_learning_siblings !== false);
       setLoading(false);
+    }).catch(() => {
+      toast({ title: 'Erro', description: 'Baralho não encontrado.', variant: 'destructive' });
+      navigate('/dashboard');
     });
   }, [deckId, user]);
 
   // ── Handlers ────────────────────────────────────────────────
-  const saveSettings = async (updates: Record<string, any>) => {
+  const saveSettings = async (updates: Record<string, string | number | boolean | string[] | null>) => {
     if (!deckId) return;
     setSaving(true);
-    const { error } = await supabase.from('decks').update(updates as any).eq('id', deckId);
-    setSaving(false);
-    if (error) {
-      toast({ title: 'Erro ao salvar', variant: 'destructive' });
-    } else {
+    try {
+      await deckService.updateDeck(deckId, updates);
+      setSaving(false);
       toast({ title: 'Salvo!' });
       queryClient.invalidateQueries({ queryKey: ['deck', deckId] });
       queryClient.invalidateQueries({ queryKey: ['decks'] });
       queryClient.invalidateQueries({ queryKey: ['study-queue', deckId] });
       queryClient.invalidateQueries({ queryKey: ['deck-stats', deckId] });
+    } catch {
+      setSaving(false);
+      toast({ title: 'Erro ao salvar', variant: 'destructive' });
     }
   };
 
@@ -236,7 +229,7 @@ const DeckSettings = () => {
       bury_new_siblings: buryNewSiblings,
       bury_review_siblings: buryReviewSiblings,
       bury_learning_siblings: buryLearningSiblings,
-    } as any);
+    });
     setStudySettingsModal(false);
     setAdvancedModal(false);
   };
@@ -265,12 +258,12 @@ const DeckSettings = () => {
 
   const handleDelete = async () => {
     if (!deckId) return;
-    const { error } = await supabase.from('decks').delete().eq('id', deckId);
-    if (error) {
-      toast({ title: 'Erro ao excluir', variant: 'destructive' });
-    } else {
+    try {
+      await deckService.deleteDeck(deckId);
       toast({ title: 'Baralho excluído' });
       navigate('/dashboard');
+    } catch {
+      toast({ title: 'Erro ao excluir', variant: 'destructive' });
     }
     setDeleteConfirm(false);
   };
@@ -278,9 +271,10 @@ const DeckSettings = () => {
   const handleDuplicate = () => {
     if (!deckId) return;
     duplicateDeck.mutate(deckId, {
-      onSuccess: (data: any) => {
+      onSuccess: (data: unknown) => {
         toast({ title: 'Baralho duplicado!' });
-        if (data?.id) navigate(`/decks/${data.id}`);
+        const created = data as { id?: string } | null;
+        if (created?.id) navigate(`/decks/${created.id}`);
       },
     });
   };
@@ -290,7 +284,7 @@ const DeckSettings = () => {
     if (!deckId) return false;
     let parentId = decks.find(d => d.id === deckId)?.parent_deck_id;
     while (parentId) {
-      const parent = decks.find(d => d.id === parentId) as any;
+      const parent = decks.find(d => d.id === parentId);
       if (!parent) break;
       if (parent.source_turma_deck_id || parent.source_listing_id || parent.is_live_deck || parent.community_id) return true;
       parentId = parent.parent_deck_id;
@@ -299,37 +293,14 @@ const DeckSettings = () => {
   }, [sourceTurmaDeckId, sourceListingId, communityId, deckId, decks]);
 
   const handleDetachDeck = async () => {
-    if (!deckId) return;
+    if (!deckId || !user) return;
     setDetaching(true);
     try {
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (!currentUser) throw new Error('Not authenticated');
-
-      const { data: originalDeck } = await supabase.from('decks').select('*').eq('id', deckId).single();
-      if (!originalDeck) throw new Error('Deck not found');
-
-      const { data: newDeck, error } = await supabase.from('decks').insert({
-        name: `${(originalDeck as any).name}`,
-        user_id: currentUser.id,
-        folder_id: null,
-      } as any).select().single();
-      if (error || !newDeck) throw error || new Error('Failed');
-
-      const { data: cards } = await supabase.from('cards').select('front_content, back_content, card_type').eq('deck_id', deckId);
-      if (cards && cards.length > 0) {
-        const newCards = cards.map((c: any) => ({
-          deck_id: (newDeck as any).id,
-          front_content: c.front_content,
-          back_content: c.back_content,
-          card_type: c.card_type ?? 'basic',
-        }));
-        await supabase.from('cards').insert(newCards as any);
-      }
-
+      const newDeck = await deckService.detachCommunityDeck(user.id, deckId);
       queryClient.invalidateQueries({ queryKey: ['decks'] });
       toast({ title: 'Deck copiado!', description: 'Uma cópia pessoal independente foi criada.' });
       setDetachConfirm(false);
-      navigate(`/decks/${(newDeck as any).id}`);
+      navigate(`/decks/${(newDeck as { id: string }).id}`);
     } catch {
       toast({ title: 'Erro ao copiar', variant: 'destructive' });
     } finally {
@@ -355,29 +326,15 @@ const DeckSettings = () => {
 
   const handleSwitchAndReset = async () => {
     if (!algorithmChangeTarget || !deckId) return;
-    const shouldReset = algorithmChangeTarget !== 'fsrs';
-    await supabase.from('decks').update({ algorithm_mode: algorithmChangeTarget } as any).eq('id', deckId);
-    if (shouldReset) {
-      await supabase.from('cards').update({ state: 0, stability: 0, difficulty: 0, scheduled_date: new Date().toISOString() } as any).eq('deck_id', deckId);
-    }
-    // Propagate to child decks
-    const { data: children } = await supabase.from('decks').select('id').eq('parent_deck_id', deckId);
-    if (children && children.length > 0) {
-      for (const child of children) {
-        await supabase.from('decks').update({ algorithm_mode: algorithmChangeTarget } as any).eq('id', child.id);
-        if (shouldReset) {
-          await supabase.from('cards').update({ state: 0, stability: 0, difficulty: 0, scheduled_date: new Date().toISOString() } as any).eq('deck_id', child.id);
-        }
-      }
-    }
+    const result = await deckService.changeAlgorithm(deckId, algorithmChangeTarget, algorithmChangeTarget !== 'fsrs');
     setAlgorithmMode(algorithmChangeTarget);
     queryClient.invalidateQueries({ queryKey: ['deck', deckId] });
     queryClient.invalidateQueries({ queryKey: ['decks'] });
     queryClient.invalidateQueries({ queryKey: ['study-queue', deckId] });
     toast({
       title: 'Algoritmo alterado',
-      description: shouldReset
-        ? `Progresso redefinido${children?.length ? ` (+ ${children.length} sub-baralho${children.length > 1 ? 's' : ''})` : ''}.`
+      description: result.shouldReset
+        ? `Progresso redefinido${result.childCount > 0 ? ` (+ ${result.childCount} sub-baralho${result.childCount > 1 ? 's' : ''})` : ''}.`
         : 'Progresso mantido.',
     });
     setAlgorithmChangeTarget(null);
@@ -385,36 +342,25 @@ const DeckSettings = () => {
 
   const handleCopyWithAlgorithm = async () => {
     if (!algorithmChangeTarget || !deckId || !user) return;
-    const { data: currentDeck } = await supabase.from('decks').select('*').eq('id', deckId).single();
-    if (!currentDeck) return;
-    const newName = `${currentDeck.name} (${algorithmChangeTarget === 'fsrs' ? 'FSRS' : 'Revisão rápida'})`;
-    const { data: newDeck, error } = await supabase
-      .from('decks')
-      .insert({ name: newName, user_id: user.id, folder_id: currentDeck.folder_id, algorithm_mode: algorithmChangeTarget } as any)
-      .select().single();
-    if (error || !newDeck) { toast({ title: 'Erro', variant: 'destructive' }); setAlgorithmChangeTarget(null); return; }
-    const { data: cards } = await supabase.from('cards').select('front_content, back_content, card_type').eq('deck_id', deckId);
-    if (cards && cards.length > 0) {
-      await supabase.from('cards').insert(cards.map((c: any) => ({
-        deck_id: (newDeck as any).id, front_content: c.front_content, back_content: c.back_content, card_type: c.card_type ?? 'basic',
-      })) as any);
+    try {
+      const algorithmLabel = algorithmChangeTarget === 'fsrs' ? 'FSRS' : 'Revisão rápida';
+      const newDeck = await deckService.createAlgorithmCopy(user.id, deckId, algorithmChangeTarget, algorithmLabel);
+      const created = newDeck as { id: string; name: string };
+      toast({ title: 'Novo baralho criado!', description: `"${created.name}" foi criado.` });
+      setAlgorithmChangeTarget(null);
+      navigate(`/decks/${created.id}`);
+    } catch {
+      toast({ title: 'Erro', variant: 'destructive' });
+      setAlgorithmChangeTarget(null);
     }
-    toast({ title: 'Novo baralho criado!', description: `"${newName}" foi criado.` });
-    setAlgorithmChangeTarget(null);
-    navigate(`/decks/${(newDeck as any).id}`);
   };
 
   const handleExportCSV = async () => {
     if (!deckId) return;
     setExportingCsv(true);
     try {
-      const { data: cards, error } = await supabase
-        .from('cards')
-        .select('front_content, back_content, card_type')
-        .eq('deck_id', deckId)
-        .order('created_at', { ascending: true });
-      if (error) throw error;
-      if (!cards || cards.length === 0) {
+      const cards = await fetchCardsForExport(deckId);
+      if (cards.length === 0) {
         toast({ title: 'Nenhum cartão para exportar', variant: 'destructive' });
         setExportingCsv(false);
         return;
@@ -447,13 +393,8 @@ const DeckSettings = () => {
     if (!deckId) return;
     setExportingAnki(true);
     try {
-      const { data: cards, error } = await supabase
-        .from('cards')
-        .select('front_content, back_content, card_type')
-        .eq('deck_id', deckId)
-        .order('created_at', { ascending: true });
-      if (error) throw error;
-      if (!cards || cards.length === 0) {
+      const cards = await fetchCardsForExport(deckId);
+      if (cards.length === 0) {
         toast({ title: 'Nenhum cartão para exportar', variant: 'destructive' });
         setExportingAnki(false);
         return;

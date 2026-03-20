@@ -17,6 +17,7 @@ const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
   };
 
   const isOnDashboard = location.pathname === '/dashboard';
+  const isOnMateria = location.pathname.startsWith('/materia/');
 
   // Check if current folder is a community (followed) folder
   const isCommunityFolder = React.useMemo(() => {
@@ -24,16 +25,17 @@ const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
     const params = new URLSearchParams(location.search);
     const folderId = params.get('folder');
     if (!folderId || !user) return false;
-    const foldersCache = queryClient.getQueryData<any[]>(['folders', user.id]);
+    interface FolderCache { id: string; source_turma_id?: string | null }
+    const foldersCache = queryClient.getQueryData<FolderCache[]>(['folders', user.id]);
     if (foldersCache) {
-      const folder = foldersCache.find((f: any) => f.id === folderId);
+      const folder = foldersCache.find(f => f.id === folderId);
       if (folder) return !!folder.source_turma_id;
     }
     return false;
   }, [isOnDashboard, location.search, user, queryClient]);
 
   const isInsideSala = isOnDashboard && location.search.includes('folder=');
-  const isDisabledAdd = !isOnDashboard || (isInsideSala && isCommunityFolder);
+  const isDisabledAdd = (!isOnDashboard && !isOnMateria) || (isInsideSala && isCommunityFolder);
 
   const handleExplorar = () => {
     navigate('/turmas');
@@ -44,7 +46,8 @@ const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
     window.dispatchEvent(new CustomEvent('open-add-menu'));
   };
 
-  const items = [
+  interface NavItem { icon: typeof Home; label: string; onClick: () => void; active: boolean; accent?: boolean; disabled?: boolean; dimmed?: boolean }
+  const items: NavItem[] = [
     { icon: Home, label: 'Home', onClick: () => navigate('/dashboard'), active: isActive('/dashboard') },
     { icon: Plus, label: 'Adicionar', onClick: handleAdd, active: false, accent: true, disabled: isDisabledAdd, dimmed: isInsideSala && isCommunityFolder },
     { icon: Compass, label: 'Explorar', onClick: handleExplorar, active: isActive('/explorar') || isActive('/turmas') },
@@ -55,8 +58,8 @@ const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
       <div className="flex items-center justify-around px-2 pb-2 pt-1">
         {items.map((item, i) => {
           const Icon = item.icon;
-          const isItemDisabled = !!(item as any).disabled;
-          const isDimmed = !!(item as any).dimmed;
+          const isItemDisabled = !!item.disabled;
+          const isDimmed = !!item.dimmed;
           return (
             <button
               key={i}

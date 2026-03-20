@@ -37,6 +37,10 @@ export interface ForecastTiming {
   avg_review_seconds: number;
   avg_learning_seconds: number;
   avg_relearning_seconds: number;
+  /** Median number of interactions a new card generates on its first day. */
+  avg_reviews_per_new_card: number;
+  /** Fraction of review cards (state=2) that lapse (rating=1). */
+  avg_lapse_rate: number;
 }
 
 export interface ForecastParams {
@@ -58,6 +62,8 @@ export interface SimulatorInput {
   weeklyNewCards: Record<string, number> | null;
   /** Day index (0-based from today) after which to stop adding created cards. null = no limit */
   createdCardsStopDay: number | null;
+  /** Empirical calibration factor for time estimates (default 1.20). */
+  calibrationFactor: number;
 }
 
 export interface ForecastPoint {
@@ -84,6 +90,8 @@ export interface SimulatorSummary {
   peakMin: number;
   peakDate: string;
   overloadedDays: number;
+  avgDailyCards: number;
+  totalCards: number;
 }
 
 export interface SimulatorResult {

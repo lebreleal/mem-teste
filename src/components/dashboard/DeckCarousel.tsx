@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import type { DeckWithStats } from '@/types/deck';
-import { calculateRealStudyTime, type RealStudyMetrics, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils';
+import { calculateRealStudyTime, type RealStudyMetrics, DEFAULT_STUDY_METRICS, DEFAULT_CALIBRATION_FACTOR } from '@/lib/studyUtils';
 
 type AggregateStats = { new_count: number; learning_count: number; review_count: number; newReviewed: number; newGraduated: number; reviewed: number };
 
@@ -78,7 +78,7 @@ function getDeckTodayStats(deck: DeckWithStats, aggregateMap: Map<string, Aggreg
   return { newAvailable, reviewAvailable, learningAvailable, pendingToday, studiedToday };
 }
 
-function DeckStudyCard({ deck, aggregateMap, studyMetrics, objectiveName, globalNewRemaining, allocatedNew }: { deck: DeckWithStats; aggregateMap: Map<string, AggregateStats>; studyMetrics: RealStudyMetrics; objectiveName?: string; globalNewRemaining?: number; allocatedNew?: number }) {
+function DeckStudyCard({ deck, aggregateMap, studyMetrics, calibrationFactor = DEFAULT_CALIBRATION_FACTOR, objectiveName, globalNewRemaining, allocatedNew }: { deck: DeckWithStats; aggregateMap: Map<string, AggregateStats>; studyMetrics: RealStudyMetrics; calibrationFactor?: number; objectiveName?: string; globalNewRemaining?: number; allocatedNew?: number }) {
   const navigate = useNavigate();
   const stats = getDeckTodayStats(deck, aggregateMap, allocatedNew != null ? allocatedNew : globalNewRemaining);
   const { newAvailable: rawNewAvailable, reviewAvailable, learningAvailable, studiedToday } = stats;
@@ -87,7 +87,7 @@ function DeckStudyCard({ deck, aggregateMap, studyMetrics, objectiveName, global
   const pendingToday = newAvailable + reviewAvailable + learningAvailable;
   const totalToday = pendingToday + studiedToday;
   const progressPercent = totalToday > 0 ? Math.round((studiedToday / totalToday) * 100) : 0;
-  const estimatedMinutes = Math.round(calculateRealStudyTime(newAvailable, learningAvailable, reviewAvailable, studyMetrics) / 60);
+  const estimatedMinutes = Math.round(calculateRealStudyTime(newAvailable, learningAvailable, reviewAvailable, studyMetrics, calibrationFactor) / 60);
 
   const isComplete = pendingToday === 0 && totalToday > 0;
 
@@ -144,6 +144,7 @@ interface DeckCarouselProps {
   decks: DeckWithStats[];
   avgSecondsPerCard?: number;
   studyMetrics?: RealStudyMetrics;
+  calibrationFactor?: number;
   hasPlan: boolean;
   planDeckIds?: string[];
   planDeckOrder?: string[];
@@ -152,9 +153,10 @@ interface DeckCarouselProps {
   distributedNewByDeck?: Map<string, number> | null;
 }
 
-export default function DeckCarousel({ decks, avgSecondsPerCard = 30, studyMetrics, hasPlan, planDeckIds, planDeckOrder, plansByDeckId, globalNewRemaining, distributedNewByDeck }: DeckCarouselProps) {
+export default function DeckCarousel({ decks, avgSecondsPerCard = 30, studyMetrics, calibrationFactor, hasPlan, planDeckIds, planDeckOrder, plansByDeckId, globalNewRemaining, distributedNewByDeck }: DeckCarouselProps) {
   const navigate = useNavigate();
   const metrics = studyMetrics ?? DEFAULT_STUDY_METRICS;
+  const calFactor = calibrationFactor ?? DEFAULT_CALIBRATION_FACTOR;
 
   // Pre-compute aggregate stats once — O(n) instead of O(n²) per render
   const aggregateMap = useMemo(() => buildAggregateMap(decks), [decks]);
@@ -285,7 +287,7 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, studyMetri
   if (activeDecks.length === 0 && !hasNoDecksAtAll) return null;
 
   const estimatedTotalMinutes = activeStats
-    ? Math.round(calculateRealStudyTime(activeStats.totalNew, activeStats.totalLearning, activeStats.totalReview, metrics) / 60)
+    ? Math.round(calculateRealStudyTime(activeStats.totalNew, activeStats.totalLearning, activeStats.totalReview, metrics, calFactor) / 60)
     : 0;
 
   return (

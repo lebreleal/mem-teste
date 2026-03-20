@@ -2,32 +2,36 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import * as studyService from '@/services/studyService';
 import type { Rating } from '@/lib/fsrs';
+import type { StudyQueueResult, StudyCard, DeckStudyConfig, CardReviewResult } from '@/types/study';
 
-
-export type { StudyQueueResult } from '@/services/studyService';
+export type { StudyQueueResult, StudyCard, DeckStudyConfig } from '@/types/study';
 
 export const useStudySession = (deckId: string, folderId?: string) => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  const studyQueue = useQuery<studyService.StudyQueueResult>({
-    queryKey: ['study-queue', folderId ? `folder-${folderId}` : deckId],
+  // "study all" mode: no deckId and no folderId → key = 'all'
+  const isStudyAll = !deckId && !folderId;
+  const queryKeySuffix = folderId ? `folder-${folderId}` : (deckId || 'all');
+
+  const studyQueue = useQuery<StudyQueueResult>({
+    queryKey: ['study-queue', queryKeySuffix],
     queryFn: () => studyService.fetchStudyQueue(user!.id, deckId, folderId),
-    enabled: !!user && !!(deckId || folderId),
+    enabled: !!user && !!(deckId || folderId || isStudyAll),
     staleTime: Infinity,
     refetchOnWindowFocus: false,
   });
 
   const submitReview = useMutation({
-    mutationFn: async ({ card, rating, elapsedMs }: { card: any; rating: Rating; elapsedMs?: number }) => {
+    mutationFn: async ({ card, rating, elapsedMs }: { card: StudyCard; rating: Rating; elapsedMs?: number }) => {
       if (!user) throw new Error('Not authenticated');
       const algorithmMode = studyQueue.data?.deckConfig?.algorithm_mode || 'fsrs';
       return studyService.submitCardReview(
         user.id, card, rating, algorithmMode, studyQueue.data?.deckConfig, elapsedMs,
       );
     },
-    onSuccess: (result: any) => {
-      queryClient.setQueryData(['study-stats', user?.id], (old: any) => {
+    onSuccess: (result: CardReviewResult) => {
+      queryClient.setQueryData(['study-stats', user?.id], (old: { todayCards?: number } | undefined) => {
         if (!old) return old;
         return { ...old, todayCards: (old.todayCards ?? 0) + 1 };
       });
@@ -46,10 +50,10 @@ export const useStudySession = (deckId: string, folderId?: string) => {
   });
 
   return {
-    queue: studyQueue.data?.cards ?? [],
+    queue: studyQueue.data?.cards ?? [] as StudyCard[],
     algorithmMode: studyQueue.data?.algorithmMode || 'fsrs',
-    deckConfig: studyQueue.data?.deckConfig,
-    deckConfigs: {} as Record<string, any>,
+    deckConfig: studyQueue.data?.deckConfig as DeckStudyConfig | undefined,
+    deckConfigs: {} as Record<string, DeckStudyConfig>,
     isLiveDeck: studyQueue.data?.isLiveDeck ?? false,
     isLoading: studyQueue.isLoading,
     isFetching: studyQueue.isFetching,

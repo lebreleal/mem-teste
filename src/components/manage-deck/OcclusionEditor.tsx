@@ -1,15 +1,31 @@
 /**
- * Extracted from ManageDeck.tsx — Occlusion Editor component for image occlusion cards.
+ * Occlusion Editor — contained overlay, supports rect, polygon, freehand, eraser, select+resize, hand/pan.
+ * Colors group shapes: same color = same card, different color = different cards.
+ * Dynamic colors: infinite colors, new colors appear as needed.
+ * Layout: image centered, drawing tools above, zoom on right, bottom bar with eye+AI+colors.
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { ArrowLeft, Upload, ZoomIn, ZoomOut, RotateCcw, Trash2, Image, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { supabase } from '@/integrations/supabase/client';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
+import { Loader2, Undo2 } from 'lucide-react';
+import { uploadImage as uploadToStorage, invokeDetectOcclusion } from '@/services/storageService';
+import { useAuth } from '@/hooks/useAuth';
 import { compressImage } from '@/lib/imageUtils';
+import { useToast } from '@/hooks/use-toast';
+import { OCCLUSION_COLORS } from '@/lib/occlusionColors';
+import {
+  IconRect, IconPolygon, IconFreehand, IconEraser, IconEyeOpen, IconEyeClosed,
+  IconSparkle, IconUpload, IconClose, IconCheck, IconTrash, IconCursor, IconHand,
+} from '@/components/icons';
 
-interface OcclusionRect {
-  x: number; y: number; w: number; h: number; id: string;
+type Tool = 'select' | 'rect' | 'polygon' | 'freehand' | 'eraser' | 'hand';
+
+interface OcclusionShape {
+  id: string;
+  type: 'rect' | 'polygon' | 'freehand';
+  x?: number; y?: number; w?: number; h?: number;
+  points?: { x: number; y: number }[];
+  color?: string;
 }
 
 interface OcclusionEditorProps {
@@ -17,148 +33,380 @@ interface OcclusionEditorProps {
   onSave: (front: string, back: string) => void;
   onCancel: () => void;
   isSaving: boolean;
+  /** Color indices used by text clozes (for syncing the dynamic palette) */
+  externalUsedColorIndices?: Set<number>;
 }
 
-const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: OcclusionEditorProps) => {
+// Use shared colors — alias for backward compat within this file
+const COLORS = OCCLUSION_COLORS;
+
+const getColorObj = (fill: string) => COLORS.find(c => c.fill === fill) || COLORS[0];
+const cloneShape = (shape: OcclusionShape): OcclusionShape => ({
+  ...shape,
+  points: shape.points?.map(point => ({ ...point })),
+});
+
+const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUsedColorIndices }: OcclusionEditorProps) => {
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [imageUrl, setImageUrl] = useState('');
-  const [rects, setRects] = useState<OcclusionRect[]>([]);
+  const [shapes, setShapes] = useState<OcclusionShape[]>([]);
+  const [history, setHistory] = useState<OcclusionShape[][]>([]);
   const [uploading, setUploading] = useState(false);
   const [zoom, setZoom] = useState(1);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [tool, setTool] = useState<Tool>('rect');
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const [isDetecting, setIsDetecting] = useState(false);
+  const [previewOpaque, setPreviewOpaque] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const imgRef = useRef<HTMLImageElement | null>(null);
-  const [imageScale, setImageScale] = useState(1);
+  const [imgSize, setImgSize] = useState({ w: 0, h: 0 });
   const [drawing, setDrawing] = useState(false);
   const [startPos, setStartPos] = useState<{ x: number; y: number } | null>(null);
   const [currentRect, setCurrentRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [currentPoints, setCurrentPoints] = useState<{ x: number; y: number }[]>([]);
+  const [polygonPreviewPoint, setPolygonPreviewPoint] = useState<{ x: number; y: number } | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const pendingNaturalRects = useRef<OcclusionRect[] | null>(null);
+  const [hoveredSelectableId, setHoveredSelectableId] = useState<string | null>(null);
+  const [shapeColor, setShapeColor] = useState(COLORS[0].fill);
+  const [dragging, setDragging] = useState<{ startX: number; startY: number; origShape: OcclusionShape } | null>(null);
+  const [resizing, setResizing] = useState<{ corner: string; startX: number; startY: number; origShape: OcclusionShape } | null>(null);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [panning, setPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
 
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const initialShapeCountRef = useRef(0);
+
+  const pushHistory = useCallback(() => {
+    setHistory(prev => [...prev.slice(-20), shapes]);
+  }, [shapes]);
+
+  const undo = useCallback(() => {
+    setHistory(prev => {
+      if (prev.length === 0) return prev;
+      const last = prev[prev.length - 1];
+      setShapes(last);
+      return prev.slice(0, -1);
+    });
+  }, []);
+
+  // Parse initial data
   useEffect(() => {
-    if (initialFront) {
-      try {
-        const data = JSON.parse(initialFront);
-        if (data.imageUrl) setImageUrl(data.imageUrl);
-        if (data.allRects) pendingNaturalRects.current = data.allRects;
-      } catch {}
-    }
+    if (!initialFront) return;
+    try {
+      const data = JSON.parse(initialFront);
+      if (data.imageUrl) setImageUrl(data.imageUrl);
+      if (data.allRects) {
+        const converted: OcclusionShape[] = data.allRects.map((r: Record<string, unknown>) => ({
+          id: r.id || crypto.randomUUID(),
+          type: r.type || 'rect',
+          color: r.color || COLORS[0].fill,
+          ...(r.type === 'polygon' || r.type === 'freehand'
+            ? { points: r.points }
+            : { x: r.x, y: r.y, w: r.w, h: r.h }),
+        }));
+        setShapes(converted);
+        initialShapeCountRef.current = converted.length;
+      }
+    } catch {}
   }, [initialFront]);
 
-  const drawCanvas = useCallback(() => {
-    const canvas = canvasRef.current;
+  const handleImgLoad = () => {
     const img = imgRef.current;
-    if (!canvas || !img) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.save();
-    ctx.scale(zoom, zoom);
-    ctx.drawImage(img, 0, 0, img.naturalWidth * imageScale, img.naturalHeight * imageScale);
+    if (!img) return;
+    setImgSize({ w: img.naturalWidth, h: img.naturalHeight });
+    setImgLoaded(true);
+  };
 
-    rects.forEach((r, i) => {
-      ctx.fillStyle = selectedId === r.id ? 'rgba(59,130,246,0.5)' : 'rgba(59,130,246,0.75)';
-      ctx.strokeStyle = selectedId === r.id ? '#facc15' : 'rgba(59,130,246,1)';
-      ctx.lineWidth = selectedId === r.id ? 3 : 2;
-      ctx.fillRect(r.x, r.y, r.w, r.h);
-      ctx.strokeRect(r.x, r.y, r.w, r.h);
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 14px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(`${i + 1}`, r.x + r.w / 2, r.y + r.h / 2);
-    });
+  // Base display size — fit image to container WITHOUT zoom
+  const getBaseDisplaySize = useCallback(() => {
+    const container = containerRef.current;
+    if (!container || imgSize.w === 0) return { w: 0, h: 0, scale: 1 };
+    const maxW = container.clientWidth - 48;
+    const maxH = container.clientHeight;
+    const fitScale = Math.min(maxW / imgSize.w, maxH / imgSize.h);
+    return { w: imgSize.w * fitScale, h: imgSize.h * fitScale, scale: fitScale };
+  }, [imgSize]);
 
-    if (currentRect) {
-      ctx.fillStyle = 'rgba(59,130,246,0.25)';
-      ctx.strokeStyle = 'rgba(59,130,246,0.8)';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([5, 5]);
-      ctx.fillRect(currentRect.x, currentRect.y, currentRect.w, currentRect.h);
-      ctx.strokeRect(currentRect.x, currentRect.y, currentRect.w, currentRect.h);
-      ctx.setLineDash([]);
-    }
-    ctx.restore();
-  }, [rects, currentRect, imageScale, zoom, selectedId]);
-
-  const loadImage = useCallback((url: string) => {
-    const img = new window.Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      imgRef.current = img;
-      const canvas = canvasRef.current;
-      const container = containerRef.current;
-      if (!canvas || !container) return;
-      const maxW = container.clientWidth;
-      const maxH = 400;
-      const s = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 1);
-      setImageScale(s);
-      canvas.width = Math.round(img.naturalWidth * s * zoom);
-      canvas.height = Math.round(img.naturalHeight * s * zoom);
-      if (pendingNaturalRects.current) {
-        const scaled = pendingNaturalRects.current.map(r => ({
-          ...r, x: r.x * s, y: r.y * s, w: r.w * s, h: r.h * s,
-        }));
-        setRects(scaled);
-        pendingNaturalRects.current = null;
-      }
+  const baseDisplay = getBaseDisplaySize();
+  // scale used for shape coordinate mapping — always base (no zoom)
+  const scale = baseDisplay.scale || 1;
+  // displaySize for rendering — always base (zoom is CSS transform)
+  const displaySize = baseDisplay;
+  const toImgCoords = (clientX: number, clientY: number) => {
+    const el = containerRef.current?.querySelector('.occlusion-img-wrapper');
+    if (!el) return { x: 0, y: 0 };
+    const rect = el.getBoundingClientRect();
+    return {
+      x: (clientX - rect.left) / (scale * zoom),
+      y: (clientY - rect.top) / (scale * zoom),
     };
-    img.src = url;
-  }, [zoom]);
+  };
 
-  useEffect(() => { if (imageUrl) loadImage(imageUrl); }, [imageUrl, loadImage]);
-  useEffect(() => { drawCanvas(); }, [drawCanvas]);
+  // Clamp coordinates within image bounds
+  const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, val));
+
+  const hitTest = (pos: { x: number; y: number }, options?: { selectableOnly?: boolean }) => {
+    return [...shapes].reverse().find(s => {
+      if (options?.selectableOnly && s.type === 'freehand') return false;
+      if (s.type === 'rect') return pos.x >= s.x! && pos.x <= s.x! + s.w! && pos.y >= s.y! && pos.y <= s.y! + s.h!;
+      if (s.points && s.points.length > 1) {
+        const xs = s.points.map(p => p.x);
+        const ys = s.points.map(p => p.y);
+        return pos.x >= Math.min(...xs) && pos.x <= Math.max(...xs) && pos.y >= Math.min(...ys) && pos.y <= Math.max(...ys);
+      }
+      return false;
+    });
+  };
+
+  const autoSwitchColor = useCallback((currentShapes: OcclusionShape[]) => {
+    const usedColors = new Set(currentShapes.map(s => s.color || COLORS[0].fill));
+    if (usedColors.has(shapeColor)) {
+      const currentIdx = COLORS.findIndex(c => c.fill === shapeColor);
+      const nextIdx = (currentIdx + 1) % COLORS.length;
+      for (let i = 0; i < COLORS.length; i++) {
+        const candidate = COLORS[(nextIdx + i) % COLORS.length];
+        if (!usedColors.has(candidate.fill)) {
+          setShapeColor(candidate.fill);
+          return;
+        }
+      }
+      setShapeColor(COLORS[nextIdx].fill);
+    }
+  }, [shapeColor]);
 
   useEffect(() => {
-    const img = imgRef.current;
-    const canvas = canvasRef.current;
-    if (!img || !canvas) return;
-    canvas.width = Math.round(img.naturalWidth * imageScale * zoom);
-    canvas.height = Math.round(img.naturalHeight * imageScale * zoom);
-    drawCanvas();
-  }, [zoom, imageScale, drawCanvas]);
+    if (!selectedId) return;
+    const selectedShape = shapes.find(shape => shape.id === selectedId);
+    if (selectedShape?.color) setShapeColor(selectedShape.color);
+  }, [selectedId, shapes]);
 
-  const toCanvasCoords = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-    const rect = canvas.getBoundingClientRect();
-    return {
-      x: ((e.clientX - rect.left) * (canvas.width / rect.width)) / zoom,
-      y: ((e.clientY - rect.top) * (canvas.height / rect.height)) / zoom,
-    };
-  };
-
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const pos = toCanvasCoords(e);
-    const hit = [...rects].reverse().find(r => pos.x >= r.x && pos.x <= r.x + r.w && pos.y >= r.y && pos.y <= r.y + r.h);
-    if (hit) { setSelectedId(hit.id); return; }
-    setSelectedId(null);
-    setDrawing(true);
-    setStartPos(pos);
-  };
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!drawing || !startPos) return;
-    const pos = toCanvasCoords(e);
-    setCurrentRect({
-      x: Math.min(startPos.x, pos.x), y: Math.min(startPos.y, pos.y),
-      w: Math.abs(pos.x - startPos.x), h: Math.abs(pos.y - startPos.y),
-    });
-  };
-
-  const handleMouseUp = () => {
-    if (!drawing || !currentRect) { setDrawing(false); return; }
-    if (currentRect.w > 10 && currentRect.h > 10) {
-      setRects(prev => [...prev, { ...currentRect, id: crypto.randomUUID() }]);
-    }
+  const activateSelection = useCallback((shape: OcclusionShape, pointerPos?: { x: number; y: number }) => {
+    setTool('select');
+    setSelectedId(shape.id);
+    setShapeColor(shape.color || COLORS[0].fill);
     setDrawing(false);
     setStartPos(null);
     setCurrentRect(null);
+    setCurrentPoints([]);
+    setPolygonPreviewPoint(null);
+    setHoveredSelectableId(shape.id);
+
+    if ((shape.type === 'rect' || shape.type === 'polygon') && pointerPos) {
+      setDragging({ startX: pointerPos.x, startY: pointerPos.y, origShape: cloneShape(shape) });
+    }
+  }, []);
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const pos = toImgCoords(e.clientX, e.clientY);
+    const clampedPos = { x: clamp(pos.x, 0, imgSize.w), y: clamp(pos.y, 0, imgSize.h) };
+    const selectableHit = hitTest(clampedPos, { selectableOnly: true });
+
+    if (tool === 'hand') {
+      setPanning(true);
+      setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
+      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+      return;
+    }
+
+    if (tool === 'select') {
+      if (selectableHit) {
+        setSelectedId(selectableHit.id);
+        setShapeColor(selectableHit.color || COLORS[0].fill);
+        if (selectableHit.type === 'rect' || selectableHit.type === 'polygon') {
+          pushHistory();
+          setDragging({ startX: clampedPos.x, startY: clampedPos.y, origShape: cloneShape(selectableHit) });
+          (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+        }
+      } else {
+        setSelectedId(null);
+      }
+      return;
+    }
+
+    if (tool === 'eraser') {
+      const hit = hitTest(clampedPos);
+      if (hit) {
+        pushHistory();
+        setShapes(prev => prev.filter(s => s.id !== hit.id));
+      }
+      return;
+    }
+
+    if (selectableHit) {
+      if (selectableHit.type === 'rect') pushHistory();
+      activateSelection(selectableHit, clampedPos);
+      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+      return;
+    }
+
+    if (tool === 'rect') {
+      setSelectedId(null);
+      setHoveredSelectableId(null);
+      pushHistory();
+      setDrawing(true);
+      setStartPos(clampedPos);
+      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    } else if (tool === 'polygon') {
+      setSelectedId(null);
+      setHoveredSelectableId(null);
+      if (currentPoints.length >= 3) {
+        const first = currentPoints[0];
+        if (Math.hypot(clampedPos.x - first.x, clampedPos.y - first.y) < 15 / scale) {
+          const newShape: OcclusionShape = { id: crypto.randomUUID(), type: 'polygon', points: [...currentPoints], color: shapeColor };
+          const newShapes = [...shapes, newShape];
+          setShapes(newShapes);
+          setCurrentPoints([]);
+          setPolygonPreviewPoint(null);
+          setSelectedId(newShape.id);
+          autoSwitchColor(newShapes);
+          return;
+        }
+      }
+      if (currentPoints.length === 0) pushHistory();
+      setCurrentPoints(prev => [...prev, clampedPos]);
+      setPolygonPreviewPoint(clampedPos);
+    } else if (tool === 'freehand') {
+      setSelectedId(null);
+      setHoveredSelectableId(null);
+      pushHistory();
+      setDrawing(true);
+      setCurrentPoints([clampedPos]);
+      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    }
   };
 
-  const deleteSelected = () => {
-    if (!selectedId) return;
-    setRects(prev => prev.filter(r => r.id !== selectedId));
-    setSelectedId(null);
+  const handlePointerMove = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const pos = toImgCoords(e.clientX, e.clientY);
+    const cx = clamp(pos.x, 0, imgSize.w);
+    const cy = clamp(pos.y, 0, imgSize.h);
+
+    if (panning && tool === 'hand') {
+      setPanOffset({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
+      return;
+    }
+
+    if (dragging) {
+      if (dragging.origShape.type === 'rect') {
+        const nextX = clamp(dragging.origShape.x! + (cx - dragging.startX), 0, imgSize.w - dragging.origShape.w!);
+        const nextY = clamp(dragging.origShape.y! + (cy - dragging.startY), 0, imgSize.h - dragging.origShape.h!);
+        setShapes(prev => prev.map(shape => shape.id === dragging.origShape.id ? { ...shape, x: nextX, y: nextY } : shape));
+      } else if (dragging.origShape.type === 'polygon' && dragging.origShape.points) {
+        const dx = cx - dragging.startX;
+        const dy = cy - dragging.startY;
+        const newPoints = dragging.origShape.points.map(p => ({
+          x: clamp(p.x + dx, 0, imgSize.w),
+          y: clamp(p.y + dy, 0, imgSize.h),
+        }));
+        setShapes(prev => prev.map(shape => shape.id === dragging.origShape.id ? { ...shape, points: newPoints } : shape));
+      }
+      return;
+    }
+
+    if (resizing) {
+      const s = resizing.origShape;
+      if (s.type === 'rect') {
+        let newX = s.x!, newY = s.y!, newW = s.w!, newH = s.h!;
+        const dx = cx - resizing.startX;
+        const dy = cy - resizing.startY;
+        if (resizing.corner.includes('e')) { newW = Math.max(10, s.w! + dx); }
+        if (resizing.corner.includes('w')) { newX = s.x! + dx; newW = Math.max(10, s.w! - dx); }
+        if (resizing.corner.includes('s')) { newH = Math.max(10, s.h! + dy); }
+        if (resizing.corner.includes('n')) { newY = s.y! + dy; newH = Math.max(10, s.h! - dy); }
+        newX = clamp(newX, 0, imgSize.w - 10);
+        newY = clamp(newY, 0, imgSize.h - 10);
+        if (newX + newW > imgSize.w) newW = imgSize.w - newX;
+        if (newY + newH > imgSize.h) newH = imgSize.h - newY;
+        newW = Math.max(10, newW);
+        newH = Math.max(10, newH);
+        setShapes(prev => prev.map(sh => sh.id === s.id ? { ...sh, x: newX, y: newY, w: newW, h: newH } : sh));
+      } else if (s.type === 'polygon' && s.points) {
+        const pts = s.points;
+        const xs = pts.map(p => p.x);
+        const ys = pts.map(p => p.y);
+        const anchor = {
+          x: resizing.corner.includes('w') ? Math.max(...xs) : Math.min(...xs),
+          y: resizing.corner.includes('n') ? Math.max(...ys) : Math.min(...ys),
+        };
+        const origDist = Math.hypot(resizing.startX - anchor.x, resizing.startY - anchor.y);
+        const newDist = Math.hypot(cx - anchor.x, cy - anchor.y);
+        const scaleFactor = origDist > 10 ? newDist / origDist : 1;
+        const newPoints = pts.map(p => ({
+          x: clamp(anchor.x + (p.x - anchor.x) * scaleFactor, 0, imgSize.w),
+          y: clamp(anchor.y + (p.y - anchor.y) * scaleFactor, 0, imgSize.h),
+        }));
+        setShapes(prev => prev.map(sh => sh.id === s.id ? { ...sh, points: newPoints } : sh));
+      }
+      return;
+    }
+
+    const hoverHit = tool === 'hand' || tool === 'eraser' ? null : hitTest({ x: cx, y: cy }, { selectableOnly: true });
+    setHoveredSelectableId(hoverHit?.id ?? null);
+
+    if (tool === 'polygon' && currentPoints.length > 0) {
+      setPolygonPreviewPoint(hoverHit ? null : { x: cx, y: cy });
+    } else {
+      setPolygonPreviewPoint(null);
+    }
+
+    if (!drawing) return;
+
+    if (tool === 'rect' && startPos) {
+      setCurrentRect({
+        x: Math.min(startPos.x, cx), y: Math.min(startPos.y, cy),
+        w: Math.abs(cx - startPos.x), h: Math.abs(cy - startPos.y),
+      });
+    } else if (tool === 'freehand') {
+      setCurrentPoints(prev => [...prev, { x: cx, y: cy }]);
+    }
+  };
+
+  const handlePointerUp = () => {
+    if (panning) {
+      setPanning(false);
+      return;
+    }
+
+    if (dragging) {
+      setDragging(null);
+      return;
+    }
+
+    if (resizing) {
+      setResizing(null);
+      return;
+    }
+
+    if (tool === 'rect') {
+      if (drawing && currentRect && currentRect.w > 5 && currentRect.h > 5) {
+        const finalX = clamp(currentRect.x, 0, imgSize.w - 10);
+        const finalY = clamp(currentRect.y, 0, imgSize.h - 10);
+        const finalW = Math.min(currentRect.w, imgSize.w - finalX);
+        const finalH = Math.min(currentRect.h, imgSize.h - finalY);
+        const newShape: OcclusionShape = { id: crypto.randomUUID(), type: 'rect', x: finalX, y: finalY, w: finalW, h: finalH, color: shapeColor };
+        const newShapes = [...shapes, newShape];
+        setShapes(newShapes);
+        setSelectedId(newShape.id);
+        autoSwitchColor(newShapes);
+      }
+      setDrawing(false);
+      setStartPos(null);
+      setCurrentRect(null);
+    } else if (tool === 'freehand' && drawing) {
+      if (currentPoints.length > 5) {
+        const newShape: OcclusionShape = { id: crypto.randomUUID(), type: 'freehand', points: [...currentPoints], color: shapeColor };
+        const newShapes = [...shapes, newShape];
+        setShapes(newShapes);
+        // Do NOT auto-switch color for freehand — only switch when user manually changes color
+      }
+      setSelectedId(null);
+      setDrawing(false);
+      setCurrentPoints([]);
+    }
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -168,88 +416,575 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
     try {
       const compressed = await compressImage(file);
       const ext = compressed.name.split('.').pop() || 'webp';
-      const path = `${crypto.randomUUID()}.${ext}`;
-      const { error } = await supabase.storage.from('card-images').upload(path, compressed);
-      if (error) throw error;
-      const { data: urlData } = supabase.storage.from('card-images').getPublicUrl(path);
-      setImageUrl(urlData.publicUrl);
-      setRects([]);
-    } catch (err: any) {
+      const userId = user?.id || 'anonymous';
+      const publicUrl = await uploadToStorage(userId, compressed);
+      setImageUrl(publicUrl);
+      setShapes([]);
+      setImgLoaded(false);
+    } catch (err: unknown) {
       console.error('Upload error:', err);
+      toast({ title: 'Erro ao enviar imagem', variant: 'destructive' });
     } finally {
       setUploading(false);
     }
   };
 
   const handleSave = () => {
-    if (!imageUrl || rects.length === 0) return;
-    const scale = imageScale || 1;
-    const normalizedRects = rects.map(r => ({
-      ...r, x: r.x / scale, y: r.y / scale, w: r.w / scale, h: r.h / scale,
-    }));
+    if (!imageUrl || shapes.length === 0) return;
+    const colorGroups = new Map<string, string[]>();
+    shapes.forEach(s => {
+      const color = s.color || COLORS[0].fill;
+      if (!colorGroups.has(color)) colorGroups.set(color, []);
+      colorGroups.get(color)!.push(s.id);
+    });
     const frontContent = JSON.stringify({
       imageUrl,
-      allRects: normalizedRects,
-      activeRectIds: normalizedRects.map(r => r.id),
+      allRects: shapes,
+      activeRectIds: shapes.map(s => s.id),
+      colorGroups: Object.fromEntries(colorGroups),
     });
     onSave(frontContent, '');
   };
 
+  const handleDetectAI = async () => {
+    if (!imageUrl) return;
+    setIsDetecting(true);
+    try {
+      const data = await invokeDetectOcclusion(imageUrl);
+      if (data?.regions && Array.isArray(data.regions) && data.regions.length > 0) {
+        pushHistory();
+        const newShapes: OcclusionShape[] = data.regions.map((r: Record<string, number>) => ({
+          id: crypto.randomUUID(),
+          type: 'rect' as const,
+          x: r.x * imgSize.w,
+          y: r.y * imgSize.h,
+          w: r.w * imgSize.w,
+          h: r.h * imgSize.h,
+          color: shapeColor,
+        }));
+        setShapes(prev => [...prev, ...newShapes]);
+        toast({ title: `✨ ${newShapes.length} área${newShapes.length > 1 ? 's' : ''} detectada${newShapes.length > 1 ? 's' : ''}!` });
+      } else {
+        toast({ title: 'Nenhum texto detectado na imagem' });
+      }
+    } catch (err: unknown) {
+      console.error('AI detect error:', err);
+      toast({ title: 'Erro ao detectar', description: err instanceof Error ? err.message : 'Erro desconhecido', variant: 'destructive' });
+    } finally {
+      setIsDetecting(false);
+    }
+  };
+
+  const deleteSelected = useCallback(() => {
+    if (!selectedId) return;
+    pushHistory();
+    setShapes(prev => prev.filter(r => r.id !== selectedId));
+    setSelectedId(null);
+  }, [selectedId, pushHistory]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
+        e.preventDefault();
+        deleteSelected();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        undo();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [selectedId, deleteSelected, undo]);
+
+  // Dynamic visible colors — show all used (shapes + external text clozes) + next available
+  const usedColorFills = new Set(shapes.map(s => s.color || COLORS[0].fill));
+  // Merge external text cloze color indices
+  if (externalUsedColorIndices) {
+    externalUsedColorIndices.forEach(idx => {
+      if (idx >= 0 && idx < COLORS.length) usedColorFills.add(COLORS[idx].fill);
+    });
+  }
+  const visibleColors = (() => {
+    const visible: typeof COLORS = [];
+    for (const c of COLORS) {
+      if (usedColorFills.has(c.fill)) visible.push(c);
+    }
+    for (const c of COLORS) {
+      if (!usedColorFills.has(c.fill)) {
+        visible.push(c);
+        break;
+      }
+    }
+    if (visible.length < 2) {
+      for (const c of COLORS) {
+        if (!visible.includes(c)) { visible.push(c); break; }
+      }
+    }
+    return visible;
+  })();
+
+  const selectedShape = selectedId ? shapes.find(s => s.id === selectedId) : null;
+
+  const handleColorPick = (fill: string) => {
+    setShapeColor(fill);
+    // Only recolor the selected shape if the user is in select mode (explicitly selecting)
+    if (!selectedId || tool !== 'select') return;
+    setShapes(prev => prev.map(shape => {
+      if (shape.id !== selectedId || shape.type === 'freehand') return shape;
+      return { ...shape, color: fill };
+    }));
+  };
+
+  // Custom cursors for eraser and freehand (brush)
+  const eraserCursorSvg = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21'/%3E%3Cpath d='M22 21H7'/%3E%3Cpath d='m5 11 9 9'/%3E%3C/svg%3E") 4 20, auto`;
+  const brushCursorSvg = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18.37 2.63 14 7l-1.59-1.59a2 2 0 0 0-2.82 0L8 7l9 9 1.59-1.59a2 2 0 0 0 0-2.82L17 10l4.37-4.37a2.12 2.12 0 1 0-3-3Z'/%3E%3Cpath d='M9 8c-2 3-4 3.5-7 4l8 10c2-1 6-5 6-7'/%3E%3Cpath d='M14.5 17.5 4.5 15'/%3E%3C/svg%3E") 2 22, crosshair`;
+
+  const getCursorStyle = () => {
+    if (tool === 'hand') return panning ? 'grabbing' : 'grab';
+    if (dragging) return 'grabbing';
+    if (tool === 'select') return selectedShape?.type === 'rect' ? 'move' : 'default';
+    if (tool === 'eraser') return eraserCursorSvg;
+    if (tool === 'freehand' && !hoveredSelectableId) return brushCursorSvg;
+    if (hoveredSelectableId) return 'move';
+    return 'crosshair';
+  };
+
+  const getShapeBottom = (s: OcclusionShape): { x: number; y: number } => {
+    if (s.type === 'rect') {
+      return { x: (s.x! + s.w! / 2) * scale, y: (s.y! + s.h!) * scale };
+    }
+    if (s.points && s.points.length > 0) {
+      const xs = s.points.map(p => p.x);
+      const ys = s.points.map(p => p.y);
+      return { x: ((Math.min(...xs) + Math.max(...xs)) / 2) * scale, y: Math.max(...ys) * scale };
+    }
+    return { x: 0, y: 0 };
+  };
+
+  /* ─── Upload Screen ─── */
   if (!imageUrl) {
     return (
-      <div className="space-y-4">
-        {!initialFront && (
-          <button onClick={onCancel} className="inline-flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors">
-            <ArrowLeft className="h-3 w-3" />
-            <Image className="h-4 w-4" /> Oclusão de imagem
-          </button>
-        )}
-        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-12 text-center space-y-3">
-          <Upload className="h-8 w-8 text-muted-foreground" />
-          <p className="text-sm font-medium text-foreground">Envie uma imagem</p>
-          <p className="text-xs text-muted-foreground max-w-xs">Selecione a imagem e depois marque as áreas que serão ocultadas durante o estudo.</p>
+      <div className="flex flex-col h-full items-center justify-center p-6">
+        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-16 px-8 text-center space-y-3 w-full max-w-sm">
+          <IconUpload />
+          <p className="text-sm font-semibold text-foreground">Envie uma imagem</p>
+          <p className="text-xs text-muted-foreground max-w-xs">Selecione a imagem e marque as áreas para ocultar.</p>
           <label className="cursor-pointer">
             <input type="file" accept="image/*" className="hidden" onChange={handleUpload} />
-            <span className="inline-flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/10 transition-colors">
-              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            <span className="inline-flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-5 py-2.5 text-sm font-medium text-primary hover:bg-primary/10 transition-colors">
+              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <IconUpload className="h-4 w-4" />}
               {uploading ? 'Enviando...' : 'Escolher imagem'}
             </span>
           </label>
         </div>
-        <div className="flex justify-end"><Button variant="outline" onClick={onCancel}>Cancelar</Button></div>
       </div>
     );
   }
 
+  /* ─── Shape rendering ─── */
+  const renderShape = (s: OcclusionShape) => {
+    const isSelected = selectedId === s.id;
+    const colorObj = getColorObj(s.color || COLORS[0].fill);
+    const fillColor = previewOpaque
+      ? colorObj.fill.replace(/[\d.]+\)$/, '1)')
+      : colorObj.fill;
+
+    if (s.type === 'rect') {
+      return (
+        <div key={s.id}>
+            <div
+              className="absolute pointer-events-auto"
+              style={{
+                left: s.x! * scale,
+                top: s.y! * scale,
+                width: s.w! * scale,
+                height: s.h! * scale,
+                backgroundColor: fillColor,
+                border: `2px solid ${colorObj.border}`,
+                borderRadius: 4,
+                boxShadow: isSelected ? `0 0 0 2px ${colorObj.border}, 0 0 8px ${colorObj.fill}` : undefined,
+                cursor: tool === 'hand'
+                  ? (panning ? 'grabbing' : 'grab')
+                  : tool === 'eraser'
+                    ? eraserCursorSvg
+                    : hoveredSelectableId === s.id || tool === 'select'
+                      ? 'move'
+                      : tool === 'freehand' ? brushCursorSvg : 'crosshair',
+              }}
+            />
+            {/* Resize handles when selected */}
+            {isSelected && tool === 'select' && (
+              <>
+                {['nw', 'ne', 'sw', 'se'].map(corner => {
+                  const left = corner.includes('w') ? s.x! * scale - 4 : (s.x! + s.w!) * scale - 4;
+                  const top = corner.includes('n') ? s.y! * scale - 4 : (s.y! + s.h!) * scale - 4;
+                  const cursor = corner === 'nw' || corner === 'se' ? 'nwse-resize' : 'nesw-resize';
+                  return (
+                    <div
+                      key={corner}
+                      className="absolute z-20 pointer-events-auto"
+                      style={{
+                        left, top, width: 8, height: 8,
+                        backgroundColor: '#fff',
+                        border: `2px solid ${colorObj.border}`,
+                        borderRadius: 2,
+                        cursor,
+                      }}
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        pushHistory();
+                        setResizing({ corner, startX: toImgCoords(e.clientX, e.clientY).x, startY: toImgCoords(e.clientX, e.clientY).y, origShape: cloneShape(s) });
+                        (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+                      }}
+                    />
+                  );
+                })}
+              </>
+            )}
+        </div>
+      );
+    }
+
+    if ((s.type === 'polygon' || s.type === 'freehand') && s.points && s.points.length > 1) {
+      const pts = s.points.map(p => `${p.x * scale},${p.y * scale}`).join(' ');
+      const sharedCursor = tool === 'hand'
+        ? 'grab'
+        : tool === 'eraser'
+          ? eraserCursorSvg
+          : s.type === 'polygon' && (hoveredSelectableId === s.id || tool === 'select')
+            ? 'move'
+            : tool === 'freehand' ? brushCursorSvg : 'crosshair';
+
+      return (
+        <svg key={s.id} className="absolute inset-0 pointer-events-none" style={{ width: displaySize.w, height: displaySize.h }}>
+          {s.type === 'polygon' ? (
+            <polygon
+              points={pts}
+              fill={fillColor}
+              stroke={colorObj.border}
+              strokeWidth={isSelected ? 3 : 2}
+              className="pointer-events-auto"
+              style={{ cursor: sharedCursor }}
+            />
+          ) : (
+            <polyline
+              points={pts}
+              fill="none"
+              stroke={colorObj.border}
+              strokeWidth={isSelected ? 4 : 3}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="pointer-events-auto"
+              style={{ cursor: sharedCursor }}
+            />
+          )}
+        </svg>
+      );
+    }
+    return null;
+  };
+
+  const drawTools: { id: Tool; label: string; icon: React.ReactNode }[] = [
+    { id: 'select', icon: <IconCursor className="h-5 w-5" />, label: 'Selecionar' },
+    { id: 'rect', icon: <IconRect active={tool === 'rect'} />, label: 'Retângulo' },
+    { id: 'polygon', icon: <IconPolygon active={tool === 'polygon'} />, label: 'Polígono' },
+    { id: 'freehand', icon: <IconFreehand active={tool === 'freehand'} />, label: 'Livre' },
+    { id: 'eraser', icon: <IconEraser active={tool === 'eraser'} />, label: 'Borracha' },
+  ];
+
   return (
-    <div className="space-y-3">
-      {!initialFront && (
-        <button onClick={() => { setImageUrl(''); setRects([]); }} className="inline-flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft className="h-3 w-3" />
-          <Image className="h-4 w-4" /> Trocar imagem
+    <div className="flex flex-col h-full min-h-0">
+      {/* ─── Header ─── */}
+      <header className="shrink-0 flex items-center gap-2 px-3 py-2.5 border-b border-border/40">
+        <button
+          onClick={() => {
+            const isDirty = shapes.length !== initialShapeCountRef.current || history.length > 0;
+            if (isDirty) { setShowCloseConfirm(true); } else { onCancel(); }
+          }}
+          className="h-8 w-8 flex items-center justify-center rounded-full text-muted-foreground hover:bg-accent transition-colors shrink-0"
+        >
+          <IconClose />
         </button>
-      )}
-      <div className="flex items-center gap-1 flex-wrap rounded-lg border border-border bg-muted/30 p-1.5">
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setZoom(z => Math.max(0.3, z - 0.25))}><ZoomOut className="h-4 w-4" /></Button>
-        <span className="text-xs text-muted-foreground w-10 text-center select-none">{Math.round(zoom * 100)}%</span>
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setZoom(z => Math.min(3, z + 0.25))}><ZoomIn className="h-4 w-4" /></Button>
-        <div className="h-5 w-px bg-border mx-1" />
-        {selectedId && (<Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={deleteSelected}><Trash2 className="h-4 w-4" /></Button>)}
-        <Button variant="ghost" size="sm" onClick={() => { setRects([]); setSelectedId(null); }} className="gap-1 text-xs h-8 ml-auto"><RotateCcw className="h-3 w-3" /> Limpar</Button>
+        <div className="flex-1 min-w-0 text-center">
+          <p className="text-sm font-semibold text-foreground">Oclusão de imagem</p>
+        </div>
+        <button
+          onClick={handleSave}
+          disabled={isSaving || shapes.length === 0}
+          className="h-8 w-8 flex items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-30 transition-colors shrink-0"
+        >
+          <IconCheck />
+        </button>
+      </header>
+
+      {/* ─── Content: toolbar + image + floating controls ─── */}
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-1.5 pt-1 pb-1 overflow-hidden">
+        {/* Drawing toolbar — above image */}
+        <div className="shrink-0 flex items-center gap-1 bg-card/90 backdrop-blur-sm rounded-xl border border-border/60 p-1 shadow-sm mb-1">
+          {drawTools.map(t => (
+            <button
+              key={t.id}
+              className={`h-9 w-9 flex items-center justify-center rounded-lg transition-colors ${
+                tool === t.id
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+              }`}
+              onClick={() => { setTool(t.id); setSelectedId(null); setCurrentPoints([]); setPolygonPreviewPoint(null); }}
+              title={t.label}
+            >
+              {t.icon}
+            </button>
+          ))}
+          <div className="w-px h-6 bg-border mx-0.5" />
+          <button
+            className="h-9 w-9 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-20 transition-colors"
+            onClick={undo}
+            disabled={history.length === 0}
+            title="Desfazer (Ctrl+Z)"
+          >
+            <Undo2 className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="flex-1 min-h-0 w-full flex items-center justify-center">
+          <div
+            ref={containerRef}
+            className="relative flex items-center justify-center overflow-auto bg-muted/20 rounded-xl border border-border/30 flex-1 min-h-0 h-full"
+            style={{ touchAction: 'none' }}
+          >
+            <div
+              className="occlusion-img-wrapper relative inline-block"
+              style={{
+                width: displaySize.w || '100%',
+                height: displaySize.h || 'auto',
+                cursor: getCursorStyle(),
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
+                transformOrigin: 'center center',
+              }}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerLeave={() => {
+                setHoveredSelectableId(null);
+                setPolygonPreviewPoint(null);
+                if (panning) { setPanning(false); return; }
+                if (dragging) { setDragging(null); return; }
+                if (resizing) { setResizing(null); return; }
+                if (drawing && tool !== 'polygon') {
+                  setDrawing(false);
+                  setStartPos(null);
+                  setCurrentRect(null);
+                  setCurrentPoints([]);
+                }
+              }}
+            >
+              <img
+                ref={imgRef}
+                src={imageUrl}
+                alt="Oclusão"
+                crossOrigin="anonymous"
+                onLoad={handleImgLoad}
+                className="block select-none pointer-events-none"
+                style={{ width: displaySize.w || '100%', height: displaySize.h || 'auto', userSelect: 'none', WebkitUserDrag: 'none' } as React.CSSProperties}
+                draggable={false}
+              />
+
+              {!imgLoaded && (
+                <div className="absolute inset-0 flex items-center justify-center bg-muted/50">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              )}
+
+              {shapes.map(renderShape)}
+
+              {/* Polygon resize handles (bounding box uniform scale) */}
+              {selectedId && selectedShape && tool === 'select' && selectedShape.type === 'polygon' && selectedShape.points && selectedShape.points.length > 1 && (() => {
+                const pts = selectedShape.points!;
+                const xs = pts.map(p => p.x);
+                const ys = pts.map(p => p.y);
+                const bbox = { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
+                const colorObj = getColorObj(selectedShape.color || COLORS[0].fill);
+                return ['nw', 'ne', 'sw', 'se'].map(corner => {
+                  const left = corner.includes('w') ? bbox.minX * scale - 4 : bbox.maxX * scale - 4;
+                  const top = corner.includes('n') ? bbox.minY * scale - 4 : bbox.maxY * scale - 4;
+                  return (
+                    <div
+                      key={corner}
+                      className="absolute z-20 pointer-events-auto"
+                      style={{ left, top, width: 8, height: 8, backgroundColor: '#fff', border: `2px solid ${colorObj.border}`, borderRadius: 2, cursor: 'nwse-resize' }}
+                      onPointerDown={(e) => {
+                        e.stopPropagation(); e.preventDefault();
+                        pushHistory();
+                        setResizing({ corner, startX: toImgCoords(e.clientX, e.clientY).x, startY: toImgCoords(e.clientX, e.clientY).y, origShape: cloneShape(selectedShape) });
+                        (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+                      }}
+                    />
+                  );
+                });
+              })()}
+
+              {selectedId && selectedShape && tool === 'select' && selectedShape.type !== 'freehand' && (
+                <div
+                  className="absolute z-30 pointer-events-auto"
+                  style={{
+                    left: getShapeBottom(selectedShape).x - 14,
+                    top: getShapeBottom(selectedShape).y + 6,
+                  }}
+                >
+                  <button
+                    onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                    onClick={(e) => { e.stopPropagation(); deleteSelected(); }}
+                    className="h-7 w-7 flex items-center justify-center rounded-full bg-foreground/90 text-background shadow-lg hover:bg-destructive transition-colors"
+                    title="Excluir"
+                  >
+                    <IconTrash className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {currentRect && tool === 'rect' && (
+                <div
+                  className="absolute border-2 border-dashed border-primary/80 pointer-events-none"
+                  style={{
+                    left: currentRect.x * scale,
+                    top: currentRect.y * scale,
+                    width: currentRect.w * scale,
+                    height: currentRect.h * scale,
+                    backgroundColor: shapeColor.replace(/[\d.]+\)$/, '0.15)'),
+                    borderRadius: 4,
+                  }}
+                />
+              )}
+
+              {currentPoints.length > 0 && (
+                <svg className="absolute inset-0 pointer-events-none" style={{ width: displaySize.w, height: displaySize.h }}>
+                  <polyline
+                    points={[
+                      ...currentPoints,
+                      ...(tool === 'polygon' && polygonPreviewPoint ? [polygonPreviewPoint] : []),
+                    ].map(p => `${p.x * scale},${p.y * scale}`).join(' ')}
+                    fill="none"
+                    stroke="rgba(59,130,246,0.8)"
+                    strokeWidth="2"
+                    strokeDasharray={tool === 'polygon' ? '5 5' : undefined}
+                    strokeLinecap="round"
+                  />
+                  {tool === 'polygon' && currentPoints.map((p, i) => (
+                    <circle key={i} cx={p.x * scale} cy={p.y * scale} r="4" fill="#3b82f6" />
+                  ))}
+                </svg>
+              )}
+            </div>
+
+            {/* Colors — left middle outside image */}
+            <div className="absolute left-2 top-1/2 z-20 -translate-y-1/2 flex flex-col items-center gap-2 rounded-xl border border-border/60 bg-card/90 p-2 shadow-sm backdrop-blur-sm">
+              {visibleColors.map(c => {
+                const showHighlight = tool !== 'select' || !!selectedId;
+                const isActive = showHighlight && shapeColor === c.fill;
+                return (
+                  <button
+                    key={c.label}
+                    className={`rounded-full transition-all shrink-0 ${isActive ? 'ring-2 ring-offset-1 ring-foreground/40 scale-110' : 'hover:scale-110'}`}
+                    style={{
+                      backgroundColor: c.fill.replace(/[\d.]+\)$/, '1)'),
+                      width: 22,
+                      height: 22,
+                    }}
+                    onClick={() => handleColorPick(c.fill)}
+                    title={c.label}
+                  />
+                );
+              })}
+            </div>
+
+            {/* Zoom controls — right middle */}
+            <div className="absolute right-2 top-1/2 z-20 -translate-y-1/2 flex flex-col items-center gap-1 bg-card/90 backdrop-blur-sm rounded-xl border border-border/60 p-1 shadow-sm">
+              <button
+                className={`h-8 w-8 flex items-center justify-center rounded-lg transition-colors ${
+                  tool === 'hand'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                }`}
+                onClick={() => { setTool('hand'); setSelectedId(null); }}
+                title="Mover (pan)"
+              >
+                <IconHand className="h-5 w-5" />
+              </button>
+              <div className="w-6 h-px bg-border" />
+              <button className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors" onClick={() => setZoom(z => Math.min(3, z + 0.25))} title="Zoom +">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5"><path d="M13 5a1 1 0 1 0-2 0v6H5a1 1 0 1 0 0 2h6v6a1 1 0 1 0 2 0v-6h6a1 1 0 1 0 0-2h-6z" /></svg>
+              </button>
+              <span className="text-[10px] text-muted-foreground tabular-nums select-none">{Math.round(zoom * 100)}%</span>
+              <button className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors" onClick={() => setZoom(z => Math.max(0.3, z - 0.25))} title="Zoom -">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5"><path d="M20 12a1 1 0 0 1-1 1H5a1 1 0 1 1 0-2h14a1 1 0 0 1 1 1" /></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {tool === 'polygon' && currentPoints.length > 0 && (
+          <p className="text-[11px] text-muted-foreground mt-1">
+            Clique para vértices. Feche no primeiro ponto. ({currentPoints.length} pt{currentPoints.length !== 1 ? 's' : ''})
+          </p>
+        )}
+
+        {/* Bottom bar — eye + IA */}
+        <div className="shrink-0 flex items-center justify-center gap-2 mt-1 flex-wrap">
+          <button
+            onClick={() => setPreviewOpaque(v => !v)}
+            className={`h-8 w-8 shrink-0 flex items-center justify-center rounded-lg transition-colors ${
+              previewOpaque ? 'text-foreground bg-accent' : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+            }`}
+            title={previewOpaque ? 'Opaco (escondido)' : 'Transparente (visível)'}
+          >
+            {previewOpaque ? <IconEyeClosed className="h-4 w-4" /> : <IconEyeOpen className="h-4 w-4" />}
+          </button>
+
+          <button
+            onClick={handleDetectAI}
+            disabled={isDetecting || !imgLoaded}
+            className="relative inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all disabled:opacity-50 shrink-0 overflow-hidden"
+            style={{ background: 'hsl(var(--card))' }}
+          >
+            <span className="absolute inset-0 rounded-full p-[1.5px] overflow-hidden" style={{ background: 'linear-gradient(90deg, #00B2FF, #3347FF, #FF306B, #FF9B23, #00B2FF)', backgroundSize: '200% 100%', animation: 'gradient-shift 3s linear infinite' }}>
+              <span className="block w-full h-full rounded-full bg-card" />
+            </span>
+            <span className="relative flex items-center gap-1.5">
+              {isDetecting ? <Loader2 className="h-4 w-4 animate-spin text-foreground" /> : <IconSparkle className="h-4 w-4 text-foreground" />}
+              <span className="text-foreground font-semibold">Detectar com IA</span>
+            </span>
+          </button>
+        </div>
       </div>
-      <div ref={containerRef} className="relative rounded-lg border border-border overflow-auto bg-muted/30 max-h-[400px]">
-        <canvas ref={canvasRef} className="block" style={{ cursor: 'crosshair' }}
-          onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}
-          onMouseLeave={() => { if (drawing) { setDrawing(false); setStartPos(null); setCurrentRect(null); } }}
-        />
-      </div>
-      <p className="text-xs text-muted-foreground">{rects.length} área(s) marcada(s). Desenhe retângulos sobre as partes que deseja ocultar.</p>
-      <div className="flex justify-end gap-2 pt-2">
-        <Button variant="outline" onClick={onCancel}>Cancelar</Button>
-        <Button onClick={handleSave} disabled={isSaving || rects.length === 0}>
-          {isSaving ? 'Salvando...' : `Salvar (${rects.length} área${rects.length !== 1 ? 's' : ''})`}
-        </Button>
-      </div>
+
+      <style>{`
+        @keyframes gradient-shift {
+          0% { background-position: 0% 50%; }
+          100% { background-position: 200% 50%; }
+        }
+      `}</style>
+
+      {/* Close without saving confirmation */}
+      <AlertDialog open={showCloseConfirm} onOpenChange={setShowCloseConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Fechar sem salvar?</AlertDialogTitle>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={onCancel}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Fechar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

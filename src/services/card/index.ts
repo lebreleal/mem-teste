@@ -16,6 +16,7 @@ export {
   fetchDescendantCardCounts,
   fetchDescendantCardsPage,
   fetchAggregatedStats,
+  fetchCardsForExport,
   type CardMeta,
   type DescendantCardCounts,
 } from './cardQueries';
@@ -29,6 +30,13 @@ export {
   moveCard,
   bulkMoveCards,
   bulkDeleteCards,
+  buryCards,
+  freezeCard,
+  unfreezeCard,
+  burySingleCard,
+  patchCard,
+  countReviewDueCards,
+  fetchStudyPlanDeckIds,
   uploadCardImage,
 } from './cardMutations';
 

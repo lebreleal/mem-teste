@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import MemoCardsLogo from '@/components/MemoCardsLogo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
@@ -10,7 +11,9 @@ import { Eye, EyeOff, Mail, Lock, User } from 'lucide-react';
 type Mode = 'login' | 'signup';
 
 const Auth = () => {
-  const [mode, setMode] = useState<Mode>('login');
+  const [searchParams] = useSearchParams();
+  const initialMode = searchParams.get('mode') === 'signup' ? 'signup' : 'login';
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -49,10 +52,11 @@ const Auth = () => {
 
       <div className="w-full max-w-sm space-y-6">
         {/* Header */}
-        <div className="text-center space-y-1">
-          <h1 className="font-display text-3xl font-black tracking-tight text-foreground">
-            Memo Cards
-          </h1>
+        <div className="flex flex-col items-center space-y-2">
+          <div className="flex items-center gap-2.5">
+            <MemoCardsLogo size={36} />
+            <span className="font-display text-2xl font-black tracking-tight text-foreground">Memocards</span>
+          </div>
           <p className="text-sm text-muted-foreground">
             {mode === 'login' ? 'Entre na sua conta' : 'Crie sua conta grátis'}
           </p>

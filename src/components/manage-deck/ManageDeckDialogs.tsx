@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import SuggestCorrectionModal from '@/components/SuggestCorrectionModal';
+
 import type { EditorCardType } from '@/hooks/useManageDeck';
 
 interface ImprovePreviewDialogProps {
@@ -75,19 +75,3 @@ export const DeleteCardDialog = ({ deleteId, setDeleteId, handleDelete }: Delete
   </AlertDialog>
 );
 
-interface SuggestCorrectionWrapperProps {
-  suggestCard: { id: string; front_content: string; back_content: string; deck_id: string; card_type: string } | null;
-  setSuggestCard: (v: any) => void;
-}
-
-export const SuggestCorrectionWrapper = ({ suggestCard, setSuggestCard }: SuggestCorrectionWrapperProps) => {
-  if (!suggestCard) return null;
-  return (
-    <SuggestCorrectionModal
-      open={!!suggestCard}
-      onOpenChange={(open) => { if (!open) setSuggestCard(null); }}
-      card={suggestCard}
-      deckId={suggestCard.deck_id}
-    />
-  );
-};

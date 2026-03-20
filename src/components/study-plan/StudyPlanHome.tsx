@@ -12,6 +12,7 @@ import { format } from 'date-fns';
 import {
   getWeeklyAvgNewCardsGlobal, DAY_LABELS,
   type StudyPlan as StudyPlanType, type DayKey, type WeeklyMinutes, type WeeklyNewCards,
+  type PlanMetrics,
 } from '@/hooks/useStudyPlan';
 import type { DeckWithStats } from '@/types/deck';
 import { useDragReorder } from '@/hooks/useDragReorder';
@@ -25,20 +26,25 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
+import type {
+  GlobalCapacity, UpdateCapacityMutation, UpdateNewCardsLimitMutation,
+  ReorderObjectivesMutation, UpdatePlanMutation,
+} from '@/types/studyPlan';
 
 interface StudyPlanHomeProps {
   plans: StudyPlanType[];
   activeDecks: DeckWithStats[];
-  globalCapacity: any;
+  globalCapacity: GlobalCapacity;
   expandedDeckIds: string[];
   allDeckIds: string[];
-  metrics: any;
+  metrics: PlanMetrics | null;
   avgSecondsPerCard: number;
   isPremium: boolean;
-  updateCapacity: any;
-  updateNewCardsLimit: any;
-  reorderObjectives: any;
-  updatePlan: any;
+  calibrationFactor?: number;
+  updateCapacity: UpdateCapacityMutation;
+  updateNewCardsLimit: UpdateNewCardsLimitMutation;
+  reorderObjectives: ReorderObjectivesMutation;
+  updatePlan: UpdatePlanMutation;
   onNavigateBack: () => void;
   onStartNewPlan: () => void;
   onStartEdit: (plan: StudyPlanType) => void;
@@ -46,7 +52,7 @@ interface StudyPlanHomeProps {
 
 export const StudyPlanHome = ({
   plans, activeDecks, globalCapacity, expandedDeckIds, allDeckIds, metrics,
-  avgSecondsPerCard, isPremium, updateCapacity, updateNewCardsLimit,
+  avgSecondsPerCard, isPremium, calibrationFactor, updateCapacity, updateNewCardsLimit,
   reorderObjectives, updatePlan,
   onNavigateBack, onStartNewPlan, onStartEdit,
 }: StudyPlanHomeProps) => {
@@ -229,6 +235,7 @@ export const StudyPlanHome = ({
           allDeckIds={expandedDeckIds} dailyMinutes={globalCapacity.dailyMinutes}
           weeklyMinutes={globalCapacity.weeklyMinutes} weeklyNewCards={globalCapacity.weeklyNewCards}
           plans={plans} updateCapacity={updateCapacity} metricsTotalNew={metrics?.totalNew}
+          activeDecks={activeDecks} calibrationFactor={calibrationFactor}
         />
 
         {/* MODAL: Confirmar alteração de novos cards */}

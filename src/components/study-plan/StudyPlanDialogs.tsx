@@ -17,7 +17,7 @@ import {
   AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { countOverdueCards, fetchOverdueCardIds, rescheduleCards, resetOverdueCards } from '@/services/studyPlanService';
 import { formatMinutes } from './constants';
 
 // ─── "What Can I Do?" Dialog ────────────────────────────
@@ -97,63 +97,56 @@ export function CatchUpDialog({ open, onOpenChange, totalReview, avgSecondsPerCa
     if (!open || allDeckIds.length === 0) return;
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 30);
-    supabase
-      .from('cards')
-      .select('id', { count: 'exact', head: true })
-      .in('deck_id', allDeckIds)
-      .eq('state', 2)
-      .lt('scheduled_date', cutoff.toISOString())
-      .then(({ count }) => setOverdueCount(count ?? 0));
+    countOverdueCards(allDeckIds, cutoff.toISOString()).then(c => setOverdueCount(c));
   }, [open, allDeckIds]);
 
   const handleDilute = async (days: number) => {
     if (allDeckIds.length === 0) return;
     setDiluting(true);
 
-    const { data: overdueCards, error: fetchErr } = await supabase
-      .from('cards')
-      .select('id')
-      .in('deck_id', allDeckIds)
-      .eq('state', 2)
-      .lte('scheduled_date', new Date().toISOString())
-      .order('scheduled_date', { ascending: true });
+    try {
+      const overdueIds = await fetchOverdueCardIds(allDeckIds);
+      if (overdueIds.length === 0) {
+        setDiluting(false);
+        onOpenChange(false);
+        return;
+      }
 
-    if (fetchErr || !overdueCards || overdueCards.length === 0) {
+      const perDay = Math.ceil(overdueIds.length / days);
+      let hasError = false;
+
+      for (let d = 0; d < days && !hasError; d++) {
+        const batch = overdueIds.slice(d * perDay, (d + 1) * perDay);
+        if (batch.length === 0) break;
+        const targetDate = new Date();
+        targetDate.setDate(targetDate.getDate() + d);
+        targetDate.setHours(0, 0, 0, 0);
+
+        try {
+          await rescheduleCards(batch, targetDate.toISOString());
+        } catch {
+          hasError = true;
+        }
+      }
+
       setDiluting(false);
       onOpenChange(false);
-      if (fetchErr) toast({ title: 'Erro ao buscar cards', variant: 'destructive' });
+
+      if (hasError) {
+        toast({ title: 'Erro ao redistribuir alguns cards', variant: 'destructive' });
+      } else {
+        const perDayFinal = Math.ceil(overdueIds.length / days);
+        const minPerDay = Math.round((perDayFinal * avgSecondsPerCard) / 60);
+        toast({
+          title: `${overdueIds.length} revisões redistribuídas em ${days} dias`,
+          description: `~${perDayFinal} cards/dia · ${formatMinutes(minPerDay)} extra por dia`,
+        });
+      }
+    } catch (fetchErr) {
+      setDiluting(false);
+      onOpenChange(false);
+      toast({ title: 'Erro ao buscar cards', variant: 'destructive' });
       return;
-    }
-
-    const perDay = Math.ceil(overdueCards.length / days);
-    let hasError = false;
-
-    for (let d = 0; d < days && !hasError; d++) {
-      const batch = overdueCards.slice(d * perDay, (d + 1) * perDay);
-      if (batch.length === 0) break;
-      const targetDate = new Date();
-      targetDate.setDate(targetDate.getDate() + d);
-      targetDate.setHours(0, 0, 0, 0);
-
-      const { error: upErr } = await supabase
-        .from('cards')
-        .update({ scheduled_date: targetDate.toISOString() } as any)
-        .in('id', batch.map(c => c.id));
-
-      if (upErr) hasError = true;
-    }
-
-    setDiluting(false);
-    onOpenChange(false);
-
-    if (hasError) {
-      toast({ title: 'Erro ao redistribuir alguns cards', variant: 'destructive' });
-    } else {
-      const minPerDay = Math.round((perDay * avgSecondsPerCard) / 60);
-      toast({
-        title: `${overdueCards.length} revisões redistribuídas em ${days} dias`,
-        description: `~${perDay} cards/dia · ${formatMinutes(minPerDay)} extra por dia`,
-      });
     }
 
     qc.invalidateQueries({ queryKey: ['plan-metrics'] });
@@ -169,26 +162,22 @@ export function CatchUpDialog({ open, onOpenChange, totalReview, avgSecondsPerCa
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 30);
     
-    const { error } = await supabase
-      .from('cards')
-      .update({ state: 0, stability: 0, difficulty: 0, scheduled_date: new Date().toISOString() } as any)
-      .in('deck_id', allDeckIds)
-      .eq('state', 2)
-      .lt('scheduled_date', cutoff.toISOString());
-    
-    setResetting(false);
-    setShowResetConfirm(false);
-    onOpenChange(false);
-    
-    if (error) {
-      toast({ title: 'Erro ao resetar cards', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await resetOverdueCards(allDeckIds, cutoff.toISOString());
+      setResetting(false);
+      setShowResetConfirm(false);
+      onOpenChange(false);
       qc.invalidateQueries({ queryKey: ['plan-metrics'] });
       qc.invalidateQueries({ queryKey: ['per-deck-new-counts'] });
       qc.invalidateQueries({ queryKey: ['study-queue'] });
       qc.invalidateQueries({ queryKey: ['decks'] });
       qc.invalidateQueries({ queryKey: ['deck-stats'] });
       toast({ title: `${overdueCount} cards resetados`, description: 'Eles voltaram ao estado "novo" e serão reapresentados gradualmente.' });
+    } catch (error: any) {
+      setResetting(false);
+      setShowResetConfirm(false);
+      onOpenChange(false);
+      toast({ title: 'Erro ao resetar cards', description: error.message, variant: 'destructive' });
     }
   };
 

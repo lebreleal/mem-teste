@@ -22,6 +22,8 @@ interface AICreateDeckDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   folderId?: string | null;
+  /** Parent deck ID — creates the new deck as a sub-deck */
+  parentDeckId?: string | null;
   existingDeckId?: string | null;
   existingDeckName?: string | null;
   /** Pre-loaded data from a pending background deck for review */
@@ -34,8 +36,8 @@ interface AICreateDeckDialogProps {
   } | null;
 }
 
-const AICreateDeckDialog = ({ open, onOpenChange, folderId, existingDeckId, existingDeckName, pendingReviewData }: AICreateDeckDialogProps) => {
-  const flow = useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existingDeckName, pendingReviewData });
+const AICreateDeckDialog = ({ open, onOpenChange, folderId, parentDeckId, existingDeckId, existingDeckName, pendingReviewData }: AICreateDeckDialogProps) => {
+  const flow = useAIDeckFlow({ onOpenChange, folderId, parentDeckId, existingDeckId, existingDeckName, pendingReviewData });
 
   const stepTitle: Record<string, string> = {
     pages: 'Selecione as páginas',
