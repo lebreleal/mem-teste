@@ -87,11 +87,14 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
 
   const openEdit = async () => {
     setEditLoading(true);
+    // Capture full snapshot at click time — these refs are stable throughout the edit session
     editCardIdRef.current = card.id;
+    editCardDeckIdRef.current = card.deck_id;
+    editCardTypeRef.current = card.card_type;
+    editCardBackRef.current = card.back_content;
+    originalFrontRef.current = card.front_content;
     // Preload the RichEditor chunk
     try { await import('@/components/RichEditor'); } catch {}
-
-    originalFrontRef.current = card.front_content;
 
     if (card.card_type === 'multiple_choice') {
       setEditorType('basic'); // MC uses basic layout in unified editor
