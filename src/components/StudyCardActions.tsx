@@ -626,15 +626,20 @@ Retorne o front com a sintaxe {{c1::resposta}} e back vazio.`;
       isEditingMCRef.current = false;
 
       // Save immediately — update card type to cloze
+      const newBackContent = JSON.stringify({ clozeTarget: 1, extra: '' });
       await patchCard(editCardIdRef.current, {
         front_content: newFront,
-        back_content: JSON.stringify({ clozeTarget: 1, extra: '' }),
+        back_content: newBackContent,
         card_type: 'cloze',
       });
       onCardUpdated(editCardIdRef.current, {
         front_content: newFront,
-        back_content: JSON.stringify({ clozeTarget: 1, extra: '' }),
+        back_content: newBackContent,
       });
+      // Also update siblings so the study queue reflects the change
+      onSiblingsUpdated?.([
+        { id: editCardIdRef.current, front_content: newFront, back_content: newBackContent },
+      ], [], null);
       queryClient.invalidateQueries({ queryKey: ['cards'] });
       toast({ title: '✨ Convertido para Cloze!' });
       setEditOpen(false);

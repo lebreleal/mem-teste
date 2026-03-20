@@ -442,6 +442,8 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
       allRects: shapes,
       activeRectIds: shapes.map(s => s.id),
       colorGroups: Object.fromEntries(colorGroups),
+      canvasWidth: imgSize.w,
+      canvasHeight: imgSize.h,
     });
     onSave(frontContent, '');
   };
