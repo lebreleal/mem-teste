@@ -303,16 +303,49 @@ const Study = () => {
             onOpenExplainChat={(options) => { const action = options?.action || 'explain'; setExplainInChat(action); chatClearRef.current?.(); tutor.handleTutorRequest(currentCard, options || { action: 'explain' }); }}
             actions={
               <StudyCardActions card={currentCard} isLiveDeck={isLiveDeck}
-                onCardUpdated={(updatedFields) => { setLocalQueue(prev => prev.map(c => c.id === currentCard.id ? { ...c, ...updatedFields } : c)); setDisplayedCard(prev => prev && prev.id === currentCard.id ? { ...prev, ...updatedFields } : prev); }}
-                onCardFrozen={() => { setLocalQueue(prev => prev.filter(c => c.id !== currentCard.id)); setCardKey(prev => prev + 1); }}
-                onCardBuried={() => {
+                onCardUpdated={(cardId, updatedFields) => { setLocalQueue(prev => prev.map(c => c.id === cardId ? { ...c, ...updatedFields } : c)); setDisplayedCard(prev => prev && prev.id === cardId ? { ...prev, ...updatedFields } : prev); }}
+                onCardFrozen={(cardId) => { setLocalQueue(prev => prev.filter(c => c.id !== cardId)); setCardKey(prev => prev + 1); }}
+                onCardBuried={(cardId) => {
+                  const targetCard = localQueue.find(c => c.id === cardId) ?? currentCard;
                   setLocalQueue(prev => {
-                    let filtered = prev.filter(c => c.id !== currentCard.id);
-                    if (currentCard.card_type === 'cloze') { const sibIds = getSiblingIds(currentCard, filtered); if (sibIds.length > 0) { const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); tomorrow.setHours(0, 0, 0, 0); buryCards(sibIds, tomorrow.toISOString()); filtered = filtered.filter(c => !sibIds.includes(c.id)); } }
+                    let filtered = prev.filter(c => c.id !== cardId);
+                    if (targetCard.card_type === 'cloze') { const sibIds = getSiblingIds(targetCard, filtered); if (sibIds.length > 0) { const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); tomorrow.setHours(0, 0, 0, 0); buryCards(sibIds, tomorrow.toISOString()); filtered = filtered.filter(c => !sibIds.includes(c.id)); } }
                     return filtered;
                   }); setCardKey(prev => prev + 1);
                 }}
-                onSiblingsUpdated={(updates, deletedIds) => { setLocalQueue(prev => { let q = prev.map(c => { const upd = updates.find(u => u.id === c.id); return upd ? { ...c, front_content: upd.front_content, back_content: upd.back_content } : c; }); if (deletedIds.length > 0) q = q.filter(c => !deletedIds.includes(c.id)); return q; }); }}
+                onSiblingsUpdated={(updates, deletedIds, replacementForActiveCard) => {
+                  let nextDisplayedCard: StudyCard | null = null;
+                  const currentCardId = currentCard.id;
+
+                  setLocalQueue(prev => {
+                    let q = prev.map(c => {
+                      const upd = updates.find(u => u.id === c.id);
+                      return upd ? { ...c, front_content: upd.front_content, back_content: upd.back_content } : c;
+                    });
+
+                    if (deletedIds.length > 0) {
+                      q = q.filter(c => !deletedIds.includes(c.id));
+                    }
+
+                    if (replacementForActiveCard && deletedIds.includes(currentCardId)) {
+                      nextDisplayedCard = q.find(c => c.id === replacementForActiveCard.id) ?? null;
+                    }
+
+                    return q;
+                  });
+
+                  const currentUpdate = updates.find(update => update.id === currentCardId);
+                  if (currentUpdate) {
+                    setDisplayedCard(prev => prev && prev.id === currentCardId
+                      ? { ...prev, front_content: currentUpdate.front_content, back_content: currentUpdate.back_content }
+                      : prev);
+                  }
+
+                  if (replacementForActiveCard && deletedIds.includes(currentCardId) && nextDisplayedCard) {
+                    setDisplayedCard(nextDisplayedCard);
+                    setCardKey(prev => prev + 1);
+                  }
+                }}
                 onOpenChat={() => setChatOpen(true)} chatHasMessages={chatHasMessages}
               />
             }

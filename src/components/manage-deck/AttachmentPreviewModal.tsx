@@ -2,6 +2,7 @@ import { X } from 'lucide-react';
 import { IconImageOcclusion } from '@/components/icons';
 
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 
 interface AttachmentPreviewModalProps {
   open: boolean;
@@ -21,14 +22,8 @@ const AttachmentPreviewModal = ({
   if (!open || !imageUrl) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className="relative w-full max-w-md rounded-3xl border border-border bg-background shadow-2xl"
-        onClick={(event) => event.stopPropagation()}
-      >
+    <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
+      <DialogContent className="w-full max-w-md overflow-hidden rounded-3xl border border-border bg-background p-0 shadow-2xl sm:rounded-3xl [&>button]:hidden">
         <button
           type="button"
           onClick={onClose}
@@ -56,8 +51,8 @@ const AttachmentPreviewModal = ({
             </div>
           ) : null}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 
