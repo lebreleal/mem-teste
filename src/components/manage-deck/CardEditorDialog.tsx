@@ -30,6 +30,7 @@ interface CardEditorDialogProps {
   handleAICreate?: (templatePrompt: string) => void;
   addMcOption: () => void;
   removeMcOption: (idx: number) => void;
+  extraContent?: React.ReactNode;
 }
 
 export const CardEditorDialog = ({
