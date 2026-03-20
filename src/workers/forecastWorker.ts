@@ -444,9 +444,9 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
 
     // Calculate minutes — keep raw fractional values, round only for final output
     // New cards: 1 first-see (new speed) + remaining interactions at learning speed
-    const firstSeeMin = (newCardsToday * newSecsPerCard * scaleFactor) / 60;
+    const firstSeeMin = (newCardsToday * newSecsPerCard * scaleFactor * calFactor) / 60;
     const newLearningInteractions = newCardsToday * Math.max(0, reviewsPerNewCard - 1);
-    const newLearningMin = (newLearningInteractions * learningSecsPerCard * scaleFactor) / 60;
+    const newLearningMin = (newLearningInteractions * learningSecsPerCard * scaleFactor * calFactor) / 60;
     const newMinRaw = firstSeeMin + newLearningMin;
     const totalMinRaw = revMinRaw + newMinRaw + learnMinRaw + relearnMinRaw;
 
