@@ -313,7 +313,31 @@ const Study = () => {
                     return filtered;
                   }); setCardKey(prev => prev + 1);
                 }}
-                onSiblingsUpdated={(updates, deletedIds) => { setLocalQueue(prev => { let q = prev.map(c => { const upd = updates.find(u => u.id === c.id); return upd ? { ...c, front_content: upd.front_content, back_content: upd.back_content } : c; }); if (deletedIds.length > 0) q = q.filter(c => !deletedIds.includes(c.id)); return q; }); }}
+                onSiblingsUpdated={(updates, deletedIds, replacementForActiveCard) => {
+                  let nextDisplayedCard: StudyCard | null = null;
+
+                  setLocalQueue(prev => {
+                    let q = prev.map(c => {
+                      const upd = updates.find(u => u.id === c.id);
+                      return upd ? { ...c, front_content: upd.front_content, back_content: upd.back_content } : c;
+                    });
+
+                    if (deletedIds.length > 0) {
+                      q = q.filter(c => !deletedIds.includes(c.id));
+                    }
+
+                    if (replacementForActiveCard && deletedIds.includes(currentCard.id)) {
+                      nextDisplayedCard = q.find(c => c.id === replacementForActiveCard.id) ?? null;
+                    }
+
+                    return q;
+                  });
+
+                  if (replacementForActiveCard && deletedIds.includes(currentCard.id) && nextDisplayedCard) {
+                    setDisplayedCard(nextDisplayedCard);
+                    setCardKey(prev => prev + 1);
+                  }
+                }}
                 onOpenChat={() => setChatOpen(true)} chatHasMessages={chatHasMessages}
               />
             }

@@ -27,6 +27,7 @@ export {
   createCards,
   updateCard,
   deleteCard,
+  deleteCardWithReviewLogs,
   moveCard,
   bulkMoveCards,
   bulkDeleteCards,

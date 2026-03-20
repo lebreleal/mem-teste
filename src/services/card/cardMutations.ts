@@ -77,6 +77,18 @@ export async function deleteCard(id: string) {
   if (error) throw error;
 }
 
+/** Delete a card and any dependent review logs first (used when removing reviewed cloze siblings). */
+export async function deleteCardWithReviewLogs(id: string) {
+  const { error: logsError } = await supabase
+    .from('review_logs')
+    .delete()
+    .eq('card_id', id);
+  if (logsError) throw logsError;
+
+  const { error } = await supabase.from('cards').delete().eq('id', id);
+  if (error) throw error;
+}
+
 /** Move a card to a different deck. */
 export async function moveCard(id: string, targetDeckId: string) {
   const { error } = await supabase.from('cards').update({ deck_id: targetDeckId } as any).eq('id', id);
