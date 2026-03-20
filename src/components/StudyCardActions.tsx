@@ -577,20 +577,27 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
 
     setIsConvertingMC(true);
     try {
-      const customPrompt = `Converta este cartão de múltipla escolha em um cartão CLOZE de alta qualidade.
+      const customPrompt = `Converta este cartão de múltipla escolha em um EXCELENTE cartão CLOZE, aplicando os princípios de formulação do conhecimento.
 
 INFORMAÇÕES DO CARTÃO:
 - Pergunta: ${question}
 - Resposta correta: ${correctAnswer}
 
-REGRAS:
-1. Use APENAS a pergunta e a resposta correta. NÃO use alternativas erradas.
-2. Crie uma AFIRMAÇÃO DECLARATIVA COMPLETA que incorpore naturalmente a resposta como uma lacuna {{c1::resposta}}.
-3. A frase deve fazer sentido quando lida por completo e ser respondível quando a lacuna está oculta.
-4. A lacuna deve conter o CONCEITO-CHAVE (a resposta correta), nunca palavras triviais.
-5. NÃO adicione informações que não estão no cartão original.
-6. O campo "back" deve ficar VAZIO (será gerado automaticamente pelo sistema de cloze).
-7. Use HTML simples se necessário.
+REGRAS OBRIGATÓRIAS:
+1. Crie uma AFIRMAÇÃO DECLARATIVA COMPLETA e AUTOCONTIDA — nunca uma pergunta. A frase deve ser um fato que se sustenta sozinho.
+2. A lacuna {{c1::resposta}} deve conter APENAS o conceito-chave (a resposta correta). Nunca oculte palavras triviais como artigos, preposições ou verbos auxiliares.
+3. A frase deve fornecer CONTEXTO SUFICIENTE para que haja UMA ÚNICA resposta possível quando a lacuna está oculta. Se necessário, adicione contexto mínimo (ex: área do conhecimento, relação causal).
+4. PROIBIDO copiar a pergunta original e simplesmente inserir a resposta. REFORMULE completamente em uma afirmação declarativa natural.
+5. A frase completa (com a lacuna preenchida) deve soar como uma sentença de livro-texto — clara, direta, sem ambiguidade.
+6. O campo "back" deve ficar VAZIO.
+7. Use HTML simples (<b>, <i>) apenas se realmente necessário.
+
+EXEMPLOS DE CONVERSÃO:
+- Pergunta: "Qual hormônio regula a glicemia?" / Resposta: "Insulina"
+  → Cloze: "O hormônio produzido pelas células beta do pâncreas que reduz a glicemia é a {{c1::insulina}}."
+
+- Pergunta: "Qual a capital da França?" / Resposta: "Paris"
+  → Cloze: "A capital da França é {{c1::Paris}}."
 
 Retorne o front com a sintaxe {{c1::resposta}} e back vazio.`;
 
