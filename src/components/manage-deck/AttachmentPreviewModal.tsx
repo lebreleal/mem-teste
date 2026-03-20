@@ -22,7 +22,7 @@ const AttachmentPreviewModal = ({
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
@@ -39,11 +39,11 @@ const AttachmentPreviewModal = ({
         </button>
 
         <div className="space-y-4 p-4 pt-12">
-          <div className="flex min-h-[18rem] items-center justify-center rounded-2xl bg-muted/20 p-4">
+          <div className="flex min-h-[14rem] items-center justify-center rounded-2xl bg-muted/20 p-4">
             <img
               src={imageUrl}
               alt="Pré-visualização do anexo"
-              className="max-h-[55dvh] w-auto max-w-full rounded-xl object-contain"
+              className="h-[200px] w-[250px] max-w-full rounded-xl object-contain"
             />
           </div>
 
