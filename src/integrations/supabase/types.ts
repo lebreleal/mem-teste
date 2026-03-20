@@ -3284,6 +3284,18 @@ export type Database = {
         }[]
       }
       strip_html: { Args: { p_text: string }; Returns: string }
+      validate_forecast_accuracy: {
+        Args: { p_days?: number; p_user_id: string }
+        Returns: {
+          actual_learning_cards: number
+          actual_new_cards: number
+          actual_relearning_cards: number
+          actual_review_cards: number
+          actual_total_cards: number
+          actual_total_seconds: number
+          review_date: string
+        }[]
+      }
     }
     Enums: {
       app_role: "admin"
