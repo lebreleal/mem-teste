@@ -85,7 +85,8 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
   const resetForm = () => {
     setFront(''); setBack('');
     setEditorType('basic');
-    setMcOptions(['', '', '', '']); setMcCorrectIndex(0);
+    setMcOptions([]); setMcCorrectIndex(0);
+    isEditingMCRef.current = false;
   };
 
   const openEdit = async () => {
