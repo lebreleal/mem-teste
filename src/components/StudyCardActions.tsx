@@ -449,31 +449,44 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
     const activeCardId = editCardIdRef.current;
     const activeTarget = parseClozeTarget(editCardBackRef.current);
 
-    const updatedSiblings: { id: string; front_content: string; back_content: string }[] = numsToKeep.map(n => ({
-      id: existingTargets.get(n)!,
-      front_content: frontContent,
-      back_content: JSON.stringify({ clozeTarget: n, extra: userBack }),
-    }));
-    const remainingNumsToAdd = [...numsToAdd];
+    // Build updated siblings list — prefer keeping the active card alive by reassigning its target
+    const updatedSiblings: { id: string; front_content: string; back_content: string }[] = [];
     let replacementForActiveCard: { id: string; front_content: string; back_content: string } | null = null;
+    const remainingNumsToAdd = [...numsToAdd];
 
     if (numsToRemove.includes(activeTarget)) {
-      const replacementTarget = numsToKeep.find(n => existingTargets.get(n) !== activeCardId);
-
-      if (replacementTarget) {
-        replacementForActiveCard = {
-          id: existingTargets.get(replacementTarget)!,
-          front_content: frontContent,
-          back_content: JSON.stringify({ clozeTarget: replacementTarget, extra: userBack }),
-        };
-      } else if (remainingNumsToAdd.length > 0) {
+      // Active card's target is being removed — reassign it to a surviving or new target
+      // First, try to reassign to a target that would otherwise need a NEW card
+      if (remainingNumsToAdd.length > 0) {
         const reassignedTarget = remainingNumsToAdd.shift()!;
         updatedSiblings.push({
           id: activeCardId,
           front_content: frontContent,
           back_content: JSON.stringify({ clozeTarget: reassignedTarget, extra: userBack }),
         });
+      } else {
+        // No new targets available — the active card's color was merged into an existing one
+        // Find the surviving sibling to use as replacement
+        const survivingTarget = numsToKeep.find(n => existingTargets.get(n) !== activeCardId);
+        if (survivingTarget) {
+          replacementForActiveCard = {
+            id: existingTargets.get(survivingTarget)!,
+            front_content: frontContent,
+            back_content: JSON.stringify({ clozeTarget: survivingTarget, extra: userBack }),
+          };
+        }
       }
+    }
+
+    // Add all surviving targets (excluding active card if already handled)
+    for (const n of numsToKeep) {
+      const cardId = existingTargets.get(n)!;
+      if (updatedSiblings.some(u => u.id === cardId)) continue; // already handled
+      updatedSiblings.push({
+        id: cardId,
+        front_content: frontContent,
+        back_content: JSON.stringify({ clozeTarget: n, extra: userBack }),
+      });
     }
 
     const deleteIds = numsToRemove
