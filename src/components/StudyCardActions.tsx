@@ -139,7 +139,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
       await freezeCardService(card.id);
       toast({ title: '❄️ Card congelado', description: 'Este card não aparecerá mais nas revisões.' });
       setFreezeConfirmOpen(false);
-      onCardFrozen();
+      onCardFrozen(card.id);
     } catch {
       toast({ title: 'Erro ao congelar card', variant: 'destructive' });
     }
