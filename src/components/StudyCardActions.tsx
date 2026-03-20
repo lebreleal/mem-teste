@@ -60,10 +60,13 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
   const [front, setFront] = useState('');
   const [back, setBack] = useState('');
   const [editorType, setEditorType] = useState<EditorCardType | null>('basic');
-  const [mcOptions, setMcOptions] = useState<string[]>(['', '', '', '']);
+  const [mcOptions, setMcOptions] = useState<string[]>([]);
   const [mcCorrectIndex, setMcCorrectIndex] = useState(0);
   const [occlusionModalOpen, setOcclusionModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isConvertingMC, setIsConvertingMC] = useState(false);
+  // Track if current card being edited is MC type
+  const isEditingMCRef = useRef(false);
 
   // AI improve state
   const [isImproving, setIsImproving] = useState(false);
