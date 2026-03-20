@@ -1,52 +1,43 @@
 
 
-# Plano: Corrigir Simulador de Cards — Limites, Calibração e Validação Histórica
+# Plano: Corrigir Erro de Deploy (Railway/Nixpacks)
 
-## Problemas Encontrados
+## Diagnóstico
 
-### 1. `daily_review_limit` NÃO é respeitado (BUG CRÍTICO)
-O worker busca `daily_review_limit` de cada deck via RPC, mas **nunca aplica esse limite**. Todos os cards de revisão pendentes são processados sem cap. Isso explica projeções infladas como 550 cards/dia — na prática, o sistema real limita revisões por deck.
+Dois problemas no deploy:
 
-### 2. Tempo de cards novos sem `calibrationFactor`
-Linhas 426-429 do worker calculam `firstSeeMin` e `newLearningMin` SEM multiplicar por `calFactor`, enquanto revisão/learning/relearning aplicam. Inconsistência que subestima tempo de novos.
+1. **Node.js via apt = versão 18** — O `nixpacks.toml` instala Node via `aptPkgs = ["nodejs", "npm"]`, que no Ubuntu Noble entrega Node.js **18.x**. Muitas dependências do projeto (Vite 5, vitest 3, etc.) exigem Node **>=20**.
 
-### 3. Sem validação histórica de contagem de cards
-Fizemos validação para tempo (comparar estimado vs real), mas nunca fizemos para **quantidade de cards por dia**. Não há como saber se a projeção de "30 revisões amanhã" é precisa sem comparar com o que realmente aconteceu.
+2. **`SecretsUsedInArgOrEnv`** — Nixpacks injeta as variáveis `VITE_*` como `ENV` no Dockerfile gerado. O Docker BuildKit avisa que isso expõe segredos. Para variáveis VITE públicas (publishable key), isso é apenas um warning, mas pode causar falha dependendo da config do builder.
 
-## Mudanças
+## Mudança
 
-### 1. Enforcar `daily_review_limit` no worker
-**Arquivo: `src/workers/forecastWorker.ts`**
+**Arquivo: `nixpacks.toml`**
 
-No loop de coleta de cards de revisão (linhas 296-303), agrupar por deck e limitar ao `daily_review_limit` de cada deck. Cards que excedem o limite ficam para o dia seguinte (permanecem com `scheduledDay` inalterado).
+Trocar `aptPkgs` por `nixPkgs` com Node.js 20 (que já inclui npm):
 
-### 2. Corrigir calibração nos cards novos
-**Arquivo: `src/workers/forecastWorker.ts`**
+```toml
+[phases.setup]
+nixPkgs = ["nodejs_20"]
+aptPkgs = []
 
-Multiplicar `calFactor` no cálculo de `firstSeeMin` e `newLearningMin` (linhas 426-429).
+[phases.install]
+cmds = ["npm install --legacy-peer-deps"]
 
-### 3. Nova RPC: `validate_forecast_accuracy`
-**Migration SQL**
+[phases.build]
+cmds = ["npm run build"]
 
-Função que compara previsão vs realidade nos últimos 14 dias do usuário:
-- Para cada dia passado, conta quantos cards de cada estado (new, review, learning) o usuário REALMENTE estudou (via `review_logs`)
-- Retorna os dados brutos para que possamos comparar com o que o simulador diria
+[start]
+cmd = "npx serve dist -s -l 3000"
+```
 
-Isso é uma ferramenta de diagnóstico — não altera a UI, mas permite validar se o simulador está acertando.
-
-### 4. Exibir contagem de cards no tooltip e resumo
-Verificar que o tooltip do gráfico já mostra cards (revisões, novos, aprendendo) e que o resumo (`summary`) inclui `avgDailyCards` e `totalCards` — já implementado na iteração anterior.
-
-## Arquivos Afetados
-
-| Arquivo | Mudança |
-|---|---|
-| `src/workers/forecastWorker.ts` | Enforcar `daily_review_limit`, fix `calFactor` em novos |
-| Migration SQL | RPC `validate_forecast_accuracy` (diagnóstico) |
+Isso resolve ambos os problemas:
+- Node 20 é compatível com todas as dependências
+- Nixpacks com nixPkgs gerencia o Node corretamente sem conflitos de apt
 
 ## Impacto
 
-- Cards/dia projetados caem para valores realistas (respeitando limites reais)
-- Tempo de novos corrigido (~5-15% de ajuste)
-- Ferramenta de validação permite confirmar precisão futura
+- Apenas o arquivo `nixpacks.toml` é alterado
+- Zero impacto no código ou no preview do Lovable
+- Deploy volta a funcionar
 
