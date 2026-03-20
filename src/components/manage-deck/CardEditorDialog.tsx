@@ -40,6 +40,7 @@ export const CardEditorDialog = ({
   isSaving, isImproving, isAICreating = false,
   occlusionModalOpen, setOcclusionModalOpen,
   resetForm, handleSave, handleImprove, handleAICreate, addMcOption, removeMcOption,
+  extraContent,
 }: CardEditorDialogProps) => {
 
   const hasOcclusionImage = (() => {
