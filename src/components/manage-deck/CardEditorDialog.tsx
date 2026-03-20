@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Check, Loader2, X } from 'lucide-react';
+import { Loader2, X } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import LazyRichEditor from '@/components/LazyRichEditor';
 import OcclusionEditor from '@/components/manage-deck/OcclusionEditor';
 import AttachmentPreviewModal from '@/components/manage-deck/AttachmentPreviewModal';
 import { OCCLUSION_COLORS } from '@/lib/occlusionColors';
+import { IconCheck } from '@/components/icons';
 import type { ImageAttachment } from '@/components/RichEditor';
 import type { EditorCardType } from '@/hooks/useManageDeck';
 
@@ -65,10 +66,13 @@ export const CardEditorDialog = ({
   const [occlusionImageUrl, setOcclusionImageUrl] = useState('');
   const [occlusionRects, setOcclusionRects] = useState<Array<{ id: string; color?: string }>>([]);
   const [occlusionCanvasSize, setOcclusionCanvasSize] = useState<{ w: number; h: number } | null>(null);
+  const [occlusionDraftWasNew, setOcclusionDraftWasNew] = useState(false);
 
   // ─── Derived text content (without images) ───
   const [editorFront, setEditorFront] = useState('');
   const [editorBack, setEditorBack] = useState('');
+
+  const hasOcclusion = !!occlusionImageUrl && occlusionRects.length > 0;
 
   // Load content from front/back props when dialog opens or card changes
   useEffect(() => {
@@ -95,18 +99,28 @@ export const CardEditorDialog = ({
         let data: Record<string, unknown>;
         try { data = JSON.parse(front); } catch { data = JSON.parse(strippedFront); }
         const rects = (data.allRects || data.rects || []) as Array<{ id: string; color?: string }>;
-        setOcclusionImageUrl((data.imageUrl as string) || '');
-        setOcclusionRects(rects);
-        setOcclusionCanvasSize(data.canvasWidth ? { w: data.canvasWidth as number, h: data.canvasHeight as number } : null);
+        const imageUrl = (data.imageUrl as string) || '';
         const { text, images } = extractImages((data.frontText as string) || '');
         setEditorFront(text);
-        setFrontAttachedImages(images);
+        if (imageUrl && rects.length === 0) {
+          setFrontAttachedImages(images.includes(imageUrl) ? images : [...images, imageUrl]);
+          setOcclusionImageUrl('');
+          setOcclusionRects([]);
+          setOcclusionCanvasSize(null);
+        } else {
+          setFrontAttachedImages(images);
+          setOcclusionImageUrl(imageUrl);
+          setOcclusionRects(rects);
+          setOcclusionCanvasSize(data.canvasWidth ? { w: data.canvasWidth as number, h: data.canvasHeight as number } : null);
+        }
       } catch {
         setEditorFront('');
         setOcclusionImageUrl('');
         setOcclusionRects([]);
         setFrontAttachedImages([]);
+        setOcclusionCanvasSize(null);
       }
+      setOcclusionDraftWasNew(false);
     } else {
       const { text, images } = extractImages(front);
       setEditorFront(text);
@@ -114,6 +128,7 @@ export const CardEditorDialog = ({
       setOcclusionImageUrl('');
       setOcclusionRects([]);
       setOcclusionCanvasSize(null);
+      setOcclusionDraftWasNew(false);
     }
 
     // Back
@@ -134,7 +149,7 @@ export const CardEditorDialog = ({
     const imgTags = frontAttachedImages.map(url => `<img src="${url}">`).join('');
     const frontWithImages = v + imgTags;
 
-    if (occlusionImageUrl) {
+    if (hasOcclusion) {
       const colorGroups: Record<string, string[]> = {};
       occlusionRects.forEach(r => {
         const color = r.color || OCCLUSION_COLORS[0].fill;
@@ -150,7 +165,7 @@ export const CardEditorDialog = ({
     } else {
       setFront(frontWithImages);
     }
-  }, [frontAttachedImages, occlusionImageUrl, occlusionRects, occlusionCanvasSize, setFront]);
+  }, [frontAttachedImages, hasOcclusion, occlusionImageUrl, occlusionRects, occlusionCanvasSize, setFront]);
 
   const handleBackTextChange = useCallback((v: string) => {
     setEditorBack(v);
@@ -181,6 +196,7 @@ export const CardEditorDialog = ({
     setOcclusionImageUrl('');
     setOcclusionRects([]);
     setOcclusionCanvasSize(null);
+    setOcclusionDraftWasNew(false);
   };
 
   return (
@@ -188,9 +204,9 @@ export const CardEditorDialog = ({
       <Dialog open={editorOpen} onOpenChange={open => { if (!open) handleClose(); }}>
         <DialogContent
           className={cn(
-            'flex flex-col gap-0 p-0 border bg-background sm:rounded-2xl',
-            'w-[96vw] sm:w-full',
-            occlusionModalOpen ? 'sm:max-w-5xl max-h-[94dvh]' : 'sm:max-w-2xl max-h-[90dvh]',
+            'flex h-[92dvh] max-h-[92dvh] flex-col gap-0 overflow-hidden border bg-background p-0 sm:rounded-2xl [&>button]:hidden',
+            'w-[calc(100vw-1rem)] sm:w-full',
+            occlusionModalOpen ? 'sm:max-w-5xl' : 'sm:max-w-3xl',
           )}
         >
           {/* Header — minimal, matches ManageDeck */}
@@ -211,7 +227,7 @@ export const CardEditorDialog = ({
               disabled={isSaving}
               className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
-              {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-4 w-4" />}
+              {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <IconCheck className="h-4 w-4" />}
             </button>
           </div>
 
@@ -221,14 +237,14 @@ export const CardEditorDialog = ({
             occlusionModalOpen ? 'overflow-hidden' : 'overflow-y-auto',
           )}>
             <div className={cn(
-              'mx-auto max-w-2xl flex flex-col gap-2 p-3 sm:p-5',
+              'mx-auto flex min-h-full w-full max-w-2xl flex-col gap-2 p-3 sm:p-5',
               occlusionModalOpen && 'pointer-events-none select-none blur-[1px] scale-[0.985] transition-all',
             )}>
               {/* Front card */}
-              <div className="flex-1 min-h-[100px] rounded-xl border border-border/60 bg-card overflow-hidden relative flex flex-col">
-                {(!editorFront || editorFront === '<p></p>') && !occlusionImageUrl && frontAttachedImages.length === 0 ? (
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <span className="text-muted-foreground/30 text-base font-medium">Frente</span>
+              <div className="relative flex min-h-[220px] flex-1 flex-col overflow-hidden rounded-xl border border-border/60 bg-card sm:min-h-[260px]">
+                {(!editorFront || editorFront === '<p></p>') && !hasOcclusion && frontAttachedImages.length === 0 ? (
+                  <div className="pointer-events-none absolute left-4 top-4 z-10">
+                    <span className="text-sm font-medium text-muted-foreground/40">Frente</span>
                   </div>
                 ) : null}
                 <LazyRichEditor
@@ -241,9 +257,8 @@ export const CardEditorDialog = ({
                   onImageAttached={(url) => {
                     setFrontAttachedImages(prev => {
                       const next = [...prev, url];
-                      // Rebuild parent front
                       const imgTags = next.map(u => `<img src="${u}">`).join('');
-                      if (occlusionImageUrl) {
+                      if (hasOcclusion) {
                         const colorGroups: Record<string, string[]> = {};
                         occlusionRects.forEach(r => {
                           const c = r.color || OCCLUSION_COLORS[0].fill;
@@ -274,7 +289,7 @@ export const CardEditorDialog = ({
                       setFrontAttachedImages(prev => {
                         const next = prev.filter(u => u !== url);
                         const imgTags = next.map(u => `<img src="${u}">`).join('');
-                        if (occlusionImageUrl) {
+                        if (hasOcclusion) {
                           const colorGroups: Record<string, string[]> = {};
                           occlusionRects.forEach(r => {
                             const c = r.color || OCCLUSION_COLORS[0].fill;
@@ -296,6 +311,7 @@ export const CardEditorDialog = ({
                   }}
                   onClickAttachment={(att) => {
                     if (att.isOcclusion && att.hasOcclusionRects) {
+                      setOcclusionDraftWasNew(false);
                       setOcclusionModalOpen(true);
                     } else {
                       setPreviewAttachment({ attachment: att, allowOcclusion: true });
@@ -305,6 +321,7 @@ export const CardEditorDialog = ({
                     setOcclusionImageUrl(imageUrl);
                     setOcclusionRects([]);
                     setOcclusionCanvasSize(null);
+                    setOcclusionDraftWasNew(true);
                     setOcclusionModalOpen(true);
                   }}
                   onAICreate={handleAICreate}
@@ -313,10 +330,10 @@ export const CardEditorDialog = ({
               </div>
 
               {/* Back card */}
-              <div className="flex-1 min-h-[100px] rounded-xl border border-border/60 bg-card overflow-hidden relative flex flex-col">
+              <div className="relative flex min-h-[220px] flex-1 flex-col overflow-hidden rounded-xl border border-border/60 bg-card sm:min-h-[260px]">
                 {!editorBack || editorBack === '<p></p>' ? (
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <span className="text-muted-foreground/30 text-base font-medium">Verso</span>
+                  <div className="pointer-events-none absolute left-4 top-4 z-10">
+                    <span className="text-sm font-medium text-muted-foreground/40">Verso</span>
                   </div>
                 ) : null}
                 <LazyRichEditor
@@ -355,7 +372,7 @@ export const CardEditorDialog = ({
 
           {/* Occlusion Editor — centered modal overlay */}
           {occlusionModalOpen && (
-            <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/50 backdrop-blur-sm p-3 sm:p-5">
+            <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/50 p-3 backdrop-blur-sm sm:p-5">
               <div className="relative w-full max-w-lg sm:max-w-xl md:max-w-2xl max-h-[80dvh] rounded-2xl border border-border bg-background shadow-2xl overflow-hidden flex flex-col">
                 <OcclusionEditor
                   initialFront={occlusionImageUrl ? JSON.stringify({
@@ -374,6 +391,7 @@ export const CardEditorDialog = ({
                       setOcclusionImageUrl(data.imageUrl || '');
                       setOcclusionRects(data.allRects || data.rects || []);
                       setOcclusionCanvasSize(data.canvasWidth ? { w: data.canvasWidth, h: data.canvasHeight } : null);
+                      setOcclusionDraftWasNew(false);
 
                       // Rebuild parent front with text + images + occlusion
                       const imgTags = frontAttachedImages.map(u => `<img src="${u}">`).join('');
@@ -392,7 +410,21 @@ export const CardEditorDialog = ({
                     } catch {}
                     setOcclusionModalOpen(false);
                   }}
-                  onCancel={() => setOcclusionModalOpen(false)}
+                  onCancel={() => {
+                    if (occlusionDraftWasNew && occlusionImageUrl && occlusionRects.length === 0) {
+                      setFrontAttachedImages(prev => {
+                        const next = prev.includes(occlusionImageUrl) ? prev : [...prev, occlusionImageUrl];
+                        const imgTags = next.map(u => `<img src="${u}">`).join('');
+                        setFront(editorFront + imgTags);
+                        return next;
+                      });
+                      setOcclusionImageUrl('');
+                      setOcclusionRects([]);
+                      setOcclusionCanvasSize(null);
+                    }
+                    setOcclusionDraftWasNew(false);
+                    setOcclusionModalOpen(false);
+                  }}
                   isSaving={false}
                 />
               </div>
@@ -414,6 +446,7 @@ export const CardEditorDialog = ({
             setOcclusionImageUrl(url);
             setOcclusionRects([]);
             setOcclusionCanvasSize(null);
+            setOcclusionDraftWasNew(true);
             setPreviewAttachment(null);
             setOcclusionModalOpen(true);
           }

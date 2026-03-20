@@ -41,12 +41,25 @@ interface StudyCardActionsProps {
   onCardFrozen: (cardId: string) => void;
   onCardBuried?: (cardId: string) => void;
   /** Called after cloze sibling edits so Study.tsx can update all siblings in localQueue */
-  onSiblingsUpdated?: (updates: { id: string; front_content: string; back_content: string }[], deletedIds: string[]) => void;
+  onSiblingsUpdated?: (
+    updates: { id: string; front_content: string; back_content: string }[],
+    deletedIds: string[],
+    replacementForActiveCard?: { id: string; front_content: string; back_content: string } | null,
+  ) => void;
   onOpenChat?: () => void;
   chatHasMessages?: boolean;
 }
 
 type EditorCardType = 'basic' | 'cloze' | 'image_occlusion';
+
+function parseClozeTarget(backContent: string): number {
+  try {
+    const parsed = JSON.parse(backContent);
+    return typeof parsed.clozeTarget === 'number' ? parsed.clozeTarget : 1;
+  } catch {
+    return 1;
+  }
+}
 
 const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCardBuried, onSiblingsUpdated, onOpenChat, chatHasMessages }: StudyCardActionsProps) => {
   const queryClient = useQueryClient();
@@ -277,34 +290,63 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
     const numsToKeep = allNums.filter(n => existingTargets.has(n));
     const numsToAdd = allNums.filter(n => !existingTargets.has(n));
     const numsToRemove = existingNums.filter(n => !allNums.includes(n));
+    const activeCardId = editCardIdRef.current;
+    const activeTarget = parseClozeTarget(editCardBackRef.current);
 
-    const updatePromises = numsToKeep.map(n => {
-      const cardId = existingTargets.get(n)!;
-      return cardService.updateCard(cardId, frontStr, JSON.stringify({ clozeTarget: n, extra: userBack }));
-    });
-    const deletePromises = numsToRemove.map(n => {
-      const cardId = existingTargets.get(n)!;
-      return cardService.deleteCard(cardId);
-    });
+    const updatedSiblings: { id: string; front_content: string; back_content: string }[] = numsToKeep.map(n => ({
+      id: existingTargets.get(n)!,
+      front_content: frontStr,
+      back_content: JSON.stringify({ clozeTarget: n, extra: userBack }),
+    }));
+    const remainingNumsToAdd = [...numsToAdd];
+    let replacementForActiveCard: { id: string; front_content: string; back_content: string } | null = null;
+
+    if (numsToRemove.includes(activeTarget)) {
+      const replacementTarget = numsToKeep.find(n => existingTargets.get(n) !== activeCardId);
+
+      if (replacementTarget) {
+        replacementForActiveCard = {
+          id: existingTargets.get(replacementTarget)!,
+          front_content: frontStr,
+          back_content: JSON.stringify({ clozeTarget: replacementTarget, extra: userBack }),
+        };
+      } else if (remainingNumsToAdd.length > 0) {
+        const reassignedTarget = remainingNumsToAdd.shift()!;
+        updatedSiblings.push({
+          id: activeCardId,
+          front_content: frontStr,
+          back_content: JSON.stringify({ clozeTarget: reassignedTarget, extra: userBack }),
+        });
+      }
+    }
+
+    const deleteIds = numsToRemove
+      .map(n => existingTargets.get(n)!)
+      .filter(id => !updatedSiblings.some(update => update.id === id));
+
+    const updatePromises = updatedSiblings.map(update =>
+      cardService.updateCard(update.id, update.front_content, update.back_content)
+    );
+    const deletePromises = deleteIds.map(id => cardService.deleteCardWithReviewLogs(id));
 
     await Promise.all([...updatePromises, ...deletePromises]);
-    if (numsToAdd.length > 0) {
-      await cardService.createCards(editCardDeckIdRef.current, numsToAdd.map(n => ({
+    if (remainingNumsToAdd.length > 0) {
+      await cardService.createCards(editCardDeckIdRef.current, remainingNumsToAdd.map(n => ({
         frontContent: frontStr,
         backContent: JSON.stringify({ clozeTarget: n, extra: userBack }),
         cardType: 'image_occlusion',
       })));
     }
 
-    // Notify study queue
-    const updatedSiblings = numsToKeep.map(n => ({
-      id: existingTargets.get(n)!,
-      front_content: frontStr,
-      back_content: JSON.stringify({ clozeTarget: n, extra: userBack }),
-    }));
-    const deletedIds = numsToRemove.map(n => existingTargets.get(n)!);
-    onCardUpdated(editCardIdRef.current, { front_content: frontStr, back_content: JSON.stringify({ clozeTarget: numsToKeep[0] ?? 1, extra: userBack }) });
-    onSiblingsUpdated?.(updatedSiblings, deletedIds);
+    const activeUpdate = updatedSiblings.find(update => update.id === activeCardId);
+    if (activeUpdate) {
+      onCardUpdated(activeUpdate.id, {
+        front_content: activeUpdate.front_content,
+        back_content: activeUpdate.back_content,
+      });
+    }
+
+    onSiblingsUpdated?.(updatedSiblings, deleteIds, replacementForActiveCard);
   };
 
   /** Save cloze with sibling reconciliation */
@@ -352,50 +394,68 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
     const numsToKeep = uniqueNums.filter(n => existingTargets.has(n));
     const numsToAdd = uniqueNums.filter(n => !existingTargets.has(n));
     const numsToRemove = existingNums.filter(n => !uniqueNums.includes(n));
+    const activeCardId = editCardIdRef.current;
+    const activeTarget = parseClozeTarget(editCardBackRef.current);
+
+    const updatedSiblings: { id: string; front_content: string; back_content: string }[] = numsToKeep.map(n => ({
+      id: existingTargets.get(n)!,
+      front_content: front,
+      back_content: JSON.stringify({ clozeTarget: n, extra: back }),
+    }));
+    const remainingNumsToAdd = [...numsToAdd];
+    let replacementForActiveCard: { id: string; front_content: string; back_content: string } | null = null;
+
+    if (numsToRemove.includes(activeTarget)) {
+      const replacementTarget = numsToKeep.find(n => existingTargets.get(n) !== activeCardId);
+
+      if (replacementTarget) {
+        replacementForActiveCard = {
+          id: existingTargets.get(replacementTarget)!,
+          front_content: front,
+          back_content: JSON.stringify({ clozeTarget: replacementTarget, extra: back }),
+        };
+      } else if (remainingNumsToAdd.length > 0) {
+        const reassignedTarget = remainingNumsToAdd.shift()!;
+        updatedSiblings.push({
+          id: activeCardId,
+          front_content: front,
+          back_content: JSON.stringify({ clozeTarget: reassignedTarget, extra: back }),
+        });
+      }
+    }
+
+    const deleteIds = numsToRemove
+      .map(n => existingTargets.get(n)!)
+      .filter(id => !updatedSiblings.some(update => update.id === id));
 
     // Update existing siblings with new front_content (created_at is NOT changed)
-    const updatePromises = numsToKeep.map(n => {
-      const cardId = existingTargets.get(n)!;
-      return cardService.updateCard(cardId, front, JSON.stringify({ clozeTarget: n, extra: back }));
-    });
+    const updatePromises = updatedSiblings.map(update =>
+      cardService.updateCard(update.id, update.front_content, update.back_content)
+    );
 
     // Delete orphaned siblings — they lose their FSRS data
-    const deletePromises = numsToRemove.map(n => {
-      const cardId = existingTargets.get(n)!;
-      return cardService.deleteCard(cardId);
-    });
+    const deletePromises = deleteIds.map(id => cardService.deleteCardWithReviewLogs(id));
 
     await Promise.all([...updatePromises, ...deletePromises]);
 
     // Create new cards for added cloze numbers
-    if (numsToAdd.length > 0) {
-      await cardService.createCards(editCardDeckIdRef.current, numsToAdd.map(n => ({
+    if (remainingNumsToAdd.length > 0) {
+      await cardService.createCards(editCardDeckIdRef.current, remainingNumsToAdd.map(n => ({
         frontContent: front,
         backContent: JSON.stringify({ clozeTarget: n, extra: back }),
         cardType: 'cloze',
       })));
     }
 
-    // Notify study queue about sibling changes
-    const updatedSiblings = numsToKeep.map(n => ({
-      id: existingTargets.get(n)!,
-      front_content: front,
-      back_content: JSON.stringify({ clozeTarget: n, extra: back }),
-    }));
-    const deletedIds = numsToRemove.map(n => existingTargets.get(n)!);
+    const activeUpdate = updatedSiblings.find(update => update.id === activeCardId);
+    if (activeUpdate) {
+      onCardUpdated(activeUpdate.id, {
+        front_content: activeUpdate.front_content,
+        back_content: activeUpdate.back_content,
+      });
+    }
 
-    // Update the current card being studied — use captured back_content from open time
-    const currentBack = (() => {
-      try {
-        const parsed = JSON.parse(editCardBackRef.current);
-        if (typeof parsed.clozeTarget === 'number') {
-          return JSON.stringify({ clozeTarget: parsed.clozeTarget, extra: back });
-        }
-      } catch {}
-      return JSON.stringify({ clozeTarget: 1, extra: back });
-    })();
-    onCardUpdated(editCardIdRef.current, { front_content: front, back_content: currentBack });
-    onSiblingsUpdated?.(updatedSiblings, deletedIds);
+    onSiblingsUpdated?.(updatedSiblings, deleteIds, replacementForActiveCard);
   };
 
   // AI Improve
