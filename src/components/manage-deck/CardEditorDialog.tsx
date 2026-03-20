@@ -1,10 +1,11 @@
 import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { CardEditorForm } from '@/components/card-editor/CardEditorForm';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import LazyRichEditor from '@/components/LazyRichEditor';
+import OcclusionEditor from '@/components/manage-deck/OcclusionEditor';
 
 import type { EditorCardType } from '@/hooks/useManageDeck';
-import OcclusionEditor from '@/components/manage-deck/OcclusionEditor';
 
 interface CardEditorDialogProps {
   editorOpen: boolean;
@@ -35,12 +36,11 @@ interface CardEditorDialogProps {
 }
 
 export const CardEditorDialog = ({
-  editorOpen, setEditorOpen, editingId, editorType, setEditorType,
+  editorOpen, setEditorOpen, editingId,
   front, setFront, back, setBack,
-  mcOptions, setMcOptions, mcCorrectIndex, setMcCorrectIndex,
-  isSaving, isImproving, isAICreating = false,
+  isSaving, isAICreating = false,
   occlusionModalOpen, setOcclusionModalOpen,
-  resetForm, handleSave, handleImprove, handleAICreate, addMcOption, removeMcOption,
+  resetForm, handleSave, handleAICreate,
   extraContent,
 }: CardEditorDialogProps) => {
 
@@ -51,73 +51,104 @@ export const CardEditorDialog = ({
     } catch { return false; }
   })();
 
-  const occlusionImageUrl = (() => {
-    try { return JSON.parse(front)?.imageUrl || ''; } catch { return ''; }
-  })();
+  // For image_occlusion, extract frontText for display
+  const isImageMode = hasOcclusionImage;
+  const editorFront = isImageMode
+    ? (() => { try { return JSON.parse(front)?.frontText || ''; } catch { return front; } })()
+    : front;
 
-  const canImprove = !hasOcclusionImage;
+  const handleFrontChange = (v: string) => {
+    if (isImageMode) {
+      try { const d = JSON.parse(front); d.frontText = v; setFront(JSON.stringify(d)); }
+      catch { setFront(v); }
+    } else {
+      setFront(v);
+    }
+  };
+
+  const handleOcclusionImageReady = (imageUrl: string) => {
+    try {
+      const existing = JSON.parse(front);
+      existing.imageUrl = imageUrl;
+      setFront(JSON.stringify(existing));
+    } catch {
+      setFront(JSON.stringify({ imageUrl, allRects: [] }));
+    }
+    setOcclusionModalOpen(true);
+  };
 
   return (
     <Dialog open={editorOpen} onOpenChange={open => { if (!open) { setEditorOpen(false); resetForm(); } }}>
       <DialogContent
         className={cn(
-          'flex flex-col gap-0 p-0 border-none sm:rounded-2xl',
+          'flex flex-col gap-0 p-0 border bg-background sm:rounded-2xl',
           'w-[96vw] sm:w-full',
           occlusionModalOpen ? 'sm:max-w-5xl max-h-[94dvh]' : 'sm:max-w-2xl max-h-[90dvh]',
         )}
       >
-        {/* Scrollable form area */}
+        {/* Header */}
+        <div className="shrink-0 border-b border-border/40 px-5 py-3 flex items-center justify-between">
+          <DialogHeader className="space-y-0">
+            <DialogTitle className="font-display text-base">
+              {editingId ? 'Editar Cartão' : 'Novo Cartão'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => { setEditorOpen(false); resetForm(); }}>
+              Cancelar
+            </Button>
+            <Button size="sm" onClick={() => handleSave(false)} disabled={isSaving}>
+              {isSaving ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </div>
+        </div>
+
+        {/* Card editor area — mirrors ManageDeck layout */}
         <div className={cn(
           'flex-1 min-h-0',
           occlusionModalOpen ? 'overflow-hidden' : 'overflow-y-auto',
         )}>
           <div className={cn(
-            'p-5 sm:p-6 space-y-1',
+            'mx-auto max-w-2xl flex flex-col gap-2 p-3 sm:p-5',
             occlusionModalOpen && 'pointer-events-none select-none blur-[1px] scale-[0.985] transition-all',
           )}>
-            <DialogHeader>
-              <DialogTitle className="font-display">
-                {editingId ? 'Editar Cartão' : 'Novo Cartão'}
-              </DialogTitle>
-            </DialogHeader>
-            <CardEditorForm
-              front={front}
-              onFrontChange={setFront}
-              back={back}
-              onBackChange={setBack}
-              cardType={undefined}
-              mcOptions={mcOptions}
-              onMcOptionsChange={setMcOptions}
-              mcCorrectIndex={mcCorrectIndex}
-              onMcCorrectIndexChange={setMcCorrectIndex}
-              occlusionImageUrl={occlusionImageUrl}
-              onOpenOcclusion={() => setOcclusionModalOpen(true)}
-              onRemoveOcclusion={() => {
-                try {
-                  const d = JSON.parse(front);
-                  setFront(d.frontText || '');
-                } catch { setFront(''); }
-              }}
-              onOcclusionImageReady={(imageUrl) => {
-                try {
-                  const existing = JSON.parse(front);
-                  existing.imageUrl = imageUrl;
-                  setFront(JSON.stringify(existing));
-                } catch {
-                  setFront(JSON.stringify({ imageUrl, allRects: [] }));
-                }
-                setOcclusionModalOpen(true);
-              }}
-              onImprove={canImprove ? handleImprove : undefined}
-              isImproving={isImproving}
-              onAICreate={handleAICreate}
-              isAICreating={isAICreating}
-              onSave={() => handleSave(false)}
-              onSaveAndAdd={!editingId ? () => handleSave(true) : undefined}
-              onCancel={() => { setEditorOpen(false); resetForm(); }}
-              isSaving={isSaving}
-              extraContent={extraContent}
-            />
+            {/* Front card */}
+            <div className="flex-1 min-h-[120px] rounded-xl border border-border/60 bg-card overflow-hidden relative flex flex-col">
+              {(!editorFront || editorFront === '<p></p>') && !isImageMode ? (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <span className="text-muted-foreground/30 text-base font-medium">Frente</span>
+                </div>
+              ) : null}
+              <LazyRichEditor
+                content={editorFront}
+                onChange={handleFrontChange}
+                placeholder=""
+                chromeless
+                hideCloze={false}
+                onOcclusionImageReady={handleOcclusionImageReady}
+                onAICreate={handleAICreate}
+                isAICreating={isAICreating}
+              />
+            </div>
+
+            {/* Back card */}
+            <div className="flex-1 min-h-[120px] rounded-xl border border-border/60 bg-card overflow-hidden relative flex flex-col">
+              {!back || back === '<p></p>' ? (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <span className="text-muted-foreground/30 text-base font-medium">Verso</span>
+                </div>
+              ) : null}
+              <LazyRichEditor
+                content={back}
+                onChange={setBack}
+                placeholder=""
+                chromeless
+                hideCloze
+              />
+            </div>
+
+            {/* Extra content (e.g. MC-to-cloze convert button) */}
+            {extraContent && <div className="pt-1">{extraContent}</div>}
           </div>
         </div>
 
