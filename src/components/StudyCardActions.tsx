@@ -144,7 +144,16 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
       setEditorType('basic');
       // front is the JSON with imageUrl, allRects, etc. — pass as-is
       setFront(card.front_content);
-      setBack(card.back_content);
+      try {
+        const parsed = JSON.parse(card.back_content);
+        if (typeof parsed.clozeTarget === 'number') {
+          setBack(parsed.extra || '');
+        } else {
+          setBack(card.back_content);
+        }
+      } catch {
+        setBack(card.back_content);
+      }
     } else {
       setEditorType('basic');
       setFront(card.front_content);
@@ -190,22 +199,32 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
 
   /** Main save handler — handles all card types with proper sibling reconciliation */
   const handleSave = async (_addAnother: boolean) => {
-    // Detect card type from content
+    let normalizedFront = front;
     let hasOcclusionImage = false;
-    let occlusionImageUrl = '';
     try {
       const d = JSON.parse(front);
       if (d && typeof d === 'object' && ('imageUrl' in d || 'allRects' in d)) {
-        hasOcclusionImage = true;
-        occlusionImageUrl = d.imageUrl || '';
+        const imageUrl = typeof d.imageUrl === 'string' ? d.imageUrl : '';
+        const rects = Array.isArray(d.allRects)
+          ? d.allRects
+          : Array.isArray(d.rects)
+            ? d.rects
+            : [];
+        const frontText = typeof d.frontText === 'string' ? d.frontText : '';
+
+        if (imageUrl && rects.length > 0) {
+          hasOcclusionImage = true;
+        } else {
+          normalizedFront = `${frontText}${imageUrl ? `<img src="${imageUrl}">` : ''}`;
+        }
       }
     } catch {}
 
-    const plainText = front.replace(/<[^>]*>/g, '');
+    const plainText = normalizedFront.replace(/<[^>]*>/g, '');
     const hasCloze = plainText.includes('{{c');
     const detectedType = hasOcclusionImage ? 'image_occlusion' : hasCloze ? 'cloze' : 'basic';
 
-    if (detectedType === 'basic' && !front.trim()) {
+    if (detectedType === 'basic' && !plainText.trim()) {
       toast({ title: 'Preencha a pergunta', variant: 'destructive' });
       return;
     }
@@ -213,13 +232,11 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
     setIsSaving(true);
     try {
       if (detectedType === 'image_occlusion') {
-        await handleSaveImageOcclusion();
+        await handleSaveImageOcclusion(front, back);
       } else if (detectedType === 'cloze') {
-        await handleSaveCloze();
+        await handleSaveCloze(normalizedFront, back);
       } else {
-        // Basic save — just update content, created_at is NOT touched
-        await cardService.updateCard(editCardIdRef.current, front, back);
-        onCardUpdated(editCardIdRef.current, { front_content: front, back_content: back });
+        await handleSaveBasic(normalizedFront, back);
       }
       queryClient.invalidateQueries({ queryKey: ['cards'] });
       toast({ title: 'Cartão atualizado!' });
@@ -232,11 +249,42 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
     }
   };
 
+  const handleSaveBasic = async (frontContent: string, backContent: string) => {
+    if (editCardTypeRef.current === 'cloze' || editCardTypeRef.current === 'image_occlusion') {
+      const allSiblingCards = await fetchClozeSiblings([editCardDeckIdRef.current], originalFrontRef.current);
+      const deleteIds = allSiblingCards
+        .filter(c => c.id !== editCardIdRef.current)
+        .map(c => c.id);
+
+      await Promise.all([
+        patchCard(editCardIdRef.current, {
+          front_content: frontContent,
+          back_content: backContent,
+          card_type: 'basic',
+        }),
+        ...deleteIds.map(id => cardService.deleteCardWithReviewLogs(id)),
+      ]);
+
+      onCardUpdated(editCardIdRef.current, { front_content: frontContent, back_content: backContent });
+      onSiblingsUpdated?.([
+        { id: editCardIdRef.current, front_content: frontContent, back_content: backContent },
+      ], deleteIds, null);
+      return;
+    }
+
+    await patchCard(editCardIdRef.current, {
+      front_content: frontContent,
+      back_content: backContent,
+      card_type: 'basic',
+    });
+    onCardUpdated(editCardIdRef.current, { front_content: frontContent, back_content: backContent });
+  };
+
   /** Save image occlusion with sibling reconciliation */
-  const handleSaveImageOcclusion = async () => {
+  const handleSaveImageOcclusion = async (frontContent: string, userBack: string) => {
     let frontData: Record<string, unknown>;
     try {
-      frontData = JSON.parse(front);
+      frontData = JSON.parse(frontContent);
     } catch {
       throw new Error('Dados de oclusão inválidos');
     }
@@ -246,16 +294,18 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
       throw new Error('Adicione a imagem e pelo menos uma oclusão');
     }
 
-    // Build color groups to determine unique cloze numbers
+    // Build color groups and preserve permanent color → cloze mapping
     const colorGroups: Record<string, string[]> = {};
+    const imageNums = new Set<number>();
     allRects.forEach((r) => {
       const color = r.color || OCCLUSION_COLORS[0].fill;
       if (!colorGroups[color]) colorGroups[color] = [];
       colorGroups[color].push(r.id);
+      const colorIndex = OCCLUSION_COLORS.findIndex(c => c.fill === color);
+      imageNums.add(colorIndex >= 0 ? colorIndex + 1 : 1);
     });
 
-    const allNums = Object.keys(colorGroups).map((_, i) => i + 1);
-    const userBack = back;
+    const allNums = [...imageNums].sort((a, b) => a - b);
 
     // Also merge text cloze nums from frontText
     const frontText = (frontData as Record<string, unknown>).frontText as string | undefined;
@@ -273,6 +323,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
 
     // Fetch existing siblings
     const allSiblingCards = await fetchClozeSiblings([editCardDeckIdRef.current], originalFrontRef.current);
+    const baseCreatedAt = allSiblingCards.find(c => c.id === editCardIdRef.current)?.created_at;
     const existingTargets = new Map<number, string>();
     allSiblingCards.forEach(c => {
       try {
@@ -335,7 +386,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
         frontContent: frontStr,
         backContent: JSON.stringify({ clozeTarget: n, extra: userBack }),
         cardType: 'image_occlusion',
-      })));
+      })), baseCreatedAt);
     }
 
     const activeUpdate = updatedSiblings.find(update => update.id === activeCardId);
@@ -350,23 +401,23 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
   };
 
   /** Save cloze with sibling reconciliation */
-  const handleSaveCloze = async () => {
-    const plainForNumbers = front.replace(/<[^>]*>/g, '');
+  const handleSaveCloze = async (frontContent: string, userBack: string) => {
+    const plainForNumbers = frontContent.replace(/<[^>]*>/g, '');
     const clozeNumMatches = [...plainForNumbers.matchAll(/\{\{c(\d+)::/g)];
     let uniqueNums = [...new Set(clozeNumMatches.map(m => parseInt(m[1])))].sort((a, b) => a - b);
 
     // Also check for image occlusion colors in front JSON
     try {
-      const parsed = JSON.parse(front);
+      const parsed = JSON.parse(frontContent);
       if (parsed.allRects) {
-        const colorGroups: Record<string, string[]> = {};
+        const imageNums = new Set<number>();
         (parsed.allRects as Array<{ id: string; color?: string }>).forEach(r => {
           const color = r.color || OCCLUSION_COLORS[0].fill;
-          if (!colorGroups[color]) colorGroups[color] = [];
-          colorGroups[color].push(r.id);
+          const colorIndex = OCCLUSION_COLORS.findIndex(c => c.fill === color);
+          imageNums.add(colorIndex >= 0 ? colorIndex + 1 : 1);
         });
-        Object.keys(colorGroups).forEach((_, i) => {
-          if (!uniqueNums.includes(i + 1)) uniqueNums.push(i + 1);
+        imageNums.forEach(n => {
+          if (!uniqueNums.includes(n)) uniqueNums.push(n);
         });
         uniqueNums.sort((a, b) => a - b);
       }
@@ -376,6 +427,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
 
     // Fetch all cloze siblings from DB
     const allSiblingCards = await fetchClozeSiblings([editCardDeckIdRef.current], originalFrontRef.current);
+    const baseCreatedAt = allSiblingCards.find(c => c.id === editCardIdRef.current)?.created_at;
 
     const existingTargets = new Map<number, string>();
     allSiblingCards.forEach(c => {
@@ -399,8 +451,8 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
 
     const updatedSiblings: { id: string; front_content: string; back_content: string }[] = numsToKeep.map(n => ({
       id: existingTargets.get(n)!,
-      front_content: front,
-      back_content: JSON.stringify({ clozeTarget: n, extra: back }),
+      front_content: frontContent,
+      back_content: JSON.stringify({ clozeTarget: n, extra: userBack }),
     }));
     const remainingNumsToAdd = [...numsToAdd];
     let replacementForActiveCard: { id: string; front_content: string; back_content: string } | null = null;
@@ -411,15 +463,15 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
       if (replacementTarget) {
         replacementForActiveCard = {
           id: existingTargets.get(replacementTarget)!,
-          front_content: front,
-          back_content: JSON.stringify({ clozeTarget: replacementTarget, extra: back }),
+          front_content: frontContent,
+          back_content: JSON.stringify({ clozeTarget: replacementTarget, extra: userBack }),
         };
       } else if (remainingNumsToAdd.length > 0) {
         const reassignedTarget = remainingNumsToAdd.shift()!;
         updatedSiblings.push({
           id: activeCardId,
-          front_content: front,
-          back_content: JSON.stringify({ clozeTarget: reassignedTarget, extra: back }),
+          front_content: frontContent,
+          back_content: JSON.stringify({ clozeTarget: reassignedTarget, extra: userBack }),
         });
       }
     }
@@ -441,10 +493,10 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
     // Create new cards for added cloze numbers
     if (remainingNumsToAdd.length > 0) {
       await cardService.createCards(editCardDeckIdRef.current, remainingNumsToAdd.map(n => ({
-        frontContent: front,
-        backContent: JSON.stringify({ clozeTarget: n, extra: back }),
+        frontContent: frontContent,
+        backContent: JSON.stringify({ clozeTarget: n, extra: userBack }),
         cardType: 'cloze',
-      })));
+      })), baseCreatedAt);
     }
 
     const activeUpdate = updatedSiblings.find(update => update.id === activeCardId);
