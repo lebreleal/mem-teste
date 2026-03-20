@@ -48,6 +48,30 @@ function extractImages(html: string): { text: string; images: string[] } {
   return { text, images };
 }
 
+function buildFrontWithOcclusion(params: {
+  imageUrl: string;
+  frontText: string;
+  rects: Array<{ id: string; color?: string }>;
+  canvasSize: { w: number; h: number } | null;
+}) {
+  const colorGroups: Record<string, string[]> = {};
+  params.rects.forEach((r) => {
+    const color = r.color || OCCLUSION_COLORS[0].fill;
+    if (!colorGroups[color]) colorGroups[color] = [];
+    colorGroups[color].push(r.id);
+  });
+
+  return JSON.stringify({
+    imageUrl: params.imageUrl,
+    frontText: params.frontText,
+    rects: params.rects,
+    allRects: params.rects,
+    canvasWidth: params.canvasSize?.w ?? 0,
+    canvasHeight: params.canvasSize?.h ?? 0,
+    colorGroups,
+  });
+}
+
 export const CardEditorDialog = ({
   editorOpen, setEditorOpen, editingId,
   front, setFront, back, setBack,
@@ -73,6 +97,28 @@ export const CardEditorDialog = ({
   const [editorBack, setEditorBack] = useState('');
 
   const hasOcclusion = !!occlusionImageUrl && occlusionRects.length > 0;
+
+  const rebuildFront = useCallback((nextText: string, attachedImages: string[], nextOcclusionImageUrl = occlusionImageUrl, nextOcclusionRects = occlusionRects, nextCanvasSize = occlusionCanvasSize) => {
+    const imgTags = attachedImages.map(url => `<img src="${url}">`).join('');
+    const frontWithImages = `${nextText}${imgTags}`;
+
+    if (nextOcclusionImageUrl && nextOcclusionRects.length > 0) {
+      setFront(buildFrontWithOcclusion({
+        imageUrl: nextOcclusionImageUrl,
+        frontText: frontWithImages,
+        rects: nextOcclusionRects,
+        canvasSize: nextCanvasSize,
+      }));
+      return;
+    }
+
+    if (nextOcclusionImageUrl && nextOcclusionRects.length === 0) {
+      setFront(`${frontWithImages}<img src="${nextOcclusionImageUrl}">`);
+      return;
+    }
+
+    setFront(frontWithImages);
+  }, [occlusionCanvasSize, occlusionImageUrl, occlusionRects, setFront]);
 
   // Load content from front/back props when dialog opens or card changes
   useEffect(() => {
@@ -145,27 +191,8 @@ export const CardEditorDialog = ({
   // ─── Sync editor changes back to parent state ───
   const handleFrontTextChange = useCallback((v: string) => {
     setEditorFront(v);
-    // Rebuild parent front with images + occlusion
-    const imgTags = frontAttachedImages.map(url => `<img src="${url}">`).join('');
-    const frontWithImages = v + imgTags;
-
-    if (hasOcclusion) {
-      const colorGroups: Record<string, string[]> = {};
-      occlusionRects.forEach(r => {
-        const color = r.color || OCCLUSION_COLORS[0].fill;
-        if (!colorGroups[color]) colorGroups[color] = [];
-        colorGroups[color].push(r.id);
-      });
-      setFront(JSON.stringify({
-        imageUrl: occlusionImageUrl, frontText: frontWithImages,
-        rects: occlusionRects, allRects: occlusionRects,
-        canvasWidth: occlusionCanvasSize?.w ?? 0, canvasHeight: occlusionCanvasSize?.h ?? 0,
-        colorGroups,
-      }));
-    } else {
-      setFront(frontWithImages);
-    }
-  }, [frontAttachedImages, hasOcclusion, occlusionImageUrl, occlusionRects, occlusionCanvasSize, setFront]);
+    rebuildFront(v, frontAttachedImages);
+  }, [frontAttachedImages, rebuildFront]);
 
   const handleBackTextChange = useCallback((v: string) => {
     setEditorBack(v);
@@ -241,8 +268,8 @@ export const CardEditorDialog = ({
               occlusionModalOpen && 'pointer-events-none select-none blur-[1px] scale-[0.985] transition-all',
             )}>
               {/* Front card */}
-              <div className="relative flex min-h-[220px] flex-1 flex-col overflow-hidden rounded-xl border border-border/60 bg-card sm:min-h-[260px]">
-                {(!editorFront || editorFront === '<p></p>') && !hasOcclusion && frontAttachedImages.length === 0 ? (
+              <div className="relative flex min-h-[280px] flex-1 flex-col overflow-hidden rounded-xl border border-border/60 bg-card sm:min-h-[320px]">
+                {(!editorFront || editorFront === '<p></p>') && !hasOcclusion && frontAttachedImages.length === 0 && !occlusionImageUrl ? (
                   <div className="pointer-events-none absolute left-4 top-4 z-10">
                     <span className="text-sm font-medium text-muted-foreground/40">Frente</span>
                   </div>
@@ -257,23 +284,7 @@ export const CardEditorDialog = ({
                   onImageAttached={(url) => {
                     setFrontAttachedImages(prev => {
                       const next = [...prev, url];
-                      const imgTags = next.map(u => `<img src="${u}">`).join('');
-                      if (hasOcclusion) {
-                        const colorGroups: Record<string, string[]> = {};
-                        occlusionRects.forEach(r => {
-                          const c = r.color || OCCLUSION_COLORS[0].fill;
-                          if (!colorGroups[c]) colorGroups[c] = [];
-                          colorGroups[c].push(r.id);
-                        });
-                        setFront(JSON.stringify({
-                          imageUrl: occlusionImageUrl, frontText: editorFront + imgTags,
-                          rects: occlusionRects, allRects: occlusionRects,
-                          canvasWidth: occlusionCanvasSize?.w ?? 0, canvasHeight: occlusionCanvasSize?.h ?? 0,
-                          colorGroups,
-                        }));
-                      } else {
-                        setFront(editorFront + imgTags);
-                      }
+                      rebuildFront(editorFront, next);
                       return next;
                     });
                   }}
@@ -282,29 +293,11 @@ export const CardEditorDialog = ({
                       setOcclusionImageUrl('');
                       setOcclusionRects([]);
                       setOcclusionCanvasSize(null);
-                      // Rebuild front without occlusion
-                      const imgTags = frontAttachedImages.map(u => `<img src="${u}">`).join('');
-                      setFront(editorFront + imgTags);
+                      rebuildFront(editorFront, frontAttachedImages, '', [], null);
                     } else {
                       setFrontAttachedImages(prev => {
                         const next = prev.filter(u => u !== url);
-                        const imgTags = next.map(u => `<img src="${u}">`).join('');
-                        if (hasOcclusion) {
-                          const colorGroups: Record<string, string[]> = {};
-                          occlusionRects.forEach(r => {
-                            const c = r.color || OCCLUSION_COLORS[0].fill;
-                            if (!colorGroups[c]) colorGroups[c] = [];
-                            colorGroups[c].push(r.id);
-                          });
-                          setFront(JSON.stringify({
-                            imageUrl: occlusionImageUrl, frontText: editorFront + imgTags,
-                            rects: occlusionRects, allRects: occlusionRects,
-                            canvasWidth: occlusionCanvasSize?.w ?? 0, canvasHeight: occlusionCanvasSize?.h ?? 0,
-                            colorGroups,
-                          }));
-                        } else {
-                          setFront(editorFront + imgTags);
-                        }
+                        rebuildFront(editorFront, next);
                         return next;
                       });
                     }
@@ -318,11 +311,15 @@ export const CardEditorDialog = ({
                     }
                   }}
                   onOcclusionImageReady={(imageUrl) => {
-                    setOcclusionImageUrl(imageUrl);
+                    setPreviewAttachment({
+                      attachment: { url: imageUrl, isOcclusion: false, hasOcclusionRects: false },
+                      allowOcclusion: true,
+                    });
+                    rebuildFront(editorFront, frontAttachedImages, '', [], null);
+                    setOcclusionImageUrl('');
                     setOcclusionRects([]);
                     setOcclusionCanvasSize(null);
-                    setOcclusionDraftWasNew(true);
-                    setOcclusionModalOpen(true);
+                    setOcclusionDraftWasNew(false);
                   }}
                   onAICreate={handleAICreate}
                   isAICreating={isAICreating}
@@ -388,25 +385,16 @@ export const CardEditorDialog = ({
                   onSave={(frontContent) => {
                     try {
                       const data = JSON.parse(frontContent);
-                      setOcclusionImageUrl(data.imageUrl || '');
-                      setOcclusionRects(data.allRects || data.rects || []);
-                      setOcclusionCanvasSize(data.canvasWidth ? { w: data.canvasWidth, h: data.canvasHeight } : null);
+                      const nextImageUrl = data.imageUrl || '';
+                      const nextRects = data.allRects || data.rects || [];
+                      const nextCanvas = data.canvasWidth ? { w: data.canvasWidth, h: data.canvasHeight } : null;
+
+                      setOcclusionImageUrl(nextImageUrl);
+                      setOcclusionRects(nextRects);
+                      setOcclusionCanvasSize(nextCanvas);
                       setOcclusionDraftWasNew(false);
 
-                      // Rebuild parent front with text + images + occlusion
-                      const imgTags = frontAttachedImages.map(u => `<img src="${u}">`).join('');
-                      const colorGroups: Record<string, string[]> = {};
-                      (data.allRects || data.rects || []).forEach((r: { id: string; color?: string }) => {
-                        const c = r.color || OCCLUSION_COLORS[0].fill;
-                        if (!colorGroups[c]) colorGroups[c] = [];
-                        colorGroups[c].push(r.id);
-                      });
-                      setFront(JSON.stringify({
-                        imageUrl: data.imageUrl, frontText: editorFront + imgTags,
-                        rects: data.allRects || data.rects || [], allRects: data.allRects || data.rects || [],
-                        canvasWidth: data.canvasWidth ?? 0, canvasHeight: data.canvasHeight ?? 0,
-                        colorGroups,
-                      }));
+                      rebuildFront(editorFront, frontAttachedImages, nextImageUrl, nextRects, nextCanvas);
                     } catch {}
                     setOcclusionModalOpen(false);
                   }}
@@ -414,8 +402,7 @@ export const CardEditorDialog = ({
                     if (occlusionDraftWasNew && occlusionImageUrl && occlusionRects.length === 0) {
                       setFrontAttachedImages(prev => {
                         const next = prev.includes(occlusionImageUrl) ? prev : [...prev, occlusionImageUrl];
-                        const imgTags = next.map(u => `<img src="${u}">`).join('');
-                        setFront(editorFront + imgTags);
+                        rebuildFront(editorFront, next, '', [], null);
                         return next;
                       });
                       setOcclusionImageUrl('');
