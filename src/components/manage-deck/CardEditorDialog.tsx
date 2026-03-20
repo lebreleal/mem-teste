@@ -58,79 +58,91 @@ export const CardEditorDialog = ({
 
   return (
     <Dialog open={editorOpen} onOpenChange={open => { if (!open) { setEditorOpen(false); resetForm(); } }}>
-      <DialogContent className={`relative overflow-hidden p-0 ${occlusionModalOpen ? 'sm:max-w-5xl' : 'sm:max-w-2xl'} w-[95vw] max-h-[90dvh]`}>
-        <div className="relative h-full">
-          <div className={`transition-all ${occlusionModalOpen ? 'pointer-events-none select-none blur-[1px] scale-[0.985]' : ''}`}>
-            <div className={`${occlusionModalOpen ? 'overflow-hidden' : 'overflow-y-auto'} max-h-[90dvh] p-6`}>
-              <DialogHeader>
-                <DialogTitle className="font-display">
-                  {editingId ? 'Editar Cartão' : 'Novo Cartão'}
-                </DialogTitle>
-              </DialogHeader>
-              <CardEditorForm
-                front={front}
-                onFrontChange={setFront}
-                back={back}
-                onBackChange={setBack}
-                cardType={undefined}
-                mcOptions={mcOptions}
-                onMcOptionsChange={setMcOptions}
-                mcCorrectIndex={mcCorrectIndex}
-                onMcCorrectIndexChange={setMcCorrectIndex}
-                occlusionImageUrl={occlusionImageUrl}
-                onOpenOcclusion={() => setOcclusionModalOpen(true)}
-                onRemoveOcclusion={() => {
-                  try {
-                    const d = JSON.parse(front);
-                    setFront(d.frontText || '');
-                  } catch { setFront(''); }
-                }}
-                onOcclusionImageReady={(imageUrl) => {
+      <DialogContent
+        className={cn(
+          'flex flex-col gap-0 p-0 border-none sm:rounded-2xl',
+          'w-[96vw] sm:w-full',
+          occlusionModalOpen ? 'sm:max-w-5xl max-h-[94dvh]' : 'sm:max-w-2xl max-h-[90dvh]',
+        )}
+      >
+        {/* Scrollable form area */}
+        <div className={cn(
+          'flex-1 min-h-0',
+          occlusionModalOpen ? 'overflow-hidden' : 'overflow-y-auto',
+        )}>
+          <div className={cn(
+            'p-5 sm:p-6 space-y-1',
+            occlusionModalOpen && 'pointer-events-none select-none blur-[1px] scale-[0.985] transition-all',
+          )}>
+            <DialogHeader>
+              <DialogTitle className="font-display">
+                {editingId ? 'Editar Cartão' : 'Novo Cartão'}
+              </DialogTitle>
+            </DialogHeader>
+            <CardEditorForm
+              front={front}
+              onFrontChange={setFront}
+              back={back}
+              onBackChange={setBack}
+              cardType={undefined}
+              mcOptions={mcOptions}
+              onMcOptionsChange={setMcOptions}
+              mcCorrectIndex={mcCorrectIndex}
+              onMcCorrectIndexChange={setMcCorrectIndex}
+              occlusionImageUrl={occlusionImageUrl}
+              onOpenOcclusion={() => setOcclusionModalOpen(true)}
+              onRemoveOcclusion={() => {
+                try {
+                  const d = JSON.parse(front);
+                  setFront(d.frontText || '');
+                } catch { setFront(''); }
+              }}
+              onOcclusionImageReady={(imageUrl) => {
+                try {
+                  const existing = JSON.parse(front);
+                  existing.imageUrl = imageUrl;
+                  setFront(JSON.stringify(existing));
+                } catch {
+                  setFront(JSON.stringify({ imageUrl, allRects: [] }));
+                }
+                setOcclusionModalOpen(true);
+              }}
+              onImprove={canImprove ? handleImprove : undefined}
+              isImproving={isImproving}
+              onAICreate={handleAICreate}
+              isAICreating={isAICreating}
+              onSave={() => handleSave(false)}
+              onSaveAndAdd={!editingId ? () => handleSave(true) : undefined}
+              onCancel={() => { setEditorOpen(false); resetForm(); }}
+              isSaving={isSaving}
+              extraContent={extraContent}
+            />
+          </div>
+        </div>
+
+        {/* Occlusion overlay */}
+        {occlusionModalOpen && (
+          <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/50 backdrop-blur-sm p-3 sm:p-5">
+            <div className="relative flex w-full max-w-lg sm:max-w-xl flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl max-h-[80dvh]">
+              <OcclusionEditor
+                initialFront={front}
+                onSave={(frontContent) => {
                   try {
                     const existing = JSON.parse(front);
-                    existing.imageUrl = imageUrl;
-                    setFront(JSON.stringify(existing));
-                  } catch {
-                    setFront(JSON.stringify({ imageUrl, allRects: [] }));
-                  }
-                  setOcclusionModalOpen(true);
+                    if (existing.frontText) {
+                      const newData = JSON.parse(frontContent);
+                      newData.frontText = existing.frontText;
+                      setFront(JSON.stringify(newData));
+                    } else { setFront(frontContent); }
+                  } catch { setFront(frontContent); }
+                  setOcclusionModalOpen(false);
                 }}
-                onImprove={canImprove ? handleImprove : undefined}
-                isImproving={isImproving}
-                onAICreate={handleAICreate}
-                isAICreating={isAICreating}
-                onSave={() => handleSave(false)}
-                onSaveAndAdd={!editingId ? () => handleSave(true) : undefined}
-                onCancel={() => { setEditorOpen(false); resetForm(); }}
-                isSaving={isSaving}
-                extraContent={extraContent}
+                onCancel={() => setOcclusionModalOpen(false)}
+                isSaving={false}
               />
             </div>
           </div>
-
-          {occlusionModalOpen && (
-            <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/50 backdrop-blur-sm p-3 sm:p-5">
-              <div className="relative flex w-full max-w-lg sm:max-w-xl flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl max-h-[80dvh]">
-                <OcclusionEditor
-                  initialFront={front}
-                  onSave={(frontContent) => {
-                    try {
-                      const existing = JSON.parse(front);
-                      if (existing.frontText) {
-                        const newData = JSON.parse(frontContent);
-                        newData.frontText = existing.frontText;
-                        setFront(JSON.stringify(newData));
-                      } else { setFront(frontContent); }
-                    } catch { setFront(frontContent); }
-                    setOcclusionModalOpen(false);
-                  }}
-                  onCancel={() => setOcclusionModalOpen(false)}
-                  isSaving={false}
-                />
-              </div>
-            </div>
-          )}
-        </div>
+        )}
       </DialogContent>
     </Dialog>
   );
