@@ -282,7 +282,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
 
     await Promise.all([...updatePromises, ...deletePromises]);
     if (numsToAdd.length > 0) {
-      await cardService.createCards(card.deck_id, numsToAdd.map(n => ({
+      await cardService.createCards(editCardDeckIdRef.current, numsToAdd.map(n => ({
         frontContent: frontStr,
         backContent: JSON.stringify({ clozeTarget: n, extra: userBack }),
         cardType: 'image_occlusion',
