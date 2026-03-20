@@ -429,8 +429,8 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
     setBack(improvePreview.back);
 
     try {
-      await patchCard(card.id, { front_content: improvePreview.front, back_content: improvePreview.back });
-      onCardUpdated({ front_content: improvePreview.front, back_content: improvePreview.back });
+      await patchCard(editCardIdRef.current, { front_content: improvePreview.front, back_content: improvePreview.back });
+      onCardUpdated(editCardIdRef.current, { front_content: improvePreview.front, back_content: improvePreview.back });
       queryClient.invalidateQueries({ queryKey: ['cards'] });
     } catch {
       // silent – editor still has values
