@@ -344,31 +344,39 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
     const activeCardId = editCardIdRef.current;
     const activeTarget = parseClozeTarget(editCardBackRef.current);
 
-    const updatedSiblings: { id: string; front_content: string; back_content: string }[] = numsToKeep.map(n => ({
-      id: existingTargets.get(n)!,
-      front_content: frontStr,
-      back_content: JSON.stringify({ clozeTarget: n, extra: userBack }),
-    }));
-    const remainingNumsToAdd = [...numsToAdd];
+    // Build updated siblings — prefer keeping the active card alive by reassigning
+    const updatedSiblings: { id: string; front_content: string; back_content: string }[] = [];
     let replacementForActiveCard: { id: string; front_content: string; back_content: string } | null = null;
+    const remainingNumsToAdd = [...numsToAdd];
 
     if (numsToRemove.includes(activeTarget)) {
-      const replacementTarget = numsToKeep.find(n => existingTargets.get(n) !== activeCardId);
-
-      if (replacementTarget) {
-        replacementForActiveCard = {
-          id: existingTargets.get(replacementTarget)!,
-          front_content: frontStr,
-          back_content: JSON.stringify({ clozeTarget: replacementTarget, extra: userBack }),
-        };
-      } else if (remainingNumsToAdd.length > 0) {
+      if (remainingNumsToAdd.length > 0) {
         const reassignedTarget = remainingNumsToAdd.shift()!;
         updatedSiblings.push({
           id: activeCardId,
           front_content: frontStr,
           back_content: JSON.stringify({ clozeTarget: reassignedTarget, extra: userBack }),
         });
+      } else {
+        const survivingTarget = numsToKeep.find(n => existingTargets.get(n) !== activeCardId);
+        if (survivingTarget) {
+          replacementForActiveCard = {
+            id: existingTargets.get(survivingTarget)!,
+            front_content: frontStr,
+            back_content: JSON.stringify({ clozeTarget: survivingTarget, extra: userBack }),
+          };
+        }
       }
+    }
+
+    for (const n of numsToKeep) {
+      const cardId = existingTargets.get(n)!;
+      if (updatedSiblings.some(u => u.id === cardId)) continue;
+      updatedSiblings.push({
+        id: cardId,
+        front_content: frontStr,
+        back_content: JSON.stringify({ clozeTarget: n, extra: userBack }),
+      });
     }
 
     const deleteIds = numsToRemove
@@ -449,31 +457,44 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
     const activeCardId = editCardIdRef.current;
     const activeTarget = parseClozeTarget(editCardBackRef.current);
 
-    const updatedSiblings: { id: string; front_content: string; back_content: string }[] = numsToKeep.map(n => ({
-      id: existingTargets.get(n)!,
-      front_content: frontContent,
-      back_content: JSON.stringify({ clozeTarget: n, extra: userBack }),
-    }));
-    const remainingNumsToAdd = [...numsToAdd];
+    // Build updated siblings list — prefer keeping the active card alive by reassigning its target
+    const updatedSiblings: { id: string; front_content: string; back_content: string }[] = [];
     let replacementForActiveCard: { id: string; front_content: string; back_content: string } | null = null;
+    const remainingNumsToAdd = [...numsToAdd];
 
     if (numsToRemove.includes(activeTarget)) {
-      const replacementTarget = numsToKeep.find(n => existingTargets.get(n) !== activeCardId);
-
-      if (replacementTarget) {
-        replacementForActiveCard = {
-          id: existingTargets.get(replacementTarget)!,
-          front_content: frontContent,
-          back_content: JSON.stringify({ clozeTarget: replacementTarget, extra: userBack }),
-        };
-      } else if (remainingNumsToAdd.length > 0) {
+      // Active card's target is being removed — reassign it to a surviving or new target
+      // First, try to reassign to a target that would otherwise need a NEW card
+      if (remainingNumsToAdd.length > 0) {
         const reassignedTarget = remainingNumsToAdd.shift()!;
         updatedSiblings.push({
           id: activeCardId,
           front_content: frontContent,
           back_content: JSON.stringify({ clozeTarget: reassignedTarget, extra: userBack }),
         });
+      } else {
+        // No new targets available — the active card's color was merged into an existing one
+        // Find the surviving sibling to use as replacement
+        const survivingTarget = numsToKeep.find(n => existingTargets.get(n) !== activeCardId);
+        if (survivingTarget) {
+          replacementForActiveCard = {
+            id: existingTargets.get(survivingTarget)!,
+            front_content: frontContent,
+            back_content: JSON.stringify({ clozeTarget: survivingTarget, extra: userBack }),
+          };
+        }
       }
+    }
+
+    // Add all surviving targets (excluding active card if already handled)
+    for (const n of numsToKeep) {
+      const cardId = existingTargets.get(n)!;
+      if (updatedSiblings.some(u => u.id === cardId)) continue; // already handled
+      updatedSiblings.push({
+        id: cardId,
+        front_content: frontContent,
+        back_content: JSON.stringify({ clozeTarget: n, extra: userBack }),
+      });
     }
 
     const deleteIds = numsToRemove
@@ -577,20 +598,27 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
 
     setIsConvertingMC(true);
     try {
-      const customPrompt = `Converta este cartão de múltipla escolha em um cartão CLOZE de alta qualidade.
+      const customPrompt = `Converta este cartão de múltipla escolha em um EXCELENTE cartão CLOZE, aplicando os princípios de formulação do conhecimento.
 
 INFORMAÇÕES DO CARTÃO:
 - Pergunta: ${question}
 - Resposta correta: ${correctAnswer}
 
-REGRAS:
-1. Use APENAS a pergunta e a resposta correta. NÃO use alternativas erradas.
-2. Crie uma AFIRMAÇÃO DECLARATIVA COMPLETA que incorpore naturalmente a resposta como uma lacuna {{c1::resposta}}.
-3. A frase deve fazer sentido quando lida por completo e ser respondível quando a lacuna está oculta.
-4. A lacuna deve conter o CONCEITO-CHAVE (a resposta correta), nunca palavras triviais.
-5. NÃO adicione informações que não estão no cartão original.
-6. O campo "back" deve ficar VAZIO (será gerado automaticamente pelo sistema de cloze).
-7. Use HTML simples se necessário.
+REGRAS OBRIGATÓRIAS:
+1. Crie uma AFIRMAÇÃO DECLARATIVA COMPLETA e AUTOCONTIDA — nunca uma pergunta. A frase deve ser um fato que se sustenta sozinho.
+2. A lacuna {{c1::resposta}} deve conter APENAS o conceito-chave (a resposta correta). Nunca oculte palavras triviais como artigos, preposições ou verbos auxiliares.
+3. A frase deve fornecer CONTEXTO SUFICIENTE para que haja UMA ÚNICA resposta possível quando a lacuna está oculta. Se necessário, adicione contexto mínimo (ex: área do conhecimento, relação causal).
+4. PROIBIDO copiar a pergunta original e simplesmente inserir a resposta. REFORMULE completamente em uma afirmação declarativa natural.
+5. A frase completa (com a lacuna preenchida) deve soar como uma sentença de livro-texto — clara, direta, sem ambiguidade.
+6. O campo "back" deve ficar VAZIO.
+7. Use HTML simples (<b>, <i>) apenas se realmente necessário.
+
+EXEMPLOS DE CONVERSÃO:
+- Pergunta: "Qual hormônio regula a glicemia?" / Resposta: "Insulina"
+  → Cloze: "O hormônio produzido pelas células beta do pâncreas que reduz a glicemia é a {{c1::insulina}}."
+
+- Pergunta: "Qual a capital da França?" / Resposta: "Paris"
+  → Cloze: "A capital da França é {{c1::Paris}}."
 
 Retorne o front com a sintaxe {{c1::resposta}} e back vazio.`;
 
@@ -619,15 +647,20 @@ Retorne o front com a sintaxe {{c1::resposta}} e back vazio.`;
       isEditingMCRef.current = false;
 
       // Save immediately — update card type to cloze
+      const newBackContent = JSON.stringify({ clozeTarget: 1, extra: '' });
       await patchCard(editCardIdRef.current, {
         front_content: newFront,
-        back_content: JSON.stringify({ clozeTarget: 1, extra: '' }),
+        back_content: newBackContent,
         card_type: 'cloze',
       });
       onCardUpdated(editCardIdRef.current, {
         front_content: newFront,
-        back_content: JSON.stringify({ clozeTarget: 1, extra: '' }),
+        back_content: newBackContent,
       });
+      // Also update siblings so the study queue reflects the change
+      onSiblingsUpdated?.([
+        { id: editCardIdRef.current, front_content: newFront, back_content: newBackContent },
+      ], [], null);
       queryClient.invalidateQueries({ queryKey: ['cards'] });
       toast({ title: '✨ Convertido para Cloze!' });
       setEditOpen(false);
