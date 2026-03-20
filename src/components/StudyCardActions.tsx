@@ -447,6 +447,85 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
     toast({ title: 'Melhoria aplicada e salva!' });
   };
 
+  /** Convert MC card to cloze using AI */
+  const handleConvertMCToCloze = async () => {
+    if (energy < 1) {
+      toast({ title: 'Créditos insuficientes', description: 'Você precisa de 1 crédito IA.', variant: 'destructive' });
+      return;
+    }
+
+    // Extract question and correct answer from current state
+    const question = front.replace(/<[^>]*>/g, '').trim();
+    const correctAnswer = back.replace(/<[^>]*>/g, '').trim();
+    if (!question || !correctAnswer) {
+      toast({ title: 'Card sem conteúdo suficiente', variant: 'destructive' });
+      return;
+    }
+
+    setIsConvertingMC(true);
+    try {
+      const customPrompt = `Converta este cartão de múltipla escolha em um cartão CLOZE de alta qualidade.
+
+INFORMAÇÕES DO CARTÃO:
+- Pergunta: ${question}
+- Resposta correta: ${correctAnswer}
+
+REGRAS:
+1. Use APENAS a pergunta e a resposta correta. NÃO use alternativas erradas.
+2. Crie uma AFIRMAÇÃO DECLARATIVA COMPLETA que incorpore naturalmente a resposta como uma lacuna {{c1::resposta}}.
+3. A frase deve fazer sentido quando lida por completo e ser respondível quando a lacuna está oculta.
+4. A lacuna deve conter o CONCEITO-CHAVE (a resposta correta), nunca palavras triviais.
+5. NÃO adicione informações que não estão no cartão original.
+6. O campo "back" deve ficar VAZIO (será gerado automaticamente pelo sistema de cloze).
+7. Use HTML simples se necessário.
+
+Retorne o front com a sintaxe {{c1::resposta}} e back vazio.`;
+
+      const data = await enhanceCard({
+        front: question,
+        back: correctAnswer,
+        cardType: 'basic',
+        aiModel: model,
+        energyCost: 1,
+        customPrompt,
+      });
+
+      if (data.error) {
+        toast({ title: data.error, variant: 'destructive' });
+        return;
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+
+      // Apply the cloze conversion
+      const newFront = data.front || front;
+      const newBack = ''; // Cloze back is managed by sibling system
+
+      setFront(newFront);
+      setBack(newBack);
+      isEditingMCRef.current = false;
+
+      // Save immediately — update card type to cloze
+      await patchCard(editCardIdRef.current, {
+        front_content: newFront,
+        back_content: JSON.stringify({ clozeTarget: 1, extra: '' }),
+        card_type: 'cloze',
+      });
+      onCardUpdated(editCardIdRef.current, {
+        front_content: newFront,
+        back_content: JSON.stringify({ clozeTarget: 1, extra: '' }),
+      });
+      queryClient.invalidateQueries({ queryKey: ['cards'] });
+      toast({ title: '✨ Convertido para Cloze!' });
+      setEditOpen(false);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erro desconhecido';
+      toast({ title: 'Erro ao converter', description: msg, variant: 'destructive' });
+    } finally {
+      setIsConvertingMC(false);
+    }
+  };
+
   return (
     <>
       {/* Action buttons */}
