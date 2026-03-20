@@ -303,12 +303,13 @@ const Study = () => {
             onOpenExplainChat={(options) => { const action = options?.action || 'explain'; setExplainInChat(action); chatClearRef.current?.(); tutor.handleTutorRequest(currentCard, options || { action: 'explain' }); }}
             actions={
               <StudyCardActions card={currentCard} isLiveDeck={isLiveDeck}
-                onCardUpdated={(updatedFields) => { setLocalQueue(prev => prev.map(c => c.id === currentCard.id ? { ...c, ...updatedFields } : c)); setDisplayedCard(prev => prev && prev.id === currentCard.id ? { ...prev, ...updatedFields } : prev); }}
-                onCardFrozen={() => { setLocalQueue(prev => prev.filter(c => c.id !== currentCard.id)); setCardKey(prev => prev + 1); }}
-                onCardBuried={() => {
+                onCardUpdated={(cardId, updatedFields) => { setLocalQueue(prev => prev.map(c => c.id === cardId ? { ...c, ...updatedFields } : c)); setDisplayedCard(prev => prev && prev.id === cardId ? { ...prev, ...updatedFields } : prev); }}
+                onCardFrozen={(cardId) => { setLocalQueue(prev => prev.filter(c => c.id !== cardId)); setCardKey(prev => prev + 1); }}
+                onCardBuried={(cardId) => {
+                  const targetCard = localQueue.find(c => c.id === cardId) ?? currentCard;
                   setLocalQueue(prev => {
-                    let filtered = prev.filter(c => c.id !== currentCard.id);
-                    if (currentCard.card_type === 'cloze') { const sibIds = getSiblingIds(currentCard, filtered); if (sibIds.length > 0) { const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); tomorrow.setHours(0, 0, 0, 0); buryCards(sibIds, tomorrow.toISOString()); filtered = filtered.filter(c => !sibIds.includes(c.id)); } }
+                    let filtered = prev.filter(c => c.id !== cardId);
+                    if (targetCard.card_type === 'cloze') { const sibIds = getSiblingIds(targetCard, filtered); if (sibIds.length > 0) { const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); tomorrow.setHours(0, 0, 0, 0); buryCards(sibIds, tomorrow.toISOString()); filtered = filtered.filter(c => !sibIds.includes(c.id)); } }
                     return filtered;
                   }); setCardKey(prev => prev + 1);
                 }}

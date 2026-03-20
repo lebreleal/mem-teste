@@ -35,9 +35,10 @@ interface StudyCardActionsProps {
     deck_id: string;
   };
   isLiveDeck?: boolean;
-  onCardUpdated: (updatedFields: { front_content: string; back_content: string }) => void;
-  onCardFrozen: () => void;
-  onCardBuried?: () => void;
+  /** cardId is the card that was actually edited (uses the ID captured at open time, not the current card) */
+  onCardUpdated: (cardId: string, updatedFields: { front_content: string; back_content: string }) => void;
+  onCardFrozen: (cardId: string) => void;
+  onCardBuried?: (cardId: string) => void;
   /** Called after cloze sibling edits so Study.tsx can update all siblings in localQueue */
   onSiblingsUpdated?: (updates: { id: string; front_content: string; back_content: string }[], deletedIds: string[]) => void;
   onOpenChat?: () => void;
@@ -70,8 +71,11 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
   const [improveModalOpen, setImproveModalOpen] = useState(false);
   const [suggestOpen, setSuggestOpen] = useState(false);
 
-  // Capture card ID at edit-open time to prevent stale references
+  // Capture FULL card snapshot at edit-open time to prevent stale references
   const editCardIdRef = useRef<string>(card.id);
+  const editCardDeckIdRef = useRef<string>(card.deck_id);
+  const editCardTypeRef = useRef<string>(card.card_type);
+  const editCardBackRef = useRef<string>(card.back_content);
   // Store original front_content to find siblings
   const originalFrontRef = useRef<string>('');
 
@@ -83,11 +87,14 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
 
   const openEdit = async () => {
     setEditLoading(true);
+    // Capture full snapshot at click time — these refs are stable throughout the edit session
     editCardIdRef.current = card.id;
+    editCardDeckIdRef.current = card.deck_id;
+    editCardTypeRef.current = card.card_type;
+    editCardBackRef.current = card.back_content;
+    originalFrontRef.current = card.front_content;
     // Preload the RichEditor chunk
     try { await import('@/components/RichEditor'); } catch {}
-
-    originalFrontRef.current = card.front_content;
 
     if (card.card_type === 'multiple_choice') {
       setEditorType('basic'); // MC uses basic layout in unified editor
@@ -132,7 +139,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
       await freezeCardService(card.id);
       toast({ title: '❄️ Card congelado', description: 'Este card não aparecerá mais nas revisões.' });
       setFreezeConfirmOpen(false);
-      onCardFrozen();
+      onCardFrozen(card.id);
     } catch {
       toast({ title: 'Erro ao congelar card', variant: 'destructive' });
     }
@@ -143,7 +150,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
       await burySingleCard(card.id);
       toast({ title: '⛏️ Card enterrado', description: 'Ele voltará amanhã.' });
       setBuryConfirmOpen(false);
-      onCardBuried?.();
+      onCardBuried?.(card.id);
     } catch {
       toast({ title: 'Erro ao enterrar card', variant: 'destructive' });
     }
@@ -192,7 +199,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
       } else {
         // Basic save — just update content, created_at is NOT touched
         await cardService.updateCard(editCardIdRef.current, front, back);
-        onCardUpdated({ front_content: front, back_content: back });
+        onCardUpdated(editCardIdRef.current, { front_content: front, back_content: back });
       }
       queryClient.invalidateQueries({ queryKey: ['cards'] });
       toast({ title: 'Cartão atualizado!' });
@@ -245,7 +252,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
     const frontStr = JSON.stringify(frontData);
 
     // Fetch existing siblings
-    const allSiblingCards = await fetchClozeSiblings([card.deck_id], originalFrontRef.current);
+    const allSiblingCards = await fetchClozeSiblings([editCardDeckIdRef.current], originalFrontRef.current);
     const existingTargets = new Map<number, string>();
     allSiblingCards.forEach(c => {
       try {
@@ -275,7 +282,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
 
     await Promise.all([...updatePromises, ...deletePromises]);
     if (numsToAdd.length > 0) {
-      await cardService.createCards(card.deck_id, numsToAdd.map(n => ({
+      await cardService.createCards(editCardDeckIdRef.current, numsToAdd.map(n => ({
         frontContent: frontStr,
         backContent: JSON.stringify({ clozeTarget: n, extra: userBack }),
         cardType: 'image_occlusion',
@@ -289,7 +296,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
       back_content: JSON.stringify({ clozeTarget: n, extra: userBack }),
     }));
     const deletedIds = numsToRemove.map(n => existingTargets.get(n)!);
-    onCardUpdated({ front_content: frontStr, back_content: JSON.stringify({ clozeTarget: numsToKeep[0] ?? 1, extra: userBack }) });
+    onCardUpdated(editCardIdRef.current, { front_content: frontStr, back_content: JSON.stringify({ clozeTarget: numsToKeep[0] ?? 1, extra: userBack }) });
     onSiblingsUpdated?.(updatedSiblings, deletedIds);
   };
 
@@ -319,7 +326,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
     if (uniqueNums.length === 0) uniqueNums = [1];
 
     // Fetch all cloze siblings from DB
-    const allSiblingCards = await fetchClozeSiblings([card.deck_id], originalFrontRef.current);
+    const allSiblingCards = await fetchClozeSiblings([editCardDeckIdRef.current], originalFrontRef.current);
 
     const existingTargets = new Map<number, string>();
     allSiblingCards.forEach(c => {
@@ -355,7 +362,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
 
     // Create new cards for added cloze numbers
     if (numsToAdd.length > 0) {
-      await cardService.createCards(card.deck_id, numsToAdd.map(n => ({
+      await cardService.createCards(editCardDeckIdRef.current, numsToAdd.map(n => ({
         frontContent: front,
         backContent: JSON.stringify({ clozeTarget: n, extra: back }),
         cardType: 'cloze',
@@ -370,17 +377,17 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
     }));
     const deletedIds = numsToRemove.map(n => existingTargets.get(n)!);
 
-    // Update the current card being studied
+    // Update the current card being studied — use captured back_content from open time
     const currentBack = (() => {
       try {
-        const parsed = JSON.parse(card.back_content);
+        const parsed = JSON.parse(editCardBackRef.current);
         if (typeof parsed.clozeTarget === 'number') {
           return JSON.stringify({ clozeTarget: parsed.clozeTarget, extra: back });
         }
       } catch {}
       return JSON.stringify({ clozeTarget: 1, extra: back });
     })();
-    onCardUpdated({ front_content: front, back_content: currentBack });
+    onCardUpdated(editCardIdRef.current, { front_content: front, back_content: currentBack });
     onSiblingsUpdated?.(updatedSiblings, deletedIds);
   };
 
@@ -422,8 +429,8 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
     setBack(improvePreview.back);
 
     try {
-      await patchCard(card.id, { front_content: improvePreview.front, back_content: improvePreview.back });
-      onCardUpdated({ front_content: improvePreview.front, back_content: improvePreview.back });
+      await patchCard(editCardIdRef.current, { front_content: improvePreview.front, back_content: improvePreview.back });
+      onCardUpdated(editCardIdRef.current, { front_content: improvePreview.front, back_content: improvePreview.back });
       queryClient.invalidateQueries({ queryKey: ['cards'] });
     } catch {
       // silent – editor still has values
