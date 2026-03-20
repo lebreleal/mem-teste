@@ -326,7 +326,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
     if (uniqueNums.length === 0) uniqueNums = [1];
 
     // Fetch all cloze siblings from DB
-    const allSiblingCards = await fetchClozeSiblings([card.deck_id], originalFrontRef.current);
+    const allSiblingCards = await fetchClozeSiblings([editCardDeckIdRef.current], originalFrontRef.current);
 
     const existingTargets = new Map<number, string>();
     allSiblingCards.forEach(c => {
