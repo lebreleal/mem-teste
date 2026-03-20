@@ -16,17 +16,15 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { CardEditorForm } from '@/components/card-editor/CardEditorForm';
-import ImageOcclusion from '@/components/ImageOcclusion';
+import { CardEditorDialog } from '@/components/manage-deck/CardEditorDialog';
 import { freezeCard as freezeCardService, burySingleCard, patchCard } from '@/services/card/cardMutations';
 import { fetchClozeSiblings } from '@/services/card/cardQueries';
 import { enhanceCard } from '@/services/card/cardAI';
 import { useEnergy } from '@/hooks/useEnergy';
 import { useAIModel } from '@/hooks/useAIModel';
 import { useToast } from '@/hooks/use-toast';
+import { OCCLUSION_COLORS } from '@/lib/occlusionColors';
 import * as cardService from '@/services/cardService';
-
-
 
 interface StudyCardActionsProps {
   card: {
@@ -46,7 +44,7 @@ interface StudyCardActionsProps {
   chatHasMessages?: boolean;
 }
 
-type EditorCardType = 'basic' | 'cloze' | 'multiple_choice' | 'image_occlusion';
+type EditorCardType = 'basic' | 'cloze' | 'image_occlusion';
 
 const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCardBuried, onSiblingsUpdated, onOpenChat, chatHasMessages }: StudyCardActionsProps) => {
   const queryClient = useQueryClient();
@@ -60,19 +58,11 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
   const [buryConfirmOpen, setBuryConfirmOpen] = useState(false);
   const [front, setFront] = useState('');
   const [back, setBack] = useState('');
-  const [editorType, setEditorType] = useState<EditorCardType>('basic');
+  const [editorType, setEditorType] = useState<EditorCardType | null>('basic');
   const [mcOptions, setMcOptions] = useState<string[]>(['', '', '', '']);
   const [mcCorrectIndex, setMcCorrectIndex] = useState(0);
-  const [occlusionImageUrl, setOcclusionImageUrl] = useState('');
-  const [occlusionRects, setOcclusionRects] = useState<any[]>([]);
-  const [occlusionActiveRectIds, setOcclusionActiveRectIds] = useState<string[]>([]);
-  const [occlusionCanvasSize, setOcclusionCanvasSize] = useState<{ w: number; h: number } | null>(null);
   const [occlusionModalOpen, setOcclusionModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-
-  // Capture card ID at edit-open time to prevent stale references
-  // if a learning card cuts the queue while the edit dialog is open
-  const editCardIdRef = useRef<string>(card.id);
 
   // AI improve state
   const [isImproving, setIsImproving] = useState(false);
@@ -80,34 +70,39 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
   const [improveModalOpen, setImproveModalOpen] = useState(false);
   const [suggestOpen, setSuggestOpen] = useState(false);
 
+  // Capture card ID at edit-open time to prevent stale references
+  const editCardIdRef = useRef<string>(card.id);
   // Store original front_content to find siblings
   const originalFrontRef = useRef<string>('');
 
+  const resetForm = () => {
+    setFront(''); setBack('');
+    setEditorType('basic');
+    setMcOptions(['', '', '', '']); setMcCorrectIndex(0);
+  };
+
   const openEdit = async () => {
     setEditLoading(true);
-    // Capture card identity at open time (immune to queue changes during edit)
     editCardIdRef.current = card.id;
-    // Preload the RichEditor chunk before opening the dialog
-    try {
-      await import('@/components/RichEditor');
-    } catch {}
-    setFront(card.front_content);
-    setOcclusionImageUrl('');
-    setOcclusionRects([]);
-    setOcclusionActiveRectIds([]);
-    setOcclusionCanvasSize(null);
+    // Preload the RichEditor chunk
+    try { await import('@/components/RichEditor'); } catch {}
+
     originalFrontRef.current = card.front_content;
+
     if (card.card_type === 'multiple_choice') {
-      setEditorType('multiple_choice');
+      setEditorType('basic'); // MC uses basic layout in unified editor
+      setFront(card.front_content);
       try {
         const data = JSON.parse(card.back_content);
         setMcOptions(data.options || ['', '', '', '']);
         setMcCorrectIndex(data.correctIndex ?? 0);
+        setBack('');
       } catch {
         setBack(card.back_content);
       }
     } else if (card.card_type === 'cloze') {
-      setEditorType('cloze');
+      setEditorType('basic');
+      setFront(card.front_content);
       try {
         const parsed = JSON.parse(card.back_content);
         if (typeof parsed.clozeTarget === 'number') {
@@ -119,25 +114,13 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
         setBack(card.back_content);
       }
     } else if (card.card_type === 'image_occlusion') {
-      setEditorType('image_occlusion');
-      try {
-        const data = JSON.parse(card.front_content);
-        setOcclusionImageUrl(data.imageUrl || '');
-        const rects = data.allRects || data.rects || [];
-        setOcclusionRects(rects);
-        setOcclusionActiveRectIds(data.activeRectIds || rects.map((r: any) => r.id));
-        setOcclusionCanvasSize(data.canvasWidth ? { w: data.canvasWidth, h: data.canvasHeight } : null);
-        setFront(data.frontText || '');
-      } catch {
-        setOcclusionImageUrl('');
-        setOcclusionRects([]);
-        setOcclusionActiveRectIds([]);
-        setOcclusionCanvasSize(null);
-        setFront('');
-      }
+      setEditorType('basic');
+      // front is the JSON with imageUrl, allRects, etc. — pass as-is
+      setFront(card.front_content);
       setBack(card.back_content);
     } else {
       setEditorType('basic');
+      setFront(card.front_content);
       setBack(card.back_content);
     }
     setEditLoading(false);
@@ -169,7 +152,6 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
   const addMcOption = () => {
     if (mcOptions.length < 6) setMcOptions([...mcOptions, '']);
   };
-
   const removeMcOption = (idx: number) => {
     if (mcOptions.length <= 2) return;
     const newOpts = mcOptions.filter((_, i) => i !== idx);
@@ -179,172 +161,227 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
     else if (mcCorrectIndex > idx) setMcCorrectIndex(mcCorrectIndex - 1);
   };
 
-  const handleSave = async () => {
-    if (editorType !== 'image_occlusion' && !front.trim()) {
+  /** Main save handler — handles all card types with proper sibling reconciliation */
+  const handleSave = async (_addAnother: boolean) => {
+    // Detect card type from content
+    let hasOcclusionImage = false;
+    let occlusionImageUrl = '';
+    try {
+      const d = JSON.parse(front);
+      if (d && typeof d === 'object' && ('imageUrl' in d || 'allRects' in d)) {
+        hasOcclusionImage = true;
+        occlusionImageUrl = d.imageUrl || '';
+      }
+    } catch {}
+
+    const plainText = front.replace(/<[^>]*>/g, '');
+    const hasCloze = plainText.includes('{{c');
+    const detectedType = hasOcclusionImage ? 'image_occlusion' : hasCloze ? 'cloze' : 'basic';
+
+    if (detectedType === 'basic' && !front.trim()) {
       toast({ title: 'Preencha a pergunta', variant: 'destructive' });
       return;
     }
 
-    // Multiple choice save
-    if (editorType === 'multiple_choice') {
-      const filledOptions = mcOptions.filter(o => o.trim());
-      if (filledOptions.length < 2) {
-        toast({ title: 'Adicione pelo menos 2 opções', variant: 'destructive' });
-        return;
-      }
-      const backContent = JSON.stringify({ options: mcOptions.filter(o => o.trim()), correctIndex: mcCorrectIndex });
-      setIsSaving(true);
-      try {
-        await cardService.updateCard(editCardIdRef.current, front, backContent);
-         toast({ title: 'Cartão atualizado!' });
-        setEditOpen(false);
-        queryClient.invalidateQueries({ queryKey: ['cards'] });
-        onCardUpdated({ front_content: front, back_content: backContent });
-      } catch {
-        toast({ title: 'Erro ao salvar', variant: 'destructive' });
-      } finally {
-        setIsSaving(false);
-      }
-      return;
-    }
-
-    // Cloze save with sibling logic
-    if (editorType === 'cloze') {
-      setIsSaving(true);
-      try {
-        // Extract unique cloze numbers from edited front
-        const plainForNumbers = front.replace(/<[^>]*>/g, '');
-        const clozeNumMatches = [...plainForNumbers.matchAll(/\{\{c(\d+)::/g)];
-        const uniqueNums = [...new Set(clozeNumMatches.map(m => parseInt(m[1])))].sort((a, b) => a - b);
-
-        // Fetch all cloze siblings from DB (same front_content as original)
-        const allSiblingCards = await fetchClozeSiblings([card.deck_id], originalFrontRef.current);
-
-        // Map existing cloze targets to card IDs
-        const existingTargets = new Map<number, string>();
-        allSiblingCards.forEach(c => {
-          try {
-            const parsed = JSON.parse(c.back_content);
-            if (typeof parsed.clozeTarget === 'number') {
-              existingTargets.set(parsed.clozeTarget, c.id);
-              return;
-            }
-          } catch {}
-          const assignedNum = uniqueNums.find(n => !existingTargets.has(n)) ?? 1;
-          existingTargets.set(assignedNum, c.id);
-        });
-
-        const existingNums = [...existingTargets.keys()];
-        const numsToKeep = uniqueNums.filter(n => existingTargets.has(n));
-        const numsToAdd = uniqueNums.filter(n => !existingTargets.has(n));
-        const numsToRemove = existingNums.filter(n => !uniqueNums.includes(n));
-
-        // Update all existing siblings with new front_content
-        const updatePromises = numsToKeep.map(n => {
-          const cardId = existingTargets.get(n)!;
-          const backJson = JSON.stringify({ clozeTarget: n, extra: back });
-          return cardService.updateCard(cardId, front, backJson);
-        });
-
-        // Create new cards for added cloze numbers
-        const newCards = numsToAdd.map(n => ({
-          frontContent: front,
-          backContent: JSON.stringify({ clozeTarget: n, extra: back }),
-          cardType: 'cloze',
-        }));
-
-        // Delete cards for removed cloze numbers
-        const deletePromises = numsToRemove.map(n => {
-          const cardId = existingTargets.get(n)!;
-          return cardService.deleteCard(cardId);
-        });
-
-        await Promise.all([...updatePromises, ...deletePromises]);
-        if (newCards.length > 0) {
-          await cardService.createCards(card.deck_id, newCards);
-        }
-
-        // Build updates for the study queue
-        const updatedSiblings = numsToKeep.map(n => ({
-          id: existingTargets.get(n)!,
-          front_content: front,
-          back_content: JSON.stringify({ clozeTarget: n, extra: back }),
-        }));
-        const deletedIds = numsToRemove.map(n => existingTargets.get(n)!);
-
-        // Update current card in study queue
-        const currentBackJson = (() => {
-          try {
-            const parsed = JSON.parse(card.back_content);
-            if (typeof parsed.clozeTarget === 'number') {
-              return JSON.stringify({ clozeTarget: parsed.clozeTarget, extra: back });
-            }
-          } catch {}
-          return JSON.stringify({ clozeTarget: 1, extra: back });
-        })();
-        onCardUpdated({ front_content: front, back_content: currentBackJson });
-
-        // Notify parent about sibling updates
-        if (onSiblingsUpdated) {
-          onSiblingsUpdated(updatedSiblings, deletedIds);
-        }
-
-        queryClient.invalidateQueries({ queryKey: ['cards'] });
-         toast({ title: 'Cartão atualizado!' });
-        setEditOpen(false);
-      } catch {
-        toast({ title: 'Erro ao salvar cloze', variant: 'destructive' });
-      } finally {
-        setIsSaving(false);
-      }
-      return;
-    }
-
-    // Image occlusion save
-    if (editorType === 'image_occlusion') {
-      if (!occlusionImageUrl || occlusionRects.length === 0) {
-        toast({ title: 'Adicione a imagem e pelo menos uma oclusão', variant: 'destructive' });
-        return;
-      }
-      setIsSaving(true);
-      try {
-        const cw = occlusionCanvasSize?.w;
-        const ch = occlusionCanvasSize?.h;
-        const frontText = front.trim() ? front : undefined;
-        const frontContent = JSON.stringify({
-          imageUrl: occlusionImageUrl,
-          allRects: occlusionRects,
-          activeRectIds: occlusionActiveRectIds.length > 0 ? occlusionActiveRectIds : occlusionRects.map((r: any) => r.id),
-          canvasWidth: cw,
-          canvasHeight: ch,
-          ...(frontText ? { frontText } : {}),
-        });
-        await cardService.updateCard(editCardIdRef.current, frontContent, back);
-         toast({ title: 'Cartão atualizado!' });
-        setEditOpen(false);
-        queryClient.invalidateQueries({ queryKey: ['cards'] });
-        onCardUpdated({ front_content: frontContent, back_content: back });
-      } catch {
-        toast({ title: 'Erro ao salvar', variant: 'destructive' });
-      } finally {
-        setIsSaving(false);
-      }
-      return;
-    }
-
-    // Basic save
     setIsSaving(true);
     try {
-      await cardService.updateCard(editCardIdRef.current, front, back);
+      if (detectedType === 'image_occlusion') {
+        await handleSaveImageOcclusion();
+      } else if (detectedType === 'cloze') {
+        await handleSaveCloze();
+      } else {
+        // Basic save — just update content, created_at is NOT touched
+        await cardService.updateCard(editCardIdRef.current, front, back);
+        onCardUpdated({ front_content: front, back_content: back });
+      }
+      queryClient.invalidateQueries({ queryKey: ['cards'] });
       toast({ title: 'Cartão atualizado!' });
       setEditOpen(false);
-      queryClient.invalidateQueries({ queryKey: ['cards'] });
-      onCardUpdated({ front_content: front, back_content: back });
-    } catch {
-      toast({ title: 'Erro ao salvar', variant: 'destructive' });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erro desconhecido';
+      toast({ title: 'Erro ao salvar', description: msg, variant: 'destructive' });
     } finally {
       setIsSaving(false);
     }
+  };
+
+  /** Save image occlusion with sibling reconciliation */
+  const handleSaveImageOcclusion = async () => {
+    let frontData: Record<string, unknown>;
+    try {
+      frontData = JSON.parse(front);
+    } catch {
+      throw new Error('Dados de oclusão inválidos');
+    }
+
+    const allRects = (frontData.allRects as Array<{ id: string; color?: string }>) || [];
+    if (!frontData.imageUrl || allRects.length === 0) {
+      throw new Error('Adicione a imagem e pelo menos uma oclusão');
+    }
+
+    // Build color groups to determine unique cloze numbers
+    const colorGroups: Record<string, string[]> = {};
+    allRects.forEach((r) => {
+      const color = r.color || OCCLUSION_COLORS[0].fill;
+      if (!colorGroups[color]) colorGroups[color] = [];
+      colorGroups[color].push(r.id);
+    });
+
+    const allNums = Object.keys(colorGroups).map((_, i) => i + 1);
+    const userBack = back;
+
+    // Also merge text cloze nums from frontText
+    const frontText = (frontData as Record<string, unknown>).frontText as string | undefined;
+    if (frontText) {
+      const textPlain = frontText.replace(/<[^>]*>/g, '');
+      const textNums = [...textPlain.matchAll(/\{\{c(\d+)::/g)].map(m => parseInt(m[1]));
+      textNums.forEach(n => { if (!allNums.includes(n)) allNums.push(n); });
+      allNums.sort((a, b) => a - b);
+    }
+
+    // Update frontData with colorGroups
+    frontData.colorGroups = colorGroups;
+    frontData.activeRectIds = allRects.map(r => r.id);
+    const frontStr = JSON.stringify(frontData);
+
+    // Fetch existing siblings
+    const allSiblingCards = await fetchClozeSiblings([card.deck_id], originalFrontRef.current);
+    const existingTargets = new Map<number, string>();
+    allSiblingCards.forEach(c => {
+      try {
+        const parsed = JSON.parse(c.back_content);
+        if (typeof parsed.clozeTarget === 'number') {
+          existingTargets.set(parsed.clozeTarget, c.id);
+          return;
+        }
+      } catch {}
+      const assignedNum = allNums.find(n => !existingTargets.has(n)) ?? 1;
+      existingTargets.set(assignedNum, c.id);
+    });
+
+    const existingNums = [...existingTargets.keys()];
+    const numsToKeep = allNums.filter(n => existingTargets.has(n));
+    const numsToAdd = allNums.filter(n => !existingTargets.has(n));
+    const numsToRemove = existingNums.filter(n => !allNums.includes(n));
+
+    const updatePromises = numsToKeep.map(n => {
+      const cardId = existingTargets.get(n)!;
+      return cardService.updateCard(cardId, frontStr, JSON.stringify({ clozeTarget: n, extra: userBack }));
+    });
+    const deletePromises = numsToRemove.map(n => {
+      const cardId = existingTargets.get(n)!;
+      return cardService.deleteCard(cardId);
+    });
+
+    await Promise.all([...updatePromises, ...deletePromises]);
+    if (numsToAdd.length > 0) {
+      await cardService.createCards(card.deck_id, numsToAdd.map(n => ({
+        frontContent: frontStr,
+        backContent: JSON.stringify({ clozeTarget: n, extra: userBack }),
+        cardType: 'image_occlusion',
+      })));
+    }
+
+    // Notify study queue
+    const updatedSiblings = numsToKeep.map(n => ({
+      id: existingTargets.get(n)!,
+      front_content: frontStr,
+      back_content: JSON.stringify({ clozeTarget: n, extra: userBack }),
+    }));
+    const deletedIds = numsToRemove.map(n => existingTargets.get(n)!);
+    onCardUpdated({ front_content: frontStr, back_content: JSON.stringify({ clozeTarget: numsToKeep[0] ?? 1, extra: userBack }) });
+    onSiblingsUpdated?.(updatedSiblings, deletedIds);
+  };
+
+  /** Save cloze with sibling reconciliation */
+  const handleSaveCloze = async () => {
+    const plainForNumbers = front.replace(/<[^>]*>/g, '');
+    const clozeNumMatches = [...plainForNumbers.matchAll(/\{\{c(\d+)::/g)];
+    let uniqueNums = [...new Set(clozeNumMatches.map(m => parseInt(m[1])))].sort((a, b) => a - b);
+
+    // Also check for image occlusion colors in front JSON
+    try {
+      const parsed = JSON.parse(front);
+      if (parsed.allRects) {
+        const colorGroups: Record<string, string[]> = {};
+        (parsed.allRects as Array<{ id: string; color?: string }>).forEach(r => {
+          const color = r.color || OCCLUSION_COLORS[0].fill;
+          if (!colorGroups[color]) colorGroups[color] = [];
+          colorGroups[color].push(r.id);
+        });
+        Object.keys(colorGroups).forEach((_, i) => {
+          if (!uniqueNums.includes(i + 1)) uniqueNums.push(i + 1);
+        });
+        uniqueNums.sort((a, b) => a - b);
+      }
+    } catch {}
+
+    if (uniqueNums.length === 0) uniqueNums = [1];
+
+    // Fetch all cloze siblings from DB
+    const allSiblingCards = await fetchClozeSiblings([card.deck_id], originalFrontRef.current);
+
+    const existingTargets = new Map<number, string>();
+    allSiblingCards.forEach(c => {
+      try {
+        const parsed = JSON.parse(c.back_content);
+        if (typeof parsed.clozeTarget === 'number') {
+          existingTargets.set(parsed.clozeTarget, c.id);
+          return;
+        }
+      } catch {}
+      const assignedNum = uniqueNums.find(n => !existingTargets.has(n)) ?? 1;
+      existingTargets.set(assignedNum, c.id);
+    });
+
+    const existingNums = [...existingTargets.keys()];
+    const numsToKeep = uniqueNums.filter(n => existingTargets.has(n));
+    const numsToAdd = uniqueNums.filter(n => !existingTargets.has(n));
+    const numsToRemove = existingNums.filter(n => !uniqueNums.includes(n));
+
+    // Update existing siblings with new front_content (created_at is NOT changed)
+    const updatePromises = numsToKeep.map(n => {
+      const cardId = existingTargets.get(n)!;
+      return cardService.updateCard(cardId, front, JSON.stringify({ clozeTarget: n, extra: back }));
+    });
+
+    // Delete orphaned siblings — they lose their FSRS data
+    const deletePromises = numsToRemove.map(n => {
+      const cardId = existingTargets.get(n)!;
+      return cardService.deleteCard(cardId);
+    });
+
+    await Promise.all([...updatePromises, ...deletePromises]);
+
+    // Create new cards for added cloze numbers
+    if (numsToAdd.length > 0) {
+      await cardService.createCards(card.deck_id, numsToAdd.map(n => ({
+        frontContent: front,
+        backContent: JSON.stringify({ clozeTarget: n, extra: back }),
+        cardType: 'cloze',
+      })));
+    }
+
+    // Notify study queue about sibling changes
+    const updatedSiblings = numsToKeep.map(n => ({
+      id: existingTargets.get(n)!,
+      front_content: front,
+      back_content: JSON.stringify({ clozeTarget: n, extra: back }),
+    }));
+    const deletedIds = numsToRemove.map(n => existingTargets.get(n)!);
+
+    // Update the current card being studied
+    const currentBack = (() => {
+      try {
+        const parsed = JSON.parse(card.back_content);
+        if (typeof parsed.clozeTarget === 'number') {
+          return JSON.stringify({ clozeTarget: parsed.clozeTarget, extra: back });
+        }
+      } catch {}
+      return JSON.stringify({ clozeTarget: 1, extra: back });
+    })();
+    onCardUpdated({ front_content: front, back_content: currentBack });
+    onSiblingsUpdated?.(updatedSiblings, deletedIds);
   };
 
   // AI Improve
@@ -361,30 +398,19 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
 
     setIsImproving(true);
     try {
-      let backToSend = back;
-      if (editorType === 'multiple_choice') {
-        backToSend = JSON.stringify({ options: mcOptions.filter(o => o.trim()), correctIndex: mcCorrectIndex });
-      }
-
       const data = await enhanceCard({
-        front, back: backToSend, cardType: editorType || 'basic', aiModel: model, energyCost: 1,
+        front, back, cardType: 'basic', aiModel: model, energyCost: 1,
       });
 
-      if (data.error) {
-        toast({ title: data.error, variant: 'destructive' });
-        return;
-      }
-
-      if (data.unchanged) {
-        toast({ title: '✨ Este card já está ótimo!', description: 'Não há melhorias a fazer.' });
-        return;
-      }
+      if (data.error) { toast({ title: data.error, variant: 'destructive' }); return; }
+      if (data.unchanged) { toast({ title: '✨ Este card já está ótimo!', description: 'Não há melhorias a fazer.' }); return; }
 
       queryClient.invalidateQueries({ queryKey: ['profile'] });
       setImprovePreview({ front: data.front, back: data.back });
       setImproveModalOpen(true);
-    } catch (e: any) {
-      toast({ title: 'Erro ao melhorar card', description: e.message, variant: 'destructive' });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erro desconhecido';
+      toast({ title: 'Erro ao melhorar card', description: msg, variant: 'destructive' });
     } finally {
       setIsImproving(false);
     }
@@ -393,36 +419,20 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
   const applyImprovement = async () => {
     if (!improvePreview) return;
     setFront(improvePreview.front);
-    let backContent: string;
-    if (editorType === 'multiple_choice') {
-      try {
-        const data = JSON.parse(improvePreview.back);
-        setMcOptions(data.options || mcOptions);
-        setMcCorrectIndex(data.correctIndex ?? mcCorrectIndex);
-        backContent = improvePreview.back;
-      } catch {
-        backContent = improvePreview.back;
-      }
-    } else {
-      setBack(improvePreview.back);
-      backContent = improvePreview.back;
-    }
+    setBack(improvePreview.back);
 
-    // Auto-save to DB and update the study session immediately
     try {
-      await patchCard(card.id, { front_content: improvePreview.front, back_content: backContent });
-      onCardUpdated({ front_content: improvePreview.front, back_content: backContent });
+      await patchCard(card.id, { front_content: improvePreview.front, back_content: improvePreview.back });
+      onCardUpdated({ front_content: improvePreview.front, back_content: improvePreview.back });
       queryClient.invalidateQueries({ queryKey: ['cards'] });
     } catch {
-      // silent – the editor still has the values so user can save manually
+      // silent – editor still has values
     }
 
     setImproveModalOpen(false);
     setImprovePreview(null);
     toast({ title: 'Melhoria aplicada e salva!' });
   };
-
-  const canImprove = editorType && editorType !== 'image_occlusion';
 
   return (
     <>
@@ -538,67 +548,31 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Edit dialog */}
-      <Dialog open={editOpen && !occlusionModalOpen} onOpenChange={(open) => { if (!open) { setEditOpen(false); setOcclusionModalOpen(false); } }}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Pencil className="h-4 w-4" /> Editar Cartão
-            </DialogTitle>
-          </DialogHeader>
-
-          <CardEditorForm
-            front={front}
-            onFrontChange={setFront}
-            back={back}
-            onBackChange={setBack}
-            cardType={editorType}
-            mcOptions={mcOptions}
-            onMcOptionsChange={setMcOptions}
-            mcCorrectIndex={mcCorrectIndex}
-            onMcCorrectIndexChange={setMcCorrectIndex}
-            occlusionImageUrl={occlusionImageUrl}
-            onOpenOcclusion={occlusionImageUrl ? () => setOcclusionModalOpen(true) : undefined}
-            onRemoveOcclusion={() => { setOcclusionImageUrl(''); setOcclusionRects([]); setOcclusionActiveRectIds([]); setOcclusionCanvasSize(null); }}
-            onImprove={canImprove ? handleImprove : undefined}
-            isImproving={isImproving}
-            onSave={handleSave}
-            onCancel={() => setEditOpen(false)}
-            isSaving={isSaving}
-          />
-        </DialogContent>
-      </Dialog>
-
-      {/* Occlusion editor modal */}
-      <Dialog open={occlusionModalOpen} onOpenChange={setOcclusionModalOpen}>
-        <DialogContent className="sm:max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>Editor de oclusão</DialogTitle>
-          </DialogHeader>
-          {occlusionImageUrl ? (
-            <div className="space-y-3">
-              <ImageOcclusion
-                imageUrl={occlusionImageUrl}
-                initialRects={occlusionRects}
-                onChange={(rects, meta) => {
-                  setOcclusionRects(rects);
-                  setOcclusionActiveRectIds(prev => {
-                    const currentIds = new Set(rects.map((r: any) => r.id));
-                    const kept = prev.filter(id => currentIds.has(id));
-                    return kept.length > 0 ? kept : rects.map((r: any) => r.id);
-                  });
-                  if (meta) setOcclusionCanvasSize({ w: meta.canvasWidth, h: meta.canvasHeight });
-                }}
-              />
-              <div className="flex justify-end">
-                <Button onClick={() => setOcclusionModalOpen(false)}>Concluir</Button>
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">Nenhuma imagem de oclusão carregada.</p>
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Card Editor Dialog — uses the same standard layout as ManageDeck */}
+      <CardEditorDialog
+        editorOpen={editOpen}
+        setEditorOpen={setEditOpen}
+        editingId={editCardIdRef.current}
+        editorType={editorType}
+        setEditorType={setEditorType}
+        front={front}
+        setFront={setFront}
+        back={back}
+        setBack={setBack}
+        mcOptions={mcOptions}
+        setMcOptions={setMcOptions}
+        mcCorrectIndex={mcCorrectIndex}
+        setMcCorrectIndex={setMcCorrectIndex}
+        isSaving={isSaving}
+        isImproving={isImproving}
+        occlusionModalOpen={occlusionModalOpen}
+        setOcclusionModalOpen={setOcclusionModalOpen}
+        resetForm={resetForm}
+        handleSave={handleSave}
+        handleImprove={handleImprove}
+        addMcOption={addMcOption}
+        removeMcOption={removeMcOption}
+      />
 
       {/* AI Improve preview dialog */}
       <Dialog open={improveModalOpen} onOpenChange={setImproveModalOpen}>
