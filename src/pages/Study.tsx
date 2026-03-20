@@ -303,7 +303,7 @@ const Study = () => {
             onOpenExplainChat={(options) => { const action = options?.action || 'explain'; setExplainInChat(action); chatClearRef.current?.(); tutor.handleTutorRequest(currentCard, options || { action: 'explain' }); }}
             actions={
               <StudyCardActions card={currentCard} isLiveDeck={isLiveDeck}
-                onCardUpdated={(cardId, updatedFields) => { setLocalQueue(prev => prev.map(c => c.id === cardId ? { ...c, ...updatedFields } : c)); setDisplayedCard(prev => prev && prev.id === cardId ? { ...prev, ...updatedFields } : prev); }}
+                onCardUpdated={(cardId, updatedFields) => { setLocalQueue(prev => prev.map(c => c.id === cardId ? { ...c, ...updatedFields, card_type: c.card_type === 'multiple_choice' && updatedFields.back_content?.includes('"clozeTarget"') ? 'cloze' : c.card_type } : c)); setDisplayedCard(prev => prev && prev.id === cardId ? { ...prev, ...updatedFields, card_type: prev.card_type === 'multiple_choice' && updatedFields.back_content?.includes('"clozeTarget"') ? 'cloze' : prev.card_type } : prev); }}
                 onCardFrozen={(cardId) => { setLocalQueue(prev => prev.filter(c => c.id !== cardId)); setCardKey(prev => prev + 1); }}
                 onCardBuried={(cardId) => {
                   const targetCard = localQueue.find(c => c.id === cardId) ?? currentCard;
