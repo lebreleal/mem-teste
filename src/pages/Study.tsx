@@ -315,6 +315,7 @@ const Study = () => {
                 }}
                 onSiblingsUpdated={(updates, deletedIds, replacementForActiveCard) => {
                   let nextDisplayedCard: StudyCard | null = null;
+                  const currentCardId = currentCard.id;
 
                   setLocalQueue(prev => {
                     let q = prev.map(c => {
@@ -326,14 +327,21 @@ const Study = () => {
                       q = q.filter(c => !deletedIds.includes(c.id));
                     }
 
-                    if (replacementForActiveCard && deletedIds.includes(currentCard.id)) {
+                    if (replacementForActiveCard && deletedIds.includes(currentCardId)) {
                       nextDisplayedCard = q.find(c => c.id === replacementForActiveCard.id) ?? null;
                     }
 
                     return q;
                   });
 
-                  if (replacementForActiveCard && deletedIds.includes(currentCard.id) && nextDisplayedCard) {
+                  const currentUpdate = updates.find(update => update.id === currentCardId);
+                  if (currentUpdate) {
+                    setDisplayedCard(prev => prev && prev.id === currentCardId
+                      ? { ...prev, front_content: currentUpdate.front_content, back_content: currentUpdate.back_content }
+                      : prev);
+                  }
+
+                  if (replacementForActiveCard && deletedIds.includes(currentCardId) && nextDisplayedCard) {
                     setDisplayedCard(nextDisplayedCard);
                     setCardKey(prev => prev + 1);
                   }
