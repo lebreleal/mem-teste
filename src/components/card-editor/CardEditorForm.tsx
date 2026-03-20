@@ -272,7 +272,7 @@ export const CardEditorForm = ({
 
       {/* Cloze preview */}
       {hasCloze && <ClozePreview text={frontTextContent} />}
-      {!hasCloze && !isImageMode && resolvedType !== 'multiple_choice' && <ClozeHelpToggle />}
+      {/* ClozeHelpToggle removed */}
 
       {/* Multiple choice options */}
       {resolvedType === 'multiple_choice' && onMcOptionsChange && onMcCorrectIndexChange && (
