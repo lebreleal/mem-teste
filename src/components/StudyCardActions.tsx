@@ -101,13 +101,15 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
     try { await import('@/components/RichEditor'); } catch {}
 
     if (card.card_type === 'multiple_choice') {
-      setEditorType('basic'); // MC uses basic layout in unified editor
+      isEditingMCRef.current = true;
+      setEditorType('basic');
       setFront(card.front_content);
+      setMcOptions([]); // Don't pass MC options to editor — we show convert button instead
+      setMcCorrectIndex(0);
       try {
         const data = JSON.parse(card.back_content);
-        setMcOptions(data.options || ['', '', '', '']);
-        setMcCorrectIndex(data.correctIndex ?? 0);
-        setBack('');
+        const correctAnswer = data.options?.[data.correctIndex ?? 0] || '';
+        setBack(correctAnswer); // Show correct answer as the back content
       } catch {
         setBack(card.back_content);
       }
