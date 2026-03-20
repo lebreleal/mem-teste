@@ -314,7 +314,9 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
     const cappedReviewIndices: number[] = [];
     for (const [deckId, indices] of reviewByDeck) {
       const dk = deckMap.get(deckId);
-      const limit = dk?.daily_review_limit ?? 9999;
+      // Scale limit DOWN when using sampling so output * scaleFactor ≈ real limit
+      const rawLimit = dk?.daily_review_limit ?? 9999;
+      const limit = scaleFactor > 1 ? Math.max(1, Math.round(rawLimit / scaleFactor)) : rawLimit;
       // Take up to limit; overflow cards keep their scheduledDay so they appear tomorrow
       for (let i = 0; i < indices.length; i++) {
         if (i < limit) {
@@ -443,27 +445,34 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
     }
 
     // Calculate minutes — keep raw fractional values, round only for final output
-    // New cards: 1 first-see (new speed) + remaining interactions at learning speed
-    const firstSeeMin = (newCardsToday * newSecsPerCard * scaleFactor * calFactor) / 60;
+    // New cards: NOT multiplied by scaleFactor — they are hard-limited by daily cap
+    const firstSeeMin = (newCardsToday * newSecsPerCard * calFactor) / 60;
     const newLearningInteractions = newCardsToday * Math.max(0, reviewsPerNewCard - 1);
-    const newLearningMin = (newLearningInteractions * learningSecsPerCard * scaleFactor * calFactor) / 60;
+    const newLearningMin = (newLearningInteractions * learningSecsPerCard * calFactor) / 60;
     const newMinRaw = firstSeeMin + newLearningMin;
-    const totalMinRaw = revMinRaw + newMinRaw + learnMinRaw + relearnMinRaw;
+    // Review/learning/relearning time already uses scaleFactor-adjusted counts implicitly
+    // (the sampled simulation produces proportional counts, multiplied by scaleFactor below)
+    const revMinScaled = revMinRaw * scaleFactor;
+    const learnMinScaled = learnMinRaw * scaleFactor;
+    const relearnMinScaled = relearnMinRaw * scaleFactor;
+    const totalMinRaw = revMinScaled + newMinRaw + learnMinScaled + relearnMinScaled;
 
     points.push({
       date, day: dayLabel,
+      // Review/learning/relearning scale with collection size
       reviewCards: Math.round(reviewCount * scaleFactor),
-      newCards: Math.round(newCardsToday * scaleFactor),
       learningCards: Math.round(learningCount * scaleFactor),
       relearningCards: Math.round(relearningCount * scaleFactor),
-      reviewMin: Math.round(revMinRaw),
-      learningMin: Math.round(learnMinRaw),
-      relearningMin: Math.round(relearnMinRaw),
+      // New cards are hard-limited — do NOT scale
+      newCards: newCardsToday,
+      reviewMin: Math.round(revMinScaled),
+      learningMin: Math.round(learnMinScaled),
+      relearningMin: Math.round(relearnMinScaled),
       newMin: Math.round(newMinRaw),
       totalMin: Math.round(totalMinRaw),
       capacityMin,
       overloaded: totalMinRaw > capacityMin,
-      createdCards: Math.round(newCreatedStudiedToday * scaleFactor),
+      createdCards: newCreatedStudiedToday,
     });
   }
 
