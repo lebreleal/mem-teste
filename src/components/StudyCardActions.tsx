@@ -377,17 +377,17 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
     }));
     const deletedIds = numsToRemove.map(n => existingTargets.get(n)!);
 
-    // Update the current card being studied
+    // Update the current card being studied — use captured back_content from open time
     const currentBack = (() => {
       try {
-        const parsed = JSON.parse(card.back_content);
+        const parsed = JSON.parse(editCardBackRef.current);
         if (typeof parsed.clozeTarget === 'number') {
           return JSON.stringify({ clozeTarget: parsed.clozeTarget, extra: back });
         }
       } catch {}
       return JSON.stringify({ clozeTarget: 1, extra: back });
     })();
-    onCardUpdated({ front_content: front, back_content: currentBack });
+    onCardUpdated(editCardIdRef.current, { front_content: front, back_content: currentBack });
     onSiblingsUpdated?.(updatedSiblings, deletedIds);
   };
 
