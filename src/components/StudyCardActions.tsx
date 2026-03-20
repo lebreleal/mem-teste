@@ -362,7 +362,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
 
     // Create new cards for added cloze numbers
     if (numsToAdd.length > 0) {
-      await cardService.createCards(card.deck_id, numsToAdd.map(n => ({
+      await cardService.createCards(editCardDeckIdRef.current, numsToAdd.map(n => ({
         frontContent: front,
         backContent: JSON.stringify({ clozeTarget: n, extra: back }),
         cardType: 'cloze',
