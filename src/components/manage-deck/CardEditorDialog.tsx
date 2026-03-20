@@ -103,7 +103,7 @@ export const CardEditorDialog = ({
                 onSaveAndAdd={!editingId ? () => handleSave(true) : undefined}
                 onCancel={() => { setEditorOpen(false); resetForm(); }}
                 isSaving={isSaving}
-                extraContent={undefined}
+                extraContent={extraContent}
               />
             </div>
           </div>
