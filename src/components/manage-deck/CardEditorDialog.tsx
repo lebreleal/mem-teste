@@ -30,6 +30,7 @@ interface CardEditorDialogProps {
   handleAICreate?: (templatePrompt: string) => void;
   addMcOption: () => void;
   removeMcOption: (idx: number) => void;
+  extraContent?: React.ReactNode;
 }
 
 export const CardEditorDialog = ({
@@ -39,6 +40,7 @@ export const CardEditorDialog = ({
   isSaving, isImproving, isAICreating = false,
   occlusionModalOpen, setOcclusionModalOpen,
   resetForm, handleSave, handleImprove, handleAICreate, addMcOption, removeMcOption,
+  extraContent,
 }: CardEditorDialogProps) => {
 
   const hasOcclusionImage = (() => {
@@ -56,7 +58,7 @@ export const CardEditorDialog = ({
 
   return (
     <Dialog open={editorOpen} onOpenChange={open => { if (!open) { setEditorOpen(false); resetForm(); } }}>
-      <DialogContent className={`relative overflow-hidden p-0 ${occlusionModalOpen ? 'sm:max-w-5xl max-h-[92dvh]' : 'sm:max-w-2xl max-h-[85dvh]'}`}>
+      <DialogContent className={`relative overflow-hidden p-0 ${occlusionModalOpen ? 'sm:max-w-5xl max-h-[92dvh]' : 'sm:max-w-2xl max-h-[85dvh]'} w-[95vw]`}>
         <div className="relative">
           <div className={`transition-all ${occlusionModalOpen ? 'pointer-events-none select-none blur-[1px] scale-[0.985]' : ''}`}>
             <div className={`${occlusionModalOpen ? 'max-h-[92dvh] overflow-hidden' : 'max-h-[85dvh] overflow-y-auto'} p-6`}>
@@ -101,7 +103,7 @@ export const CardEditorDialog = ({
                 onSaveAndAdd={!editingId ? () => handleSave(true) : undefined}
                 onCancel={() => { setEditorOpen(false); resetForm(); }}
                 isSaving={isSaving}
-                extraContent={undefined}
+                extraContent={extraContent}
               />
             </div>
           </div>

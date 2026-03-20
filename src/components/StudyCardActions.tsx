@@ -2,6 +2,7 @@ import { useState, useRef, lazy, Suspense } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { useQueryClient } from '@tanstack/react-query';
 import { Snowflake, Pencil, Sparkles, Loader2, ArrowLeft, Plus, Trash2, MessageSquareText, CheckSquare, PenLine, MessageCircle, MoreVertical, Flag, ImageIcon, Shovel, StickyNote } from 'lucide-react';
+import { IconAIGradient } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -60,10 +61,13 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
   const [front, setFront] = useState('');
   const [back, setBack] = useState('');
   const [editorType, setEditorType] = useState<EditorCardType | null>('basic');
-  const [mcOptions, setMcOptions] = useState<string[]>(['', '', '', '']);
+  const [mcOptions, setMcOptions] = useState<string[]>([]);
   const [mcCorrectIndex, setMcCorrectIndex] = useState(0);
   const [occlusionModalOpen, setOcclusionModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isConvertingMC, setIsConvertingMC] = useState(false);
+  // Track if current card being edited is MC type
+  const isEditingMCRef = useRef(false);
 
   // AI improve state
   const [isImproving, setIsImproving] = useState(false);
@@ -82,7 +86,8 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
   const resetForm = () => {
     setFront(''); setBack('');
     setEditorType('basic');
-    setMcOptions(['', '', '', '']); setMcCorrectIndex(0);
+    setMcOptions([]); setMcCorrectIndex(0);
+    isEditingMCRef.current = false;
   };
 
   const openEdit = async () => {
@@ -97,13 +102,15 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
     try { await import('@/components/RichEditor'); } catch {}
 
     if (card.card_type === 'multiple_choice') {
-      setEditorType('basic'); // MC uses basic layout in unified editor
+      isEditingMCRef.current = true;
+      setEditorType('basic');
       setFront(card.front_content);
+      setMcOptions([]); // Don't pass MC options to editor — we show convert button instead
+      setMcCorrectIndex(0);
       try {
         const data = JSON.parse(card.back_content);
-        setMcOptions(data.options || ['', '', '', '']);
-        setMcCorrectIndex(data.correctIndex ?? 0);
-        setBack('');
+        const correctAnswer = data.options?.[data.correctIndex ?? 0] || '';
+        setBack(correctAnswer); // Show correct answer as the back content
       } catch {
         setBack(card.back_content);
       }
@@ -441,6 +448,85 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
     toast({ title: 'Melhoria aplicada e salva!' });
   };
 
+  /** Convert MC card to cloze using AI */
+  const handleConvertMCToCloze = async () => {
+    if (energy < 1) {
+      toast({ title: 'Créditos insuficientes', description: 'Você precisa de 1 crédito IA.', variant: 'destructive' });
+      return;
+    }
+
+    // Extract question and correct answer from current state
+    const question = front.replace(/<[^>]*>/g, '').trim();
+    const correctAnswer = back.replace(/<[^>]*>/g, '').trim();
+    if (!question || !correctAnswer) {
+      toast({ title: 'Card sem conteúdo suficiente', variant: 'destructive' });
+      return;
+    }
+
+    setIsConvertingMC(true);
+    try {
+      const customPrompt = `Converta este cartão de múltipla escolha em um cartão CLOZE de alta qualidade.
+
+INFORMAÇÕES DO CARTÃO:
+- Pergunta: ${question}
+- Resposta correta: ${correctAnswer}
+
+REGRAS:
+1. Use APENAS a pergunta e a resposta correta. NÃO use alternativas erradas.
+2. Crie uma AFIRMAÇÃO DECLARATIVA COMPLETA que incorpore naturalmente a resposta como uma lacuna {{c1::resposta}}.
+3. A frase deve fazer sentido quando lida por completo e ser respondível quando a lacuna está oculta.
+4. A lacuna deve conter o CONCEITO-CHAVE (a resposta correta), nunca palavras triviais.
+5. NÃO adicione informações que não estão no cartão original.
+6. O campo "back" deve ficar VAZIO (será gerado automaticamente pelo sistema de cloze).
+7. Use HTML simples se necessário.
+
+Retorne o front com a sintaxe {{c1::resposta}} e back vazio.`;
+
+      const data = await enhanceCard({
+        front: question,
+        back: correctAnswer,
+        cardType: 'basic',
+        aiModel: model,
+        energyCost: 1,
+        customPrompt,
+      });
+
+      if (data.error) {
+        toast({ title: data.error, variant: 'destructive' });
+        return;
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+
+      // Apply the cloze conversion
+      const newFront = data.front || front;
+      const newBack = ''; // Cloze back is managed by sibling system
+
+      setFront(newFront);
+      setBack(newBack);
+      isEditingMCRef.current = false;
+
+      // Save immediately — update card type to cloze
+      await patchCard(editCardIdRef.current, {
+        front_content: newFront,
+        back_content: JSON.stringify({ clozeTarget: 1, extra: '' }),
+        card_type: 'cloze',
+      });
+      onCardUpdated(editCardIdRef.current, {
+        front_content: newFront,
+        back_content: JSON.stringify({ clozeTarget: 1, extra: '' }),
+      });
+      queryClient.invalidateQueries({ queryKey: ['cards'] });
+      toast({ title: '✨ Convertido para Cloze!' });
+      setEditOpen(false);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erro desconhecido';
+      toast({ title: 'Erro ao converter', description: msg, variant: 'destructive' });
+    } finally {
+      setIsConvertingMC(false);
+    }
+  };
+
   return (
     <>
       {/* Action buttons */}
@@ -579,6 +665,25 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
         handleImprove={handleImprove}
         addMcOption={addMcOption}
         removeMcOption={removeMcOption}
+        extraContent={isEditingMCRef.current ? (
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 space-y-2">
+            <p className="text-xs text-muted-foreground">
+              Este cartão é de <span className="font-semibold text-foreground">múltipla escolha</span>. 
+              Converta-o para <span className="font-semibold text-foreground">cloze</span> para melhor memorização.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleConvertMCToCloze}
+              disabled={isConvertingMC}
+              className="w-full gap-2 border-primary/30 text-primary hover:bg-primary/10"
+            >
+              {isConvertingMC ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <IconAIGradient className="h-3.5 w-3.5" />}
+              {isConvertingMC ? 'Convertendo...' : 'Converter para Cloze com IA'}
+              <span className="text-[10px] text-muted-foreground ml-auto">1 crédito</span>
+            </Button>
+          </div>
+        ) : undefined}
       />
 
       {/* AI Improve preview dialog */}

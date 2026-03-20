@@ -138,7 +138,7 @@ export async function burySingleCard(cardId: string) {
 }
 
 /** Patch specific fields on a card row. */
-export async function patchCard(cardId: string, fields: { front_content?: string; back_content?: string }) {
+export async function patchCard(cardId: string, fields: { front_content?: string; back_content?: string; card_type?: string }) {
   const { error } = await supabase
     .from('cards')
     .update(fields)
