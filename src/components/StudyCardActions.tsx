@@ -150,7 +150,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
       await burySingleCard(card.id);
       toast({ title: '⛏️ Card enterrado', description: 'Ele voltará amanhã.' });
       setBuryConfirmOpen(false);
-      onCardBuried?.();
+      onCardBuried?.(card.id);
     } catch {
       toast({ title: 'Erro ao enterrar card', variant: 'destructive' });
     }
