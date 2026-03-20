@@ -77,56 +77,7 @@ const ClozePlusIcon = () => (
   </svg>
 );
 
-/* ─── Cloze Help Toggle ─── */
-const ClozeHelpToggle = () => {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="rounded-lg border border-border bg-muted/20 overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-primary hover:bg-muted/40 transition-colors"
-      >
-        <span className="underline underline-offset-2">Como usar Oclusão de Texto</span>
-        {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-      </button>
-      {open && (
-        <div className="px-3 pb-3 space-y-3 text-xs text-muted-foreground border-t border-border/50 pt-2.5">
-          <div className="flex items-start gap-2.5">
-            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-card border border-border shadow-sm">
-              <ClozeIcon />
-            </span>
-            <div>
-              <p className="font-semibold text-foreground mb-0.5">Criar oclusão</p>
-              <p><span className="text-foreground font-medium">Selecione</span> a palavra ou trecho e clique neste ícone. O texto vira uma lacuna oculta no cartão. Se clicar de novo no mesmo ícone, a próxima seleção terá o <span className="text-foreground font-medium">mesmo número</span> — ou seja, as duas lacunas viram <span className="text-foreground font-medium">o mesmo cartão</span>.</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-2.5">
-            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-card border border-border shadow-sm">
-              <ClozePlusIcon />
-            </span>
-            <div>
-              <p className="font-semibold text-foreground mb-0.5">Nova oclusão (número diferente)</p>
-              <p><span className="text-foreground font-medium">Selecione</span> o trecho e clique neste ícone com <span className="text-foreground font-medium">+</span>. Ele cria uma lacuna com um <span className="text-foreground font-medium">número novo</span>, gerando um <span className="text-foreground font-medium">cartão separado</span>.</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-2.5">
-            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-card border border-border shadow-sm text-destructive">
-              <Trash2 className="h-3.5 w-3.5" />
-            </span>
-            <div>
-              <p className="font-semibold text-foreground mb-0.5">Remover oclusão</p>
-              <p>Coloque o cursor dentro da lacuna e clique no ícone <span className="inline-flex align-middle mx-0.5"><ClozeIcon /></span> novamente. A oclusão é removida e o texto volta ao normal.</p>
-            </div>
-          </div>
-          <div className="rounded-md bg-primary/5 border border-primary/20 px-2.5 py-2 text-[11px]">
-            <span className="font-semibold text-primary">Dica:</span> Lacunas com o mesmo número (ex: <span className="font-mono text-primary">c1</span>) viram um único cartão. Use números diferentes para gerar cartões separados.
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
+/* ClozeHelpToggle removed — monkey theory: keep UI minimal */
 
 /* ─── Cloze Preview ─── */
 const CLOZE_COLORS = [

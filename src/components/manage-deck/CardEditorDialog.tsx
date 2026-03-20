@@ -58,10 +58,10 @@ export const CardEditorDialog = ({
 
   return (
     <Dialog open={editorOpen} onOpenChange={open => { if (!open) { setEditorOpen(false); resetForm(); } }}>
-      <DialogContent className={`relative overflow-hidden p-0 ${occlusionModalOpen ? 'sm:max-w-5xl max-h-[92dvh]' : 'sm:max-w-2xl max-h-[85dvh]'} w-[95vw]`}>
-        <div className="relative">
+      <DialogContent className={`relative overflow-hidden p-0 ${occlusionModalOpen ? 'sm:max-w-5xl' : 'sm:max-w-2xl'} w-[95vw] max-h-[90dvh]`}>
+        <div className="relative h-full">
           <div className={`transition-all ${occlusionModalOpen ? 'pointer-events-none select-none blur-[1px] scale-[0.985]' : ''}`}>
-            <div className={`${occlusionModalOpen ? 'max-h-[92dvh] overflow-hidden' : 'max-h-[85dvh] overflow-y-auto'} p-6`}>
+            <div className={`${occlusionModalOpen ? 'overflow-hidden' : 'overflow-y-auto'} max-h-[90dvh] p-6`}>
               <DialogHeader>
                 <DialogTitle className="font-display">
                   {editingId ? 'Editar Cartão' : 'Novo Cartão'}
