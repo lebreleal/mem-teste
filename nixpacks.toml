@@ -1,6 +1,6 @@
 [phases.setup]
-nixPkgs = []
-aptPkgs = ["nodejs", "npm"]
+nixPkgs = ["nodejs_20"]
+aptPkgs = []
 
 [phases.install]
 cmds = ["npm install --legacy-peer-deps"]
