@@ -131,17 +131,18 @@ const Study = () => {
     fetchBookmarkedCardIds(user.id).then(setBookmarkedIds).catch(() => {});
   }, [user?.id]);
 
-  const handleToggleBookmark = useCallback(async () => {
-    if (!user?.id || !currentCard) return;
+  const handleToggleBookmarkRef = useRef<(cardId: string) => Promise<void>>();
+  handleToggleBookmarkRef.current = async (cardId: string) => {
+    if (!user?.id) return;
     try {
-      const isNowBookmarked = await toggleBookmark(user.id, currentCard.id);
+      const isNowBookmarked = await toggleBookmark(user.id, cardId);
       setBookmarkedIds(prev => {
         const next = new Set(prev);
-        if (isNowBookmarked) next.add(currentCard.id); else next.delete(currentCard.id);
+        if (isNowBookmarked) next.add(cardId); else next.delete(cardId);
         return next;
       });
     } catch {}
-  }, [user?.id, currentCard]);
+  };
 
   // Initialize local queue
   useEffect(() => {
