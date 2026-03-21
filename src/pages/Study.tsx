@@ -399,6 +399,8 @@ const Study = () => {
                   }
                 }}
                 onOpenChat={() => setChatOpen(true)} chatHasMessages={chatHasMessages}
+                isBookmarked={bookmarkedIds.has(currentCard.id)}
+                onToggleBookmark={() => handleToggleBookmarkRef.current?.(currentCard.id)}
               />
             }
             communityMeta={sourceInfo ? (
