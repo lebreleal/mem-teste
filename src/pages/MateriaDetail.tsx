@@ -26,7 +26,7 @@ import { toast } from '@/hooks/use-toast';
 import DeckRow from '@/components/dashboard/DeckRow';
 import DashboardModals from '@/components/dashboard/DashboardModals';
 import { calculateRealStudyTime, DEFAULT_CALIBRATION_FACTOR } from '@/lib/studyUtils';
-import { renameDeck, archiveDeck, deleteDeck, updateDeck } from '@/services/deck';
+import { renameDeck, archiveDeck, deleteDeckCascade, updateDeck } from '@/services/deck';
 import { invalidateDeckRelatedQueries } from '@/lib/queryKeys';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 
