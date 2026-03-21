@@ -373,6 +373,7 @@ const FlashCard = ({
       {/* Top bar: difficulty + actions */}
       <div className="flex flex-col items-center gap-1 flex-shrink-0 pb-3">
         <div className="flex items-center justify-center gap-2">
+          {actionsLeft}
           {difficultyData && (
             <button
               onClick={() => setRecallExpanded(prev => !prev)}
