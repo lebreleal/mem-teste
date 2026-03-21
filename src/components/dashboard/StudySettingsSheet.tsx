@@ -361,6 +361,74 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
               {isMateriaMode ? 'Nenhum subdeck neste baralho' : 'Nenhum deck nesta sala'}
             </div>
           )}
+
+          {/* ─── Advanced Global Settings ─── */}
+          {!isMateriaMode && (
+            <div className="mt-4">
+              <button
+                onClick={() => setShowAdvanced(prev => !prev)}
+                className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors w-full py-2"
+              >
+                <Settings2 className="h-4 w-4" />
+                <span className="font-medium">Configurações Avançadas</span>
+                <ChevronDown className={`h-3.5 w-3.5 ml-auto transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showAdvanced && (
+                <div className="mt-2 space-y-4 rounded-xl border border-border/60 bg-card p-4">
+                  {/* Learning Steps */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-foreground">
+                      Etapas de aprendizagem
+                    </label>
+                    <p className="text-[10px] text-muted-foreground leading-tight">
+                      Intervalos entre revisões de cartões novos. Use sufixos: m (minutos), h (horas), d (dias).
+                    </p>
+                    <Input
+                      value={learningStepsStr}
+                      onChange={e => setLearningStepsStr(e.target.value)}
+                      placeholder="1m, 10m"
+                      className="h-9 text-sm"
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      Ex: <code className="bg-muted px-1 rounded">1m, 10m</code> → revisa após 1 min e depois 10 min
+                    </p>
+                  </div>
+
+                  {/* Easy Graduating Interval */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-foreground">
+                      Intervalo de graduação fácil
+                    </label>
+                    <p className="text-[10px] text-muted-foreground leading-tight">
+                      Quando você marca "Fácil" em um cartão novo, ele aparece novamente após esse número de dias.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setEasyGradInterval(prev => Math.max(1, prev - 1))}
+                        className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors active:scale-95"
+                      >
+                        <Minus className="h-4 w-4" />
+                      </button>
+                      <span className="text-base font-bold text-foreground tabular-nums w-12 text-center">
+                        {easyGradInterval}d
+                      </span>
+                      <button
+                        onClick={() => setEasyGradInterval(prev => Math.min(365, prev + 1))}
+                        className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors active:scale-95"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-amber-600 dark:text-amber-400">
+                    ⚠️ Estas configurações são aplicadas globalmente a todos os seus baralhos.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="p-4 border-t border-border/50">
