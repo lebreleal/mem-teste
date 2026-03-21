@@ -464,7 +464,7 @@ const MateriaDetail: React.FC = () => {
             setAiDeckOpen(true);
           }}
           onImportCards={() => {
-            setImportOpen(true);
+            navigate(`/dashboard?action=import&parentDeckId=${id}`);
           }}
       />
 
