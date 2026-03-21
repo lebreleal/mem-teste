@@ -22,6 +22,7 @@ import FlashCard from '@/components/FlashCard';
 import SessionProgressStrip, { type DeckSessionStats } from '@/components/SessionProgressStrip';
 import SessionComplete from '@/components/study/SessionComplete';
 import StudyDialogs from '@/components/study/StudyDialogs';
+import StudyPausedModal from '@/components/study/StudyPausedModal';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Brain, Moon, Sun, Timer, RefreshCw, Info } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
@@ -81,13 +82,31 @@ const Study = () => {
   const deckStatsRef = useRef<Map<string, DeckSessionStats>>(new Map());
   const [deckStatsSnapshot, setDeckStatsSnapshot] = useState<DeckSessionStats[]>([]);
 
+  // Pause state
+  const [isPaused, setIsPaused] = useState(false);
+  const pausedAccumulatedRef = useRef(0);
+  const pauseStartRef = useRef<number | null>(null);
+
   const sessionDoneRef = useRef(false);
   useEffect(() => {
     const interval = setInterval(() => {
-      if (sessionDoneRef.current) return;
-      setSessionElapsed(Date.now() - sessionStartRef.current);
+      if (sessionDoneRef.current || isPaused) return;
+      setSessionElapsed(Date.now() - sessionStartRef.current - pausedAccumulatedRef.current);
     }, 1000);
     return () => clearInterval(interval);
+  }, [isPaused]);
+
+  const handlePause = useCallback(() => {
+    setIsPaused(true);
+    pauseStartRef.current = Date.now();
+  }, []);
+
+  const handleResume = useCallback(() => {
+    if (pauseStartRef.current) {
+      pausedAccumulatedRef.current += Date.now() - pauseStartRef.current;
+      pauseStartRef.current = null;
+    }
+    setIsPaused(false);
   }, []);
 
   // Leech bypass refs (kept as stubs for StudyDialogs compatibility)
@@ -278,7 +297,7 @@ const Study = () => {
         </div>
       </header>
 
-      <SessionProgressStrip reviewCount={reviewCount} correctCount={correctCount} wrongCount={wrongCount} initialQueueSize={initialQueueSize} remainingCount={localQueue.length} elapsedMs={sessionElapsed} deckStats={deckStatsSnapshot} />
+      <SessionProgressStrip reviewCount={reviewCount} correctCount={correctCount} wrongCount={wrongCount} initialQueueSize={initialQueueSize} remainingCount={localQueue.length} elapsedMs={sessionElapsed} deckStats={deckStatsSnapshot} onPause={handlePause} />
 
       <div className="h-1.5 w-full bg-muted/40">
         <div className="h-full transition-all duration-500 ease-out" style={{ width: `${progressPercent}%`, background: `linear-gradient(90deg, hsl(var(--primary)), hsl(var(--primary) / 0.7))`, borderRadius: '0 4px 4px 0' }} />
@@ -369,6 +388,7 @@ const Study = () => {
         isTutorLoading={tutor.isTutorLoading} onClearStreaming={() => setExplainInChat(false)}
         resetKey={cardKey} onHasMessagesChange={setChatHasMessages} clearRef={chatClearRef}
       />
+      <StudyPausedModal open={isPaused} onResume={handleResume} onEnd={goBack} reviewCount={reviewCount} elapsedMs={sessionElapsed} />
     </div>
   );
 };
