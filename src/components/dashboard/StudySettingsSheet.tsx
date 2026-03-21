@@ -189,12 +189,13 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
 
 
   const hasChanges = useMemo(() => {
-    return Object.keys(settings).some(id => {
+    const deckChanged = Object.keys(settings).some(id => {
       const init = initialSettings.map[id];
       const curr = settings[id];
       return init && curr && init.dailyNewLimit !== curr.dailyNewLimit;
     });
-  }, [settings, initialSettings]);
+    return deckChanged || advancedChanged;
+  }, [settings, initialSettings, advancedChanged]);
 
   const rootItems = initialSettings.order
     .map(id => settings[id])
