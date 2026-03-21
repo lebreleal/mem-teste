@@ -1,8 +1,9 @@
 /**
  * SessionProgressStrip — compact real-time progress bar during study.
- * Shows card counter, accuracy, and time elapsed.
+ * Shows card counter, time elapsed, and pause button.
  */
 
+import { Pause } from 'lucide-react';
 import { IconDeck } from '@/components/icons';
 
 export interface DeckSessionStats {
@@ -22,6 +23,7 @@ interface SessionProgressStripProps {
   remainingCount: number;
   elapsedMs: number;
   deckStats: DeckSessionStats[];
+  onPause?: () => void;
 }
 
 function formatElapsed(ms: number) {
@@ -36,6 +38,7 @@ const SessionProgressStrip = ({
   reviewCount,
   initialQueueSize,
   elapsedMs,
+  onPause,
 }: SessionProgressStripProps) => {
   return (
     <div className="bg-card/80 backdrop-blur-sm border-b border-border/50">
@@ -44,8 +47,17 @@ const SessionProgressStrip = ({
           <IconDeck className="h-3.5 w-3.5 text-muted-foreground" />
           {reviewCount}/{initialQueueSize}
         </span>
-        <span className="text-muted-foreground tabular-nums">
+        <span className="text-muted-foreground tabular-nums flex items-center gap-1">
           {formatElapsed(elapsedMs)}
+          {onPause && (
+            <button
+              onClick={onPause}
+              className="ml-0.5 inline-flex items-center justify-center h-5 w-5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Pausar sessão"
+            >
+              <Pause className="h-3 w-3" />
+            </button>
+          )}
         </span>
       </div>
     </div>
