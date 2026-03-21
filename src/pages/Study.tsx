@@ -234,8 +234,7 @@ const Study = () => {
     if (deckStat) { deckStat.done += 1; if (rating >= 3) deckStat.correct += 1; else deckStat.wrong += 1; setDeckStatsSnapshot(Array.from(deckStatsRef.current.values())); }
 
     if (shouldKeep) {
-      const cardConfig = getCardDeckConfig(card); const steps = cardConfig?.learning_steps ?? ['1', '10'];
-      const currentStep = card.learning_step ?? 0; const stepIdx = rating === 1 ? 0 : Math.min(currentStep + 1, steps.length - 1);
+      const stepIdx = rating === 1 ? 0 : Math.min(currentStep + 1, steps.length - 1);
       const stepStr = steps[stepIdx] ?? '1'; const stepMinutes = parseStepToMinutes(stepStr);
       const estimatedDate = new Date(Date.now() + stepMinutes * 60 * 1000).toISOString();
       const estimatedState = rating === 1 && card.state === 2 ? 3 : (card.state === 0 ? 1 : card.state);
