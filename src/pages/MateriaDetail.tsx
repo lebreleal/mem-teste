@@ -26,7 +26,7 @@ import { toast } from '@/hooks/use-toast';
 import DeckRow from '@/components/dashboard/DeckRow';
 import DashboardModals from '@/components/dashboard/DashboardModals';
 import { calculateRealStudyTime, DEFAULT_CALIBRATION_FACTOR } from '@/lib/studyUtils';
-import { renameDeck, archiveDeck, deleteDeck, updateDeck } from '@/services/deck';
+import { renameDeck, archiveDeck, deleteDeckCascade, updateDeck } from '@/services/deck';
 import { invalidateDeckRelatedQueries } from '@/lib/queryKeys';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 
@@ -156,7 +156,7 @@ const MateriaDetail: React.FC = () => {
   const deleteMutation = useMutation({
     mutationFn: async () => {
       if (!id) throw new Error('No materia id');
-      await deleteDeck(id);
+      await deleteDeckCascade(id);
     },
     onSuccess: () => {
       invalidateDeckRelatedQueries(queryClient);
@@ -267,7 +267,7 @@ const MateriaDetail: React.FC = () => {
 
   const handleDelete = useCallback((deck: DeckWithStats) => {
     if (!window.confirm(`Excluir "${deck.name}"? Esta ação não pode ser desfeita.`)) return;
-    deleteDeck(deck.id)
+    deleteDeckCascade(deck.id)
       .then(() => { invalidateDeckRelatedQueries(queryClient); toast({ title: 'Baralho excluído' }); })
       .catch(() => { toast({ title: 'Erro ao excluir', variant: 'destructive' }); });
   }, [queryClient]);
