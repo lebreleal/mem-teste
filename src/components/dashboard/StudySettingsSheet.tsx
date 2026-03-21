@@ -135,9 +135,11 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
   useMemo(() => {
     if (open) {
       setSettings(initialSettings.map);
+      setLearningStepsStr(initialLearningSteps);
+      setEasyGradInterval(initialEasyGradInterval);
       setShowAdvanced(false);
     }
-  }, [open, initialSettings]);
+  }, [open, initialSettings, initialLearningSteps, initialEasyGradInterval]);
 
   const updateLimit = useCallback((deckId: string, delta: number) => {
     setSettings(prev => {
