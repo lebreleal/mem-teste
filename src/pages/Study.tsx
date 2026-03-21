@@ -22,6 +22,7 @@ import FlashCard from '@/components/FlashCard';
 import SessionProgressStrip, { type DeckSessionStats } from '@/components/SessionProgressStrip';
 import SessionComplete from '@/components/study/SessionComplete';
 import StudyDialogs from '@/components/study/StudyDialogs';
+import StudyPausedModal from '@/components/study/StudyPausedModal';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Brain, Moon, Sun, Timer, RefreshCw, Info } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
@@ -29,6 +30,7 @@ import StudyCardActions from '@/components/StudyCardActions';
 import { useToast } from '@/hooks/use-toast';
 import { resolveCommunitySource } from '@/services/studyService';
 import { buryCards } from '@/services/card/cardMutations';
+import { fetchBookmarkedCardIds, toggleBookmark } from '@/services/bookmarkService';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { Rating } from '@/lib/fsrs';
@@ -81,13 +83,31 @@ const Study = () => {
   const deckStatsRef = useRef<Map<string, DeckSessionStats>>(new Map());
   const [deckStatsSnapshot, setDeckStatsSnapshot] = useState<DeckSessionStats[]>([]);
 
+  // Pause state
+  const [isPaused, setIsPaused] = useState(false);
+  const pausedAccumulatedRef = useRef(0);
+  const pauseStartRef = useRef<number | null>(null);
+
   const sessionDoneRef = useRef(false);
   useEffect(() => {
     const interval = setInterval(() => {
-      if (sessionDoneRef.current) return;
-      setSessionElapsed(Date.now() - sessionStartRef.current);
+      if (sessionDoneRef.current || isPaused) return;
+      setSessionElapsed(Date.now() - sessionStartRef.current - pausedAccumulatedRef.current);
     }, 1000);
     return () => clearInterval(interval);
+  }, [isPaused]);
+
+  const handlePause = useCallback(() => {
+    setIsPaused(true);
+    pauseStartRef.current = Date.now();
+  }, []);
+
+  const handleResume = useCallback(() => {
+    if (pauseStartRef.current) {
+      pausedAccumulatedRef.current += Date.now() - pauseStartRef.current;
+      pauseStartRef.current = null;
+    }
+    setIsPaused(false);
   }, []);
 
   // Leech bypass refs (kept as stubs for StudyDialogs compatibility)
@@ -103,6 +123,26 @@ const Study = () => {
   const [chatHasMessages, setChatHasMessages] = useState(false);
   const chatClearRef = useRef<(() => void) | null>(null);
   const [communityInfoOpen, setCommunityInfoOpen] = useState(false);
+
+  // Bookmarks
+  const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!user?.id) return;
+    fetchBookmarkedCardIds(user.id).then(setBookmarkedIds).catch(() => {});
+  }, [user?.id]);
+
+  const handleToggleBookmarkRef = useRef<(cardId: string) => Promise<void>>();
+  handleToggleBookmarkRef.current = async (cardId: string) => {
+    if (!user?.id) return;
+    try {
+      const isNowBookmarked = await toggleBookmark(user.id, cardId);
+      setBookmarkedIds(prev => {
+        const next = new Set(prev);
+        if (isNowBookmarked) next.add(cardId); else next.delete(cardId);
+        return next;
+      });
+    } catch {}
+  };
 
   // Initialize local queue
   useEffect(() => {
@@ -177,19 +217,24 @@ const Study = () => {
   const submittingRef = useRef<string | null>(null);
 
   const executeReview = useCallback((card: StudyCard, rating: Rating) => {
-    undo.saveSnapshot({ queue: [...localQueue], reviewCount, cardKey, cardId: card.id, prevCardState: { stability: card.stability, difficulty: card.difficulty, state: card.state, scheduled_date: card.scheduled_date, last_reviewed_at: card.last_reviewed_at ?? null } });
+    undo.saveSnapshot({ queue: [...localQueue], reviewCount, cardKey, cardId: card.id, actionType: 'review', prevCardState: { stability: card.stability, difficulty: card.difficulty, state: card.state, scheduled_date: card.scheduled_date, last_reviewed_at: card.last_reviewed_at ?? null } });
     tutor.abortTutor(); const elapsed = Date.now() - cardShownAt.current;
     if (elapsed < FAST_THRESHOLD_MS) { if (fastWarningTimer.current) clearTimeout(fastWarningTimer.current); fastWarningTimer.current = setTimeout(() => {}, 3000); }
     if (rating > 2) addSuccessfulCard.mutate({ flowMultiplier: 1.0 });
-    const shouldKeep = rating === 1 || (rating === 2 && card.state !== 2);
+    // Determine if card stays in session: Again always stays; Hard stays for learning;
+    // Good stays if card is in learning/new AND has more steps before graduation
+    const cardConfig = getCardDeckConfig(card);
+    const steps = cardConfig?.learning_steps ?? ['1', '10'];
+    const currentStep = card.learning_step ?? 0;
+    const goodStaysInLearning = rating === 3 && (card.state === 0 || card.state === 1 || card.state === 3) && (currentStep + 1 < steps.length);
+    const shouldKeep = rating === 1 || (rating === 2 && card.state !== 2) || goodStaysInLearning;
     reviewedCardIdsRef.current.add(card.id); setReviewCount(prev => prev + 1);
     if (rating >= 3) setCorrectCount(prev => prev + 1); else setWrongCount(prev => prev + 1);
     const deckStat = deckStatsRef.current.get(card.deck_id);
     if (deckStat) { deckStat.done += 1; if (rating >= 3) deckStat.correct += 1; else deckStat.wrong += 1; setDeckStatsSnapshot(Array.from(deckStatsRef.current.values())); }
 
     if (shouldKeep) {
-      const cardConfig = getCardDeckConfig(card); const steps = cardConfig?.learning_steps ?? ['1', '10'];
-      const currentStep = card.learning_step ?? 0; const stepIdx = rating === 1 ? 0 : Math.min(currentStep + 1, steps.length - 1);
+      const stepIdx = rating === 1 ? 0 : Math.min(currentStep + 1, steps.length - 1);
       const stepStr = steps[stepIdx] ?? '1'; const stepMinutes = parseStepToMinutes(stepStr);
       const estimatedDate = new Date(Date.now() + stepMinutes * 60 * 1000).toISOString();
       const estimatedState = rating === 1 && card.state === 2 ? 3 : (card.state === 0 ? 1 : card.state);
@@ -278,7 +323,7 @@ const Study = () => {
         </div>
       </header>
 
-      <SessionProgressStrip reviewCount={reviewCount} correctCount={correctCount} wrongCount={wrongCount} initialQueueSize={initialQueueSize} remainingCount={localQueue.length} elapsedMs={sessionElapsed} deckStats={deckStatsSnapshot} />
+      <SessionProgressStrip reviewCount={reviewCount} correctCount={correctCount} wrongCount={wrongCount} initialQueueSize={initialQueueSize} remainingCount={localQueue.length} elapsedMs={sessionElapsed} deckStats={deckStatsSnapshot} onPause={handlePause} />
 
       <div className="h-1.5 w-full bg-muted/40">
         <div className="h-full transition-all duration-500 ease-out" style={{ width: `${progressPercent}%`, background: `linear-gradient(90deg, hsl(var(--primary)), hsl(var(--primary) / 0.7))`, borderRadius: '0 4px 4px 0' }} />
@@ -304,12 +349,24 @@ const Study = () => {
             actions={
               <StudyCardActions card={currentCard} isLiveDeck={isLiveDeck}
                 onCardUpdated={(cardId, updatedFields) => { setLocalQueue(prev => prev.map(c => c.id === cardId ? { ...c, ...updatedFields, card_type: c.card_type === 'multiple_choice' && updatedFields.back_content?.includes('"clozeTarget"') ? 'cloze' : c.card_type } : c)); setDisplayedCard(prev => prev && prev.id === cardId ? { ...prev, ...updatedFields, card_type: prev.card_type === 'multiple_choice' && updatedFields.back_content?.includes('"clozeTarget"') ? 'cloze' : prev.card_type } : prev); }}
-                onCardFrozen={(cardId) => { setLocalQueue(prev => prev.filter(c => c.id !== cardId)); setCardKey(prev => prev + 1); }}
+                onCardFrozen={(cardId) => {
+                  const targetCard = localQueue.find(c => c.id === cardId) ?? currentCard;
+                  undo.saveSnapshot({ queue: [...localQueue], reviewCount, cardKey, cardId, actionType: 'freeze', prevCardState: { stability: targetCard.stability, difficulty: targetCard.difficulty, state: targetCard.state, scheduled_date: targetCard.scheduled_date, last_reviewed_at: targetCard.last_reviewed_at ?? null } });
+                  setLocalQueue(prev => prev.filter(c => c.id !== cardId)); setCardKey(prev => prev + 1);
+                }}
                 onCardBuried={(cardId) => {
                   const targetCard = localQueue.find(c => c.id === cardId) ?? currentCard;
+                  const buriedSiblingIds: string[] = [];
+                  const buriedSiblingDates: Record<string, string> = {};
+                  // Identify siblings that will be buried
+                  if (targetCard.card_type === 'cloze') {
+                    const sibs = getSiblingIds(targetCard, localQueue.filter(c => c.id !== cardId));
+                    sibs.forEach(sid => { const sc = localQueue.find(c => c.id === sid); if (sc) { buriedSiblingIds.push(sid); buriedSiblingDates[sid] = sc.scheduled_date; } });
+                  }
+                  undo.saveSnapshot({ queue: [...localQueue], reviewCount, cardKey, cardId, actionType: 'bury', prevCardState: { stability: targetCard.stability, difficulty: targetCard.difficulty, state: targetCard.state, scheduled_date: targetCard.scheduled_date, last_reviewed_at: targetCard.last_reviewed_at ?? null }, buriedSiblingIds, buriedSiblingDates });
                   setLocalQueue(prev => {
                     let filtered = prev.filter(c => c.id !== cardId);
-                    if (targetCard.card_type === 'cloze') { const sibIds = getSiblingIds(targetCard, filtered); if (sibIds.length > 0) { const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); tomorrow.setHours(0, 0, 0, 0); buryCards(sibIds, tomorrow.toISOString()); filtered = filtered.filter(c => !sibIds.includes(c.id)); } }
+                    if (buriedSiblingIds.length > 0) { const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); tomorrow.setHours(0, 0, 0, 0); buryCards(buriedSiblingIds, tomorrow.toISOString()); filtered = filtered.filter(c => !buriedSiblingIds.includes(c.id)); }
                     return filtered;
                   }); setCardKey(prev => prev + 1);
                 }}
@@ -347,6 +404,8 @@ const Study = () => {
                   }
                 }}
                 onOpenChat={() => setChatOpen(true)} chatHasMessages={chatHasMessages}
+                isBookmarked={bookmarkedIds.has(currentCard.id)}
+                onToggleBookmark={() => handleToggleBookmarkRef.current?.(currentCard.id)}
               />
             }
             communityMeta={sourceInfo ? (
@@ -369,6 +428,7 @@ const Study = () => {
         isTutorLoading={tutor.isTutorLoading} onClearStreaming={() => setExplainInChat(false)}
         resetKey={cardKey} onHasMessagesChange={setChatHasMessages} clearRef={chatClearRef}
       />
+      <StudyPausedModal open={isPaused} onResume={handleResume} onEnd={goBack} />
     </div>
   );
 };
