@@ -117,14 +117,17 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
   const [settings, setSettings] = useState<Record<string, DeckSetting>>(initialSettings.map);
 
   // ─── Advanced global settings ───
-  // Pick defaults from the first deck in the list (they should all be the same globally)
-  const firstDeck = salaDecks[0];
+  const globalSettingsQuery = useQuery({
+    queryKey: ['global-study-settings', user?.id],
+    queryFn: () => fetchGlobalStudySettings(user!.id),
+    enabled: !!user && open,
+    staleTime: 60_000,
+  });
+
   const initialLearningSteps = useMemo(() => {
-    // Try to find existing learning_steps from any deck — they're all the same globally
-    // DeckWithStats doesn't carry learning_steps, so we use defaults
-    return '1m, 10m';
-  }, []);
-  const initialEasyGradInterval = 15;
+    return (globalSettingsQuery.data?.learning_steps ?? ['1m', '10m']).join(', ');
+  }, [globalSettingsQuery.data]);
+  const initialEasyGradInterval = globalSettingsQuery.data?.easy_graduating_interval ?? 15;
 
   const [learningStepsStr, setLearningStepsStr] = useState(initialLearningSteps);
   const [easyGradInterval, setEasyGradInterval] = useState(initialEasyGradInterval);
