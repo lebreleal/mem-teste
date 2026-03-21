@@ -63,7 +63,7 @@ const AICreateDeckDialog = ({ open, onOpenChange, folderId, parentDeckId, existi
         <DialogHeader>
           <DialogTitle className="font-display flex items-center gap-2">
             <Sparkles className="h-5 w-5" style={{ color: 'hsl(var(--energy-purple))' }} />
-            {stepTitle[flow.step] || 'Criar Deck com IA'}
+            {stepTitle[flow.step] || (parentDeckId ? 'Criar Sub-baralho com IA' : 'Criar Deck com IA')}
           </DialogTitle>
         </DialogHeader>
 
