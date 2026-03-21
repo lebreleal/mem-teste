@@ -116,8 +116,24 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
 
   const [settings, setSettings] = useState<Record<string, DeckSetting>>(initialSettings.map);
 
+  // ─── Advanced global settings ───
+  // Pick defaults from the first deck in the list (they should all be the same globally)
+  const firstDeck = salaDecks[0];
+  const initialLearningSteps = useMemo(() => {
+    // Try to find existing learning_steps from any deck — they're all the same globally
+    // DeckWithStats doesn't carry learning_steps, so we use defaults
+    return '1m, 10m';
+  }, []);
+  const initialEasyGradInterval = 15;
+
+  const [learningStepsStr, setLearningStepsStr] = useState(initialLearningSteps);
+  const [easyGradInterval, setEasyGradInterval] = useState(initialEasyGradInterval);
+
   useMemo(() => {
-    if (open) setSettings(initialSettings.map);
+    if (open) {
+      setSettings(initialSettings.map);
+      setShowAdvanced(false);
+    }
   }, [open, initialSettings]);
 
   const updateLimit = useCallback((deckId: string, delta: number) => {
@@ -143,7 +159,23 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
     try {
       const updates = Object.values(settings).map(s => ({ id: s.id, daily_new_limit: s.dailyNewLimit }));
       await updateDeckDailyLimits(updates);
+
+      // Save advanced global settings if changed
+      if (user && advancedChanged) {
+        const parsedSteps = learningStepsStr
+          .split(',')
+          .map(s => s.trim())
+          .filter(Boolean);
+        if (parsedSteps.length > 0) {
+          await updateGlobalDeckSettings(user.id, {
+            learning_steps: parsedSteps,
+            easy_graduating_interval: easyGradInterval,
+          });
+        }
+      }
+
       queryClient.invalidateQueries({ queryKey: ['decks'] });
+      queryClient.invalidateQueries({ queryKey: ['study-queue'] });
       toast({ title: 'Configurações salvas!' });
       onOpenChange(false);
     } catch {
@@ -151,7 +183,10 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
     } finally {
       setSaving(false);
     }
-  }, [settings, queryClient, toast, onOpenChange]);
+  }, [settings, user, learningStepsStr, easyGradInterval, queryClient, toast, onOpenChange]);
+
+  const advancedChanged = learningStepsStr !== initialLearningSteps || easyGradInterval !== initialEasyGradInterval;
+
 
   const hasChanges = useMemo(() => {
     return Object.keys(settings).some(id => {
