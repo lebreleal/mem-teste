@@ -196,7 +196,7 @@ const Study = () => {
   const submittingRef = useRef<string | null>(null);
 
   const executeReview = useCallback((card: StudyCard, rating: Rating) => {
-    undo.saveSnapshot({ queue: [...localQueue], reviewCount, cardKey, cardId: card.id, prevCardState: { stability: card.stability, difficulty: card.difficulty, state: card.state, scheduled_date: card.scheduled_date, last_reviewed_at: card.last_reviewed_at ?? null } });
+    undo.saveSnapshot({ queue: [...localQueue], reviewCount, cardKey, cardId: card.id, actionType: 'review', prevCardState: { stability: card.stability, difficulty: card.difficulty, state: card.state, scheduled_date: card.scheduled_date, last_reviewed_at: card.last_reviewed_at ?? null } });
     tutor.abortTutor(); const elapsed = Date.now() - cardShownAt.current;
     if (elapsed < FAST_THRESHOLD_MS) { if (fastWarningTimer.current) clearTimeout(fastWarningTimer.current); fastWarningTimer.current = setTimeout(() => {}, 3000); }
     if (rating > 2) addSuccessfulCard.mutate({ flowMultiplier: 1.0 });
