@@ -30,6 +30,7 @@ import StudyCardActions from '@/components/StudyCardActions';
 import { useToast } from '@/hooks/use-toast';
 import { resolveCommunitySource } from '@/services/studyService';
 import { buryCards } from '@/services/card/cardMutations';
+import { fetchBookmarkedCardIds, toggleBookmark } from '@/services/bookmarkService';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { Rating } from '@/lib/fsrs';
