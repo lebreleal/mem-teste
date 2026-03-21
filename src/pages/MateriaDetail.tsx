@@ -461,12 +461,12 @@ const MateriaDetail: React.FC = () => {
              },
            });
          }}
-         onCreateDeckAI={() => {
-           navigate(`/dashboard?action=ai-deck&parentDeckId=${id}`);
-         }}
-         onImportCards={() => {
-           navigate(`/dashboard?action=import&parentDeckId=${id}`);
-         }}
+          onCreateDeckAI={() => {
+            setAiDeckOpen(true);
+          }}
+          onImportCards={() => {
+            setImportOpen(true);
+          }}
       />
 
       {/* Edit modal */}
