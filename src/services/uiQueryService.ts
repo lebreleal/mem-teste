@@ -143,6 +143,21 @@ export async function updateGlobalDeckSettings(
   if (error) throw error;
 }
 
+/** Fetch global study settings from the first deck (they're the same globally). */
+export async function fetchGlobalStudySettings(userId: string): Promise<{ learning_steps: string[]; easy_graduating_interval: number } | null> {
+  const { data } = await supabase
+    .from('decks')
+    .select('learning_steps, easy_graduating_interval')
+    .eq('user_id', userId)
+    .limit(1)
+    .maybeSingle();
+  if (!data) return null;
+  return {
+    learning_steps: (data as { learning_steps: string[]; easy_graduating_interval: number }).learning_steps ?? ['1m', '10m'],
+    easy_graduating_interval: (data as { learning_steps: string[]; easy_graduating_interval: number }).easy_graduating_interval ?? 15,
+  };
+}
+
 // ─── Card front content fetch (for cloze editing) ───
 
 export async function fetchCardFrontContent(cardId: string): Promise<string | null> {
