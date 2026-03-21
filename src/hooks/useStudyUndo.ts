@@ -1,5 +1,6 @@
 /**
  * Extracted from Study.tsx — undo/redo logic for study session.
+ * Supports review, bury, and freeze undo.
  */
 import { useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -12,6 +13,7 @@ export interface UndoSnapshot {
   reviewCount: number;
   cardKey: number;
   cardId: string;
+  actionType: 'review' | 'bury' | 'freeze';
   prevCardState: {
     stability: number;
     difficulty: number;
@@ -19,6 +21,10 @@ export interface UndoSnapshot {
     scheduled_date: string;
     last_reviewed_at: string | null;
   };
+  /** Sibling IDs also buried (for cloze bury undo) */
+  buriedSiblingIds?: string[];
+  /** Original scheduled_dates for buried siblings */
+  buriedSiblingDates?: Record<string, string>;
 }
 
 export function useStudyUndo(
@@ -40,32 +46,68 @@ export function useStudyUndo(
     setLocalQueue(undoSnapshot.queue);
     setReviewCount(undoSnapshot.reviewCount);
     setCardKey(undoSnapshot.cardKey);
-    reviewedCardIdsRef.current.delete(undoSnapshot.cardId);
     setUndoSnapshot(null);
 
-    try {
-      await supabase
-        .from('cards')
-        .update({
-          stability: undoSnapshot.prevCardState.stability,
-          difficulty: undoSnapshot.prevCardState.difficulty,
-          state: undoSnapshot.prevCardState.state,
-          scheduled_date: undoSnapshot.prevCardState.scheduled_date,
-          last_reviewed_at: undoSnapshot.prevCardState.last_reviewed_at,
-        })
-        .eq('id', undoSnapshot.cardId);
+    const { actionType, cardId, prevCardState } = undoSnapshot;
 
-      const { data: logs } = await supabase
-        .from('review_logs')
-        .select('id')
-        .eq('card_id', undoSnapshot.cardId)
-        .order('reviewed_at', { ascending: false })
-        .limit(1);
-      if (logs && logs.length > 0) {
-        await supabase.from('review_logs').delete().eq('id', logs[0].id);
+    try {
+      if (actionType === 'review') {
+        reviewedCardIdsRef.current.delete(cardId);
+        await supabase
+          .from('cards')
+          .update({
+            stability: prevCardState.stability,
+            difficulty: prevCardState.difficulty,
+            state: prevCardState.state,
+            scheduled_date: prevCardState.scheduled_date,
+            last_reviewed_at: prevCardState.last_reviewed_at,
+          })
+          .eq('id', cardId);
+
+        const { data: logs } = await supabase
+          .from('review_logs')
+          .select('id')
+          .eq('card_id', cardId)
+          .order('reviewed_at', { ascending: false })
+          .limit(1);
+        if (logs && logs.length > 0) {
+          await supabase.from('review_logs').delete().eq('id', logs[0].id);
+        }
+      } else if (actionType === 'bury') {
+        // Restore card's original scheduled_date
+        await supabase
+          .from('cards')
+          .update({ scheduled_date: prevCardState.scheduled_date })
+          .eq('id', cardId);
+
+        // Restore buried siblings
+        if (undoSnapshot.buriedSiblingIds?.length) {
+          const siblingDates = undoSnapshot.buriedSiblingDates ?? {};
+          await Promise.all(
+            undoSnapshot.buriedSiblingIds.map(sibId =>
+              supabase
+                .from('cards')
+                .update({ scheduled_date: siblingDates[sibId] ?? prevCardState.scheduled_date })
+                .eq('id', sibId)
+            )
+          );
+        }
+        toast({ title: 'Enterramento desfeito' });
+      } else if (actionType === 'freeze') {
+        // Restore card to its previous state
+        await supabase
+          .from('cards')
+          .update({
+            state: prevCardState.state,
+            stability: prevCardState.stability,
+            difficulty: prevCardState.difficulty,
+            scheduled_date: prevCardState.scheduled_date,
+          })
+          .eq('id', cardId);
+        toast({ title: 'Suspensão desfeita' });
       }
 
-      // Defer heavy invalidations — user is still studying, no need to refetch dashboard
+      // Defer heavy invalidations
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ['decks'] });
         queryClient.invalidateQueries({ queryKey: ['deck-stats'] });
@@ -74,7 +116,7 @@ export function useStudyUndo(
         queryClient.invalidateQueries({ queryKey: ['activity-full'] });
       }, 10_000);
     } catch {
-      toast({ title: 'Erro ao desfazer no banco', variant: 'destructive' });
+      toast({ title: 'Erro ao desfazer', variant: 'destructive' });
     }
   }, [undoSnapshot, queryClient, toast, setLocalQueue, setReviewCount, setCardKey, reviewedCardIdsRef]);
 
