@@ -83,7 +83,7 @@ const MultipleChoiceCard = ({
   difficultyData: difficultyDataProp,
   algorithmMode,
   deckConfig,
-  actions, communityMeta,
+  actions, actionsLeft, communityMeta,
   stability,
   difficulty,
   state,
