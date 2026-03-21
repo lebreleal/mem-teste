@@ -267,7 +267,7 @@ const MateriaDetail: React.FC = () => {
 
   const handleDelete = useCallback((deck: DeckWithStats) => {
     if (!window.confirm(`Excluir "${deck.name}"? Esta ação não pode ser desfeita.`)) return;
-    deleteDeck(deck.id)
+    deleteDeckCascade(deck.id)
       .then(() => { invalidateDeckRelatedQueries(queryClient); toast({ title: 'Baralho excluído' }); })
       .catch(() => { toast({ title: 'Erro ao excluir', variant: 'destructive' }); });
   }, [queryClient]);
