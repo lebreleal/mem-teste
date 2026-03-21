@@ -789,18 +789,22 @@ Retorne o front com a sintaxe {{c1::resposta}} e back vazio.`;
         )}
       </div>
 
-      {/* Freeze confirm */}
+      {/* Freeze/Suspend confirm */}
       <AlertDialog open={freezeConfirmOpen} onOpenChange={setFreezeConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>❄️ Congelar este card?</AlertDialogTitle>
+            <AlertDialogTitle>Suspender este cartão?</AlertDialogTitle>
             <AlertDialogDescription>
-              O card não aparecerá mais nas sessões de estudo. Você pode descongelá-lo depois na página de gerenciamento do baralho.
+              O cartão não entrará mais na sua fila de estudo até ser reativado manualmente na página de gerenciamento do baralho.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer px-1">
+            <input type="checkbox" checked={freezeDismissCheck} onChange={e => setFreezeDismissCheck(e.target.checked)} className="rounded border-border" />
+            Não mostrar esta confirmação por 30 dias
+          </label>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleFreeze}>Congelar</AlertDialogAction>
+            <AlertDialogAction onClick={handleFreeze}>Suspender</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -809,11 +813,15 @@ Retorne o front com a sintaxe {{c1::resposta}} e back vazio.`;
       <AlertDialog open={buryConfirmOpen} onOpenChange={setBuryConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>⛏️ Enterrar este card?</AlertDialogTitle>
+            <AlertDialogTitle>Enterrar este cartão?</AlertDialogTitle>
             <AlertDialogDescription>
-              <strong>Enterrar</strong> significa pular o card por hoje. Ele será removido desta sessão e voltará amanhã automaticamente. É diferente de congelar — o card continua ativo no seu baralho.
+              O cartão será removido desta sessão e retornará à sua fila de estudo amanhã automaticamente.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer px-1">
+            <input type="checkbox" checked={buryDismissCheck} onChange={e => setBuryDismissCheck(e.target.checked)} className="rounded border-border" />
+            Não mostrar esta confirmação por 30 dias
+          </label>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleBury}>Enterrar</AlertDialogAction>
