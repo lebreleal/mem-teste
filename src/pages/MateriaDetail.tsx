@@ -538,17 +538,6 @@ const MateriaDetail: React.FC = () => {
             parentDeckId={id}
           />
         )}
-        {importOpen && (
-          <ImportCardsDialog
-            open={importOpen}
-            onOpenChange={(open) => {
-              setImportOpen(open);
-              if (!open) invalidateDeckRelatedQueries(queryClient);
-            }}
-            folderId={materia?.folder_id ?? null}
-            parentDeckId={id}
-          />
-        )}
       </Suspense>
     </div>
   );
