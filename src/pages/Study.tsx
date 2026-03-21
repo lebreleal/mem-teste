@@ -400,7 +400,7 @@ const Study = () => {
         isTutorLoading={tutor.isTutorLoading} onClearStreaming={() => setExplainInChat(false)}
         resetKey={cardKey} onHasMessagesChange={setChatHasMessages} clearRef={chatClearRef}
       />
-      <StudyPausedModal open={isPaused} onResume={handleResume} onEnd={goBack} reviewCount={reviewCount} elapsedMs={sessionElapsed} />
+      <StudyPausedModal open={isPaused} onResume={handleResume} onEnd={goBack} />
     </div>
   );
 };
