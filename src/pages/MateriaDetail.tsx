@@ -524,6 +524,32 @@ const MateriaDetail: React.FC = () => {
           />
         )}
       </Suspense>
+
+      {/* AI Deck Dialog — opens in-place instead of navigating away */}
+      <Suspense fallback={null}>
+        {aiDeckOpen && (
+          <AICreateDeckDialog
+            open={aiDeckOpen}
+            onOpenChange={(open) => {
+              setAiDeckOpen(open);
+              if (!open) invalidateDeckRelatedQueries(queryClient);
+            }}
+            folderId={materia?.folder_id ?? null}
+            parentDeckId={id}
+          />
+        )}
+        {importOpen && (
+          <ImportCardsDialog
+            open={importOpen}
+            onOpenChange={(open) => {
+              setImportOpen(open);
+              if (!open) invalidateDeckRelatedQueries(queryClient);
+            }}
+            folderId={materia?.folder_id ?? null}
+            parentDeckId={id}
+          />
+        )}
+      </Suspense>
     </div>
   );
 };
