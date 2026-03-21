@@ -156,7 +156,7 @@ const MateriaDetail: React.FC = () => {
   const deleteMutation = useMutation({
     mutationFn: async () => {
       if (!id) throw new Error('No materia id');
-      await deleteDeck(id);
+      await deleteDeckCascade(id);
     },
     onSuccess: () => {
       invalidateDeckRelatedQueries(queryClient);
