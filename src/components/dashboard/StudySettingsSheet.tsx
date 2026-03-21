@@ -403,10 +403,10 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
                   {/* Easy Graduating Interval */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-foreground">
-                      Intervalo de graduação fácil
+                      Intervalo máximo do "Fácil" (novos)
                     </label>
                     <p className="text-[10px] text-muted-foreground leading-tight">
-                      Quando você marca "Fácil" em um cartão novo, ele aparece novamente após esse número de dias.
+                      Intervalo máximo (em dias) ao marcar "Fácil" em um cartão novo ou em aprendizado. Valores maiores = intervalos mais longos para "Fácil". Não afeta cartões já graduados (revisão).
                     </p>
                     <div className="flex items-center gap-2">
                       <button
