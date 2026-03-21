@@ -1,8 +1,8 @@
 import { useState, useRef, lazy, Suspense } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { useQueryClient } from '@tanstack/react-query';
-import { Ban, Pencil, Sparkles, Loader2, ArrowLeft, Plus, Trash2, MessageSquareText, CheckSquare, PenLine, MessageCircle, MoreVertical, Flag, ImageIcon, Clock, StickyNote } from 'lucide-react';
-import { IconAIGradient } from '@/components/icons';
+import { Pencil, Sparkles, Loader2, ArrowLeft, Plus, Trash2, MessageSquareText, CheckSquare, PenLine, MessageCircle, MoreVertical, Flag, ImageIcon, StickyNote } from 'lucide-react';
+import { IconAIGradient, IconBury, IconFreeze, IconBookmark } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -36,11 +36,9 @@ interface StudyCardActionsProps {
     deck_id: string;
   };
   isLiveDeck?: boolean;
-  /** cardId is the card that was actually edited (uses the ID captured at open time, not the current card) */
   onCardUpdated: (cardId: string, updatedFields: { front_content: string; back_content: string }) => void;
   onCardFrozen: (cardId: string) => void;
   onCardBuried?: (cardId: string) => void;
-  /** Called after cloze sibling edits so Study.tsx can update all siblings in localQueue */
   onSiblingsUpdated?: (
     updates: { id: string; front_content: string; back_content: string }[],
     deletedIds: string[],
@@ -48,6 +46,8 @@ interface StudyCardActionsProps {
   ) => void;
   onOpenChat?: () => void;
   chatHasMessages?: boolean;
+  isBookmarked?: boolean;
+  onToggleBookmark?: () => void;
 }
 
 type EditorCardType = 'basic' | 'cloze' | 'image_occlusion';
@@ -74,7 +74,7 @@ function dismiss(key: string) {
   localStorage.setItem(key, String(Date.now() + 30 * 86400000));
 }
 
-const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCardBuried, onSiblingsUpdated, onOpenChat, chatHasMessages }: StudyCardActionsProps) => {
+const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCardBuried, onSiblingsUpdated, onOpenChat, chatHasMessages, isBookmarked, onToggleBookmark }: StudyCardActionsProps) => {
   const queryClient = useQueryClient();
   const { energy, spendEnergy } = useEnergy();
   const { model } = useAIModel();
@@ -709,8 +709,37 @@ Retorne o front com a sintaxe {{c1::resposta}} e back vazio.`;
 
   return (
     <>
-      {/* Action buttons */}
-      <div className="flex items-center gap-1">
+      {/* Left actions: Bury + Freeze */}
+      <div className="flex items-center gap-1" data-actions-left>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={handleBuryClick}
+              className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+              aria-label="Enterrar card"
+            >
+              <IconBury />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent><p>Enterrar (pular hoje)</p></TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={handleFreezeClick}
+              className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+              aria-label="Suspender card"
+            >
+              <IconFreeze />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent><p>Suspender card</p></TooltipContent>
+        </Tooltip>
+      </div>
+
+      {/* Right actions: Chat + Bookmark + Edit */}
+      <div className="flex items-center gap-1" data-actions-right>
         {onOpenChat && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -733,31 +762,24 @@ Retorne o front com a sintaxe {{c1::resposta}} e back vazio.`;
           </Tooltip>
         )}
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={handleBuryClick}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-              aria-label="Enterrar card"
-            >
-              <Clock className="h-3.5 w-3.5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent><p>Enterrar (pular hoje)</p></TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={handleFreezeClick}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-              aria-label="Suspender card"
-            >
-              <Ban className="h-3.5 w-3.5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent><p>Suspender card</p></TooltipContent>
-        </Tooltip>
+        {onToggleBookmark && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={onToggleBookmark}
+                className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors ${
+                  isBookmarked
+                    ? 'text-primary bg-primary/10'
+                    : 'text-muted-foreground hover:text-primary hover:bg-primary/10'
+                }`}
+                aria-label={isBookmarked ? 'Remover favorito' : 'Favoritar'}
+              >
+                <IconBookmark filled={isBookmarked} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent><p>{isBookmarked ? 'Remover favorito' : 'Favoritar'}</p></TooltipContent>
+          </Tooltip>
+        )}
 
         {isLiveDeck ? (
           <Tooltip>

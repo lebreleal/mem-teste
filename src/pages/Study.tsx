@@ -30,6 +30,7 @@ import StudyCardActions from '@/components/StudyCardActions';
 import { useToast } from '@/hooks/use-toast';
 import { resolveCommunitySource } from '@/services/studyService';
 import { buryCards } from '@/services/card/cardMutations';
+import { fetchBookmarkedCardIds, toggleBookmark } from '@/services/bookmarkService';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { Rating } from '@/lib/fsrs';
@@ -122,6 +123,26 @@ const Study = () => {
   const [chatHasMessages, setChatHasMessages] = useState(false);
   const chatClearRef = useRef<(() => void) | null>(null);
   const [communityInfoOpen, setCommunityInfoOpen] = useState(false);
+
+  // Bookmarks
+  const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!user?.id) return;
+    fetchBookmarkedCardIds(user.id).then(setBookmarkedIds).catch(() => {});
+  }, [user?.id]);
+
+  const handleToggleBookmarkRef = useRef<(cardId: string) => Promise<void>>();
+  handleToggleBookmarkRef.current = async (cardId: string) => {
+    if (!user?.id) return;
+    try {
+      const isNowBookmarked = await toggleBookmark(user.id, cardId);
+      setBookmarkedIds(prev => {
+        const next = new Set(prev);
+        if (isNowBookmarked) next.add(cardId); else next.delete(cardId);
+        return next;
+      });
+    } catch {}
+  };
 
   // Initialize local queue
   useEffect(() => {
@@ -378,6 +399,8 @@ const Study = () => {
                   }
                 }}
                 onOpenChat={() => setChatOpen(true)} chatHasMessages={chatHasMessages}
+                isBookmarked={bookmarkedIds.has(currentCard.id)}
+                onToggleBookmark={() => handleToggleBookmarkRef.current?.(currentCard.id)}
               />
             }
             communityMeta={sourceInfo ? (

@@ -140,7 +140,7 @@ const MultipleChoiceCard = ({
     <div className="flex flex-col h-[calc(100dvh-7rem)] w-full max-w-lg mx-auto px-1 relative">
       {/* Top bar: difficulty + actions */}
       <div className="flex flex-col items-center gap-1 flex-shrink-0 pb-3">
-        <div className="flex items-center justify-center gap-2">
+        <div className="flex items-center justify-center gap-2 [&>[data-actions-left]]:order-1 [&>button]:order-2 [&>[data-actions-right]]:order-3">
           {difficultyData && (
             <button
               onClick={() => setRecallExpanded(prev => !prev)}
