@@ -82,13 +82,31 @@ const Study = () => {
   const deckStatsRef = useRef<Map<string, DeckSessionStats>>(new Map());
   const [deckStatsSnapshot, setDeckStatsSnapshot] = useState<DeckSessionStats[]>([]);
 
+  // Pause state
+  const [isPaused, setIsPaused] = useState(false);
+  const pausedAccumulatedRef = useRef(0);
+  const pauseStartRef = useRef<number | null>(null);
+
   const sessionDoneRef = useRef(false);
   useEffect(() => {
     const interval = setInterval(() => {
-      if (sessionDoneRef.current) return;
-      setSessionElapsed(Date.now() - sessionStartRef.current);
+      if (sessionDoneRef.current || isPaused) return;
+      setSessionElapsed(Date.now() - sessionStartRef.current - pausedAccumulatedRef.current);
     }, 1000);
     return () => clearInterval(interval);
+  }, [isPaused]);
+
+  const handlePause = useCallback(() => {
+    setIsPaused(true);
+    pauseStartRef.current = Date.now();
+  }, []);
+
+  const handleResume = useCallback(() => {
+    if (pauseStartRef.current) {
+      pausedAccumulatedRef.current += Date.now() - pauseStartRef.current;
+      pauseStartRef.current = null;
+    }
+    setIsPaused(false);
   }, []);
 
   // Leech bypass refs (kept as stubs for StudyDialogs compatibility)
