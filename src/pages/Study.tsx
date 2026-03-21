@@ -221,7 +221,13 @@ const Study = () => {
     tutor.abortTutor(); const elapsed = Date.now() - cardShownAt.current;
     if (elapsed < FAST_THRESHOLD_MS) { if (fastWarningTimer.current) clearTimeout(fastWarningTimer.current); fastWarningTimer.current = setTimeout(() => {}, 3000); }
     if (rating > 2) addSuccessfulCard.mutate({ flowMultiplier: 1.0 });
-    const shouldKeep = rating === 1 || (rating === 2 && card.state !== 2);
+    // Determine if card stays in session: Again always stays; Hard stays for learning;
+    // Good stays if card is in learning/new AND has more steps before graduation
+    const cardConfig = getCardDeckConfig(card);
+    const steps = cardConfig?.learning_steps ?? ['1', '10'];
+    const currentStep = card.learning_step ?? 0;
+    const goodStaysInLearning = rating === 3 && (card.state === 0 || card.state === 1 || card.state === 3) && (currentStep + 1 < steps.length);
+    const shouldKeep = rating === 1 || (rating === 2 && card.state !== 2) || goodStaysInLearning;
     reviewedCardIdsRef.current.add(card.id); setReviewCount(prev => prev + 1);
     if (rating >= 3) setCorrectCount(prev => prev + 1); else setWrongCount(prev => prev + 1);
     const deckStat = deckStatsRef.current.get(card.deck_id);
