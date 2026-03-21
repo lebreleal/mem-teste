@@ -41,7 +41,7 @@ export async function toggleBookmark(userId: string, cardId: string): Promise<bo
   } else {
     const { error } = await supabase
       .from('card_bookmarks')
-      .insert({ user_id: userId, card_id: cardId } as Record<string, unknown>);
+      .insert({ user_id: userId, card_id: cardId });
     if (error) throw error;
     return true;
   }
