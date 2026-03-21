@@ -219,3 +219,27 @@ export const IconImport = ({ className = 'h-5 w-5' }: IconProps) => (
     <path fill="currentColor" d="M3.879 20.121A3 3 0 0 1 2.999 18v-5c0-.545.449-1 1-1C4.553 12 5 12.455 5 13v5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5c0-.545.448-1 1-1s1 .455 1 1v5a3 3 0 0 1-3 3H6a3 3 0 0 1-2.121-.879" />
   </svg>
 );
+
+/* ─── Bury (Shovel) ─── */
+export const IconBury = ({ className = 'h-3.5 w-3.5' }: IconProps) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M12 22V10" />
+    <path d="M8 22h8" />
+    <path d="M12 10c0-3 2-5 2-7s-1-3-2-3-2 1-2 3 2 4 2 7z" />
+  </svg>
+);
+
+/* ─── Freeze (Snowflake) ─── */
+export const IconFreeze = ({ className = 'h-3.5 w-3.5' }: IconProps) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M12 2v20M2 12h20M4.93 4.93l14.14 14.14M19.07 4.93 4.93 19.07" />
+    <path d="m9 3 3 3 3-3M9 21l3-3 3 3M3 9l3 3-3 3M21 9l-3 3 3 3" />
+  </svg>
+);
+
+/* ─── Bookmark / Favorite ─── */
+export const IconBookmark = ({ className = 'h-3.5 w-3.5', filled }: IconProps & { filled?: boolean }) => (
+  <svg viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+  </svg>
+);
