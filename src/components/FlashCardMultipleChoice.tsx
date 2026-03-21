@@ -54,6 +54,7 @@ interface MultipleChoiceCardProps {
   algorithmMode?: string;
   deckConfig?: any;
   actions?: React.ReactNode;
+  actionsLeft?: React.ReactNode;
   communityMeta?: React.ReactNode;
   stability: number;
   difficulty: number;
