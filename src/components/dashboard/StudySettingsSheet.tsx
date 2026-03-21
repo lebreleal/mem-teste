@@ -12,13 +12,15 @@
  */
 
 import { useState, useMemo, useCallback } from 'react';
-import { ArrowLeft, ChevronDown, Minus, Plus } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Minus, Plus, Settings2, X } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { updateDeckDailyLimits } from '@/services/uiQueryService';
+import { updateDeckDailyLimits, updateGlobalDeckSettings } from '@/services/uiQueryService';
 import { useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/hooks/useAuth';
 import type { DeckWithStats } from '@/hooks/useDecks';
 
 interface StudySettingsSheetProps {

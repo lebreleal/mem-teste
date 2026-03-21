@@ -129,6 +129,20 @@ export async function updateDeckDailyLimits(updates: Array<{ id: string; daily_n
   );
 }
 
+// ─── Global deck settings update (batch) ───
+
+/** Update learning_steps and easy_graduating_interval for ALL user decks. */
+export async function updateGlobalDeckSettings(
+  userId: string,
+  settings: { learning_steps?: string[]; easy_graduating_interval?: number },
+): Promise<void> {
+  const { error } = await supabase
+    .from('decks')
+    .update(settings)
+    .eq('user_id', userId);
+  if (error) throw error;
+}
+
 // ─── Card front content fetch (for cloze editing) ───
 
 export async function fetchCardFrontContent(cardId: string): Promise<string | null> {
