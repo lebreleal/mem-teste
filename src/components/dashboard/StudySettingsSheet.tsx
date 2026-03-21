@@ -12,13 +12,15 @@
  */
 
 import { useState, useMemo, useCallback } from 'react';
-import { ArrowLeft, ChevronDown, Minus, Plus } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Minus, Plus, Settings2, X } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { updateDeckDailyLimits } from '@/services/uiQueryService';
-import { useQueryClient } from '@tanstack/react-query';
+import { updateDeckDailyLimits, updateGlobalDeckSettings, fetchGlobalStudySettings } from '@/services/uiQueryService';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { useAuth } from '@/hooks/useAuth';
 import type { DeckWithStats } from '@/hooks/useDecks';
 
 interface StudySettingsSheetProps {
@@ -48,9 +50,11 @@ const ERROR_NOTEBOOK_PREFIX = '📕';
 
 const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggregateStats, currentFolderId, parentDeckId }: StudySettingsSheetProps) => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const isMateriaMode = !!parentDeckId;
 
@@ -112,9 +116,30 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
 
   const [settings, setSettings] = useState<Record<string, DeckSetting>>(initialSettings.map);
 
+  // ─── Advanced global settings ───
+  const globalSettingsQuery = useQuery({
+    queryKey: ['global-study-settings', user?.id],
+    queryFn: () => fetchGlobalStudySettings(user!.id),
+    enabled: !!user && open,
+    staleTime: 60_000,
+  });
+
+  const initialLearningSteps = useMemo(() => {
+    return (globalSettingsQuery.data?.learning_steps ?? ['1m', '10m']).join(', ');
+  }, [globalSettingsQuery.data]);
+  const initialEasyGradInterval = globalSettingsQuery.data?.easy_graduating_interval ?? 15;
+
+  const [learningStepsStr, setLearningStepsStr] = useState(initialLearningSteps);
+  const [easyGradInterval, setEasyGradInterval] = useState(initialEasyGradInterval);
+
   useMemo(() => {
-    if (open) setSettings(initialSettings.map);
-  }, [open, initialSettings]);
+    if (open) {
+      setSettings(initialSettings.map);
+      setLearningStepsStr(initialLearningSteps);
+      setEasyGradInterval(initialEasyGradInterval);
+      setShowAdvanced(false);
+    }
+  }, [open, initialSettings, initialLearningSteps, initialEasyGradInterval]);
 
   const updateLimit = useCallback((deckId: string, delta: number) => {
     setSettings(prev => {
@@ -139,7 +164,23 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
     try {
       const updates = Object.values(settings).map(s => ({ id: s.id, daily_new_limit: s.dailyNewLimit }));
       await updateDeckDailyLimits(updates);
+
+      // Save advanced global settings if changed
+      if (user && advancedChanged) {
+        const parsedSteps = learningStepsStr
+          .split(',')
+          .map(s => s.trim())
+          .filter(Boolean);
+        if (parsedSteps.length > 0) {
+          await updateGlobalDeckSettings(user.id, {
+            learning_steps: parsedSteps,
+            easy_graduating_interval: easyGradInterval,
+          });
+        }
+      }
+
       queryClient.invalidateQueries({ queryKey: ['decks'] });
+      queryClient.invalidateQueries({ queryKey: ['study-queue'] });
       toast({ title: 'Configurações salvas!' });
       onOpenChange(false);
     } catch {
@@ -147,15 +188,19 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
     } finally {
       setSaving(false);
     }
-  }, [settings, queryClient, toast, onOpenChange]);
+  }, [settings, user, learningStepsStr, easyGradInterval, queryClient, toast, onOpenChange]);
+
+  const advancedChanged = learningStepsStr !== initialLearningSteps || easyGradInterval !== initialEasyGradInterval;
+
 
   const hasChanges = useMemo(() => {
-    return Object.keys(settings).some(id => {
+    const deckChanged = Object.keys(settings).some(id => {
       const init = initialSettings.map[id];
       const curr = settings[id];
       return init && curr && init.dailyNewLimit !== curr.dailyNewLimit;
     });
-  }, [settings, initialSettings]);
+    return deckChanged || advancedChanged;
+  }, [settings, initialSettings, advancedChanged]);
 
   const rootItems = initialSettings.order
     .map(id => settings[id])
@@ -319,6 +364,74 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
           {allItems.length === 0 && rootItems.length === 0 && (
             <div className="py-12 text-center text-sm text-muted-foreground">
               {isMateriaMode ? 'Nenhum subdeck neste baralho' : 'Nenhum deck nesta sala'}
+            </div>
+          )}
+
+          {/* ─── Advanced Global Settings ─── */}
+          {!isMateriaMode && (
+            <div className="mt-4">
+              <button
+                onClick={() => setShowAdvanced(prev => !prev)}
+                className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors w-full py-2"
+              >
+                <Settings2 className="h-4 w-4" />
+                <span className="font-medium">Configurações Avançadas</span>
+                <ChevronDown className={`h-3.5 w-3.5 ml-auto transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showAdvanced && (
+                <div className="mt-2 space-y-4 rounded-xl border border-border/60 bg-card p-4">
+                  {/* Learning Steps */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-foreground">
+                      Etapas de aprendizagem
+                    </label>
+                    <p className="text-[10px] text-muted-foreground leading-tight">
+                      Intervalos entre revisões de cartões novos. Use sufixos: m (minutos), h (horas), d (dias).
+                    </p>
+                    <Input
+                      value={learningStepsStr}
+                      onChange={e => setLearningStepsStr(e.target.value)}
+                      placeholder="1m, 10m"
+                      className="h-9 text-sm"
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      Ex: <code className="bg-muted px-1 rounded">1m, 10m</code> → revisa após 1 min e depois 10 min
+                    </p>
+                  </div>
+
+                  {/* Easy Graduating Interval */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-foreground">
+                      Intervalo de graduação fácil
+                    </label>
+                    <p className="text-[10px] text-muted-foreground leading-tight">
+                      Quando você marca "Fácil" em um cartão novo, ele aparece novamente após esse número de dias.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setEasyGradInterval(prev => Math.max(1, prev - 1))}
+                        className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors active:scale-95"
+                      >
+                        <Minus className="h-4 w-4" />
+                      </button>
+                      <span className="text-base font-bold text-foreground tabular-nums w-12 text-center">
+                        {easyGradInterval}d
+                      </span>
+                      <button
+                        onClick={() => setEasyGradInterval(prev => Math.min(365, prev + 1))}
+                        className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors active:scale-95"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-amber-600 dark:text-amber-400">
+                    ⚠️ Estas configurações são aplicadas globalmente a todos os seus baralhos.
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>

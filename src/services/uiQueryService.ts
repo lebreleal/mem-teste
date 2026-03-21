@@ -129,6 +129,35 @@ export async function updateDeckDailyLimits(updates: Array<{ id: string; daily_n
   );
 }
 
+// ─── Global deck settings update (batch) ───
+
+/** Update learning_steps and easy_graduating_interval for ALL user decks. */
+export async function updateGlobalDeckSettings(
+  userId: string,
+  settings: { learning_steps?: string[]; easy_graduating_interval?: number },
+): Promise<void> {
+  const { error } = await supabase
+    .from('decks')
+    .update(settings)
+    .eq('user_id', userId);
+  if (error) throw error;
+}
+
+/** Fetch global study settings from the first deck (they're the same globally). */
+export async function fetchGlobalStudySettings(userId: string): Promise<{ learning_steps: string[]; easy_graduating_interval: number } | null> {
+  const { data } = await supabase
+    .from('decks')
+    .select('learning_steps, easy_graduating_interval')
+    .eq('user_id', userId)
+    .limit(1)
+    .maybeSingle();
+  if (!data) return null;
+  return {
+    learning_steps: (data as { learning_steps: string[]; easy_graduating_interval: number }).learning_steps ?? ['1m', '10m'],
+    easy_graduating_interval: (data as { learning_steps: string[]; easy_graduating_interval: number }).easy_graduating_interval ?? 15,
+  };
+}
+
 // ─── Card front content fetch (for cloze editing) ───
 
 export async function fetchCardFrontContent(cardId: string): Promise<string | null> {
