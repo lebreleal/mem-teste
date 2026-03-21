@@ -61,6 +61,19 @@ function parseClozeTarget(backContent: string): number {
   }
 }
 
+const BURY_DISMISS_KEY = 'memo_bury_dismiss_until';
+const FREEZE_DISMISS_KEY = 'memo_freeze_dismiss_until';
+
+function isDismissed(key: string): boolean {
+  const val = localStorage.getItem(key);
+  if (!val) return false;
+  return Date.now() < parseInt(val, 10);
+}
+
+function dismiss(key: string) {
+  localStorage.setItem(key, String(Date.now() + 30 * 86400000));
+}
+
 const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCardBuried, onSiblingsUpdated, onOpenChat, chatHasMessages }: StudyCardActionsProps) => {
   const queryClient = useQueryClient();
   const { energy, spendEnergy } = useEnergy();
@@ -71,6 +84,8 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
   const [editLoading, setEditLoading] = useState(false);
   const [freezeConfirmOpen, setFreezeConfirmOpen] = useState(false);
   const [buryConfirmOpen, setBuryConfirmOpen] = useState(false);
+  const [buryDismissCheck, setBuryDismissCheck] = useState(false);
+  const [freezeDismissCheck, setFreezeDismissCheck] = useState(false);
   const [front, setFront] = useState('');
   const [back, setBack] = useState('');
   const [editorType, setEditorType] = useState<EditorCardType | null>('basic');
