@@ -109,7 +109,7 @@ const MateriaDetail: React.FC = () => {
   const [salaAddMenuOpen, setSalaAddMenuOpen] = useState(false);
   const [addMenuInfoType, setAddMenuInfoType] = useState<'deck' | 'deck-manual' | 'deck-ia' | null>(null);
   const [aiDeckOpen, setAiDeckOpen] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
+  
 
   // Listen for + button from BottomNav
   useEffect(() => {
