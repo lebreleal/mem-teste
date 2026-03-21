@@ -32,7 +32,6 @@ import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 
 const StudySettingsSheet = lazy(() => import('@/components/dashboard/StudySettingsSheet'));
 const AICreateDeckDialog = lazy(() => import('@/components/AICreateDeckDialog'));
-const ImportCardsDialog = lazy(() => import('@/components/ImportCardsDialog'));
 
 const MATERIA_COLORS = [
   null, '#C8B6FF', '#FFF3BF', '#FFD6E0', '#D4FFDA',
