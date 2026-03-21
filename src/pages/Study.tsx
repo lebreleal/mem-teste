@@ -22,6 +22,7 @@ import FlashCard from '@/components/FlashCard';
 import SessionProgressStrip, { type DeckSessionStats } from '@/components/SessionProgressStrip';
 import SessionComplete from '@/components/study/SessionComplete';
 import StudyDialogs from '@/components/study/StudyDialogs';
+import StudyPausedModal from '@/components/study/StudyPausedModal';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Brain, Moon, Sun, Timer, RefreshCw, Info } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
