@@ -270,9 +270,11 @@ export async function fetchStudyQueue(
   const folderRemaining = Math.max(0, folderNewLimit - newReviewedInHierarchy);
   const globalRemaining = Math.max(0, globalLimit - globalNewReviewedToday);
 
+  // Always respect BOTH the per-deck/folder limit AND the global profile limit.
+  // Previously, single-deck mode with active plans would bypass the deck limit.
   const effectiveNewLimit = folderId
     ? Math.max(0, Math.min(folderRemaining, globalRemaining))
-    : (hasPlanActive ? globalRemaining : deckRemaining);
+    : Math.max(0, Math.min(deckRemaining, globalRemaining));
   const effectiveReviewLimit = Math.max(0, (folderId ? folderReviewLimit : reviewLimit) - reviewReviewedToday);
 
   // --- Apply daily limits FIRST, then bury siblings among the surviving cards ---
