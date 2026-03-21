@@ -709,8 +709,37 @@ Retorne o front com a sintaxe {{c1::resposta}} e back vazio.`;
 
   return (
     <>
-      {/* Action buttons */}
-      <div className="flex items-center gap-1">
+      {/* Left actions: Bury + Freeze */}
+      <div className="flex items-center gap-1" data-actions-left>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={handleBuryClick}
+              className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+              aria-label="Enterrar card"
+            >
+              <IconBury />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent><p>Enterrar (pular hoje)</p></TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={handleFreezeClick}
+              className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+              aria-label="Suspender card"
+            >
+              <IconFreeze />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent><p>Suspender card</p></TooltipContent>
+        </Tooltip>
+      </div>
+
+      {/* Right actions: Chat + Bookmark + Edit */}
+      <div className="flex items-center gap-1" data-actions-right>
         {onOpenChat && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -733,31 +762,24 @@ Retorne o front com a sintaxe {{c1::resposta}} e back vazio.`;
           </Tooltip>
         )}
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={handleBuryClick}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-              aria-label="Enterrar card"
-            >
-              <Clock className="h-3.5 w-3.5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent><p>Enterrar (pular hoje)</p></TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={handleFreezeClick}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-              aria-label="Suspender card"
-            >
-              <Ban className="h-3.5 w-3.5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent><p>Suspender card</p></TooltipContent>
-        </Tooltip>
+        {onToggleBookmark && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={onToggleBookmark}
+                className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors ${
+                  isBookmarked
+                    ? 'text-primary bg-primary/10'
+                    : 'text-muted-foreground hover:text-primary hover:bg-primary/10'
+                }`}
+                aria-label={isBookmarked ? 'Remover favorito' : 'Favoritar'}
+              >
+                <IconBookmark filled={isBookmarked} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent><p>{isBookmarked ? 'Remover favorito' : 'Favoritar'}</p></TooltipContent>
+          </Tooltip>
+        )}
 
         {isLiveDeck ? (
           <Tooltip>
