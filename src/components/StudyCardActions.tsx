@@ -36,11 +36,9 @@ interface StudyCardActionsProps {
     deck_id: string;
   };
   isLiveDeck?: boolean;
-  /** cardId is the card that was actually edited (uses the ID captured at open time, not the current card) */
   onCardUpdated: (cardId: string, updatedFields: { front_content: string; back_content: string }) => void;
   onCardFrozen: (cardId: string) => void;
   onCardBuried?: (cardId: string) => void;
-  /** Called after cloze sibling edits so Study.tsx can update all siblings in localQueue */
   onSiblingsUpdated?: (
     updates: { id: string; front_content: string; back_content: string }[],
     deletedIds: string[],
@@ -48,6 +46,8 @@ interface StudyCardActionsProps {
   ) => void;
   onOpenChat?: () => void;
   chatHasMessages?: boolean;
+  isBookmarked?: boolean;
+  onToggleBookmark?: () => void;
 }
 
 type EditorCardType = 'basic' | 'cloze' | 'image_occlusion';
