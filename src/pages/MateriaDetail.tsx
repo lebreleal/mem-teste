@@ -31,6 +31,7 @@ import { invalidateDeckRelatedQueries } from '@/lib/queryKeys';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 
 const StudySettingsSheet = lazy(() => import('@/components/dashboard/StudySettingsSheet'));
+const AICreateDeckDialog = lazy(() => import('@/components/AICreateDeckDialog'));
 
 const MATERIA_COLORS = [
   null, '#C8B6FF', '#FFF3BF', '#FFD6E0', '#D4FFDA',
@@ -107,6 +108,8 @@ const MateriaDetail: React.FC = () => {
   // Add menu state (reusing DashboardModals)
   const [salaAddMenuOpen, setSalaAddMenuOpen] = useState(false);
   const [addMenuInfoType, setAddMenuInfoType] = useState<'deck' | 'deck-manual' | 'deck-ia' | null>(null);
+  const [aiDeckOpen, setAiDeckOpen] = useState(false);
+  
 
   // Listen for + button from BottomNav
   useEffect(() => {
@@ -457,12 +460,12 @@ const MateriaDetail: React.FC = () => {
              },
            });
          }}
-         onCreateDeckAI={() => {
-           navigate(`/dashboard?action=ai-deck&parentDeckId=${id}`);
-         }}
-         onImportCards={() => {
-           navigate(`/dashboard?action=import&parentDeckId=${id}`);
-         }}
+          onCreateDeckAI={() => {
+            setAiDeckOpen(true);
+          }}
+          onImportCards={() => {
+            navigate(`/dashboard?action=import&parentDeckId=${id}`);
+          }}
       />
 
       {/* Edit modal */}
@@ -516,6 +519,21 @@ const MateriaDetail: React.FC = () => {
             getSubDecks={getSubDecks}
             getAggregateStats={getAggregateStats}
             currentFolderId={materia.folder_id ?? null}
+            parentDeckId={id}
+          />
+        )}
+      </Suspense>
+
+      {/* AI Deck Dialog — opens in-place instead of navigating away */}
+      <Suspense fallback={null}>
+        {aiDeckOpen && (
+          <AICreateDeckDialog
+            open={aiDeckOpen}
+            onOpenChange={(open) => {
+              setAiDeckOpen(open);
+              if (!open) invalidateDeckRelatedQueries(queryClient);
+            }}
+            folderId={materia?.folder_id ?? null}
             parentDeckId={id}
           />
         )}
