@@ -196,7 +196,7 @@ const Study = () => {
   const submittingRef = useRef<string | null>(null);
 
   const executeReview = useCallback((card: StudyCard, rating: Rating) => {
-    undo.saveSnapshot({ queue: [...localQueue], reviewCount, cardKey, cardId: card.id, prevCardState: { stability: card.stability, difficulty: card.difficulty, state: card.state, scheduled_date: card.scheduled_date, last_reviewed_at: card.last_reviewed_at ?? null } });
+    undo.saveSnapshot({ queue: [...localQueue], reviewCount, cardKey, cardId: card.id, actionType: 'review', prevCardState: { stability: card.stability, difficulty: card.difficulty, state: card.state, scheduled_date: card.scheduled_date, last_reviewed_at: card.last_reviewed_at ?? null } });
     tutor.abortTutor(); const elapsed = Date.now() - cardShownAt.current;
     if (elapsed < FAST_THRESHOLD_MS) { if (fastWarningTimer.current) clearTimeout(fastWarningTimer.current); fastWarningTimer.current = setTimeout(() => {}, 3000); }
     if (rating > 2) addSuccessfulCard.mutate({ flowMultiplier: 1.0 });
@@ -323,12 +323,24 @@ const Study = () => {
             actions={
               <StudyCardActions card={currentCard} isLiveDeck={isLiveDeck}
                 onCardUpdated={(cardId, updatedFields) => { setLocalQueue(prev => prev.map(c => c.id === cardId ? { ...c, ...updatedFields, card_type: c.card_type === 'multiple_choice' && updatedFields.back_content?.includes('"clozeTarget"') ? 'cloze' : c.card_type } : c)); setDisplayedCard(prev => prev && prev.id === cardId ? { ...prev, ...updatedFields, card_type: prev.card_type === 'multiple_choice' && updatedFields.back_content?.includes('"clozeTarget"') ? 'cloze' : prev.card_type } : prev); }}
-                onCardFrozen={(cardId) => { setLocalQueue(prev => prev.filter(c => c.id !== cardId)); setCardKey(prev => prev + 1); }}
+                onCardFrozen={(cardId) => {
+                  const targetCard = localQueue.find(c => c.id === cardId) ?? currentCard;
+                  undo.saveSnapshot({ queue: [...localQueue], reviewCount, cardKey, cardId, actionType: 'freeze', prevCardState: { stability: targetCard.stability, difficulty: targetCard.difficulty, state: targetCard.state, scheduled_date: targetCard.scheduled_date, last_reviewed_at: targetCard.last_reviewed_at ?? null } });
+                  setLocalQueue(prev => prev.filter(c => c.id !== cardId)); setCardKey(prev => prev + 1);
+                }}
                 onCardBuried={(cardId) => {
                   const targetCard = localQueue.find(c => c.id === cardId) ?? currentCard;
+                  const buriedSiblingIds: string[] = [];
+                  const buriedSiblingDates: Record<string, string> = {};
+                  // Identify siblings that will be buried
+                  if (targetCard.card_type === 'cloze') {
+                    const sibs = getSiblingIds(targetCard, localQueue.filter(c => c.id !== cardId));
+                    sibs.forEach(sid => { const sc = localQueue.find(c => c.id === sid); if (sc) { buriedSiblingIds.push(sid); buriedSiblingDates[sid] = sc.scheduled_date; } });
+                  }
+                  undo.saveSnapshot({ queue: [...localQueue], reviewCount, cardKey, cardId, actionType: 'bury', prevCardState: { stability: targetCard.stability, difficulty: targetCard.difficulty, state: targetCard.state, scheduled_date: targetCard.scheduled_date, last_reviewed_at: targetCard.last_reviewed_at ?? null }, buriedSiblingIds, buriedSiblingDates });
                   setLocalQueue(prev => {
                     let filtered = prev.filter(c => c.id !== cardId);
-                    if (targetCard.card_type === 'cloze') { const sibIds = getSiblingIds(targetCard, filtered); if (sibIds.length > 0) { const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); tomorrow.setHours(0, 0, 0, 0); buryCards(sibIds, tomorrow.toISOString()); filtered = filtered.filter(c => !sibIds.includes(c.id)); } }
+                    if (buriedSiblingIds.length > 0) { const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); tomorrow.setHours(0, 0, 0, 0); buryCards(buriedSiblingIds, tomorrow.toISOString()); filtered = filtered.filter(c => !buriedSiblingIds.includes(c.id)); }
                     return filtered;
                   }); setCardKey(prev => prev + 1);
                 }}
@@ -388,7 +400,7 @@ const Study = () => {
         isTutorLoading={tutor.isTutorLoading} onClearStreaming={() => setExplainInChat(false)}
         resetKey={cardKey} onHasMessagesChange={setChatHasMessages} clearRef={chatClearRef}
       />
-      <StudyPausedModal open={isPaused} onResume={handleResume} onEnd={goBack} reviewCount={reviewCount} elapsedMs={sessionElapsed} />
+      <StudyPausedModal open={isPaused} onResume={handleResume} onEnd={goBack} />
     </div>
   );
 };

@@ -1,7 +1,7 @@
 import { useState, useRef, lazy, Suspense } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { useQueryClient } from '@tanstack/react-query';
-import { Snowflake, Pencil, Sparkles, Loader2, ArrowLeft, Plus, Trash2, MessageSquareText, CheckSquare, PenLine, MessageCircle, MoreVertical, Flag, ImageIcon, Shovel, StickyNote } from 'lucide-react';
+import { Ban, Pencil, Sparkles, Loader2, ArrowLeft, Plus, Trash2, MessageSquareText, CheckSquare, PenLine, MessageCircle, MoreVertical, Flag, ImageIcon, Clock, StickyNote } from 'lucide-react';
 import { IconAIGradient } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -61,6 +61,19 @@ function parseClozeTarget(backContent: string): number {
   }
 }
 
+const BURY_DISMISS_KEY = 'memo_bury_dismiss_until';
+const FREEZE_DISMISS_KEY = 'memo_freeze_dismiss_until';
+
+function isDismissed(key: string): boolean {
+  const val = localStorage.getItem(key);
+  if (!val) return false;
+  return Date.now() < parseInt(val, 10);
+}
+
+function dismiss(key: string) {
+  localStorage.setItem(key, String(Date.now() + 30 * 86400000));
+}
+
 const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCardBuried, onSiblingsUpdated, onOpenChat, chatHasMessages }: StudyCardActionsProps) => {
   const queryClient = useQueryClient();
   const { energy, spendEnergy } = useEnergy();
@@ -71,6 +84,8 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
   const [editLoading, setEditLoading] = useState(false);
   const [freezeConfirmOpen, setFreezeConfirmOpen] = useState(false);
   const [buryConfirmOpen, setBuryConfirmOpen] = useState(false);
+  const [buryDismissCheck, setBuryDismissCheck] = useState(false);
+  const [freezeDismissCheck, setFreezeDismissCheck] = useState(false);
   const [front, setFront] = useState('');
   const [back, setBack] = useState('');
   const [editorType, setEditorType] = useState<EditorCardType | null>('basic');
@@ -166,22 +181,42 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
   const handleFreeze = async () => {
     try {
       await freezeCardService(card.id);
-      toast({ title: '❄️ Card congelado', description: 'Este card não aparecerá mais nas revisões.' });
+      toast({ title: 'Cartão suspenso', description: 'Ele não entrará na fila de estudo até ser reativado.' });
       setFreezeConfirmOpen(false);
+      if (freezeDismissCheck) dismiss(FREEZE_DISMISS_KEY);
       onCardFrozen(card.id);
     } catch {
-      toast({ title: 'Erro ao congelar card', variant: 'destructive' });
+      toast({ title: 'Erro ao suspender card', variant: 'destructive' });
     }
   };
 
   const handleBury = async () => {
     try {
       await burySingleCard(card.id);
-      toast({ title: '⛏️ Card enterrado', description: 'Ele voltará amanhã.' });
+      toast({ title: 'Cartão enterrado', description: 'Retorna pra sua fila de estudo amanhã.' });
       setBuryConfirmOpen(false);
+      if (buryDismissCheck) dismiss(BURY_DISMISS_KEY);
       onCardBuried?.(card.id);
     } catch {
       toast({ title: 'Erro ao enterrar card', variant: 'destructive' });
+    }
+  };
+
+  const handleBuryClick = () => {
+    if (isDismissed(BURY_DISMISS_KEY)) {
+      handleBury();
+    } else {
+      setBuryDismissCheck(false);
+      setBuryConfirmOpen(true);
+    }
+  };
+
+  const handleFreezeClick = () => {
+    if (isDismissed(FREEZE_DISMISS_KEY)) {
+      handleFreeze();
+    } else {
+      setFreezeDismissCheck(false);
+      setFreezeConfirmOpen(true);
     }
   };
 
@@ -701,11 +736,11 @@ Retorne o front com a sintaxe {{c1::resposta}} e back vazio.`;
         <Tooltip>
           <TooltipTrigger asChild>
             <button
-              onClick={() => setBuryConfirmOpen(true)}
+              onClick={handleBuryClick}
               className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
               aria-label="Enterrar card"
             >
-              <Shovel className="h-3.5 w-3.5" />
+              <Clock className="h-3.5 w-3.5" />
             </button>
           </TooltipTrigger>
           <TooltipContent><p>Enterrar (pular hoje)</p></TooltipContent>
@@ -714,14 +749,14 @@ Retorne o front com a sintaxe {{c1::resposta}} e back vazio.`;
         <Tooltip>
           <TooltipTrigger asChild>
             <button
-              onClick={() => setFreezeConfirmOpen(true)}
+              onClick={handleFreezeClick}
               className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-              aria-label="Congelar card"
+              aria-label="Suspender card"
             >
-              <Snowflake className="h-3.5 w-3.5" />
+              <Ban className="h-3.5 w-3.5" />
             </button>
           </TooltipTrigger>
-          <TooltipContent><p>Congelar card</p></TooltipContent>
+          <TooltipContent><p>Suspender card</p></TooltipContent>
         </Tooltip>
 
         {isLiveDeck ? (
@@ -754,18 +789,22 @@ Retorne o front com a sintaxe {{c1::resposta}} e back vazio.`;
         )}
       </div>
 
-      {/* Freeze confirm */}
+      {/* Freeze/Suspend confirm */}
       <AlertDialog open={freezeConfirmOpen} onOpenChange={setFreezeConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>❄️ Congelar este card?</AlertDialogTitle>
+            <AlertDialogTitle>Suspender este cartão?</AlertDialogTitle>
             <AlertDialogDescription>
-              O card não aparecerá mais nas sessões de estudo. Você pode descongelá-lo depois na página de gerenciamento do baralho.
+              O cartão não entrará mais na sua fila de estudo até ser reativado manualmente na página de gerenciamento do baralho.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer px-1">
+            <input type="checkbox" checked={freezeDismissCheck} onChange={e => setFreezeDismissCheck(e.target.checked)} className="rounded border-border" />
+            Não mostrar esta confirmação por 30 dias
+          </label>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleFreeze}>Congelar</AlertDialogAction>
+            <AlertDialogAction onClick={handleFreeze}>Suspender</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -774,11 +813,15 @@ Retorne o front com a sintaxe {{c1::resposta}} e back vazio.`;
       <AlertDialog open={buryConfirmOpen} onOpenChange={setBuryConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>⛏️ Enterrar este card?</AlertDialogTitle>
+            <AlertDialogTitle>Enterrar este cartão?</AlertDialogTitle>
             <AlertDialogDescription>
-              <strong>Enterrar</strong> significa pular o card por hoje. Ele será removido desta sessão e voltará amanhã automaticamente. É diferente de congelar — o card continua ativo no seu baralho.
+              O cartão será removido desta sessão e retornará à sua fila de estudo amanhã automaticamente.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer px-1">
+            <input type="checkbox" checked={buryDismissCheck} onChange={e => setBuryDismissCheck(e.target.checked)} className="rounded border-border" />
+            Não mostrar esta confirmação por 30 dias
+          </label>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleBury}>Enterrar</AlertDialogAction>
