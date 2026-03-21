@@ -285,6 +285,37 @@ export async function fetchStudyQueue(
   let allNew = cards.filter(c => c.state === 0 && !zeroNewLimitDeckIds.has(c.deck_id));
   let allReview = cards.filter(c => c.state === 2);
 
+  // Per-root-deck new-card limit enforcement for folder/studyAll mode
+  if ((folderId || isStudyAll) && deckStatsResult.data) {
+    const perDeckStats = deckStatsResult.data as { deck_id: string; new_reviewed_today: number }[];
+    // Build a map: rootDeckId → sum of new_reviewed_today across all descendants
+    const rootReviewedMap = new Map<string, number>();
+    for (const stat of perDeckStats) {
+      const rootId = findRootAncestorId(activeDecks, stat.deck_id);
+      rootReviewedMap.set(rootId, (rootReviewedMap.get(rootId) ?? 0) + (stat.new_reviewed_today ?? 0));
+    }
+
+    // Group new cards by root deck, cap each group to root's daily_new_limit - reviewed_today
+    const groupedByRoot = new Map<string, StudyCard[]>();
+    for (const card of allNew) {
+      const rootId = findRootAncestorId(activeDecks, card.deck_id);
+      const group = groupedByRoot.get(rootId);
+      if (group) group.push(card);
+      else groupedByRoot.set(rootId, [card]);
+    }
+
+    const perRootCapped: StudyCard[] = [];
+    for (const [rootId, rootCards] of groupedByRoot) {
+      const rootDeck = deckMap.get(rootId);
+      const rootLimit = rootDeck?.daily_new_limit ?? 20;
+      const rootReviewed = rootReviewedMap.get(rootId) ?? 0;
+      const rootRemaining = Math.max(0, rootLimit - rootReviewed);
+      perRootCapped.push(...rootCards.slice(0, rootRemaining));
+    }
+    allNew = perRootCapped;
+  }
+
+  // Apply global new-card limit on top of per-root limits
   allNew = allNew.slice(0, effectiveNewLimit);
   allReview = allReview.slice(0, effectiveReviewLimit);
 
