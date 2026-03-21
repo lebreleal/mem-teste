@@ -267,7 +267,6 @@ const FlashCard = ({
         algorithmMode={algorithmMode}
         deckConfig={deckConfig}
         actions={actions}
-        actionsLeft={actionsLeft}
         communityMeta={communityMeta}
         stability={stability}
         difficulty={difficulty}
