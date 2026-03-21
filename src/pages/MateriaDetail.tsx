@@ -26,11 +26,12 @@ import { toast } from '@/hooks/use-toast';
 import DeckRow from '@/components/dashboard/DeckRow';
 import DashboardModals from '@/components/dashboard/DashboardModals';
 import { calculateRealStudyTime, DEFAULT_CALIBRATION_FACTOR } from '@/lib/studyUtils';
-import { renameDeck, archiveDeck, deleteDeck, updateDeck } from '@/services/deck';
+import { renameDeck, archiveDeck, deleteDeckCascade, updateDeck } from '@/services/deck';
 import { invalidateDeckRelatedQueries } from '@/lib/queryKeys';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 
 const StudySettingsSheet = lazy(() => import('@/components/dashboard/StudySettingsSheet'));
+const AICreateDeckDialog = lazy(() => import('@/components/AICreateDeckDialog'));
 
 const MATERIA_COLORS = [
   null, '#C8B6FF', '#FFF3BF', '#FFD6E0', '#D4FFDA',
@@ -107,6 +108,8 @@ const MateriaDetail: React.FC = () => {
   // Add menu state (reusing DashboardModals)
   const [salaAddMenuOpen, setSalaAddMenuOpen] = useState(false);
   const [addMenuInfoType, setAddMenuInfoType] = useState<'deck' | 'deck-manual' | 'deck-ia' | null>(null);
+  const [aiDeckOpen, setAiDeckOpen] = useState(false);
+  
 
   // Listen for + button from BottomNav
   useEffect(() => {
@@ -156,7 +159,7 @@ const MateriaDetail: React.FC = () => {
   const deleteMutation = useMutation({
     mutationFn: async () => {
       if (!id) throw new Error('No materia id');
-      await deleteDeck(id);
+      await deleteDeckCascade(id);
     },
     onSuccess: () => {
       invalidateDeckRelatedQueries(queryClient);
@@ -267,7 +270,7 @@ const MateriaDetail: React.FC = () => {
 
   const handleDelete = useCallback((deck: DeckWithStats) => {
     if (!window.confirm(`Excluir "${deck.name}"? Esta ação não pode ser desfeita.`)) return;
-    deleteDeck(deck.id)
+    deleteDeckCascade(deck.id)
       .then(() => { invalidateDeckRelatedQueries(queryClient); toast({ title: 'Baralho excluído' }); })
       .catch(() => { toast({ title: 'Erro ao excluir', variant: 'destructive' }); });
   }, [queryClient]);
@@ -457,12 +460,12 @@ const MateriaDetail: React.FC = () => {
              },
            });
          }}
-         onCreateDeckAI={() => {
-           navigate(`/dashboard?action=ai-deck&parentDeckId=${id}`);
-         }}
-         onImportCards={() => {
-           navigate(`/dashboard?action=import&parentDeckId=${id}`);
-         }}
+          onCreateDeckAI={() => {
+            setAiDeckOpen(true);
+          }}
+          onImportCards={() => {
+            navigate(`/dashboard?action=import&parentDeckId=${id}`);
+          }}
       />
 
       {/* Edit modal */}
@@ -516,6 +519,21 @@ const MateriaDetail: React.FC = () => {
             getSubDecks={getSubDecks}
             getAggregateStats={getAggregateStats}
             currentFolderId={materia.folder_id ?? null}
+            parentDeckId={id}
+          />
+        )}
+      </Suspense>
+
+      {/* AI Deck Dialog — opens in-place instead of navigating away */}
+      <Suspense fallback={null}>
+        {aiDeckOpen && (
+          <AICreateDeckDialog
+            open={aiDeckOpen}
+            onOpenChange={(open) => {
+              setAiDeckOpen(open);
+              if (!open) invalidateDeckRelatedQueries(queryClient);
+            }}
+            folderId={materia?.folder_id ?? null}
             parentDeckId={id}
           />
         )}
