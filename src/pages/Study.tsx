@@ -124,6 +124,25 @@ const Study = () => {
   const chatClearRef = useRef<(() => void) | null>(null);
   const [communityInfoOpen, setCommunityInfoOpen] = useState(false);
 
+  // Bookmarks
+  const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!user?.id) return;
+    fetchBookmarkedCardIds(user.id).then(setBookmarkedIds).catch(() => {});
+  }, [user?.id]);
+
+  const handleToggleBookmark = useCallback(async () => {
+    if (!user?.id || !currentCard) return;
+    try {
+      const isNowBookmarked = await toggleBookmark(user.id, currentCard.id);
+      setBookmarkedIds(prev => {
+        const next = new Set(prev);
+        if (isNowBookmarked) next.add(currentCard.id); else next.delete(currentCard.id);
+        return next;
+      });
+    } catch {}
+  }, [user?.id, currentCard]);
+
   // Initialize local queue
   useEffect(() => {
     if (queue.length > 0 && !queueInitialized) {
