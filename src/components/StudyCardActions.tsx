@@ -736,11 +736,11 @@ Retorne o front com a sintaxe {{c1::resposta}} e back vazio.`;
         <Tooltip>
           <TooltipTrigger asChild>
             <button
-              onClick={() => setBuryConfirmOpen(true)}
+              onClick={handleBuryClick}
               className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
               aria-label="Enterrar card"
             >
-              <Shovel className="h-3.5 w-3.5" />
+              <Clock className="h-3.5 w-3.5" />
             </button>
           </TooltipTrigger>
           <TooltipContent><p>Enterrar (pular hoje)</p></TooltipContent>
@@ -749,14 +749,14 @@ Retorne o front com a sintaxe {{c1::resposta}} e back vazio.`;
         <Tooltip>
           <TooltipTrigger asChild>
             <button
-              onClick={() => setFreezeConfirmOpen(true)}
+              onClick={handleFreezeClick}
               className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-              aria-label="Congelar card"
+              aria-label="Suspender card"
             >
-              <Snowflake className="h-3.5 w-3.5" />
+              <Ban className="h-3.5 w-3.5" />
             </button>
           </TooltipTrigger>
-          <TooltipContent><p>Congelar card</p></TooltipContent>
+          <TooltipContent><p>Suspender card</p></TooltipContent>
         </Tooltip>
 
         {isLiveDeck ? (
