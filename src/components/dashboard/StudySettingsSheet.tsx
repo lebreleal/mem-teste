@@ -18,8 +18,8 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { updateDeckDailyLimits, updateGlobalDeckSettings } from '@/services/uiQueryService';
-import { useQueryClient } from '@tanstack/react-query';
+import { updateDeckDailyLimits, updateGlobalDeckSettings, fetchGlobalStudySettings } from '@/services/uiQueryService';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import type { DeckWithStats } from '@/hooks/useDecks';
 
