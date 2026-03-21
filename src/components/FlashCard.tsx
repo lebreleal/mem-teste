@@ -61,6 +61,7 @@ interface FlashCardProps {
   explainResponse?: string | null;
   mcExplainResponse?: string | null;
   actions?: React.ReactNode;
+  actionsLeft?: React.ReactNode;
   communityMeta?: React.ReactNode;
   canUndo?: boolean;
   onUndo?: () => void;
