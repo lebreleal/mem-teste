@@ -55,10 +55,20 @@ const Study = () => {
   const { model, setModel, getCost, pendingPro, confirmPro, cancelPro } = useAIModel();
   const goBack = useCallback(() => {
     invalidateStudyQueries(queryClient);
-    if (deckId) navigate(`/decks/${deckId}`, { replace: true });
-    else if (folderId) navigate(`/dashboard?folder=${folderId}`, { replace: true });
-    else navigate('/dashboard', { replace: true });
-  }, [deckId, folderId, navigate, queryClient]);
+    if (deckId) {
+      // If studying a subdeck, go back to parent deck (materia) instead of subdeck detail
+      const parentId = deckConfig?.parent_deck_id;
+      if (parentId) {
+        navigate(`/materia/${parentId}`, { replace: true });
+      } else {
+        navigate(`/decks/${deckId}`, { replace: true });
+      }
+    } else if (folderId) {
+      navigate(`/dashboard?folder=${folderId}`, { replace: true });
+    } else {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [deckId, folderId, navigate, queryClient, deckConfig?.parent_deck_id]);
   const TUTOR_COST = getCost(BASE_TUTOR_COST);
 
   const getCardDeckConfig = useCallback((_card: StudyCard) => deckConfig, [deckConfig]);
