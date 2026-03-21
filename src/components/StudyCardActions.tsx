@@ -181,22 +181,42 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
   const handleFreeze = async () => {
     try {
       await freezeCardService(card.id);
-      toast({ title: '❄️ Card congelado', description: 'Este card não aparecerá mais nas revisões.' });
+      toast({ title: 'Cartão suspenso', description: 'Ele não entrará na fila de estudo até ser reativado.' });
       setFreezeConfirmOpen(false);
+      if (freezeDismissCheck) dismiss(FREEZE_DISMISS_KEY);
       onCardFrozen(card.id);
     } catch {
-      toast({ title: 'Erro ao congelar card', variant: 'destructive' });
+      toast({ title: 'Erro ao suspender card', variant: 'destructive' });
     }
   };
 
   const handleBury = async () => {
     try {
       await burySingleCard(card.id);
-      toast({ title: '⛏️ Card enterrado', description: 'Ele voltará amanhã.' });
+      toast({ title: 'Cartão enterrado', description: 'Retorna pra sua fila de estudo amanhã.' });
       setBuryConfirmOpen(false);
+      if (buryDismissCheck) dismiss(BURY_DISMISS_KEY);
       onCardBuried?.(card.id);
     } catch {
       toast({ title: 'Erro ao enterrar card', variant: 'destructive' });
+    }
+  };
+
+  const handleBuryClick = () => {
+    if (isDismissed(BURY_DISMISS_KEY)) {
+      handleBury();
+    } else {
+      setBuryDismissCheck(false);
+      setBuryConfirmOpen(true);
+    }
+  };
+
+  const handleFreezeClick = () => {
+    if (isDismissed(FREEZE_DISMISS_KEY)) {
+      handleFreeze();
+    } else {
+      setFreezeDismissCheck(false);
+      setFreezeConfirmOpen(true);
     }
   };
 
