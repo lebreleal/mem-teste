@@ -50,9 +50,11 @@ const ERROR_NOTEBOOK_PREFIX = '📕';
 
 const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggregateStats, currentFolderId, parentDeckId }: StudySettingsSheetProps) => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const isMateriaMode = !!parentDeckId;
 
