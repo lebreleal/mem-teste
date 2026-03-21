@@ -184,7 +184,7 @@ export async function fetchStudyQueue(
   const tzOffsetMinutes = TZ_OFFSET_SP;
   const allActiveDeckIds = activeDecks.map(d => d.id);
 
-  const [cardsResult, allCardIdsResult, plansResult, profileResult] = await Promise.all([
+  const [cardsResult, allCardIdsResult, plansResult, profileResult, deckStatsResult] = await Promise.all([
     supabase
       .from('cards')
       .select('id, deck_id, front_content, back_content, card_type, state, stability, difficulty, scheduled_date, learning_step, last_reviewed_at, origin_deck_id, created_at')
@@ -202,6 +202,10 @@ export async function fetchStudyQueue(
       .select('daily_new_cards_limit, weekly_new_cards')
       .eq('id', userId)
       .single(),
+    // Fetch per-deck stats for per-root new-card limit enforcement in folder/studyAll mode
+    (folderId || isStudyAll)
+      ? supabase.rpc('get_all_user_deck_stats', { p_user_id: userId, p_tz_offset_minutes: tzOffsetMinutes })
+      : Promise.resolve({ data: null }),
   ]);
 
   if (cardsResult.error) throw cardsResult.error;
