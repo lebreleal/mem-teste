@@ -276,6 +276,7 @@ export type Database = {
           difficulty: number
           front_content: string
           id: string
+          last_rating: number | null
           last_reviewed_at: string | null
           learning_step: number
           origin_deck_id: string | null
@@ -293,6 +294,7 @@ export type Database = {
           difficulty?: number
           front_content: string
           id?: string
+          last_rating?: number | null
           last_reviewed_at?: string | null
           learning_step?: number
           origin_deck_id?: string | null
@@ -310,6 +312,7 @@ export type Database = {
           difficulty?: number
           front_content?: string
           id?: string
+          last_rating?: number | null
           last_reviewed_at?: string | null
           learning_step?: number
           origin_deck_id?: string | null
@@ -3135,6 +3138,7 @@ export type Database = {
           difficulty: number
           front_content: string
           id: string
+          last_rating: number | null
           last_reviewed_at: string | null
           learning_step: number
           origin_deck_id: string | null

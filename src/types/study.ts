@@ -29,6 +29,7 @@ export interface StudyCard {
   last_reviewed_at: string | null;
   origin_deck_id: string | null;
   created_at: string;
+  last_rating: number | null;
 }
 
 /** Deck configuration fields used during study sessions. */
@@ -103,6 +104,7 @@ export interface CardUpdatePayload {
   scheduled_date: string;
   last_reviewed_at: string;
   learning_step: number;
+  last_rating: number;
 }
 
 /** Return value of submitCardReview. */

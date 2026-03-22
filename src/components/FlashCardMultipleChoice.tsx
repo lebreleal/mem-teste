@@ -61,6 +61,7 @@ interface MultipleChoiceCardProps {
   scheduledDate: string;
   lastReviewedAt?: string;
   learningStep?: number;
+  lastRating?: number | null;
   canUndo?: boolean;
   onUndo?: () => void;
   onOpenExplainChat?: (options?: { action?: string; mcOptions?: string[]; correctIndex?: number; selectedIndex?: number }) => void;
@@ -89,6 +90,7 @@ const MultipleChoiceCard = ({
   scheduledDate,
   lastReviewedAt,
   learningStep = 0,
+  lastRating,
   canUndo,
   onUndo,
   onOpenExplainChat,
@@ -132,7 +134,7 @@ const MultipleChoiceCard = ({
     }, 700);
   };
 
-  const difficultyData = difficultyDataProp ?? getCardDifficulty({ state, difficulty });
+  const difficultyData = difficultyDataProp ?? getCardDifficulty({ state, difficulty, last_rating: lastRating });
   const diffColor = getDifficultyColor(difficultyData);
   const diffBgColor = getDifficultyBgColor(difficultyData);
 
