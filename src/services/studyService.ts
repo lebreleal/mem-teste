@@ -258,12 +258,13 @@ export async function fetchStudyQueue(
     globalNewReviewedToday = (globalLimitsResult.data as StudyQueueLimitsRow[])[0].new_reviewed_today ?? 0;
   }
 
-  // Profile limits
-  const rawGlobalLimit = profileData?.daily_new_cards_limit ?? 9999;
+  // Global limit = SUM of all root deck daily_new_limit (dynamic, not from profile)
+  const rootDecks = activeDecks.filter(d => !d.parent_deck_id);
+  const computedGlobalLimit = rootDecks.reduce((sum, d) => sum + (d.daily_new_limit ?? 20), 0) || 9999;
   const weeklyNewCards = profileData?.weekly_new_cards as Record<string, number> | null;
   const DAY_KEYS_LOCAL = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
   const todayKey = DAY_KEYS_LOCAL[new Date().getDay()];
-  const globalLimit = (weeklyNewCards && weeklyNewCards[todayKey] != null) ? weeklyNewCards[todayKey] : rawGlobalLimit;
+  const globalLimit = (weeklyNewCards && weeklyNewCards[todayKey] != null) ? weeklyNewCards[todayKey] : computedGlobalLimit;
 
   const hasPlanActive = planDeckIdSet.size > 0;
   const deckRemaining = Math.max(0, deckNewLimit - newReviewedInHierarchy);

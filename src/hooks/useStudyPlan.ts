@@ -129,23 +129,8 @@ export function useStudyPlan(options?: { full?: boolean }) {
     enabled: !!userId,
   });
 
-  // ─── Use centralized profile for global capacity ───
-  const profileQuery = useProfile();
-  const globalCapacity = useMemo(() => {
-    const p = profileQuery.data;
-    if (!p) return { dailyMinutes: 60, weeklyMinutes: null, dailyNewCardsLimit: 30, weeklyNewCards: null };
-    return {
-      dailyMinutes: p.daily_study_minutes ?? 60,
-      weeklyMinutes: p.weekly_study_minutes as WeeklyMinutes | null,
-      dailyNewCardsLimit: p.daily_new_cards_limit ?? 30,
-      weeklyNewCards: p.weekly_new_cards as WeeklyNewCards | null,
-    };
-  }, [profileQuery.data]);
-
-  const plans = plansQuery.data ?? [];
-
   // ─── Deck hierarchy from shared cache (avoids duplicate query) ───
-  interface CachedDeckItem { id: string; parent_deck_id: string | null; folder_id: string | null; is_archived?: boolean }
+  interface CachedDeckItem { id: string; parent_deck_id: string | null; folder_id: string | null; is_archived?: boolean; daily_new_limit?: number }
   const cachedDecks = qc.getQueryData<CachedDeckItem[]>(['decks', userId]);
   const deckHierarchy = useMemo(() => {
     if (!cachedDecks) return [] as { id: string; parent_deck_id: string | null; folder_id: string | null }[];
@@ -153,6 +138,26 @@ export function useStudyPlan(options?: { full?: boolean }) {
       .filter(d => !d.is_archived)
       .map(d => ({ id: d.id, parent_deck_id: d.parent_deck_id, folder_id: d.folder_id }));
   }, [cachedDecks]);
+
+  // ─── Use centralized profile for global capacity ───
+  const profileQuery = useProfile();
+  // Global new cards limit = SUM of all root (parent) deck daily_new_limit values
+  // This is dynamically computed, not stored in the profile.
+  const globalCapacity = useMemo(() => {
+    const p = profileQuery.data;
+    if (!p) return { dailyMinutes: 60, weeklyMinutes: null, dailyNewCardsLimit: 30, weeklyNewCards: null };
+    // Compute from cached decks: sum of root deck limits
+    const rootDecks = (cachedDecks ?? []).filter(d => !d.parent_deck_id && !d.is_archived);
+    const sumRootLimits = rootDecks.reduce((sum, d) => sum + (d.daily_new_limit ?? 20), 0);
+    return {
+      dailyMinutes: p.daily_study_minutes ?? 60,
+      weeklyMinutes: p.weekly_study_minutes as WeeklyMinutes | null,
+      dailyNewCardsLimit: sumRootLimits || 30,
+      weeklyNewCards: p.weekly_new_cards as WeeklyNewCards | null,
+    };
+  }, [profileQuery.data, cachedDecks]);
+
+  const plans = plansQuery.data ?? [];
 
   const findRoot = useCallback((id: string): string => {
     const deck = deckHierarchy.find(d => d.id === id);
