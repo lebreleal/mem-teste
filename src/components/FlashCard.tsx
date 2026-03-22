@@ -183,7 +183,7 @@ function renderOcclusion(frontContent: string, revealed: boolean, fallbackCanvas
 }
 
 const FlashCard = ({
-  frontContent, backContent, cardId, stability, difficulty, state, scheduledDate, lastReviewedAt, cardType, learningStep = 0,
+  frontContent, backContent, cardId, stability, difficulty, state, scheduledDate, lastReviewedAt, cardType, learningStep = 0, lastRating,
   onRate, isSubmitting, quickReview, algorithmMode = 'fsrs', deckConfig,
   energy = 0, tutorCost = 2, onTutorRequest, isTutorLoading, hintResponse, explainResponse, mcExplainResponse, actions, communityMeta,
   canUndo, onUndo, onOpenExplainChat,
