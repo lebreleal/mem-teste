@@ -103,6 +103,7 @@ export interface CardUpdatePayload {
   scheduled_date: string;
   last_reviewed_at: string;
   learning_step: number;
+  last_rating: number;
 }
 
 /** Return value of submitCardReview. */
