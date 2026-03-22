@@ -8,7 +8,15 @@ import { Button } from '@/components/ui/button';
 const ITEM_HEIGHT = 88;
 
 function getCardBorderColor(card: any): string {
-  if (card.state === 0) return 'border-l-muted-foreground/40';
+  if (card.state === 0 && card.last_rating == null) return 'border-l-muted-foreground/40';
+  const lr = card.last_rating;
+  if (lr != null) {
+    if (lr === 1) return 'border-l-destructive';
+    if (lr === 2) return 'border-l-warning';
+    if (lr === 3) return 'border-l-success';
+    return 'border-l-info';
+  }
+  // Fallback for old cards without last_rating
   const d = card.difficulty ?? 5;
   if (d <= 3) return 'border-l-info';
   if (d <= 5) return 'border-l-success';
