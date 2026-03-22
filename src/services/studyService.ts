@@ -258,24 +258,11 @@ export async function fetchStudyQueue(
     globalNewReviewedToday = (globalLimitsResult.data as StudyQueueLimitsRow[])[0].new_reviewed_today ?? 0;
   }
 
-  // Global limit = SUM of all root deck daily_new_limit (dynamic, not from profile)
-  const rootDecks = activeDecks.filter(d => !d.parent_deck_id);
-  const computedGlobalLimit = rootDecks.reduce((sum, d) => sum + (d.daily_new_limit ?? 20), 0) || 9999;
+  // Per-root-deck limits are enforced individually (lines below).
+  // There is NO shared global cap — each root deck's daily_new_limit is independent.
   const weeklyNewCards = profileData?.weekly_new_cards as Record<string, number> | null;
-  const DAY_KEYS_LOCAL = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
-  const todayKey = DAY_KEYS_LOCAL[new Date().getDay()];
-  const globalLimit = (weeklyNewCards && weeklyNewCards[todayKey] != null) ? weeklyNewCards[todayKey] : computedGlobalLimit;
 
-  const hasPlanActive = planDeckIdSet.size > 0;
   const deckRemaining = Math.max(0, deckNewLimit - newReviewedInHierarchy);
-  const folderRemaining = Math.max(0, folderNewLimit - newReviewedInHierarchy);
-  const globalRemaining = Math.max(0, globalLimit - globalNewReviewedToday);
-
-  // Always respect BOTH the per-deck/folder limit AND the global profile limit.
-  // Previously, single-deck mode with active plans would bypass the deck limit.
-  const effectiveNewLimit = folderId
-    ? Math.max(0, Math.min(folderRemaining, globalRemaining))
-    : Math.max(0, Math.min(deckRemaining, globalRemaining));
   const effectiveReviewLimit = Math.max(0, (folderId ? folderReviewLimit : reviewLimit) - reviewReviewedToday);
 
   // --- Apply daily limits FIRST, then bury siblings among the surviving cards ---
