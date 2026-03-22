@@ -19,11 +19,11 @@ interface StudySalaSheetProps {
   folders: Folder[];
   decks: DeckWithStats[];
   getAggregateStats: (deck: DeckWithStats) => { new_count: number; learning_count: number; review_count: number; reviewed_today: number };
-  globalNewRemaining: number;
+  globalNewRemaining?: number; // deprecated — kept for backward compat but unused
   avgSecondsPerCard: number;
 }
 
-const StudySalaSheet = ({ open, onOpenChange, folders, decks, getAggregateStats, globalNewRemaining }: StudySalaSheetProps) => {
+const StudySalaSheet = ({ open, onOpenChange, folders, decks, getAggregateStats }: StudySalaSheetProps) => {
   const navigate = useNavigate();
 
   const rootFolders = useMemo(
@@ -55,30 +55,42 @@ const StudySalaSheet = ({ open, onOpenChange, folders, decks, getAggregateStats,
     return map;
   }, [rootFolders, decks, getAggregateStats]);
 
-  // Distribute globalNewRemaining proportionally across folders
+  // Per-root-deck limits (independent, not shared globally)
   const folderDailyDue = useMemo(() => {
     const result = new Map<string, number>();
-    const entries: { id: string; newCount: number; learningReview: number }[] = [];
-    let totalRawNew = 0;
 
     for (const f of rootFolders) {
-      const stats = folderStats.get(f.id);
-      const rawNew = stats?.totalNew ?? 0;
-      const lr = (stats?.totalLearning ?? 0) + (stats?.totalReview ?? 0);
-      entries.push({ id: f.id, newCount: rawNew, learningReview: lr });
-      totalRawNew += rawNew;
-    }
+      const folderDecks = decks.filter(d => d.folder_id === f.id && !d.parent_deck_id && !d.is_archived);
+      let totalDue = 0;
 
-    for (const e of entries) {
-      const cappedNew = totalRawNew > 0
-        ? Math.round((e.newCount / totalRawNew) * globalNewRemaining)
-        : 0;
-      const finalNew = Math.min(cappedNew, e.newCount);
-      result.set(e.id, finalNew + e.learningReview);
+      for (const rootDeck of folderDecks) {
+        // Collect hierarchy new count and new_reviewed for this root
+        const collectHierarchy = (deckId: string): { nc: number; nr: number } => {
+          const dk = decks.find(d => d.id === deckId);
+          if (!dk || dk.is_archived) return { nc: 0, nr: 0 };
+          let nc = dk.new_count ?? 0;
+          let nr = dk.new_reviewed_today ?? 0;
+          const subs = decks.filter(x => x.parent_deck_id === deckId && !x.is_archived);
+          for (const s of subs) {
+            const sub = collectHierarchy(s.id);
+            nc += sub.nc;
+            nr += sub.nr;
+          }
+          return { nc, nr };
+        };
+        const { nc, nr } = collectHierarchy(rootDeck.id);
+        const rootLimit = rootDeck.daily_new_limit ?? 20;
+        const rootNewAvailable = Math.max(0, Math.min(nc, rootLimit - nr));
+        totalDue += rootNewAvailable;
+      }
+
+      const stats = folderStats.get(f.id);
+      totalDue += (stats?.totalLearning ?? 0) + (stats?.totalReview ?? 0);
+      result.set(f.id, totalDue);
     }
 
     return result;
-  }, [rootFolders, folderStats, globalNewRemaining]);
+  }, [rootFolders, folderStats, decks]);
 
   const handleStudySala = (folderId: string) => {
     onOpenChange(false);
