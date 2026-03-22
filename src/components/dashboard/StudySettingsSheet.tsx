@@ -179,7 +179,7 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
         }
       }
 
-      queryClient.invalidateQueries({ queryKey: ['decks'] });
+      await queryClient.invalidateQueries({ queryKey: ['decks'] });
       queryClient.invalidateQueries({ queryKey: ['study-queue'] });
       toast({ title: 'Configurações salvas!' });
       onOpenChange(false);
