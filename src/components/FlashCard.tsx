@@ -219,8 +219,8 @@ const FlashCard = ({
 
   const difficultyData = useMemo(() => {
     if (algorithmMode === 'quick_review') return null;
-    return getCardDifficulty({ state, difficulty });
-  }, [state, difficulty, algorithmMode]);
+    return getCardDifficulty({ state, difficulty, last_rating: lastRating });
+  }, [state, difficulty, algorithmMode, lastRating]);
 
   const [occlusionFallbackCanvas, setOcclusionFallbackCanvas] = useState<{ w: number; h: number } | null>(null);
 
