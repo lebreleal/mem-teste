@@ -48,6 +48,7 @@ interface FlashCardProps {
   lastReviewedAt?: string;
   cardType?: string;
   learningStep?: number;
+  lastRating?: number | null;
   onRate: (rating: Rating) => void;
   isSubmitting: boolean;
   quickReview?: boolean;
@@ -182,7 +183,7 @@ function renderOcclusion(frontContent: string, revealed: boolean, fallbackCanvas
 }
 
 const FlashCard = ({
-  frontContent, backContent, cardId, stability, difficulty, state, scheduledDate, lastReviewedAt, cardType, learningStep = 0,
+  frontContent, backContent, cardId, stability, difficulty, state, scheduledDate, lastReviewedAt, cardType, learningStep = 0, lastRating,
   onRate, isSubmitting, quickReview, algorithmMode = 'fsrs', deckConfig,
   energy = 0, tutorCost = 2, onTutorRequest, isTutorLoading, hintResponse, explainResponse, mcExplainResponse, actions, communityMeta,
   canUndo, onUndo, onOpenExplainChat,
@@ -218,8 +219,8 @@ const FlashCard = ({
 
   const difficultyData = useMemo(() => {
     if (algorithmMode === 'quick_review') return null;
-    return getCardDifficulty({ state, difficulty });
-  }, [state, difficulty, algorithmMode]);
+    return getCardDifficulty({ state, difficulty, last_rating: lastRating });
+  }, [state, difficulty, algorithmMode, lastRating]);
 
   const [occlusionFallbackCanvas, setOcclusionFallbackCanvas] = useState<{ w: number; h: number } | null>(null);
 
@@ -277,6 +278,7 @@ const FlashCard = ({
         onUndo={onUndo}
         onOpenExplainChat={onOpenExplainChat}
         learningStep={learningStep}
+        lastRating={lastRating}
       />
     );
   }

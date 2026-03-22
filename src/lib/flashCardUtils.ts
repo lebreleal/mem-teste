@@ -99,35 +99,57 @@ export interface DifficultyData {
   value: number; // 1-10 rounded
   label: string;
   state: 'new' | 'learning' | 'review';
+  lastRating?: number | null; // 1=Errei, 2=Difícil, 3=Bom, 4=Fácil
 }
 
 /** Get difficulty data for a card */
-export function getCardDifficulty(card: { state: number; difficulty: number }): DifficultyData | null {
+export function getCardDifficulty(card: { state: number; difficulty: number; last_rating?: number | null }): DifficultyData | null {
   const stateMap: Record<number, 'new' | 'learning' | 'review'> = { 0: 'new', 1: 'learning', 2: 'review', 3: 'learning' };
   const state = stateMap[card.state] ?? 'new';
-  if (card.state === 0) return { value: 0, label: 'Novo', state };
+  if (card.state === 0 && !card.last_rating) return { value: 0, label: 'Novo', state, lastRating: null };
+  // Use last_rating if available for label
+  const lr = card.last_rating;
+  if (lr != null) {
+    const labelMap: Record<number, string> = { 1: 'Errei', 2: 'Difícil', 3: 'Bom', 4: 'Fácil' };
+    return { value: lr, label: labelMap[lr] ?? 'Novo', state, lastRating: lr };
+  }
+  // Fallback to difficulty-based (for old cards without last_rating)
   const d = Math.round(card.difficulty * 10) / 10;
   let label: string;
   if (d <= 3) label = 'Fácil';
   else if (d <= 5) label = 'Médio';
   else if (d <= 7) label = 'Difícil';
   else label = 'Muito difícil';
-  return { value: d, label, state };
+  return { value: d, label, state, lastRating: null };
 }
 
-/** Get difficulty-based color class */
+/** Get color class based on last rating (or fallback to difficulty) */
 export function getDifficultyColor(data: DifficultyData | null): string {
-  if (!data || data.state === 'new') return 'text-muted-foreground';
+  if (!data || (data.state === 'new' && data.lastRating == null)) return 'text-muted-foreground';
+  if (data.lastRating != null) {
+    if (data.lastRating === 1) return 'text-destructive';
+    if (data.lastRating === 2) return 'text-amber-600 dark:text-amber-400';
+    if (data.lastRating === 3) return 'text-emerald-600 dark:text-emerald-400';
+    return 'text-info';
+  }
+  // Fallback
   if (data.value <= 3) return 'text-emerald-600 dark:text-emerald-400';
   if (data.value <= 5) return 'text-primary';
   if (data.value <= 7) return 'text-amber-600 dark:text-amber-400';
   return 'text-orange-600 dark:text-orange-400';
 }
 
-/** Get difficulty-based background color class */
+/** Get background color class based on last rating (or fallback to difficulty) */
 export function getDifficultyBgColor(data: DifficultyData | null): string {
   if (!data) return '';
-  if (data.state === 'new') return 'bg-muted/80';
+  if (data.state === 'new' && data.lastRating == null) return 'bg-muted/80';
+  if (data.lastRating != null) {
+    if (data.lastRating === 1) return 'bg-destructive/10';
+    if (data.lastRating === 2) return 'bg-amber-500/10';
+    if (data.lastRating === 3) return 'bg-emerald-500/10';
+    return 'bg-info/10';
+  }
+  // Fallback
   if (data.value <= 3) return 'bg-emerald-500/10';
   if (data.value <= 5) return 'bg-primary/10';
   if (data.value <= 7) return 'bg-amber-500/10';

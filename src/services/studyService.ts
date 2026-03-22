@@ -156,7 +156,7 @@ export async function fetchStudyQueue(
   if (algorithmMode === 'quick_review') {
     const { data, error } = await supabase
       .from('cards')
-      .select('id, deck_id, front_content, back_content, card_type, state, stability, difficulty, scheduled_date, learning_step, last_reviewed_at, origin_deck_id, created_at')
+      .select('id, deck_id, front_content, back_content, card_type, state, stability, difficulty, scheduled_date, learning_step, last_reviewed_at, origin_deck_id, created_at, last_rating')
       .in('deck_id', deckIds)
       .order('created_at', { ascending: true });
     if (error) throw error;
@@ -187,7 +187,7 @@ export async function fetchStudyQueue(
   const [cardsResult, allCardIdsResult, plansResult, profileResult, deckStatsResult] = await Promise.all([
     supabase
       .from('cards')
-      .select('id, deck_id, front_content, back_content, card_type, state, stability, difficulty, scheduled_date, learning_step, last_reviewed_at, origin_deck_id, created_at')
+      .select('id, deck_id, front_content, back_content, card_type, state, stability, difficulty, scheduled_date, learning_step, last_reviewed_at, origin_deck_id, created_at, last_rating')
       .in('deck_id', deckIds)
       .or(`and(state.eq.0,or(scheduled_date.is.null,scheduled_date.lte.${endOfTodayISO})),and(state.in.(1,3),scheduled_date.lte.${endOfTodayISO}),and(state.eq.2,scheduled_date.lte.${nowISO})`)
       .order('created_at', { ascending: true }),
@@ -402,9 +402,10 @@ export async function submitCardReview(
     const isRatingFail = rating === 1;
     const isInErrorDeck = !!card.origin_deck_id;
 
-    const updatePayload: Pick<CardUpdatePayload, 'state' | 'last_reviewed_at'> = {
+    const updatePayload: Pick<CardUpdatePayload, 'state' | 'last_reviewed_at' | 'last_rating'> = {
       state: newState,
       last_reviewed_at: nowIso,
+      last_rating: rating,
     };
 
     const [updateResult, logResult] = await Promise.all([
@@ -477,6 +478,7 @@ export async function submitCardReview(
     stability: result.stability, difficulty: result.difficulty,
     state: result.state, scheduled_date: result.scheduled_date,
     last_reviewed_at: new Date().toISOString(), learning_step: 'learning_step' in result ? result.learning_step : 0,
+    last_rating: rating,
   };
 
   const [updateResult, logResult] = await Promise.all([
