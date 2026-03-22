@@ -48,6 +48,7 @@ interface FlashCardProps {
   lastReviewedAt?: string;
   cardType?: string;
   learningStep?: number;
+  lastRating?: number | null;
   onRate: (rating: Rating) => void;
   isSubmitting: boolean;
   quickReview?: boolean;
