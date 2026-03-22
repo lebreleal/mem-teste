@@ -134,7 +134,7 @@ const MultipleChoiceCard = ({
     }, 700);
   };
 
-  const difficultyData = difficultyDataProp ?? getCardDifficulty({ state, difficulty });
+  const difficultyData = difficultyDataProp ?? getCardDifficulty({ state, difficulty, last_rating: lastRating });
   const diffColor = getDifficultyColor(difficultyData);
   const diffBgColor = getDifficultyBgColor(difficultyData);
 
