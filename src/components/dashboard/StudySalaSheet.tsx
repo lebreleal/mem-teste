@@ -19,11 +19,11 @@ interface StudySalaSheetProps {
   folders: Folder[];
   decks: DeckWithStats[];
   getAggregateStats: (deck: DeckWithStats) => { new_count: number; learning_count: number; review_count: number; reviewed_today: number };
-  globalNewRemaining: number;
+  globalNewRemaining?: number; // deprecated — kept for backward compat but unused
   avgSecondsPerCard: number;
 }
 
-const StudySalaSheet = ({ open, onOpenChange, folders, decks, getAggregateStats, globalNewRemaining }: StudySalaSheetProps) => {
+const StudySalaSheet = ({ open, onOpenChange, folders, decks, getAggregateStats }: StudySalaSheetProps) => {
   const navigate = useNavigate();
 
   const rootFolders = useMemo(
