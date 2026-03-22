@@ -69,6 +69,7 @@ const SalaHero = ({
   setSalaImageOpen, setLeaveSalaConfirm, setStudySettingsOpen,
   realStudyMetrics, calibrationFactor, salaDifficultyStats,
   organizeMode, setOrganizeMode,
+  globalNewCardsLimit, globalWeeklyNewCards,
 }: SalaHeroProps) => {
   const navigate = useNavigate();
   const [infoOpen, setInfoOpen] = useState(false);
