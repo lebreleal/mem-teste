@@ -29,6 +29,7 @@ export interface StudyCard {
   last_reviewed_at: string | null;
   origin_deck_id: string | null;
   created_at: string;
+  last_rating: number | null;
 }
 
 /** Deck configuration fields used during study sessions. */

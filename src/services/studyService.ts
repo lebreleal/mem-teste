@@ -187,7 +187,7 @@ export async function fetchStudyQueue(
   const [cardsResult, allCardIdsResult, plansResult, profileResult, deckStatsResult] = await Promise.all([
     supabase
       .from('cards')
-      .select('id, deck_id, front_content, back_content, card_type, state, stability, difficulty, scheduled_date, learning_step, last_reviewed_at, origin_deck_id, created_at')
+      .select('id, deck_id, front_content, back_content, card_type, state, stability, difficulty, scheduled_date, learning_step, last_reviewed_at, origin_deck_id, created_at, last_rating')
       .in('deck_id', deckIds)
       .or(`and(state.eq.0,or(scheduled_date.is.null,scheduled_date.lte.${endOfTodayISO})),and(state.in.(1,3),scheduled_date.lte.${endOfTodayISO}),and(state.eq.2,scheduled_date.lte.${nowISO})`)
       .order('created_at', { ascending: true }),
