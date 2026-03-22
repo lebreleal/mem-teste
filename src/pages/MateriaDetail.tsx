@@ -232,22 +232,8 @@ const MateriaDetail: React.FC = () => {
       collectStudyStats(deck.id, true);
     }
 
-    // Apply global profile limit
-    const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
-    const rawGlobalLimit = globalCapacity.dailyNewCardsLimit ?? 9999;
-    const weeklyNewCards = globalCapacity.weeklyNewCards as Record<string, number> | null;
-    const todayGlobalLimit = (weeklyNewCards && weeklyNewCards[DAY_KEYS[new Date().getDay()]] != null)
-      ? weeklyNewCards[DAY_KEYS[new Date().getDay()]]
-      : rawGlobalLimit;
-
-    // Global new reviewed today across ALL decks
-    let globalNewReviewedToday = 0;
-    for (const [, dk] of deckMap) {
-      if (!dk.is_archived) globalNewReviewedToday += dk.new_reviewed_today ?? 0;
-    }
-    const globalRemaining = Math.max(0, todayGlobalLimit - globalNewReviewedToday);
-
-    const newCountToday = Math.min(newCountTodayByDeckLimits, globalRemaining);
+    // No global shared cap — the parent deck's daily_new_limit already caps this hierarchy
+    const newCountToday = newCountTodayByDeckLimits;
     const cappedReviewCount = Math.max(0, Math.min(reviewCount, totalDailyReviewLimit - totalReviewReviewedToday));
     const totalDue = newCountToday + learningCount + cappedReviewCount;
 
