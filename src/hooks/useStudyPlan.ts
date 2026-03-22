@@ -131,16 +131,21 @@ export function useStudyPlan(options?: { full?: boolean }) {
 
   // ─── Use centralized profile for global capacity ───
   const profileQuery = useProfile();
+  // Global new cards limit = SUM of all root (parent) deck daily_new_limit values
+  // This is dynamically computed, not stored in the profile.
   const globalCapacity = useMemo(() => {
     const p = profileQuery.data;
     if (!p) return { dailyMinutes: 60, weeklyMinutes: null, dailyNewCardsLimit: 30, weeklyNewCards: null };
+    // Compute from cached decks: sum of root deck limits
+    const rootDecks = (cachedDecks ?? []).filter(d => !d.parent_deck_id && !d.is_archived);
+    const sumRootLimits = rootDecks.reduce((sum, d) => sum + ((d as DeckWithStats).daily_new_limit ?? 20), 0);
     return {
       dailyMinutes: p.daily_study_minutes ?? 60,
       weeklyMinutes: p.weekly_study_minutes as WeeklyMinutes | null,
-      dailyNewCardsLimit: p.daily_new_cards_limit ?? 30,
+      dailyNewCardsLimit: sumRootLimits || 30,
       weeklyNewCards: p.weekly_new_cards as WeeklyNewCards | null,
     };
-  }, [profileQuery.data]);
+  }, [profileQuery.data, cachedDecks]);
 
   const plans = plansQuery.data ?? [];
 
