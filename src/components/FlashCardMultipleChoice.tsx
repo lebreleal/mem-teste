@@ -61,6 +61,7 @@ interface MultipleChoiceCardProps {
   scheduledDate: string;
   lastReviewedAt?: string;
   learningStep?: number;
+  lastRating?: number | null;
   canUndo?: boolean;
   onUndo?: () => void;
   onOpenExplainChat?: (options?: { action?: string; mcOptions?: string[]; correctIndex?: number; selectedIndex?: number }) => void;
