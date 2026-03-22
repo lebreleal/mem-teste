@@ -278,6 +278,7 @@ const FlashCard = ({
         onUndo={onUndo}
         onOpenExplainChat={onOpenExplainChat}
         learningStep={learningStep}
+        lastRating={lastRating}
       />
     );
   }
