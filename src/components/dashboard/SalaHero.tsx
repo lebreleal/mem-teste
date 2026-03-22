@@ -59,6 +59,8 @@ interface SalaHeroProps {
   salaDifficultyStats: { novo: number; facil: number; bom: number; dificil: number; errei: number };
   organizeMode: boolean;
   setOrganizeMode: (v: boolean) => void;
+  globalNewCardsLimit?: number;
+  globalWeeklyNewCards?: Record<string, number> | null;
 }
 
 const SalaHero = ({
@@ -67,6 +69,7 @@ const SalaHero = ({
   setSalaImageOpen, setLeaveSalaConfirm, setStudySettingsOpen,
   realStudyMetrics, calibrationFactor, salaDifficultyStats,
   organizeMode, setOrganizeMode,
+  globalNewCardsLimit, globalWeeklyNewCards,
 }: SalaHeroProps) => {
   const navigate = useNavigate();
   const [infoOpen, setInfoOpen] = useState(false);
@@ -160,6 +163,8 @@ const SalaHero = ({
       totalCards += collectTotalCards(deck.id);
     }
 
+    // No global shared cap — each root deck's limit is independent.
+    // newCountTodayByDeckLimits already respects each root's daily_new_limit individually.
     const newCountToday = newCountTodayByDeckLimits;
     const cappedReviewCount = Math.max(0, Math.min(reviewCount, totalDailyReviewLimit - totalReviewReviewedToday));
     const totalDue = newCountToday + learningCount + cappedReviewCount;
@@ -191,7 +196,7 @@ const SalaHero = ({
       totalDue, progressPct, timeLabel, totalCards: effectiveTotal, masteredCount,
       totalAllLabel, totalAllCards, ...ds,
     };
-  }, [state.isInsideSala, state.currentDecks, state.deckMap, state.childrenIndex, salaDifficultyStats, realStudyMetrics, calibrationFactor]);
+  }, [state.isInsideSala, state.currentDecks, state.deckMap, state.childrenIndex, salaDifficultyStats, realStudyMetrics, calibrationFactor, globalNewCardsLimit, globalWeeklyNewCards]);
 
   return (
     <>

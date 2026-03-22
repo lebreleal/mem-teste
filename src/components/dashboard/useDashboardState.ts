@@ -56,7 +56,11 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
   const profileQuery = useProfile();
   const profileData = profileQuery.data;
 
-  const rawGlobalNewLimit = profileData?.daily_new_cards_limit ?? 9999;
+  // Global new cards limit = SUM of all root deck daily_new_limit (dynamic, not from profile)
+  const rawGlobalNewLimit = useMemo(() => {
+    const roots = decks.filter(d => !d.parent_deck_id && !d.is_archived);
+    return roots.reduce((sum, d) => sum + (d.daily_new_limit ?? 20), 0) || 9999;
+  }, [decks]);
   const weeklyNewCardsProfile = profileData?.weekly_new_cards ?? null;
   const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
   const todayGlobalNewLimit = (weeklyNewCardsProfile && weeklyNewCardsProfile[DAY_KEYS[new Date().getDay()]] != null)

@@ -55,7 +55,7 @@ const MateriaDetail: React.FC = () => {
   const queryClient = useQueryClient();
   const { decks, createDeck } = useDecks();
   const { folders } = useFolders();
-  const { realStudyMetrics, calibrationFactor } = useStudyPlan();
+  const { realStudyMetrics, calibrationFactor, globalCapacity } = useStudyPlan();
 
   const materia = useMemo(() => decks?.find(d => d.id === id), [decks, id]);
   const subDecks = useMemo(
@@ -232,10 +232,12 @@ const MateriaDetail: React.FC = () => {
       collectStudyStats(deck.id, true);
     }
 
+    // No global shared cap — the parent deck's daily_new_limit already caps this hierarchy
+    const newCountToday = newCountTodayByDeckLimits;
     const cappedReviewCount = Math.max(0, Math.min(reviewCount, totalDailyReviewLimit - totalReviewReviewedToday));
-    const totalDue = newCountTodayByDeckLimits + learningCount + cappedReviewCount;
+    const totalDue = newCountToday + learningCount + cappedReviewCount;
 
-    const remainingSeconds = calculateRealStudyTime(newCountTodayByDeckLimits, learningCount, cappedReviewCount, realStudyMetrics, calibrationFactor);
+    const remainingSeconds = calculateRealStudyTime(newCountToday, learningCount, cappedReviewCount, realStudyMetrics, calibrationFactor);
     const remainingMin = Math.ceil(remainingSeconds / 60);
     const timeLabel = remainingMin >= 60
       ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
@@ -250,7 +252,7 @@ const MateriaDetail: React.FC = () => {
     const totalAllCards = rawNewCount + learningCount + reviewCount;
 
     return { totalDue, timeLabel, totalAllCards, totalAllLabel };
-  }, [subDecks, childrenIndex, deckMap, realStudyMetrics, calibrationFactor]);
+  }, [subDecks, childrenIndex, deckMap, realStudyMetrics, calibrationFactor, globalCapacity]);
 
   // Deck actions — using service layer (Law 2A)
   const handleRename = useCallback((deck: DeckWithStats) => {
