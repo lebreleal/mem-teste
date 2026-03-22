@@ -305,8 +305,11 @@ export async function fetchStudyQueue(
     allNew = perRootCapped;
   }
 
-  // Apply global new-card limit on top of per-root limits
-  allNew = allNew.slice(0, effectiveNewLimit);
+  // For single-deck mode (no per-root enforcement above), apply deck-level cap
+  if (!folderId && !isStudyAll) {
+    allNew = allNew.slice(0, deckRemaining);
+  }
+  // For folder/studyAll mode, per-root caps were already applied above — no global cap needed
   allReview = allReview.slice(0, effectiveReviewLimit);
 
   if (buryNew || buryReview || buryLearning) {

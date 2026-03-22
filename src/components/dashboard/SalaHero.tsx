@@ -163,21 +163,9 @@ const SalaHero = ({
       totalCards += collectTotalCards(deck.id);
     }
 
-    // Apply global profile limit (daily_new_cards_limit / weekly overrides)
-    const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
-    const rawGlobalLimit = globalNewCardsLimit ?? 9999;
-    const todayGlobalLimit = (globalWeeklyNewCards && globalWeeklyNewCards[DAY_KEYS[new Date().getDay()]] != null)
-      ? globalWeeklyNewCards[DAY_KEYS[new Date().getDay()]]
-      : rawGlobalLimit;
-
-    // Compute global new reviewed today across ALL decks (not just this sala)
-    let globalNewReviewedToday = 0;
-    for (const [, dk] of deckMap) {
-      if (!dk.is_archived) globalNewReviewedToday += dk.new_reviewed_today ?? 0;
-    }
-    const globalRemaining = Math.max(0, todayGlobalLimit - globalNewReviewedToday);
-
-    const newCountToday = Math.min(newCountTodayByDeckLimits, globalRemaining);
+    // No global shared cap — each root deck's limit is independent.
+    // newCountTodayByDeckLimits already respects each root's daily_new_limit individually.
+    const newCountToday = newCountTodayByDeckLimits;
     const cappedReviewCount = Math.max(0, Math.min(reviewCount, totalDailyReviewLimit - totalReviewReviewedToday));
     const totalDue = newCountToday + learningCount + cappedReviewCount;
     const totalSession = totalDue + reviewedToday;
