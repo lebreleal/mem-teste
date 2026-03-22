@@ -90,6 +90,7 @@ const MultipleChoiceCard = ({
   scheduledDate,
   lastReviewedAt,
   learningStep = 0,
+  lastRating,
   canUndo,
   onUndo,
   onOpenExplainChat,
