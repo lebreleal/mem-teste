@@ -333,7 +333,7 @@ const Study = () => {
         </div>
       </header>
 
-      <SessionProgressStrip reviewCount={reviewCount} correctCount={correctCount} wrongCount={wrongCount} initialQueueSize={initialQueueSize} remainingCount={localQueue.length} elapsedMs={sessionElapsed} deckStats={deckStatsSnapshot} onPause={handlePause} />
+      <SessionProgressStrip reviewCount={cardsCompleted} correctCount={correctCount} wrongCount={wrongCount} initialQueueSize={initialQueueSize} remainingCount={localQueue.length} elapsedMs={sessionElapsed} deckStats={deckStatsSnapshot} onPause={handlePause} />
 
       <div className="h-1.5 w-full bg-muted/40">
         <div className="h-full transition-all duration-500 ease-out" style={{ width: `${progressPercent}%`, background: `linear-gradient(90deg, hsl(var(--primary)), hsl(var(--primary) / 0.7))`, borderRadius: '0 4px 4px 0' }} />
