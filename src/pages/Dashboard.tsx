@@ -236,6 +236,8 @@ const Dashboard = () => {
             salaDifficultyStats={salaDifficultyStats}
             organizeMode={organizeMode}
             setOrganizeMode={setOrganizeMode}
+            globalNewCardsLimit={globalCapacity.dailyNewCardsLimit}
+            globalWeeklyNewCards={globalCapacity.weeklyNewCards as Record<string, number> | null}
           />
         )}
 
