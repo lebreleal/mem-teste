@@ -156,7 +156,7 @@ export async function fetchStudyQueue(
   if (algorithmMode === 'quick_review') {
     const { data, error } = await supabase
       .from('cards')
-      .select('id, deck_id, front_content, back_content, card_type, state, stability, difficulty, scheduled_date, learning_step, last_reviewed_at, origin_deck_id, created_at')
+      .select('id, deck_id, front_content, back_content, card_type, state, stability, difficulty, scheduled_date, learning_step, last_reviewed_at, origin_deck_id, created_at, last_rating')
       .in('deck_id', deckIds)
       .order('created_at', { ascending: true });
     if (error) throw error;
