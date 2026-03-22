@@ -157,6 +157,8 @@ export function useStudyPlan(options?: { full?: boolean }) {
     };
   }, [profileQuery.data, cachedDecks]);
 
+  const plans = plansQuery.data ?? [];
+
   const findRoot = useCallback((id: string): string => {
     const deck = deckHierarchy.find(d => d.id === id);
     if (!deck || !deck.parent_deck_id) return id;
