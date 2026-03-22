@@ -54,21 +54,14 @@ function buildAggregateMap(allDecks: DeckWithStats[]): Map<string, AggregateStat
 }
 
 /** Calculate today's pending cards for a root deck, aggregating sub-decks and respecting daily limits.
- *  When globalNewRemaining is provided (plan mode), it represents the remaining global new-card
- *  budget across ALL objective decks (already reduced by cards studied in any objective deck today). */
-function getDeckTodayStats(deck: DeckWithStats, aggregateMap: Map<string, AggregateStats>, globalNewRemaining?: number) {
+ *  Each root deck's daily_new_limit is independent — NOT shared globally. */
+function getDeckTodayStats(deck: DeckWithStats, aggregateMap: Map<string, AggregateStats>, _globalNewRemaining?: number) {
   const raw = aggregateMap.get(deck.id) ?? { new_count: 0, learning_count: 0, review_count: 0, newReviewed: 0, newGraduated: 0, reviewed: 0 };
   const dailyReviewLimit = deck.daily_review_limit ?? 100;
 
-  let newAvailable: number;
-  if (globalNewRemaining != null) {
-    // Plan mode: cap by the shared global remaining (already accounts for all decks' reviews)
-    newAvailable = Math.max(0, Math.min(raw.new_count, globalNewRemaining));
-  } else {
-    // Manual mode: use deck's own limit
-    const dailyNewLimit = deck.daily_new_limit ?? 20;
-    newAvailable = Math.max(0, Math.min(raw.new_count, dailyNewLimit - raw.newReviewed));
-  }
+  // Always use per-deck limit — limits are independent per root deck, never shared globally
+  const dailyNewLimit = deck.daily_new_limit ?? 20;
+  const newAvailable = Math.max(0, Math.min(raw.new_count, dailyNewLimit - raw.newReviewed));
 
   const reviewReviewedToday = Math.max(0, raw.reviewed - raw.newGraduated);
   const reviewAvailable = Math.max(0, Math.min(raw.review_count, dailyReviewLimit - reviewReviewedToday));
