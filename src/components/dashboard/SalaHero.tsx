@@ -59,6 +59,8 @@ interface SalaHeroProps {
   salaDifficultyStats: { novo: number; facil: number; bom: number; dificil: number; errei: number };
   organizeMode: boolean;
   setOrganizeMode: (v: boolean) => void;
+  globalNewCardsLimit?: number;
+  globalWeeklyNewCards?: Record<string, number> | null;
 }
 
 const SalaHero = ({
