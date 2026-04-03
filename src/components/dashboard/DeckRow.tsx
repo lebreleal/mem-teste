@@ -291,7 +291,7 @@ const DeckRow = ({
               </button>
             )}
             {!effectiveDisableManagement && (
-              <DeckMenu deck={deck} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
+              <DeckMenu deck={deck} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} onCreateSubDeck={onCreateSubDeck} onCreateSubDeckAI={onCreateSubDeckAI} />
             )}
           </div>
         )}
