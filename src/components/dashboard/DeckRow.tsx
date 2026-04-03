@@ -209,8 +209,9 @@ const DeckRow = ({
       }
       return;
     }
-    // Deck with children → navigate to materia detail page
-    if (hasChildren) {
+    // Root deck (no parent) → always navigate to materia detail page
+    // so user can manage sub-decks, even if none exist yet
+    if (!deck.parent_deck_id) {
       navigate(`/materia/${deck.id}`);
       return;
     }
