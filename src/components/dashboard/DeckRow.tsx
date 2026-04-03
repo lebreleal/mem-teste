@@ -6,7 +6,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDown, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings, Play, GripVertical } from 'lucide-react';
+import { ChevronDown, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings, Play, GripVertical, Layers } from 'lucide-react';
 import { IconDeck } from '@/components/icons';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { DeckWithStats } from '@/hooks/useDecks';
@@ -54,13 +54,15 @@ const ClassificationBar = ({ facilPct, bomPct, dificilPct, erreiPct, novoPct, cl
 );
 
 /** Reusable 3-dot dropdown menu for deck actions */
-const DeckMenu = ({ deck, onRename, onMove, onArchive, onDelete, navigate }: {
+const DeckMenu = ({ deck, onRename, onMove, onArchive, onDelete, navigate, onCreateSubDeck, onCreateSubDeckAI }: {
   deck: DeckWithStats;
   onRename: (d: DeckWithStats) => void;
   onMove: (d: DeckWithStats) => void;
   onArchive: (id: string) => void;
   onDelete: (d: DeckWithStats) => void;
   navigate: (path: string) => void;
+  onCreateSubDeck?: (deckId: string) => void;
+  onCreateSubDeckAI?: (deckId: string) => void;
 }) => (
   <DropdownMenu>
     <DropdownMenuTrigger asChild>
@@ -72,6 +74,17 @@ const DeckMenu = ({ deck, onRename, onMove, onArchive, onDelete, navigate }: {
       </button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="end" className="w-44" onClick={(e) => e.stopPropagation()}>
+      {/* Only show subdeck options for root decks (no parent) */}
+      {!deck.parent_deck_id && onCreateSubDeck && (
+        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onCreateSubDeck(deck.id); }}>
+          <Layers className="h-4 w-4 mr-2" /> Criar sub-baralho
+        </DropdownMenuItem>
+      )}
+      {!deck.parent_deck_id && onCreateSubDeckAI && (
+        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onCreateSubDeckAI(deck.id); }}>
+          <Layers className="h-4 w-4 mr-2" /> Sub-baralho com IA
+        </DropdownMenuItem>
+      )}
       <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onRename(deck); }}>
         <Pencil className="h-4 w-4 mr-2" /> Renomear
       </DropdownMenuItem>
@@ -278,7 +291,7 @@ const DeckRow = ({
               </button>
             )}
             {!effectiveDisableManagement && (
-              <DeckMenu deck={deck} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
+              <DeckMenu deck={deck} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} onCreateSubDeck={onCreateSubDeck} onCreateSubDeckAI={onCreateSubDeckAI} />
             )}
           </div>
         )}
