@@ -1,40 +1,64 @@
+# Refatoração de Performance — Sessão de Estudo
 
+## Diagnóstico (confirmado no código + no banco)
 
-## Problema Identificado
+Ao apertar **Estudar**, a função `fetchStudyQueue` (`src/services/studyService.ts`) faz **3 rodadas sequenciais** de chamadas ao Supabase antes do primeiro card aparecer:
 
-O contador de "novos" no dashboard (e nas RPCs) está inflado porque inclui **cartões enterrados** (state=0, scheduled_date=amanhã) e **cartões criados que não deveriam entrar na fila de hoje**. O filtro atual apenas exclui cartões congelados (+50 anos), mas não exclui enterrados.
+1. Busca **todos** os decks + folders do usuário.
+2. Busca cards devidos **+ `get_all_card_ids_for_user`** (que traz o ID de *todos* os cards do usuário, sem limite — 10k+ linhas viajam pela rede só para filtrar no JS) + plans + profile + `get_all_user_deck_stats` (varre todos os cards).
+3. Duas chamadas `get_study_queue_limits` passando arrays enormes de IDs.
 
-### Causa raiz
+No modo "seguidor" (turma/comunidade) ainda há +3 chamadas sequenciais (bootstrap). Resultado: **3 a 6 idas-e-voltas de rede** antes de renderizar. Confirmado pelo relatório de queries lentas: milhares de `SELECT ... LIMIT/OFFSET` em `cards` e um `select('*')` chegando a 2,5s.
 
-Nas RPCs `get_all_user_deck_stats`, `get_deck_stats` e `get_plan_metrics`, o `new_count` usa:
-```sql
-COUNT(*) FILTER (WHERE c.state = 0 AND c.scheduled_date <= now() + interval '50 years')
+Além disso:
+- Cada avaliação invalida `cards-aggregated` (50 refetches numa sessão de 50 cards).
+- Ao sair, `invalidateStudyQueries` roda **duas vezes** (7 famílias de queries × 2 = 14 invalidações).
+- A contagem "errada" vem de a fila ser montada/limitada no **JS** com uma lógica diferente da usada no dashboard (`get_all_user_deck_stats`), gerando divergências.
+
+## Objetivo
+
+Montar a fila + limites + config **inteiramente no servidor, em 1 RPC**, e parar os enxames de invalidação. Sem mudanças visuais. Sem mudar regras de FSRS/limites (apenas mover o mesmo cálculo para um lugar só, eliminando a duplicação JS↔SQL que causa números divergentes).
+
+## Mudanças
+
+### 1. Novo RPC `build_study_queue` (banco)
+Cria uma função `build_study_queue(p_user_id, p_scope, p_deck_id, p_folder_id, p_tz_offset_minutes)` que faz tudo server-side e retorna um único JSON:
+- Resolve o escopo (deck único + descendentes / folder / "tudo") via CTE recursiva sobre `decks`.
+- Aplica os limites por deck-pai (novos/revisão) reaproveitando exatamente a lógica de `get_all_user_deck_stats` e `get_study_queue_limits` (mesma fonte de verdade → conserta a contagem).
+- Aplica "bury siblings" de cloze pelo `front_content`.
+- Retorna `{ cards: [...só os campos de StudyCard...], deckConfig, isLiveDeck }` já ordenado (learning → novos/revisão).
+
+Isso **elimina** `get_all_card_ids_for_user`, o transporte de todos os IDs, e as rodadas 2 e 3. Uma única ida à rede.
+
+### 2. `studyService.ts` — `fetchStudyQueue`
+Reescrever para uma única chamada `supabase.rpc('build_study_queue', …)` e mapear o retorno para `StudyQueueResult`. Manter o caminho `quick_review` e o bootstrap de seguidor (chamado só quando o RPC retornar vazio para um folder de turma, e então repetir o RPC uma vez). A assinatura pública da função e os tipos em `src/types/study.ts` permanecem iguais — `useStudySession` não muda.
+
+### 3. `useStudySession.ts` — invalidação por review
+Remover `invalidateQueries(['cards-aggregated'])` do `onSettled` (roda a cada avaliação). A atualização otimista de `study-stats.todayCards` já existe e basta durante a sessão; os contadores do dashboard são recalculados na saída.
+
+### 4. `Study.tsx` — invalidação na saída
+Eliminar a invalidação dupla: manter **apenas** a do cleanup de unmount (`removeQueries` + um único `invalidateStudyQueries`) e remover a chamada redundante dentro de `goBack`.
+
+### 5. Limpeza
+Remover o código morto de `movedToError`/`returnedFromError` no `onSuccess` (sempre `false`) e a função `get_all_card_ids_for_user` do uso (mantida no banco por segurança, mas sem chamadas no front).
+
+## Detalhes técnicos
+
+```text
+ANTES (apertar Estudar):
+  Round 1 ─► decks + folders
+  Round 2 ─► due cards + TODOS os card ids + plans + profile + deck stats
+  Round 3 ─► limits(hierarquia) + limits(global)
+  = 3–6 RTT, ~10k linhas transferidas
+
+DEPOIS:
+  Round 1 ─► build_study_queue(scope) ──► fila pronta + config
+  = 1 RTT, só os cards devidos
 ```
-Isso inclui cartões enterrados (scheduled_date = amanhã). Já a query real do estudo filtra corretamente com `scheduled_date <= endOfToday`.
 
-O resultado: o dashboard mostra 35 cards, mas ao abrir a sessão de estudo, a fila real pode ter menos (ou o mesmo número se não houver enterrados, mas inclui cartões que deveriam estar filtrados).
+- O RPC será `STABLE SECURITY DEFINER SET search_path = public`, escopado por `d.user_id = p_user_id`.
+- Índices de apoio (criados se faltarem): `cards(deck_id, state, scheduled_date)` e `review_logs(user_id, card_id, reviewed_at)` para os filtros de "revisado hoje".
+- Validação: comparar a fila/contagens do RPC com a saída atual do JS para um deck, um folder e "tudo" antes de remover o caminho antigo; rodar os testes de `src/test/studyQueue.test.ts`.
 
-### Correção
-
-Uma migration SQL para atualizar 3 funções:
-
-1. **`get_all_user_deck_stats`** — Mudar o filtro de `new_count` de `<= 50 years` para `<= end_of_user_today` (usando o timezone offset do usuário):
-   ```sql
-   -- De:
-   COUNT(*) FILTER (WHERE c.state = 0 AND c.scheduled_date <= ft.threshold)
-   -- Para:
-   COUNT(*) FILTER (WHERE c.state = 0 AND (c.scheduled_date IS NULL OR c.scheduled_date <= (ut.today_date + interval '1 day' - interval '1 second')))
-   ```
-   Onde `ut.today_date` é o dia do usuário em SP.
-
-2. **`get_deck_stats`** — Mesma correção para `new_count`.
-
-3. **`get_plan_metrics`** — Mantém `total_new` contando TODOS os novos (incluindo enterrados) porque o plano de estudo precisa do total geral para calcular carga futura. Sem alteração aqui.
-
-### Detalhes técnicos
-
-- O `end_of_user_today` será calculado como `(today_date + interval '1 day' - interval '1 second')` usando o `p_tz_offset_minutes`, convertido de volta para UTC para comparar com `scheduled_date` (que está em UTC).
-- Expressão correta: `c.scheduled_date <= ((ut.today_date + interval '1 day') AT TIME ZONE 'UTC' - (p_tz_offset_minutes || ' minutes')::interval)` para converter end-of-day local para UTC.
-- Cartões congelados (+100 anos) continuam automaticamente excluídos por essa lógica.
-- Nenhuma alteração no frontend necessária — os componentes já consomem os valores das RPCs.
-
+## Fora de escopo (próxima rodada, se quiser)
+Os loops paginados de cards do dashboard/deck-detail (`cardQueries.ts`, `deckStats.ts`) também aparecem como lentos — dá para trocá-los por RPCs de agregação que já existem (`get_all_user_card_counts`, `count_descendant_cards_by_state`). Posso fazer isso em seguida; este plano foca na sessão de estudo, que foi o pedido principal.
