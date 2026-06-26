@@ -3028,6 +3028,13 @@ export type Database = {
         Args: { p_deck_id: string }
         Returns: Json
       }
+      count_questions_by_deck_ids: {
+        Args: { p_deck_ids: string[] }
+        Returns: {
+          deck_id: string
+          total: number
+        }[]
+      }
       deduct_energy: {
         Args: { p_cost: number; p_user_id: string }
         Returns: number
