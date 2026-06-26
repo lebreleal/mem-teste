@@ -12,7 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 // Error deck imports removed — cards no longer move to error deck on fail
 import { fsrsSchedule, type Rating, type FSRSCard, type FSRSParams, type FSRSOutput, DEFAULT_FSRS_PARAMS } from '@/lib/fsrs';
 import { sm2Schedule, type SM2Card, type SM2Params, type SM2Output } from '@/lib/sm2';
-import { parseStepToMinutes, shuffleArray, collectDescendantIds, collectFolderDeckIds, findRootAncestorId } from '@/lib/studyUtils';
+import { parseStepToMinutes } from '@/lib/studyUtils';
 import { TZ_OFFSET_SP } from '@/lib/dateUtils';
 
 export type { StudyQueueResult, StudyCard, DeckStudyConfig, CardReviewResult, StudyQueueLimitsRow, StudyPlanRow, StudyProfileRow, CardUpdatePayload, StudyStatsSummaryRow, ActivityBreakdownResult, ActivityDayRow, HourlyBreakdownRow, RetentionRow, CardsAddedRow } from '@/types/study';
