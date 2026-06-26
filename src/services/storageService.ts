@@ -4,15 +4,20 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
+import { compressImage } from '@/lib/imageUtils';
 
 const BUCKET = 'card-images';
+// 1 year — images are immutable (unique UUID filenames), so cache aggressively
+// in the browser and CDN. Avoids re-downloading images every study session.
+const LONG_CACHE = '31536000';
 
 /** Upload an image file and return the public URL. */
 export async function uploadImage(userId: string, file: File, folder?: string): Promise<string> {
-  const ext = file.name.split('.').pop() || 'webp';
+  const optimized = await compressImage(file);
+  const ext = optimized.name.split('.').pop() || 'webp';
   const prefix = folder ? `${folder}/${userId}` : userId;
   const path = `${prefix}/${crypto.randomUUID()}.${ext}`;
-  const { error } = await supabase.storage.from(BUCKET).upload(path, file);
+  const { error } = await supabase.storage.from(BUCKET).upload(path, optimized, { cacheControl: LONG_CACHE });
   if (error) throw error;
   const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
   return urlData.publicUrl;
@@ -20,9 +25,11 @@ export async function uploadImage(userId: string, file: File, folder?: string): 
 
 /** Upload a file (any type) and return the public URL. */
 export async function uploadFile(userId: string, file: File): Promise<string> {
-  const ext = file.name.split('.').pop();
+  // compressImage is a no-op for non-image inputs.
+  const optimized = await compressImage(file);
+  const ext = optimized.name.split('.').pop();
   const path = `${userId}/${crypto.randomUUID()}.${ext}`;
-  const { error } = await supabase.storage.from(BUCKET).upload(path, file);
+  const { error } = await supabase.storage.from(BUCKET).upload(path, optimized, { cacheControl: LONG_CACHE });
   if (error) throw error;
   const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
   return urlData.publicUrl;

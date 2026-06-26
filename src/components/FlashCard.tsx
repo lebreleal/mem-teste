@@ -172,7 +172,7 @@ function renderOcclusion(frontContent: string, revealed: boolean, fallbackCanvas
     })();
 
     return `<div style="position:relative;display:inline-block;max-width:100%">
-      <img src="${imageUrl}" loading="lazy" style="max-width:100%;border-radius:0.5rem;display:block" crossorigin="anonymous" />
+      <img src="${imageUrl}" decoding="async" fetchpriority="high" style="max-width:100%;border-radius:0.5rem;display:block" />
       <svg style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none" viewBox="0 0 ${vbW} ${vbH}" preserveAspectRatio="xMinYMin meet">
         ${svgShapes}
       </svg>
@@ -231,7 +231,6 @@ const FlashCard = ({
       if (data.canvasWidth && data.canvasHeight) { setOcclusionFallbackCanvas(null); return; }
       if (!data.imageUrl) { setOcclusionFallbackCanvas(null); return; }
       const img = new window.Image();
-      img.crossOrigin = 'anonymous';
       img.onload = () => {
         const scale = Math.min(1, 450 / img.naturalHeight);
         setOcclusionFallbackCanvas({ w: Math.round(img.naturalWidth * scale), h: Math.round(img.naturalHeight * scale) });
