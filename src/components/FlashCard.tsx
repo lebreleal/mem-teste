@@ -231,7 +231,6 @@ const FlashCard = ({
       if (data.canvasWidth && data.canvasHeight) { setOcclusionFallbackCanvas(null); return; }
       if (!data.imageUrl) { setOcclusionFallbackCanvas(null); return; }
       const img = new window.Image();
-      img.crossOrigin = 'anonymous';
       img.onload = () => {
         const scale = Math.min(1, 450 / img.naturalHeight);
         setOcclusionFallbackCanvas({ w: Math.round(img.naturalWidth * scale), h: Math.round(img.naturalHeight * scale) });
