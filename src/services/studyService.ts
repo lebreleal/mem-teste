@@ -18,331 +18,73 @@ import { TZ_OFFSET_SP } from '@/lib/dateUtils';
 export type { StudyQueueResult, StudyCard, DeckStudyConfig, CardReviewResult, StudyQueueLimitsRow, StudyPlanRow, StudyProfileRow, CardUpdatePayload, StudyStatsSummaryRow, ActivityBreakdownResult, ActivityDayRow, HourlyBreakdownRow, RetentionRow, CardsAddedRow } from '@/types/study';
 import type { StudyQueueResult, StudyCard, DeckStudyConfig, CardReviewResult, StudyQueueLimitsRow, StudyPlanRow, StudyProfileRow, CardUpdatePayload, StudyStatsSummaryRow, ActivityBreakdownResult, HourlyBreakdownRow, RetentionRow, CardsAddedRow } from '@/types/study';
 
-const DECK_SELECT_COLS = 'id, name, parent_deck_id, folder_id, daily_new_limit, daily_review_limit, algorithm_mode, learning_steps, requested_retention, max_interval, interval_modifier, easy_bonus, easy_graduating_interval, shuffle_cards, is_live_deck, source_turma_deck_id, source_listing_id, bury_siblings, bury_new_siblings, bury_review_siblings, bury_learning_siblings, is_archived' as const;
+interface BuildStudyQueueResult {
+  cards: StudyCard[];
+  algorithmMode: string;
+  deckConfig: DeckStudyConfig | null;
+  isLiveDeck: boolean;
+  scopeDeckCount: number;
+}
 
-/** Fetch the study queue for a deck or folder. */
+/**
+ * Fetch the study queue for a deck, folder, or "study all" via a single
+ * server-side RPC (build_study_queue). Scope, daily limits, sibling burial
+ * and deck config are all resolved in one round-trip on the database.
+ */
 export async function fetchStudyQueue(
   userId: string,
   deckId: string,
   folderId?: string,
 ): Promise<StudyQueueResult> {
-  // ─── Round 1: base data (parallel) ───
-  const isStudyAll = !deckId && !folderId;
-  const [decksResult, foldersResult] = await Promise.all([
-    supabase.from('decks').select(DECK_SELECT_COLS).eq('user_id', userId),
-    (folderId || isStudyAll)
-      ? supabase.from('folders').select('id, parent_id').eq('user_id', userId)
-      : Promise.resolve({ data: [] as { id: string; parent_id: string | null }[] }),
-  ]);
-
-  let activeDecks = (decksResult.data ?? []).filter(d => !d.is_archived);
-  const foldersData = foldersResult.data ?? [];
-
-  // Map-based lookup O(1) instead of .find() O(n) — Lei 1A
-  const deckMap = new Map(activeDecks.map(d => [d.id, d]));
-
-  // Builds a set of deck IDs whose new-card limit is 0 (used to exclude their NEW cards only, not reviews)
-  const zeroNewLimitDeckIds = new Set<string>();
-  const buildZeroLimitSet = (deckIdToCheck: string) => {
-    let current = deckMap.get(deckIdToCheck);
-    while (current) {
-      if ((current.daily_new_limit ?? 20) <= 0) {
-        zeroNewLimitDeckIds.add(deckIdToCheck);
-        return;
-      }
-      if (!current.parent_deck_id) break;
-      current = deckMap.get(current.parent_deck_id);
-    }
-  };
-
-  let deckIds: string[] = [];
-  let deckConfig: DeckStudyConfig | undefined;
-  let limitScopeIds: string[] = [];
-  let folderLimitDecks: typeof activeDecks = [];
-
-  // "Study All" mode: no specific deck or folder → use ALL active decks
-
-  if (isStudyAll) {
-    deckIds = activeDecks.map(d => d.id);
-    if (deckIds.length === 0) {
-      return { cards: [], algorithmMode: 'fsrs', deckConfig: undefined, isLiveDeck: false };
-    }
-    deckIds.forEach(buildZeroLimitSet);
-
-    // Use the first root-level deck as deckConfig reference
-    const rootDecks = activeDecks.filter(d => !d.parent_deck_id);
-    folderLimitDecks = rootDecks;
-    deckConfig = (rootDecks[0] as DeckStudyConfig | undefined);
-    limitScopeIds = deckIds;
-  } else if (folderId) {
-    const collectRootDeckIds = () => collectFolderDeckIds(activeDecks, foldersData, folderId);
-    let rootDeckIds = collectRootDeckIds();
-
-    // Follower room safety: if folder came from Explorar and local decks are missing, bootstrap on demand.
-    if (rootDeckIds.length === 0) {
-      const { data: folderMeta } = await supabase
-        .from('folders')
-        .select('source_turma_id')
-        .eq('id', folderId)
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      if (folderMeta?.source_turma_id) {
-        await supabase.rpc('bootstrap_follower_decks', {
-          p_user_id: userId,
-          p_turma_id: folderMeta.source_turma_id,
-          p_folder_id: folderId,
-        });
-
-        const { data: refreshedDecks, error: refreshError } = await supabase
-          .from('decks')
-          .select(DECK_SELECT_COLS)
-          .eq('user_id', userId);
-        if (refreshError) throw refreshError;
-
-        activeDecks = (refreshedDecks ?? []).filter(d => !d.is_archived);
-        // Rebuild deckMap after refresh
-        deckMap.clear();
-        for (const d of activeDecks) deckMap.set(d.id, d);
-        rootDeckIds = collectRootDeckIds();
-      }
-    }
-
-    const allDescendants = rootDeckIds.flatMap(id => collectDescendantIds(activeDecks, id));
-    deckIds = [...new Set([...rootDeckIds, ...allDescendants])];
-
-    // Guard: if still no decks after bootstrap, return empty queue
-    if (deckIds.length === 0) {
-      return { cards: [], algorithmMode: 'fsrs', deckConfig: undefined, isLiveDeck: false };
-    }
-
-    // Mark decks with zero new-card limit (their reviews still participate)
-    deckIds.forEach(buildZeroLimitSet);
-
-    const rootDecks = rootDeckIds
-      .map(id => deckMap.get(id))
-      .filter((d): d is (typeof activeDecks)[number] => !!d);
-
-    folderLimitDecks = rootDecks;
-    deckConfig = (rootDecks[0] as DeckStudyConfig | undefined);
-    limitScopeIds = deckIds;
-  } else {
-    const descendantIds = collectDescendantIds(activeDecks, deckId);
-    deckIds = [deckId, ...descendantIds];
-
-    // Mark decks with zero new-card limit
-    deckIds.forEach(buildZeroLimitSet);
-
-    const rootId = findRootAncestorId(activeDecks, deckId);
-    deckConfig = deckMap.get(rootId) as DeckStudyConfig | undefined;
-    const rootDescendants = collectDescendantIds(activeDecks, rootId);
-    limitScopeIds = [rootId, ...rootDescendants];
-  }
-
-  const deckNewLimit = deckConfig?.daily_new_limit ?? 20;
-  const reviewLimit = deckConfig?.daily_review_limit ?? 100;
-
-  const folderNewLimit = (folderId || isStudyAll)
-    ? folderLimitDecks.reduce((sum, d) => sum + (d.daily_new_limit ?? 20), 0)
-    : deckNewLimit;
-  const folderReviewLimit = (folderId || isStudyAll)
-    ? folderLimitDecks.reduce((sum, d) => sum + (d.daily_review_limit ?? 100), 0)
-    : reviewLimit;
-
-  const algorithmMode = deckConfig?.algorithm_mode || 'fsrs';
-  const shuffle = deckConfig?.shuffle_cards ?? false;
-
-  // Quick-review mode: just fetch all cards, no limits
-  if (algorithmMode === 'quick_review') {
-    const { data, error } = await supabase
-      .from('cards')
-      .select('id, deck_id, front_content, back_content, card_type, state, stability, difficulty, scheduled_date, learning_step, last_reviewed_at, origin_deck_id, created_at, last_rating')
-      .in('deck_id', deckIds)
-      .order('created_at', { ascending: true });
-    if (error) throw error;
-    const cards = data ?? [];
-  const isLiveDeck = deckIds.some(id => {
-    const d = deckMap.get(id);
-    if (d?.is_live_deck || d?.source_turma_deck_id || d?.source_listing_id) return true;
-    let parentId = d?.parent_deck_id;
-    while (parentId) {
-      const parent = deckMap.get(parentId);
-      if (!parent) break;
-      if (parent.is_live_deck || parent.source_turma_deck_id || parent.source_listing_id) return true;
-      parentId = parent.parent_deck_id;
-    }
-    return false;
-  });
-  return { cards: shuffle ? shuffleArray(cards) : cards, algorithmMode, deckConfig, isLiveDeck };
-  }
-
-  // ─── Round 2: cards + allCardIds + plans + profile (parallel) ───
-  const endOfToday = new Date();
-  endOfToday.setHours(23, 59, 59, 999);
-  const endOfTodayISO = endOfToday.toISOString();
-  const nowISO = new Date().toISOString();
+  const scope = folderId ? 'folder' : (deckId ? 'deck' : 'all');
   const tzOffsetMinutes = TZ_OFFSET_SP;
-  const allActiveDeckIds = activeDecks.map(d => d.id);
 
-  const [cardsResult, allCardIdsResult, plansResult, profileResult, deckStatsResult] = await Promise.all([
-    supabase
-      .from('cards')
-      .select('id, deck_id, front_content, back_content, card_type, state, stability, difficulty, scheduled_date, learning_step, last_reviewed_at, origin_deck_id, created_at, last_rating')
-      .in('deck_id', deckIds)
-      .or(`and(state.eq.0,or(scheduled_date.is.null,scheduled_date.lte.${endOfTodayISO})),and(state.in.(1,3),scheduled_date.lte.${endOfTodayISO}),and(state.eq.2,scheduled_date.lte.${nowISO})`)
-      .order('created_at', { ascending: true }),
-    supabase.rpc('get_all_card_ids_for_user', { p_user_id: userId }),
-    supabase
-      .from('study_plans')
-      .select('deck_ids, priority')
+  const callRpc = () =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC not yet in generated types
+    (supabase.rpc as any)('build_study_queue', {
+      p_user_id: userId,
+      p_scope: scope,
+      p_deck_id: deckId || null,
+      p_folder_id: folderId || null,
+      p_tz_offset_minutes: tzOffsetMinutes,
+    }) as Promise<{ data: unknown; error: { message: string } | null }>;
+
+  const first = await callRpc();
+  if (first.error) throw first.error;
+  let result = first.data as BuildStudyQueueResult | null;
+
+  // Follower-room safety: a turma/community folder with no local decks yet →
+  // bootstrap the mirror decks on demand, then retry the queue once.
+  if (scope === 'folder' && folderId && (result?.scopeDeckCount ?? 0) === 0) {
+    const { data: folderMeta } = await supabase
+      .from('folders')
+      .select('source_turma_id')
+      .eq('id', folderId)
       .eq('user_id', userId)
-      .order('priority', { ascending: true }),
-    supabase
-      .from('profiles')
-      .select('daily_new_cards_limit, weekly_new_cards')
-      .eq('id', userId)
-      .single(),
-    // Fetch per-deck stats for per-root new-card limit enforcement in folder/studyAll mode
-    (folderId || isStudyAll)
-      ? supabase.rpc('get_all_user_deck_stats', { p_user_id: userId, p_tz_offset_minutes: tzOffsetMinutes })
-      : Promise.resolve({ data: null }),
-  ]);
+      .maybeSingle();
 
-  if (cardsResult.error) throw cardsResult.error;
-  const cards = cardsResult.data ?? [];
-  if (allCardIdsResult.error) throw allCardIdsResult.error;
-  const allCardRows = (allCardIdsResult.data ?? []) as { id: string; deck_id: string }[];
-  const studyPlans = (plansResult.data ?? []) as unknown as StudyPlanRow[];
-  const profileData = profileResult.data as unknown as StudyProfileRow | null;
-
-  // Derive limitCardIds and globalCardIds from allCardRows (JS filtering, no extra queries)
-  const limitScopeSet = new Set(limitScopeIds);
-  const limitCardIds = allCardRows.filter(c => limitScopeSet.has(c.deck_id)).map(c => c.id);
-
-  // Build global scope deck IDs
-  const planDeckIdSet = new Set<string>();
-  if (studyPlans && studyPlans.length > 0) {
-    for (const plan of studyPlans) {
-      for (const id of (plan.deck_ids ?? [])) planDeckIdSet.add(id);
+    if (folderMeta?.source_turma_id) {
+      await supabase.rpc('bootstrap_follower_decks', {
+        p_user_id: userId,
+        p_turma_id: folderMeta.source_turma_id,
+        p_folder_id: folderId,
+      });
+      const retry = await callRpc();
+      if (retry.error) throw retry.error;
+      result = retry.data as BuildStudyQueueResult | null;
     }
   }
-  const expandedPlanDeckIds = new Set<string>(planDeckIdSet);
-  for (const pid of planDeckIdSet) {
-    for (const d of collectDescendantIds(activeDecks, pid)) expandedPlanDeckIds.add(d);
-  }
-  const globalScopeDeckIdSet = planDeckIdSet.size > 0
-    ? expandedPlanDeckIds
-    : new Set(allActiveDeckIds);
-  const globalCardIds = allCardRows.filter(c => globalScopeDeckIdSet.has(c.deck_id)).map(c => c.id);
 
-  // ─── Round 3: both limits RPCs in parallel ───
-  const [hierarchyLimits, globalLimitsResult] = await Promise.all([
-    limitCardIds.length > 0
-      ? supabase.rpc('get_study_queue_limits', { p_user_id: userId, p_card_ids: limitCardIds, p_tz_offset_minutes: tzOffsetMinutes })
-      : Promise.resolve({ data: null }),
-    globalCardIds.length > 0
-      ? supabase.rpc('get_study_queue_limits', { p_user_id: userId, p_card_ids: globalCardIds, p_tz_offset_minutes: tzOffsetMinutes })
-      : Promise.resolve({ data: null }),
-  ]);
-
-  let newReviewedInHierarchy = 0;
-  let reviewReviewedToday = 0;
-  if (hierarchyLimits.data && (hierarchyLimits.data as StudyQueueLimitsRow[]).length > 0) {
-    const row = (hierarchyLimits.data as StudyQueueLimitsRow[])[0];
-    newReviewedInHierarchy = row.new_reviewed_today ?? 0;
-    reviewReviewedToday = row.review_reviewed_today ?? 0;
+  if (!result) {
+    return { cards: [], algorithmMode: 'fsrs', deckConfig: undefined, isLiveDeck: false };
   }
 
-  let globalNewReviewedToday = 0;
-  if (globalLimitsResult.data && (globalLimitsResult.data as StudyQueueLimitsRow[]).length > 0) {
-    globalNewReviewedToday = (globalLimitsResult.data as StudyQueueLimitsRow[])[0].new_reviewed_today ?? 0;
-  }
-
-  // Per-root-deck limits are enforced individually (lines below).
-  // There is NO shared global cap — each root deck's daily_new_limit is independent.
-  const weeklyNewCards = profileData?.weekly_new_cards as Record<string, number> | null;
-
-  const deckRemaining = Math.max(0, deckNewLimit - newReviewedInHierarchy);
-  const effectiveReviewLimit = Math.max(0, (folderId ? folderReviewLimit : reviewLimit) - reviewReviewedToday);
-
-  // --- Apply daily limits FIRST, then bury siblings among the surviving cards ---
-  const buryNew = deckConfig?.bury_new_siblings !== false;
-  const buryReview = deckConfig?.bury_review_siblings !== false;
-  const buryLearning = deckConfig?.bury_learning_siblings !== false;
-
-  let allLearning = cards.filter(c => c.state === 1 || c.state === 3);
-  // Exclude new cards from decks whose new-card limit is 0 (reviews/learning still play)
-  let allNew = cards.filter(c => c.state === 0 && !zeroNewLimitDeckIds.has(c.deck_id));
-  let allReview = cards.filter(c => c.state === 2);
-
-  // Per-root-deck new-card limit enforcement for folder/studyAll mode
-  if ((folderId || isStudyAll) && deckStatsResult.data) {
-    const perDeckStats = deckStatsResult.data as { deck_id: string; new_reviewed_today: number }[];
-    // Build a map: rootDeckId → sum of new_reviewed_today across all descendants
-    const rootReviewedMap = new Map<string, number>();
-    for (const stat of perDeckStats) {
-      const rootId = findRootAncestorId(activeDecks, stat.deck_id);
-      rootReviewedMap.set(rootId, (rootReviewedMap.get(rootId) ?? 0) + (stat.new_reviewed_today ?? 0));
-    }
-
-    // Group new cards by root deck, cap each group to root's daily_new_limit - reviewed_today
-    const groupedByRoot = new Map<string, StudyCard[]>();
-    for (const card of allNew) {
-      const rootId = findRootAncestorId(activeDecks, card.deck_id);
-      const group = groupedByRoot.get(rootId);
-      if (group) group.push(card);
-      else groupedByRoot.set(rootId, [card]);
-    }
-
-    const perRootCapped: StudyCard[] = [];
-    for (const [rootId, rootCards] of groupedByRoot) {
-      const rootDeck = deckMap.get(rootId);
-      const rootLimit = rootDeck?.daily_new_limit ?? 20;
-      const rootReviewed = rootReviewedMap.get(rootId) ?? 0;
-      const rootRemaining = Math.max(0, rootLimit - rootReviewed);
-      perRootCapped.push(...rootCards.slice(0, rootRemaining));
-    }
-    allNew = perRootCapped;
-  }
-
-  // For single-deck mode (no per-root enforcement above), apply deck-level cap
-  if (!folderId && !isStudyAll) {
-    allNew = allNew.slice(0, deckRemaining);
-  }
-  // For folder/studyAll mode, per-root caps were already applied above — no global cap needed
-  allReview = allReview.slice(0, effectiveReviewLimit);
-
-  if (buryNew || buryReview || buryLearning) {
-    const seenFronts = new Set<string>();
-    const buryFilter = (card: StudyCard, shouldBury: boolean) => {
-      if (card.card_type !== 'cloze' || !shouldBury) return true;
-      const key = card.front_content;
-      if (seenFronts.has(key)) return false;
-      seenFronts.add(key);
-      return true;
-    };
-    allLearning = allLearning.filter(c => buryFilter(c, buryLearning));
-    allReview = allReview.filter(c => buryFilter(c, buryReview));
-    allNew = allNew.filter(c => buryFilter(c, buryNew));
-  }
-
-  const nonLearning = [...allNew, ...allReview];
-  const orderedNonLearning = shuffle ? shuffleArray(nonLearning) : nonLearning;
-  const queue = [...allLearning, ...orderedNonLearning];
-
-  const isLiveDeck = deckIds.some(id => {
-    const d = deckMap.get(id);
-    if (d?.is_live_deck || d?.source_turma_deck_id || d?.source_listing_id) return true;
-    let parentId = d?.parent_deck_id;
-    while (parentId) {
-      const parent = deckMap.get(parentId);
-      if (!parent) break;
-      if (parent.is_live_deck || parent.source_turma_deck_id || parent.source_listing_id) return true;
-      parentId = parent.parent_deck_id;
-    }
-    return false;
-  });
-  return { cards: queue, algorithmMode, deckConfig, isLiveDeck };
+  return {
+    cards: (result.cards ?? []) as StudyCard[],
+    algorithmMode: result.algorithmMode || 'fsrs',
+    deckConfig: (result.deckConfig ?? undefined) as DeckStudyConfig | undefined,
+    isLiveDeck: result.isLiveDeck ?? false,
+  };
 }
 
 /** Resolve community deck source info via RPC. */
