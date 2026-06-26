@@ -154,9 +154,9 @@ export async function fetchCommunityRecommendations(userId: string | undefined):
       const turmaMap = new Map<string, string>();
       if (turmas) for (const t of turmas) turmaMap.set(t.id, t.name);
 
-      const { data: cardCounts } = await supabase.from('cards').select('deck_id').in('deck_id', tdDeckIds);
+      const { data: cardCounts } = await supabase.rpc('count_cards_by_deck_ids', { p_deck_ids: tdDeckIds });
       const countMap = new Map<string, number>();
-      if (cardCounts) for (const c of cardCounts) countMap.set(c.deck_id, (countMap.get(c.deck_id) ?? 0) + 1);
+      if (cardCounts) for (const c of cardCounts as Array<{ deck_id: string; total: number }>) countMap.set(c.deck_id, Number(c.total));
 
       const seenIds = new Set(results.map(r => r.deck_id));
       for (const td of turmaDecks) {
