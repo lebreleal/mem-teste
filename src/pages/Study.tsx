@@ -54,7 +54,8 @@ const Study = () => {
   const { energy, addSuccessfulCard } = useEnergy();
   const { model, setModel, getCost, pendingPro, confirmPro, cancelPro } = useAIModel();
   const goBack = useCallback(() => {
-    invalidateStudyQueries(queryClient);
+    // Note: study queries are invalidated once on unmount (cleanup effect below),
+    // so we intentionally do NOT invalidate here to avoid a double refetch.
     if (deckId) {
       // If studying a subdeck, go back to parent deck (materia) instead of subdeck detail
       const parentId = deckConfig?.parent_deck_id;
