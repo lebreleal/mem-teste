@@ -199,12 +199,7 @@ export async function fetchTurmaFolderId(userId: string, turmaId: string): Promi
 
 // ── Sala Decks (TurmaDetail) ──
 
-interface CardStatRow {
-  id: string;
-  deck_id: string;
-  state: number;
-  difficulty: number;
-}
+
 
 export async function fetchSalaDecksData(turmaId: string) {
   const { data: turmaDecks } = await supabase
