@@ -67,69 +67,7 @@ export async function fetchCards(deckId: string) {
 /** Lightweight metadata for all cards (for counts/filters). No heavy content fields. */
 export type CardMeta = { id: string; state: number | null; card_type: string; scheduled_date: string };
 
-export async function fetchAggregatedCardsMeta(deckIds: string[]): Promise<CardMeta[]> {
-  if (deckIds.length === 0) return [];
-  if (deckIds.length === 1) {
-    return paginatedFetch<CardMeta>((from) =>
-      supabase.from('cards').select('id, state, card_type, scheduled_date').eq('deck_id', deckIds[0]).range(from, from + PAGE_SIZE - 1)
-    );
-  }
-  const results: CardMeta[] = [];
-  for (let i = 0; i < deckIds.length; i += IN_BATCH) {
-    const batch = deckIds.slice(i, i + IN_BATCH);
-    const rows = await paginatedFetch<CardMeta>((from) =>
-      supabase.from('cards').select('id, state, card_type, scheduled_date').in('deck_id', batch).range(from, from + PAGE_SIZE - 1)
-    );
-    results.push(...rows);
-  }
-  return results;
-}
 
-/** Fetch paginated full cards for display. Uses server-side pagination. */
-export async function fetchAggregatedCardsPage(deckIds: string[], limit: number, offset: number) {
-  if (deckIds.length === 0) return [];
-  if (deckIds.length === 1) {
-    const { data, error } = await withRetry(async () => {
-      const res = await supabase.from('cards').select(CARD_COLS).eq('deck_id', deckIds[0]).order('created_at', { ascending: false }).range(offset, offset + limit - 1);
-      return res as { data: CardRow[] | null; error: any };
-    });
-    if (error) throw error;
-    return (data ?? []) as CardRow[];
-  }
-  const results: CardRow[] = [];
-  for (let i = 0; i < deckIds.length; i += IN_BATCH) {
-    const batch = deckIds.slice(i, i + IN_BATCH);
-    const needed = offset + limit;
-    const { data, error } = await withRetry(async () => {
-      const res = await supabase.from('cards').select(CARD_COLS).in('deck_id', batch).order('created_at', { ascending: false }).range(0, needed - 1);
-      return res as { data: CardRow[] | null; error: any };
-    });
-    if (error) throw error;
-    if (data) results.push(...(data as CardRow[]));
-  }
-  results.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  return results.slice(offset, offset + limit);
-}
-
-/** Fetch aggregated cards (FULL - backward compat). */
-export async function fetchAggregatedCards(deckIds: string[]) {
-  if (deckIds.length === 0) return [];
-  if (deckIds.length === 1) {
-    return paginatedFetch((from) =>
-      supabase.from('cards').select(CARD_COLS).eq('deck_id', deckIds[0]).order('created_at', { ascending: false }).range(from, from + PAGE_SIZE - 1)
-    );
-  }
-  const results: any[] = [];
-  for (let i = 0; i < deckIds.length; i += IN_BATCH) {
-    const batch = deckIds.slice(i, i + IN_BATCH);
-    const rows = await paginatedFetch((from) =>
-      supabase.from('cards').select(CARD_COLS).in('deck_id', batch).order('created_at', { ascending: false }).range(from, from + PAGE_SIZE - 1)
-    );
-    results.push(...rows);
-  }
-  results.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  return results;
-}
 
 /** Fetch cloze/occlusion siblings by front_content. */
 export async function fetchClozeSiblings(deckIds: string[], frontContent: string): Promise<CardRow[]> {
