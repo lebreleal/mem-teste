@@ -3000,6 +3000,16 @@ export type Database = {
         Args: { p_folder_id: string; p_turma_id: string; p_user_id: string }
         Returns: Json
       }
+      build_study_queue: {
+        Args: {
+          p_deck_id?: string
+          p_folder_id?: string
+          p_scope: string
+          p_tz_offset_minutes?: number
+          p_user_id: string
+        }
+        Returns: Json
+      }
       count_cards_per_deck: {
         Args: { p_deck_ids: string[] }
         Returns: {
