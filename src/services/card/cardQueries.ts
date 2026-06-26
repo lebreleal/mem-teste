@@ -137,29 +137,6 @@ export async function fetchDescendantCardsPage(deckId: string, limit: number, of
   return (data ?? []) as CardRow[];
 }
 
-/** Fetch aggregated stats for multiple decks. */
-export async function fetchAggregatedStats(deckIds: string[]) {
-  const totals = { new_count: 0, learning_count: 0, review_count: 0, reviewed_today: 0, new_reviewed_today: 0, new_graduated_today: 0 };
-  if (deckIds.length === 0) return totals;
-
-  const allCards: { id: string; state: number | null; scheduled_date: string }[] = [];
-  for (let i = 0; i < deckIds.length; i += IN_BATCH) {
-    const batch = deckIds.slice(i, i + IN_BATCH);
-    const rows = await paginatedFetch<{ id: string; state: number | null; scheduled_date: string }>((from) =>
-      supabase.from('cards').select('id, state, scheduled_date').in('deck_id', batch).range(from, from + PAGE_SIZE - 1)
-    );
-    allCards.push(...rows);
-  }
-
-  if (allCards.length === 0) return totals;
-  const now = new Date();
-  for (const c of allCards) {
-    if (c.state === 0 || c.state == null) totals.new_count++;
-    else if (c.state === 1 || c.state === 3) totals.learning_count++;
-    else if (c.state === 2 && new Date(c.scheduled_date) <= now) totals.review_count++;
-  }
-  return totals;
-}
 
 /** Fetch card contents for export (CSV / Anki). */
 export async function fetchCardsForExport(deckId: string) {
