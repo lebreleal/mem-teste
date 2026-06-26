@@ -3010,6 +3010,13 @@ export type Database = {
         }
         Returns: Json
       }
+      count_cards_by_deck_ids: {
+        Args: { p_deck_ids: string[] }
+        Returns: {
+          deck_id: string
+          total: number
+        }[]
+      }
       count_cards_per_deck: {
         Args: { p_deck_ids: string[] }
         Returns: {

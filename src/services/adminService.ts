@@ -199,12 +199,7 @@ export async function fetchTurmaFolderId(userId: string, turmaId: string): Promi
 
 // ── Sala Decks (TurmaDetail) ──
 
-interface CardStatRow {
-  id: string;
-  deck_id: string;
-  state: number;
-  difficulty: number;
-}
+
 
 export async function fetchSalaDecksData(turmaId: string) {
   const { data: turmaDecks } = await supabase
@@ -231,29 +226,15 @@ export async function fetchSalaDecksData(turmaId: string) {
     .in('id', allDeckIds);
 
   const cardCountMap = new Map<string, { total: number; mastered: number; novo: number; facil: number; bom: number; dificil: number; errei: number }>();
-  const PAGE = 1000;
 
-  for (let i = 0; i < allDeckIds.length; i += 200) {
-    const batch = allDeckIds.slice(i, i + 200);
-    let offset = 0;
-    let hasMore = true;
-    while (hasMore) {
-      const { data: cards } = await supabase
-        .from('cards')
-        .select('id, deck_id, state, difficulty')
-        .in('deck_id', batch)
-        .order('id', { ascending: true })
-        .range(offset, offset + PAGE - 1);
-      if (cards) {
-        for (const c of cards as CardStatRow[]) {
-          const entry = cardCountMap.get(c.deck_id) ?? { total: 0, mastered: 0, novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
-          entry.total++;
-          entry.novo++;
-          cardCountMap.set(c.deck_id, entry);
-        }
+  // Server-side aggregation: one GROUP BY count instead of streaming every card row.
+  if (allDeckIds.length > 0) {
+    const { data: counts } = await supabase.rpc('count_cards_by_deck_ids', { p_deck_ids: allDeckIds });
+    if (counts) {
+      for (const r of counts as Array<{ deck_id: string; total: number }>) {
+        const total = Number(r.total);
+        cardCountMap.set(r.deck_id, { total, mastered: 0, novo: total, facil: 0, bom: 0, dificil: 0, errei: 0 });
       }
-      hasMore = (cards?.length ?? 0) === PAGE;
-      offset += PAGE;
     }
   }
 
