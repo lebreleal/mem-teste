@@ -57,9 +57,6 @@ interface DeckDateRow {
   updated_at: string;
 }
 
-interface DeckQuestionRow {
-  deck_id: string;
-}
 
 export async function fetchUserTurmas(userId: string): Promise<Turma[]> {
   const { data: memberships } = await supabase
