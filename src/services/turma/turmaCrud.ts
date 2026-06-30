@@ -57,9 +57,6 @@ interface DeckDateRow {
   updated_at: string;
 }
 
-interface DeckQuestionRow {
-  deck_id: string;
-}
 
 export async function fetchUserTurmas(userId: string): Promise<Turma[]> {
   const { data: memberships } = await supabase
@@ -240,16 +237,13 @@ export async function fetchDiscoverTurmas(_userId: string, searchQuery: string):
     });
   }
 
-  // Question counts per turma
+  // Question counts per turma (server-side GROUP BY, single query)
   const questionCountMap = new Map<string, number>();
   if (allDeckIds.length > 0) {
-    const { data: qRows } = await supabase
-      .from('deck_questions')
-      .select('deck_id')
-      .in('deck_id', allDeckIds);
+    const { data: qRows } = await supabase.rpc('count_questions_by_deck_ids', { p_deck_ids: allDeckIds });
     const perDeck = new Map<string, number>();
-    for (const r of (qRows ?? []) as DeckQuestionRow[]) {
-      perDeck.set(r.deck_id, (perDeck.get(r.deck_id) ?? 0) + 1);
+    for (const r of (qRows ?? []) as Array<{ deck_id: string; total: number }>) {
+      perDeck.set(r.deck_id, Number(r.total));
     }
     typedTurmaDecks.forEach(td => {
       const qc = perDeck.get(td.deck_id) ?? 0;

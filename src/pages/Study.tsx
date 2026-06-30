@@ -54,7 +54,8 @@ const Study = () => {
   const { energy, addSuccessfulCard } = useEnergy();
   const { model, setModel, getCost, pendingPro, confirmPro, cancelPro } = useAIModel();
   const goBack = useCallback(() => {
-    invalidateStudyQueries(queryClient);
+    // Note: study queries are invalidated once on unmount (cleanup effect below),
+    // so we intentionally do NOT invalidate here to avoid a double refetch.
     if (deckId) {
       // If studying a subdeck, go back to parent deck (materia) instead of subdeck detail
       const parentId = deckConfig?.parent_deck_id;
@@ -182,13 +183,25 @@ const Study = () => {
   useEffect(() => { if (!isTransitioning) setDisplayedCard(nextCard); }, [cardKey, isTransitioning, queueInitialized]);
   const currentCard = displayedCard ?? nextCard;
 
-  // Prefetch images
+  // Prefetch images so they are cached before the user reaches each card.
+  // Looks far ahead (the whole near queue) and dedupes via a ref so we never
+  // re-trigger the same download — images then render instantly with the text.
+  const prefetchedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (!currentCard || localQueue.length === 0) return;
-    const currentIdx = localQueue.findIndex(c => c.id === currentCard.id);
-    const upcoming = currentIdx >= 0 ? localQueue.slice(currentIdx + 1, currentIdx + 4) : localQueue.slice(0, 3);
-    upcoming.flatMap(c => extractImageUrls((c.front_content ?? '') + (c.back_content ?? ''))).forEach(url => { const img = new Image(); img.src = url; });
+    if (localQueue.length === 0) return;
+    const currentIdx = currentCard ? localQueue.findIndex(c => c.id === currentCard.id) : 0;
+    const start = currentIdx >= 0 ? currentIdx : 0;
+    const upcoming = localQueue.slice(start, start + 15);
+    for (const c of upcoming) {
+      for (const url of extractImageUrls((c.front_content ?? '') + (c.back_content ?? ''))) {
+        if (prefetchedRef.current.has(url)) continue;
+        prefetchedRef.current.add(url);
+        const img = new Image();
+        img.src = url;
+      }
+    }
   }, [currentCard?.id, localQueue]);
+
 
   const currentCardDeckId = currentCard?.deck_id ?? deckId ?? null;
   const { data: sourceInfo } = useQuery({

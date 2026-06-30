@@ -3000,6 +3000,23 @@ export type Database = {
         Args: { p_folder_id: string; p_turma_id: string; p_user_id: string }
         Returns: Json
       }
+      build_study_queue: {
+        Args: {
+          p_deck_id?: string
+          p_folder_id?: string
+          p_scope: string
+          p_tz_offset_minutes?: number
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      count_cards_by_deck_ids: {
+        Args: { p_deck_ids: string[] }
+        Returns: {
+          deck_id: string
+          total: number
+        }[]
+      }
       count_cards_per_deck: {
         Args: { p_deck_ids: string[] }
         Returns: {
@@ -3010,6 +3027,13 @@ export type Database = {
       count_descendant_cards_by_state: {
         Args: { p_deck_id: string }
         Returns: Json
+      }
+      count_questions_by_deck_ids: {
+        Args: { p_deck_ids: string[] }
+        Returns: {
+          deck_id: string
+          total: number
+        }[]
       }
       deduct_energy: {
         Args: { p_cost: number; p_user_id: string }

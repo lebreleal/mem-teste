@@ -186,7 +186,7 @@ export async function uploadCardImage(userId: string, file: File): Promise<strin
   const compressed = await compressImage(file);
   const ext = compressed.name.split('.').pop() || 'webp';
   const path = `${userId}/${crypto.randomUUID()}.${ext}`;
-  const { error } = await supabase.storage.from('card-images').upload(path, compressed);
+  const { error } = await supabase.storage.from('card-images').upload(path, compressed, { cacheControl: '31536000' });
   if (error) throw error;
   const { data: urlData } = supabase.storage.from('card-images').getPublicUrl(path);
   return urlData.publicUrl;

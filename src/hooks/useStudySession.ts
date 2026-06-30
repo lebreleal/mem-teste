@@ -41,12 +41,8 @@ export const useStudySession = (deckId: string, folderId?: string) => {
         queryClient.invalidateQueries({ queryKey: ['error-notebook-count'] });
       }
     },
-    onSettled: () => {
-      // Only invalidate lightweight queries per review.
-      // Heavy deck stats (fetchDecksWithStats) are invalidated on session exit
-      // via invalidateStudyQueries() in Study.tsx goBack/cleanup.
-      queryClient.invalidateQueries({ queryKey: ['cards-aggregated'] });
-    },
+    // No per-review invalidation: heavy dashboard/deck queries are refreshed
+    // once on session exit (invalidateStudyQueries in Study.tsx cleanup).
   });
 
   return {

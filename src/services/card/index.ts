@@ -9,13 +9,9 @@ export type { CardRow } from '@/types/deck';
 // Queries (CQRS Read side)
 export {
   fetchCards,
-  fetchAggregatedCardsMeta,
-  fetchAggregatedCardsPage,
-  fetchAggregatedCards,
   fetchClozeSiblings,
   fetchDescendantCardCounts,
   fetchDescendantCardsPage,
-  fetchAggregatedStats,
   fetchCardsForExport,
   type CardMeta,
   type DescendantCardCounts,
