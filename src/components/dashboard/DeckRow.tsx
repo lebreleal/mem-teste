@@ -176,6 +176,7 @@ const DeckRow = ({
   organizeMode = false,
 }: DeckRowProps) => {
   const navigate = useNavigate();
+  const prefetchDeck = usePrefetchDeck();
   const { isAdmin } = useIsAdmin();
   const isErrorDeck = deck.name === ERROR_DECK_NAME;
   const [showDevModal, setShowDevModal] = useState(false);
@@ -221,6 +222,12 @@ const DeckRow = ({
   const handleStudy = (e: React.MouseEvent, deckId: string) => {
     e.stopPropagation();
     navigate(`/decks/${deckId}`, readOnlyNavState ? { state: readOnlyNavState } : undefined);
+  };
+
+  // Warm the destination before the click lands (hover / touch = intent).
+  const handleIntent = () => {
+    if (deckSelectionMode || isErrorDeck || deck.parent_deck_id === null) return;
+    prefetchDeck(deck.id);
   };
 
   return (
