@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
+import { toast } from '@/hooks/use-toast';
 import * as studyService from '@/services/studyService';
 import type { Rating } from '@/lib/fsrs';
 import type { StudyQueueResult, StudyCard, DeckStudyConfig, CardReviewResult } from '@/types/study';
