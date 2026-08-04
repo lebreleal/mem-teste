@@ -331,13 +331,13 @@ const FlashCard = ({
         const parsed = JSON.parse(backContent);
         if (typeof parsed.clozeTarget === 'number') {
           if (parsed.extra && parsed.extra.replace(/<[^>]*>/g, '').trim()) {
-            occlusionBackText = (occlusionBackText ? occlusionBackText + '<hr style="margin:1rem 0;border-color:hsl(var(--border))" />' : '') + sanitizeHtml(parsed.extra);
+            occlusionBackText = (occlusionBackText ? occlusionBackText + '<hr style="margin:1rem 0;border-color:hsl(var(--border))" />' : '') + sanitizeHtml(parsed.extra, { eager: true });
           }
         } else {
-          occlusionBackText = (occlusionBackText ? occlusionBackText + '<hr style="margin:1rem 0;border-color:hsl(var(--border))" />' : '') + sanitizeHtml(backContent);
+          occlusionBackText = (occlusionBackText ? occlusionBackText + '<hr style="margin:1rem 0;border-color:hsl(var(--border))" />' : '') + sanitizeHtml(backContent, { eager: true });
         }
       } catch {
-        occlusionBackText = (occlusionBackText ? occlusionBackText + '<hr style="margin:1rem 0;border-color:hsl(var(--border))" />' : '') + sanitizeHtml(backContent);
+        occlusionBackText = (occlusionBackText ? occlusionBackText + '<hr style="margin:1rem 0;border-color:hsl(var(--border))" />' : '') + sanitizeHtml(backContent, { eager: true });
       }
     }
   } else if (isCloze) {
