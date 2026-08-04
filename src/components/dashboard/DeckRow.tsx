@@ -10,6 +10,7 @@ import { ChevronDown, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archi
 import { IconDeck } from '@/components/icons';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { DeckWithStats } from '@/hooks/useDecks';
+import { usePrefetchDeck } from '@/hooks/usePrefetchDeck';
 import type { DragReorderHandlers } from '@/hooks/useDragReorder';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
 import {
@@ -176,6 +177,7 @@ const DeckRow = ({
   organizeMode = false,
 }: DeckRowProps) => {
   const navigate = useNavigate();
+  const prefetchDeck = usePrefetchDeck();
   const { isAdmin } = useIsAdmin();
   const isErrorDeck = deck.name === ERROR_DECK_NAME;
   const [showDevModal, setShowDevModal] = useState(false);
@@ -223,6 +225,12 @@ const DeckRow = ({
     navigate(`/decks/${deckId}`, readOnlyNavState ? { state: readOnlyNavState } : undefined);
   };
 
+  // Warm the destination before the click lands (hover / touch = intent).
+  const handleIntent = () => {
+    if (deckSelectionMode || isErrorDeck || deck.parent_deck_id === null) return;
+    prefetchDeck(deck.id);
+  };
+
   return (
     <>
       {/* Unified deck row — same template for all decks */}
@@ -238,6 +246,9 @@ const DeckRow = ({
         } : {})}
         className={`group flex items-center gap-3 px-4 py-4 cursor-pointer transition-all hover:bg-muted/50 ${dragHandlers ? dragHandlers.className : ''}`}
         onClick={handleClick}
+        onMouseEnter={handleIntent}
+        onTouchStart={handleIntent}
+        onFocus={handleIntent}
       >
         {organizeMode && (
           <GripVertical className="h-4 w-4 text-muted-foreground/50 shrink-0 cursor-grab active:cursor-grabbing" />

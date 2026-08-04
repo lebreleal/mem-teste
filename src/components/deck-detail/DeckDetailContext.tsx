@@ -8,7 +8,8 @@
 import { createContext, useContext, useState, useMemo, useCallback, useEffect, useRef, type ReactNode } from 'react';
 import type { User } from '@supabase/supabase-js';
 import type { CardMeta, DescendantCardCounts } from '@/services/cardService';
-import { countReviewDueCards, fetchStudyPlanDeckIds, unfreezeCard as unfreezeCardService } from '@/services/card/cardMutations';
+import { fetchReviewDueCount, fetchStudyPlanDeckIds } from '@/services/card/cardQueries';
+import { unfreezeCard as unfreezeCardService } from '@/services/card/cardMutations';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCards } from '@/hooks/useCards';
 import { useDecks } from '@/hooks/useDecks';
@@ -269,10 +270,15 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   }, [decks]);
 
   // ─── Queries ───────────────────────────
+  // The deck list is already cached globally, so the detail screen must not
+  // wait a round-trip to render its shell: seed from cache with a stale
+  // timestamp so TanStack still revalidates in the background.
   const { data: deck, isLoading: deckLoading } = useQuery({
     queryKey: ['deck', deckId],
     queryFn: () => deckService.fetchDeck(deckId),
     enabled: !!user && !!deckId,
+    initialData: () => deckMap.get(deckId) as unknown as DeckRow | undefined,
+    initialDataUpdatedAt: 0,
   });
 
   // Count review cards actually due today (scheduled_date <= now), not ALL review-state cards
@@ -290,7 +296,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
         }
         frontier = nextFrontier;
       }
-      return countReviewDueCards(allIds, nowISO);
+      return fetchReviewDueCount(allIds, nowISO);
     },
     enabled: !!user && !!deckId && decks.length > 0,
     staleTime: 30_000,

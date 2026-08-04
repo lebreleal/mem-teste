@@ -209,8 +209,8 @@ describe('CQRS Pattern — Separation Validation', () => {
   it('card/cardMutations.ts only exports write functions', async () => {
     const mutations = await import('@/services/card/cardMutations');
     const exportNames = Object.keys(mutations);
-    // All exports should be create/update/delete/move/bulk/upload functions (writes)
-    const writePrefixes = ['create', 'update', 'delete', 'move', 'bulk', 'upload'];
+    // All exports must be write verbs (command side of CQRS)
+    const writePrefixes = ['create', 'update', 'delete', 'move', 'bulk', 'upload', 'bury', 'freeze', 'unfreeze', 'patch'];
     exportNames.forEach(name => {
       if (typeof mutations[name as keyof typeof mutations] === 'function') {
         const isWrite = writePrefixes.some(p => name.toLowerCase().startsWith(p));

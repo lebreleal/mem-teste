@@ -4,16 +4,35 @@
  */
 
 const IMG_SRC_RE = /<img[^>]+src="([^"]+)"/g;
+const JSON_IMAGE_URL_RE = /"imageUrl"\s*:\s*"([^"]+)"/g;
 
-/** Extract all image URLs from an HTML string. */
-export function extractImageUrls(html: string): string[] {
-  const urls: string[] = [];
+/**
+ * Extract every image URL referenced by a card payload.
+ *
+ * Card content is not always HTML: image-occlusion cards store their picture as
+ * `{"imageUrl": "..."}` JSON. Both shapes must be covered, otherwise the study
+ * prefetch silently skips occlusion images and they only start downloading when
+ * the card is already on screen.
+ */
+export function extractImageUrls(content: string): string[] {
+  if (!content) return [];
+  const urls = new Set<string>();
+
   let match: RegExpExecArray | null;
-  while ((match = IMG_SRC_RE.exec(html)) !== null) {
-    urls.push(match[1]);
+  IMG_SRC_RE.lastIndex = 0;
+  while ((match = IMG_SRC_RE.exec(content)) !== null) {
+    urls.add(match[1]);
   }
   IMG_SRC_RE.lastIndex = 0;
-  return urls;
+
+  JSON_IMAGE_URL_RE.lastIndex = 0;
+  while ((match = JSON_IMAGE_URL_RE.exec(content)) !== null) {
+    // JSON strings escape forward slashes in some serializers; normalise them.
+    urls.add(match[1].replace(/\\\//g, '/'));
+  }
+  JSON_IMAGE_URL_RE.lastIndex = 0;
+
+  return Array.from(urls);
 }
 
 /** Real study metrics per card state (from user's historical data). */
