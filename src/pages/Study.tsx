@@ -51,7 +51,7 @@ const Study = () => {
   const { toast } = useToast();
   const { queue, isLoading, isFetching, submitReview, algorithmMode, isLiveDeck, deckConfig, deckConfigs } = useStudySession(deckId ?? '', folderId);
   const { theme, toggleTheme } = useTheme();
-  const { energy, addSuccessfulCard } = useEnergy();
+  const { energy } = useEnergy();
   const { model, setModel, getCost, pendingPro, confirmPro, cancelPro } = useAIModel();
   const goBack = useCallback(() => {
     // Note: study queries are invalidated once on unmount (cleanup effect below),
@@ -287,7 +287,7 @@ const Study = () => {
         if (shouldKeep && result.interval_days === 0) { setLocalQueue(prev => prev.map(c => c.id === card.id ? { ...c, state: result.state, stability: result.stability, difficulty: result.difficulty, scheduled_date: result.scheduled_date, learning_step: result.learning_step ?? 0 } : c)); }
       },
     });
-  }, [localQueue, reviewCount, cardKey, deckConfig, deckConfigs, getCardDeckConfig, undo, tutor, addSuccessfulCard, submitReview, user]);
+  }, [localQueue, reviewCount, cardKey, deckConfig, deckConfigs, getCardDeckConfig, undo, tutor, submitReview, user]);
 
   const handleRate = useCallback(async (rating: Rating) => {
     if (!currentCard || isTransitioning) return;
