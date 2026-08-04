@@ -116,6 +116,43 @@ export async function fetchLeechStreak(userId: string, cardId: string, limit: nu
 
 
 
+/**
+ * Persist a review atomically.
+ *
+ * `submit_review` writes the card scheduling, the review_logs entry and the
+ * profile counters inside a single transaction (one round trip instead of
+ * three). Counters are incremented server-side, so two quick reviews can no
+ * longer overwrite each other (lost-update anomaly of read-modify-write).
+ */
+async function persistReview(
+  card: StudyCard,
+  rating: Rating,
+  payload: {
+    state: number;
+    stability: number;
+    difficulty: number;
+    scheduled_date: string;
+    learning_step: number;
+  },
+  elapsedMs: number | null,
+): Promise<ReviewProfileCounters | null> {
+  const { data, error } = await supabase.rpc('submit_review', {
+    p_card_id: card.id,
+    p_rating: rating,
+    p_state: payload.state,
+    p_stability: payload.stability,
+    p_difficulty: payload.difficulty,
+    p_scheduled_date: payload.scheduled_date,
+    p_learning_step: payload.learning_step,
+    p_elapsed_ms: elapsedMs,
+    p_prev_state: card.state,
+    p_count_success: rating > 2,
+    p_tz_offset_minutes: TZ_OFFSET_SP,
+  });
+  if (error) throw error;
+  return (data as unknown as ReviewProfileCounters | null) ?? null;
+}
+
 /** Submit a card review and update scheduling. */
 export async function submitCardReview(
   userId: string,
@@ -132,30 +169,13 @@ export async function submitCardReview(
   if (algorithmMode === 'quick_review') {
     const nowIso = new Date().toISOString();
     const newState = rating > 2 ? 2 : 1;
-    const isRatingFail = rating === 1;
-    const isInErrorDeck = !!card.origin_deck_id;
 
-    const updatePayload: Pick<CardUpdatePayload, 'state' | 'last_reviewed_at' | 'last_rating'> = {
-      state: newState,
-      last_reviewed_at: nowIso,
-      last_rating: rating,
-    };
-
-    const [updateResult, logResult] = await Promise.all([
-      supabase.from('cards').update(updatePayload).eq('id', card.id),
-      supabase.from('review_logs').insert({
-        user_id: userId,
-        card_id: card.id,
-        rating,
-        stability: 0,
-        difficulty: 0,
-        scheduled_date: nowIso,
-        elapsed_ms: cappedMs,
-      }),
-    ]);
-
-    if (updateResult.error) throw updateResult.error;
-    if (logResult.error) throw logResult.error;
+    const counters = await persistReview(
+      card,
+      rating,
+      { state: newState, stability: 0, difficulty: 0, scheduled_date: nowIso, learning_step: 0 },
+      cappedMs,
+    );
 
     return {
       state: newState,
@@ -166,6 +186,7 @@ export async function submitCardReview(
       movedToError: false,
       returnedFromError: false,
       originDeckName: null,
+      counters,
     };
   }
 
@@ -206,26 +227,20 @@ export async function submitCardReview(
     result = sm2Schedule(sm2Card, rating, sm2Params);
   }
 
-  // Build update payload
-  const updatePayload: CardUpdatePayload = {
-    stability: result.stability, difficulty: result.difficulty,
-    state: result.state, scheduled_date: result.scheduled_date,
-    last_reviewed_at: new Date().toISOString(), learning_step: 'learning_step' in result ? result.learning_step : 0,
-    last_rating: rating,
-  };
+  const counters = await persistReview(
+    card,
+    rating,
+    {
+      state: result.state,
+      stability: result.stability,
+      difficulty: result.difficulty,
+      scheduled_date: result.scheduled_date,
+      learning_step: 'learning_step' in result ? (result.learning_step ?? 0) : 0,
+    },
+    cappedMs,
+  );
 
-  const [updateResult, logResult] = await Promise.all([
-    supabase.from('cards').update(updatePayload).eq('id', card.id),
-    supabase.from('review_logs').insert({
-      user_id: userId, card_id: card.id, rating,
-      stability: result.stability, difficulty: result.difficulty,
-      scheduled_date: result.scheduled_date, state: card.state, elapsed_ms: cappedMs,
-    }),
-  ]);
-  if (updateResult.error) throw updateResult.error;
-  if (logResult.error) throw logResult.error;
-
-  return { ...result, movedToError: false, returnedFromError: false, originDeckName: null };
+  return { ...result, movedToError: false, returnedFromError: false, originDeckName: null, counters };
 }
 
 import type { StudyStats } from '@/types/study';
