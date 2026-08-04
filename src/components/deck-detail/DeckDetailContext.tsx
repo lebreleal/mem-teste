@@ -269,10 +269,15 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   }, [decks]);
 
   // ─── Queries ───────────────────────────
+  // The deck list is already cached globally, so the detail screen must not
+  // wait a round-trip to render its shell: seed from cache with a stale
+  // timestamp so TanStack still revalidates in the background.
   const { data: deck, isLoading: deckLoading } = useQuery({
     queryKey: ['deck', deckId],
     queryFn: () => deckService.fetchDeck(deckId),
     enabled: !!user && !!deckId,
+    initialData: () => deckMap.get(deckId) as unknown as DeckRow | undefined,
+    initialDataUpdatedAt: 0,
   });
 
   // Count review cards actually due today (scheduled_date <= now), not ALL review-state cards
