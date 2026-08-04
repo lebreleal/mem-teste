@@ -612,7 +612,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     setAlgorithmConfirm, setAlgorithmModalOpen, setExamModalOpen, setExamGenerating,
   });
 
-  const hasMoreCards = displayLimit < totalCards;
+  const hasMoreCards = !isSearching && (cardsInfinite.hasNextPage ?? false);
 
   const value: DeckDetailContextValue = {
     deckId, deck, deckLoading, allCards, allCardsLoading, filteredCards, cardCounts, loadMoreCards, hasMoreCards, stats, decks,
