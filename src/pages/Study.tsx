@@ -184,22 +184,25 @@ const Study = () => {
   const currentCard = displayedCard ?? nextCard;
 
   // Prefetch images so they are cached before the user reaches each card.
-  // Looks far ahead (the whole near queue) and dedupes via a ref so we never
-  // re-trigger the same download — images then render instantly with the text.
+  // Order matters: the ACTIVE card is warmed first (it is what the user is
+  // waiting for), then the next 3 cards of the queue (Lei 1B). A ref dedupes
+  // downloads so the same URL is never requested twice in a session.
   const prefetchedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (localQueue.length === 0) return;
     const currentIdx = currentCard ? localQueue.findIndex(c => c.id === currentCard.id) : 0;
     const start = currentIdx >= 0 ? currentIdx : 0;
-    const upcoming = localQueue.slice(start, start + 15);
-    for (const c of upcoming) {
-      for (const url of extractImageUrls((c.front_content ?? '') + (c.back_content ?? ''))) {
+    const upcoming = localQueue.slice(start, start + 4); // active + next 3
+    upcoming.forEach((c, i) => {
+      for (const url of extractImageUrls(`${c.front_content ?? ''}${c.back_content ?? ''}`)) {
         if (prefetchedRef.current.has(url)) continue;
         prefetchedRef.current.add(url);
         const img = new Image();
+        // The active card competes with the render; the lookahead must not.
+        img.fetchPriority = i === 0 ? 'high' : 'low';
         img.src = url;
       }
-    }
+    });
   }, [currentCard?.id, localQueue]);
 
 
