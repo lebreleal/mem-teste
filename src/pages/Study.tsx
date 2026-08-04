@@ -361,7 +361,7 @@ const Study = () => {
             stability={currentCard.stability} difficulty={currentCard.difficulty} state={currentCard.state}
             scheduledDate={currentCard.scheduled_date} lastReviewedAt={currentCard.last_reviewed_at}
             cardType={currentCard.card_type} learningStep={currentCard.learning_step ?? 0} lastRating={currentCard.last_rating}
-            onRate={handleRate} isSubmitting={submitReview.isPending || isTransitioning}
+            onRate={handleRate} isSubmitting={isTransitioning}
             quickReview={algorithmMode === 'quick_review'} algorithmMode={algorithmMode}
             deckConfig={getCardDeckConfig(currentCard)} energy={energy} tutorCost={TUTOR_COST}
             onTutorRequest={(options) => tutor.handleTutorRequest(currentCard, options)}
