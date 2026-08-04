@@ -52,7 +52,7 @@ function checkIsLinkedDeck(deck: LinkableDeck | null | undefined, deckMap: Map<s
 
 
 const DeckDetailContent = () => {
-  const { deck, deckLoading, allCardsLoading, deckId, navigate, toast, setAlgorithmModalOpen, cardCounts, decks } = useDeckDetail();
+  const { deck, deckLoading, deckId, navigate, toast, setAlgorithmModalOpen, cardCounts, decks } = useDeckDetail();
   const location = useLocation();
   const queryClient = useQueryClient();
   const locState = location.state as { from?: string; folderId?: string; turmaId?: string } | null;
