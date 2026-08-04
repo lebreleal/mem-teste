@@ -199,7 +199,7 @@ const Study = () => {
         prefetchedRef.current.add(url);
         const img = new Image();
         // The active card competes with the render; the lookahead must not.
-        img.fetchPriority = i === 0 ? 'high' : 'low';
+        img.setAttribute('fetchpriority', i === 0 ? 'high' : 'low');
         img.src = url;
       }
     });
