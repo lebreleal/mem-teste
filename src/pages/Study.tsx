@@ -51,7 +51,7 @@ const Study = () => {
   const { toast } = useToast();
   const { queue, isLoading, isFetching, submitReview, algorithmMode, isLiveDeck, deckConfig, deckConfigs } = useStudySession(deckId ?? '', folderId);
   const { theme, toggleTheme } = useTheme();
-  const { energy, addSuccessfulCard } = useEnergy();
+  const { energy } = useEnergy();
   const { model, setModel, getCost, pendingPro, confirmPro, cancelPro } = useAIModel();
   const goBack = useCallback(() => {
     // Note: study queries are invalidated once on unmount (cleanup effect below),
@@ -246,7 +246,7 @@ const Study = () => {
     undo.saveSnapshot({ queue: [...localQueue], reviewCount, cardKey, cardId: card.id, actionType: 'review', prevCardState: { stability: card.stability, difficulty: card.difficulty, state: card.state, scheduled_date: card.scheduled_date, last_reviewed_at: card.last_reviewed_at ?? null } });
     tutor.abortTutor(); const elapsed = Date.now() - cardShownAt.current;
     if (elapsed < FAST_THRESHOLD_MS) { if (fastWarningTimer.current) clearTimeout(fastWarningTimer.current); fastWarningTimer.current = setTimeout(() => {}, 3000); }
-    if (rating > 2) addSuccessfulCard.mutate({ flowMultiplier: 1.0 });
+    // Success counters are incremented server-side inside submit_review (atomic).
     // Determine if card stays in session: Again always stays; Hard stays for learning;
     // Good stays if card is in learning/new AND has more steps before graduation
     const cardConfig = getCardDeckConfig(card);
@@ -287,7 +287,7 @@ const Study = () => {
         if (shouldKeep && result.interval_days === 0) { setLocalQueue(prev => prev.map(c => c.id === card.id ? { ...c, state: result.state, stability: result.stability, difficulty: result.difficulty, scheduled_date: result.scheduled_date, learning_step: result.learning_step ?? 0 } : c)); }
       },
     });
-  }, [localQueue, reviewCount, cardKey, deckConfig, deckConfigs, getCardDeckConfig, undo, tutor, addSuccessfulCard, submitReview, user]);
+  }, [localQueue, reviewCount, cardKey, deckConfig, deckConfigs, getCardDeckConfig, undo, tutor, submitReview, user]);
 
   const handleRate = useCallback(async (rating: Rating) => {
     if (!currentCard || isTransitioning) return;

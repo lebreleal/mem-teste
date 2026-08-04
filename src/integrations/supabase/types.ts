@@ -3341,6 +3341,22 @@ export type Database = {
         }[]
       }
       strip_html: { Args: { p_text: string }; Returns: string }
+      submit_review: {
+        Args: {
+          p_card_id: string
+          p_count_success?: boolean
+          p_difficulty: number
+          p_elapsed_ms?: number
+          p_learning_step?: number
+          p_prev_state?: number
+          p_rating: number
+          p_scheduled_date: string
+          p_stability: number
+          p_state: number
+          p_tz_offset_minutes?: number
+        }
+        Returns: Json
+      }
       validate_forecast_accuracy: {
         Args: { p_days?: number; p_user_id: string }
         Returns: {
