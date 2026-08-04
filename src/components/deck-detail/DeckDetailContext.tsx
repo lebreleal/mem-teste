@@ -296,7 +296,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
         }
         frontier = nextFrontier;
       }
-      return countReviewDueCards(allIds, nowISO);
+      return fetchReviewDueCount(allIds, nowISO);
     },
     enabled: !!user && !!deckId && decks.length > 0,
     staleTime: 30_000,
