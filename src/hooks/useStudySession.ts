@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
+import { profileQueryKey } from '@/hooks/useProfile';
 import { toast } from '@/hooks/use-toast';
 import * as studyService from '@/services/studyService';
 import type { Rating } from '@/lib/fsrs';
@@ -41,6 +42,13 @@ export const useStudySession = (deckId: string, folderId?: string) => {
         if (!old) return old;
         return { ...old, todayCards: (old.todayCards ?? 0) + 1 };
       });
+      // submit_review returns the authoritative profile counters; patch the
+      // cache instead of refetching the profile after every single review.
+      if (result?.counters && user?.id) {
+        queryClient.setQueryData(profileQueryKey(user.id), (old: Record<string, unknown> | undefined) =>
+          old ? { ...old, ...result.counters } : old,
+        );
+      }
       // Invalidate error deck counts when cards move
       if (result?.movedToError || result?.returnedFromError) {
         queryClient.invalidateQueries({ queryKey: ['error-deck-cards'] });

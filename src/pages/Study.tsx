@@ -246,7 +246,7 @@ const Study = () => {
     undo.saveSnapshot({ queue: [...localQueue], reviewCount, cardKey, cardId: card.id, actionType: 'review', prevCardState: { stability: card.stability, difficulty: card.difficulty, state: card.state, scheduled_date: card.scheduled_date, last_reviewed_at: card.last_reviewed_at ?? null } });
     tutor.abortTutor(); const elapsed = Date.now() - cardShownAt.current;
     if (elapsed < FAST_THRESHOLD_MS) { if (fastWarningTimer.current) clearTimeout(fastWarningTimer.current); fastWarningTimer.current = setTimeout(() => {}, 3000); }
-    if (rating > 2) addSuccessfulCard.mutate({ flowMultiplier: 1.0 });
+    // Success counters are incremented server-side inside submit_review (atomic).
     // Determine if card stays in session: Again always stays; Hard stays for learning;
     // Good stays if card is in learning/new AND has more steps before graduation
     const cardConfig = getCardDeckConfig(card);
