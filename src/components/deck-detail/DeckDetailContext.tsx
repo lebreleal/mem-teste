@@ -313,7 +313,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   // Detect community deck (belongs to another user) — RPCs filter by auth.uid(), so use direct queries instead
   const isCommunityDeck = !!deck && !!user && deck.user_id !== user.id;
 
-  const CARDS_PAGE = 200;
+  const CARDS_PAGE = 100;
   
 
   // Card counts: use RPC for own decks, direct query for community decks
