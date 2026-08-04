@@ -198,10 +198,10 @@ describe('CQRS Pattern — Separation Validation', () => {
     const queries = await import('@/services/card/cardQueries');
     const exportNames = Object.keys(queries);
     // All exports should be fetch/get functions (reads)
-    const readPrefixes = ['fetch', 'CardMeta', 'DescendantCardCounts'];
+    const readPrefixes = ['fetch', 'search'];
     exportNames.forEach(name => {
       if (typeof queries[name as keyof typeof queries] === 'function') {
-        expect(name.startsWith('fetch')).toBe(true);
+        expect(readPrefixes.some(p => name.startsWith(p))).toBe(true);
       }
     });
   });

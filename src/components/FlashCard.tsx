@@ -316,11 +316,11 @@ const FlashCard = ({
             const parsed = JSON.parse(backContent);
             if (typeof parsed.clozeTarget === 'number') clozeTarget = parsed.clozeTarget;
           } catch {}
-          occlusionFrontText = sanitizeHtml(renderCloze(rawFrontText, false, clozeTarget));
+          occlusionFrontText = sanitizeHtml(renderCloze(rawFrontText, false, clozeTarget), { eager: true });
           // For back: show revealed cloze
-          occlusionBackText = sanitizeHtml(renderCloze(rawFrontText, true, clozeTarget));
+          occlusionBackText = sanitizeHtml(renderCloze(rawFrontText, true, clozeTarget), { eager: true });
         } else {
-          occlusionFrontText = sanitizeHtml(rawFrontText);
+          occlusionFrontText = sanitizeHtml(rawFrontText, { eager: true });
         }
       }
     } catch {}
@@ -331,13 +331,13 @@ const FlashCard = ({
         const parsed = JSON.parse(backContent);
         if (typeof parsed.clozeTarget === 'number') {
           if (parsed.extra && parsed.extra.replace(/<[^>]*>/g, '').trim()) {
-            occlusionBackText = (occlusionBackText ? occlusionBackText + '<hr style="margin:1rem 0;border-color:hsl(var(--border))" />' : '') + sanitizeHtml(parsed.extra);
+            occlusionBackText = (occlusionBackText ? occlusionBackText + '<hr style="margin:1rem 0;border-color:hsl(var(--border))" />' : '') + sanitizeHtml(parsed.extra, { eager: true });
           }
         } else {
-          occlusionBackText = (occlusionBackText ? occlusionBackText + '<hr style="margin:1rem 0;border-color:hsl(var(--border))" />' : '') + sanitizeHtml(backContent);
+          occlusionBackText = (occlusionBackText ? occlusionBackText + '<hr style="margin:1rem 0;border-color:hsl(var(--border))" />' : '') + sanitizeHtml(backContent, { eager: true });
         }
       } catch {
-        occlusionBackText = (occlusionBackText ? occlusionBackText + '<hr style="margin:1rem 0;border-color:hsl(var(--border))" />' : '') + sanitizeHtml(backContent);
+        occlusionBackText = (occlusionBackText ? occlusionBackText + '<hr style="margin:1rem 0;border-color:hsl(var(--border))" />' : '') + sanitizeHtml(backContent, { eager: true });
       }
     }
   } else if (isCloze) {
@@ -421,7 +421,7 @@ const FlashCard = ({
                 ) : (
                   <div
                     className="prose prose-sm max-w-none text-center text-card-foreground w-full"
-                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(displayFront) }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(displayFront, { eager: true }) }}
                   />
                 )}
               </div>
@@ -468,7 +468,7 @@ const FlashCard = ({
                   ) : (
                     <div
                       className="prose prose-sm max-w-none text-center text-card-foreground w-full"
-                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(peekingFront ? displayFront : displayBack) }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(peekingFront ? displayFront : displayBack, { eager: true }) }}
                     />
                   )}
                   {peekingFront && (
