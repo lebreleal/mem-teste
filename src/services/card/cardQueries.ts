@@ -178,3 +178,25 @@ export async function fetchCardsForExport(deckId: string) {
   if (error) throw error;
   return data ?? [];
 }
+
+/** Count review-state cards due now across multiple deck IDs. */
+export async function fetchReviewDueCount(deckIds: string[], nowISO: string): Promise<number> {
+  const { count, error } = await supabase
+    .from('cards')
+    .select('id', { count: 'exact', head: true })
+    .in('deck_id', deckIds)
+    .eq('state', 2)
+    .lte('scheduled_date', nowISO);
+  if (error) throw error;
+  return count ?? 0;
+}
+
+/** Fetch study plan deck_ids for a user. */
+export async function fetchStudyPlanDeckIds(userId: string): Promise<Array<{ deck_ids: string[] | null }>> {
+  const { data, error } = await supabase
+    .from('study_plans')
+    .select('deck_ids')
+    .eq('user_id', userId);
+  if (error) throw error;
+  return (data ?? []) as Array<{ deck_ids: string[] | null }>;
+}

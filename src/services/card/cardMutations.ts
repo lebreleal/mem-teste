@@ -158,28 +158,6 @@ export async function patchCard(cardId: string, fields: { front_content?: string
   if (error) throw error;
 }
 
-/** Count review-state cards due now across multiple deck IDs. */
-export async function countReviewDueCards(deckIds: string[], nowISO: string): Promise<number> {
-  const { count, error } = await supabase
-    .from('cards')
-    .select('id', { count: 'exact', head: true })
-    .in('deck_id', deckIds)
-    .eq('state', 2)
-    .lte('scheduled_date', nowISO);
-  if (error) throw error;
-  return count ?? 0;
-}
-
-/** Fetch study plan deck_ids for a user. */
-export async function fetchStudyPlanDeckIds(userId: string): Promise<Array<{ deck_ids: string[] | null }>> {
-  const { data, error } = await supabase
-    .from('study_plans')
-    .select('deck_ids')
-    .eq('user_id', userId);
-  if (error) throw error;
-  return (data ?? []) as Array<{ deck_ids: string[] | null }>;
-}
-
 /** Upload a card image to storage. Returns the public URL. */
 export async function uploadCardImage(userId: string, file: File): Promise<string> {
   if (file.size > 5 * 1024 * 1024) throw new Error('Máximo 5MB');
