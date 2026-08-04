@@ -347,15 +347,16 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     enabled: !!user && !!deckId && !deckLoading,
   });
 
-  // Display cards: use RPC for own decks, direct query for community decks
-  // For community decks, override state/difficulty to show as "new" from viewer's perspective
-  const { data: displayCards = [], isLoading: displayCardsLoading } = useQuery({
-    queryKey: ['cards-display', deckId, displayLimit, isCommunityDeck],
-    queryFn: async () => {
+  // Display cards: cumulative pagination (Lei 1G) — each "load more" fetches
+  // only the next page instead of re-downloading everything from offset 0.
+  const cardsInfinite = useInfiniteQuery({
+    queryKey: ['cards-display', deckId, isCommunityDeck],
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }) => {
       if (isCommunityDeck) {
         const cards = await cardService.fetchCards(deckId);
         // Reset state and difficulty so gauge shows 0% progress for the viewer
-        return cards.slice(0, displayLimit).map((c) => ({
+        return cards.slice(pageParam, pageParam + CARDS_PAGE).map((c) => ({
           ...c,
           state: 0,
           difficulty: 0,
@@ -364,17 +365,41 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
           last_reviewed_at: null,
         })) as cardService.CardRow[];
       }
-      return cardService.fetchDescendantCardsPage(deckId, displayLimit, 0);
+      return cardService.fetchDescendantCardsPage(deckId, CARDS_PAGE, pageParam);
     },
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.length < CARDS_PAGE ? undefined : allPages.length * CARDS_PAGE,
     enabled: !!user && !!deckId && !deckLoading,
   });
 
-  const allCardsLoading = cardCountsLoading || displayCardsLoading;
-  const allCards = displayCards;
+  const displayCards = useMemo(
+    () => (cardsInfinite.data?.pages ?? []).flat() as CardRow[],
+    [cardsInfinite.data],
+  );
+
+  // Server-side search (Lei 1G): local filtering would only see loaded pages.
+  const debouncedSearch = useDebouncedValue(search.trim(), 300);
+  const isSearching = debouncedSearch.length >= 2;
+
+  const { data: searchResults = [], isFetching: searchLoading } = useQuery({
+    queryKey: ['cards-search', deckId, debouncedSearch],
+    queryFn: () => cardService.searchCardsInDecks(allDeckIds, debouncedSearch),
+    enabled: !!user && isSearching,
+    staleTime: 60_000,
+  });
+
+  const allCardsLoading = isSearching
+    ? searchLoading
+    : (cardCountsLoading || cardsInfinite.isLoading);
+  const allCards = isSearching ? searchResults : displayCards;
 
   // Legacy auto-sync removed — bootstrap_follower_decks RPC handles card copying now
 
-  const loadMoreCards = useCallback(() => { setDisplayLimit(prev => prev + CARDS_PAGE); }, []);
+  const loadMoreCards = useCallback(() => {
+    if (cardsInfinite.hasNextPage && !cardsInfinite.isFetchingNextPage) cardsInfinite.fetchNextPage();
+  }, [cardsInfinite]);
+
+
 
   const stats = useMemo(() => {
     if (!cardCounts) return undefined;
