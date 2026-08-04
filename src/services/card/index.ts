@@ -13,6 +13,7 @@ export {
   fetchDescendantCardCounts,
   fetchDescendantCardsPage,
   fetchCardsForExport,
+  searchCardsInDecks,
   type CardMeta,
   type DescendantCardCounts,
 } from './cardQueries';
