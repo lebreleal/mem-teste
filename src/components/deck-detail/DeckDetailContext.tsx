@@ -314,7 +314,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const isCommunityDeck = !!deck && !!user && deck.user_id !== user.id;
 
   const CARDS_PAGE = 200;
-  const [displayLimit, setDisplayLimit] = useState(CARDS_PAGE);
+  
 
   // Card counts: use RPC for own decks, direct query for community decks
   // For community decks, all cards are "new" from the viewer's perspective (owner's state is irrelevant)
