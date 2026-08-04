@@ -1,79 +1,113 @@
-# Plano: navegação e estudo com carregamento instantâneo
+# Plano: arquitetura de leitura/escrita para navegação e estudo instantâneos
 
-## Diagnóstico confirmado
+Este plano mantém tudo o que já foi diagnosticado antes (imagens, waterfalls de navegação, invalidações globais) e adiciona a camada que faltava: o problema central não é ajuste fino de query, é **modelo de dados derivado**. Hoje o app recalcula, a cada visita de tela, agregados que deveriam ser mantidos de forma incremental.
 
-- O prefetch atual extrai apenas `<img src="...">`; cards de oclusão guardam `imageUrl` em JSON, então suas imagens não são pré-carregadas. O texto aparece antes e a imagem chega depois.
-- A entrada no subdeck espera simultaneamente detalhes do deck, contagens agregadas e a primeira página de cards. Qualquer consulta lenta mantém a tela inteira no spinner.
-- Ao abrir um subdeck, detalhes, contagens, cards, vencidos e imagem da sala são solicitados separadamente. Parte desses dados já existe no cache global de decks/pastas.
-- Ao sair do estudo, são invalidadas várias famílias globais de queries ao mesmo tempo, causando refetches amplos e lentidão na tela de destino.
-- `build_study_queue` faz uma única chamada de rede, mas recalcula hierarquia e histórico diário em múltiplas CTEs. O índice atual de cards está adequado ao filtro principal; o plano da função precisa ser medido antes de qualquer alteração SQL.
-- A lista de queries lentas mostra que leituras de IDs de cards por deck ainda chegam a cerca de 706 ms e que a persistência de cada revisão está dividida em múltiplas escritas.
-- Há avisos de refs inválidas em componentes globais (`Toaster`, `Sonner` e `GlobalLoading`), que serão corrigidos por serem executados em todas as telas.
+## Princípio orientador (Kleppmann, DDIA)
+
+Dados derivados (contadores, estatísticas, filas) não devem ser recomputados sob demanda no caminho de leitura. Eles devem ser mantidos incrementalmente a partir de um log de eventos imutável, e a leitura deve ser apenas uma busca por índice. Aplicando isso ao MemoCards:
+
+- `review_logs` é o **log de eventos** (fonte da verdade, append-only).
+- `cards.state/stability/difficulty/scheduled_date` é um **estado materializado** derivado desse log.
+- Estatísticas de deck e limites diários são **views derivadas** — hoje recomputadas, deveriam ser incrementais.
+- A fila de estudo é uma **projeção de leitura**, que deve ser servida pronta.
+
+## O que a análise profunda revelou
+
+### Problema estrutural 1: agregados recomputados a cada leitura (custo O(coleção inteira))
+
+`get_all_user_deck_stats` roda a cada carregamento de dashboard, matéria e subdeck. Ela varre **todos os cards do usuário** com join em **todos os review_logs**, com subconsultas correlacionadas por deck (`SELECT COUNT(*) FROM new_cards_studied ncs WHERE ncs.deck_id = c.deck_id` avaliada por grupo) e um `NOT EXISTS` sobre `review_logs` por card revisado hoje. O custo cresce com o histórico inteiro do usuário, não com o que está sendo exibido. Nenhum índice resolve isso: é recomputação de agregado global em caminho quente.
+
+O mesmo padrão se repete em `build_study_queue`, que recalcula hierarquia raiz, contagem de novos por raiz e histórico do dia em várias CTEs recursivas a cada clique em Estudar.
+
+### Problema estrutural 2: ausência de fronteira CQRS real
+
+Existe a intenção de CQRS (`deckStats.ts` está marcado como "read side"), mas o lado de leitura executa a mesma computação pesada do domínio. Falta uma tabela de leitura desnormalizada e atualizada por escrita.
+
+### Problema estrutural 3: escrita fragmentada e não idempotente
+
+Cada revisão gera escritas separadas: insert em `review_logs`, update em `cards`, update em `profiles`. São três round-trips sem atomicidade. Um retry parcial pode duplicar log ou divergir contadores. As queries lentas mostram exatamente essas três escritas no topo por tempo total acumulado.
+
+### Problema estrutural 4: falta de invariantes explícitas nos limites diários
+
+Os limites diários são recalculados em três lugares (RPC de fila, RPC de stats e agregações no cliente em `useDashboardState` e `MateriaDetail`). Três implementações da mesma regra é a origem das divergências de contagem já observadas e do custo repetido.
+
+### Problemas de caminho crítico já diagnosticados (mantidos)
+
+- Prefetch de imagem só lê `<img src>`; cards de oclusão guardam `imageUrl` em JSON e nunca são pré-carregados.
+- `FlashCard` faz um segundo download só para medir dimensões, mesmo quando o JSON já traz `canvasWidth/canvasHeight`.
+- `DeckDetail` bloqueia a tela inteira até deck + contagens + primeira página de cards chegarem, mesmo com o deck já presente no cache global.
+- Saída do estudo invalida famílias inteiras de queries, disparando refetch em massa na tela de destino.
+- Avisos de ref em componentes globais (`Toaster`, `Sonner`, `GlobalLoading`) aparecem em todas as telas.
 
 ## Implementação
 
-### 1. Corrigir o caminho crítico das imagens
+### Fase 1 — Instrumentar antes de mudar
 
-- Tornar `extractImageUrls` capaz de extrair URLs tanto de HTML quanto do JSON de image occlusion, com deduplicação.
-- Criar testes Vitest cobrindo HTML, JSON de oclusão, conteúdo misto, conteúdo inválido e URLs duplicadas.
-- Pré-carregar primeiro a imagem do card ativo e depois somente os próximos 3 cards, conforme a regra de performance do projeto.
-- Manter o card ativo como `eager/high` e cards fora da área visível como `lazy/async`.
-- Remover o segundo carregamento desnecessário da imagem usado apenas para descobrir dimensões quando o JSON já possui `canvasWidth/canvasHeight`.
+Medir `EXPLAIN (ANALYZE, BUFFERS)` de `get_all_user_deck_stats`, `get_all_user_card_counts` e `build_study_queue` com dados reais, nos escopos deck, folder e all. Registrar tempo e blocos lidos como linha de base. Nenhuma mudança de esquema entra sem número antes e depois.
 
-### 2. Tornar Parent Deck → Subdeck imediato
+### Fase 2 — Caminho crítico do cliente (ganho imediato, risco baixo)
 
-- Renderizar o shell do subdeck assim que o deck estiver disponível no cache de `['decks', userId]`, sem aguardar cards e contagens.
-- Exibir skeleton apenas nas regiões dependentes (estatísticas e lista), em vez de bloquear a tela inteira.
-- Usar os dados globais de deck como `initialData` para a query detalhada e evitar uma espera visual por informação já carregada.
-- Não buscar a lista de cards antes da aba de cards estar ativa; ao ativá-la, manter paginação de 100 e busca server-side.
-- Reutilizar a URL da imagem já presente no cache de folders e consultar `folder-image` apenas quando ela realmente estiver ausente.
+- `extractImageUrls` passa a extrair URLs de HTML **e** do JSON de image occlusion, com deduplicação; testes Vitest para HTML, oclusão, misto, inválido e duplicado.
+- Pré-carregar a imagem do card ativo primeiro e depois os próximos 3 cards (regra 1B), em vez de 15.
+- Eliminar o download extra de medição quando o JSON já tem dimensões.
+- `DeckDetail` renderiza o shell a partir do cache de decks (`initialData`), com skeleton apenas nas regiões dependentes; lista de cards só é buscada quando a aba de cards está ativa.
+- Prefetch por intenção (pointerenter/touchstart/focus) nas linhas de matéria e subdeck e no botão Estudar, aquecendo exatamente as query keys do destino.
+- Trocar a invalidação global na saída do estudo por invalidação seletiva dos decks afetados.
+- Corrigir o contrato de refs dos componentes globais, sem alterar visual.
 
-### 3. Prefetch orientado à intenção
+### Fase 3 — Tabela de leitura derivada e incremental
 
-- Nos itens de baralho pai e subdeck, iniciar prefetch no toque/ponteiro/foco antes da navegação.
-- Aquecer as queries necessárias à próxima tela com as mesmas query keys usadas pelos destinos.
-- No botão Estudar, iniciar `build_study_queue` antes da mudança de rota e reutilizar exatamente esse resultado no `useStudySession`.
-- Limitar o prefetch à intenção explícita para não sobrecarregar o banco ao renderizar listas grandes.
+Criar `deck_daily_stats` (por usuário, deck e dia local UTC-3) contendo contadores de vencidos por estado e de estudados no dia, mantida incrementalmente:
 
-### 4. Reduzir refetches e duplicação
+- Trigger em `review_logs` (append) e em `cards` (mudança de estado, criação, exclusão, mudança de deck) aplica deltas.
+- A distinção "card novo estudado hoje" passa a ser decidida no momento do evento e persistida, eliminando o `NOT EXISTS` sobre todo o histórico.
+- `get_all_user_deck_stats` passa a ler essa tabela por índice em vez de varrer cards e logs.
+- Função de reconciliação idempotente para recomputar o dia de um deck a partir do log, usada em backfill e como rede de segurança.
+- Backfill inicial e validação comparando saída antiga e nova antes de trocar o caminho de leitura.
 
-- Substituir a invalidação global ao desmontar Study por atualização/invalidação seletiva dos decks e contagens afetados.
-- Manter a fila concluída fora do cache, mas preservar dados estruturais ainda válidos.
-- Migrar bookmarks e metadados auxiliares do estudo para TanStack Query, permitindo cache entre sessões sem bloquear o primeiro card.
-- Remover consultas duplicadas de detalhe/contagem quando o cache agregado já satisfizer a tela.
+Regras de negócio permanecem idênticas: FSRS-6, retenção 0.85, timezone UTC-3, exclusão de arquivados, cards congelados, bury siblings, limite zero filtrando apenas novos.
 
-### 5. Otimizar o banco com evidência
+### Fase 4 — Escrita única, atômica e idempotente
 
-- Medir `EXPLAIN (ANALYZE, BUFFERS)` de `build_study_queue` nos escopos deck, folder e all usando dados representativos.
-- Reescrever somente os trechos confirmados como caros, preservando integralmente regras de limite, timezone UTC-3, arquivamento e bury siblings.
-- Se o plano confirmar varredura repetida de histórico, consolidar os cálculos diários em uma única passagem e adicionar apenas índices usados pelo plano.
-- Avaliar uma RPC transacional única para persistir rating + review log + contadores de perfil, reduzindo round-trips e garantindo atomicidade, sem alterar o comportamento otimista da UI.
+Uma RPC transacional `submit_review` recebe um `review_id` gerado no cliente e executa log + atualização do card + contadores de perfil em uma transação, com `ON CONFLICT DO NOTHING` no log para tornar o retry seguro. A UI continua otimista e não espera a resposta; o retry em background deixa de ter risco de duplicar dados.
 
-### 6. Corrigir erros globais e validar
+### Fase 5 — Fila de estudo como projeção servida
 
-- Corrigir o contrato de refs dos componentes globais sem alterar o visual.
-- Adicionar testes para extração/prefetch de imagens e para a seleção das query keys invalidadas ao concluir estudo.
-- Executar testes seletivos e validar com sessão autenticada em desktop: Dashboard → Matéria → Subdeck → Estudar → três avaliações → voltar.
-- Medir tempo de navegação, tempo até primeiro conteúdo, tempo até primeira imagem e quantidade de requests; repetir em cache frio e quente.
+Com os contadores diários já materializados, `build_study_queue` deixa de recalcular hierarquia e histórico: resolve escopo por índice, aplica limites lidos da tabela derivada e retorna a fila. Reescrever apenas os trechos que o `EXPLAIN` confirmar como caros; adicionar somente índices que o plano usar.
+
+### Fase 6 — Unificar a regra de limite diário
+
+Extrair a regra de limites para um módulo puro em `src/lib`, com testes, e usá-la no cliente; o servidor mantém a mesma semântica na tabela derivada. Elimina as três implementações divergentes.
+
+## Validação
+
+- Testes unitários: extração de imagens, regra de limites, seleção de query keys invalidadas.
+- Testes de paridade: saída antiga e nova das estatísticas por deck idênticas em cenários com novos, aprendizado, revisão, congelados, arquivados, siblings e limite zero.
+- Sessão autenticada em desktop: Dashboard → Matéria → Subdeck → Estudar → três avaliações → voltar, medindo tempo de navegação, tempo até primeiro conteúdo, tempo até primeira imagem e número de requests, em cache frio e quente.
+- Reexecutar as consultas lentas e comparar com a linha de base da Fase 1.
 
 ## Critérios de aceite
 
-- Clique em matéria e subdeck apresenta estrutura útil imediatamente, sem spinner de página inteira.
-- Clique em Estudar reutiliza fila prefetched quando disponível e mostra o primeiro card sem waterfall adicional.
-- A imagem do primeiro card de oclusão aparece junto do conteúdo; as próximas 3 imagens já estão em cache durante a revisão.
-- Avaliar um card continua instantâneo e não espera a rede.
-- Voltar do estudo não dispara uma tempestade de refetches globais.
-- Nenhuma regra FSRS-6, limite diário, bury siblings, timezone, cards arquivados ou UI visual é alterada.
+- Estatísticas de deck deixam de escalar com o histórico do usuário: leitura por índice, tempo estável.
+- Matéria e subdeck mostram estrutura útil imediatamente, sem spinner de tela cheia.
+- Estudar reutiliza a fila prefetched quando disponível; primeiro card sem waterfall.
+- Imagem do primeiro card de oclusão aparece junto do texto; próximas 3 já em cache.
+- Avaliar continua instantâneo; retry não duplica nem diverge contadores.
+- Voltar do estudo não dispara refetch em massa.
+- Nenhuma regra de agendamento, limite, timezone ou UI é alterada.
 
-## Arquivos previstos
+## Ordem de entrega
 
-- `src/lib/studyUtils.ts` e testes correspondentes
-- `src/pages/Study.tsx`
-- `src/components/FlashCard.tsx`
-- `src/pages/DeckDetail.tsx`
-- `src/components/deck-detail/DeckDetailContext.tsx`
-- componentes de `DeckRow`/navegação que iniciam o prefetch
-- `src/hooks/useStudySession.ts`
-- `src/lib/queryKeys.ts`
-- componentes globais responsáveis pelos avisos de ref
-- migration Supabase somente se o plano de execução comprovar ganho
+Fase 1 e 2 primeiro (ganho perceptível sem risco de dados). Fases 3 a 5 em seguida, cada uma com backfill, paridade validada e possibilidade de reverter o caminho de leitura. Fase 6 encerra removendo a duplicação de regra.
+
+## Arquivos e artefatos previstos
+
+- `src/lib/studyUtils.ts` e testes
+- `src/pages/Study.tsx`, `src/components/FlashCard.tsx`
+- `src/pages/DeckDetail.tsx`, `src/components/deck-detail/DeckDetailContext.tsx`
+- `src/components/dashboard/DeckRow.tsx` e pontos de navegação com prefetch
+- `src/hooks/useStudySession.ts`, `src/lib/queryKeys.ts`
+- `src/services/deck/deckStats.ts`, `src/services/studyService.ts`
+- novo módulo puro de limites diários em `src/lib` e testes
+- componentes globais com o problema de ref
+- migrations Supabase: tabela derivada, triggers, função de reconciliação, `submit_review`, revisão de `get_all_user_deck_stats` e `build_study_queue`
