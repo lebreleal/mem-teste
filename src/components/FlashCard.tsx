@@ -316,11 +316,11 @@ const FlashCard = ({
             const parsed = JSON.parse(backContent);
             if (typeof parsed.clozeTarget === 'number') clozeTarget = parsed.clozeTarget;
           } catch {}
-          occlusionFrontText = sanitizeHtml(renderCloze(rawFrontText, false, clozeTarget));
+          occlusionFrontText = sanitizeHtml(renderCloze(rawFrontText, false, clozeTarget), { eager: true });
           // For back: show revealed cloze
-          occlusionBackText = sanitizeHtml(renderCloze(rawFrontText, true, clozeTarget));
+          occlusionBackText = sanitizeHtml(renderCloze(rawFrontText, true, clozeTarget), { eager: true });
         } else {
-          occlusionFrontText = sanitizeHtml(rawFrontText);
+          occlusionFrontText = sanitizeHtml(rawFrontText, { eager: true });
         }
       }
     } catch {}
