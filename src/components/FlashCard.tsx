@@ -468,7 +468,7 @@ const FlashCard = ({
                   ) : (
                     <div
                       className="prose prose-sm max-w-none text-center text-card-foreground w-full"
-                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(peekingFront ? displayFront : displayBack) }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(peekingFront ? displayFront : displayBack, { eager: true }) }}
                     />
                   )}
                   {peekingFront && (
