@@ -548,7 +548,9 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
       else if (stateFilter === 'dificil') result = result.filter(c => c.state !== 0 && c.state != null && !isFrozenCard(c) && (c.difficulty ?? 5) > 5 && (c.difficulty ?? 5) <= 7);
       else if (stateFilter === 'errei') result = result.filter(c => c.state !== 0 && c.state != null && !isFrozenCard(c) && (c.difficulty ?? 5) > 7);
     }
-    if (search.trim()) {
+    // When isSearching, the server already applied the term (Lei 1G) — the
+    // local pass would only re-filter the same rows.
+    if (!isSearching && search.trim()) {
       const q = search.toLowerCase();
       result = result.filter(c => c.front_content.toLowerCase().includes(q) || c.back_content.toLowerCase().includes(q));
     }
@@ -557,7 +559,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
       const bFrozen = isFrozenCard(b) ? 1 : 0;
       return aFrozen - bFrozen;
     });
-  }, [allCards, search, typeFilter, stateFilter, isFrozenCard]);
+  }, [allCards, search, isSearching, typeFilter, stateFilter, isFrozenCard]);
 
   const getStateInfo = useCallback((card: CardRow) => {
     if (isFrozenCard(card)) return { label: '❄️ Congelado', color: 'text-info bg-info/10' };
