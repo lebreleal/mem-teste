@@ -15,8 +15,8 @@ import { sm2Schedule, type SM2Card, type SM2Params, type SM2Output } from '@/lib
 import { parseStepToMinutes } from '@/lib/studyUtils';
 import { TZ_OFFSET_SP } from '@/lib/dateUtils';
 
-export type { StudyQueueResult, StudyCard, DeckStudyConfig, CardReviewResult, StudyQueueLimitsRow, StudyPlanRow, StudyProfileRow, CardUpdatePayload, StudyStatsSummaryRow, ActivityBreakdownResult, ActivityDayRow, HourlyBreakdownRow, RetentionRow, CardsAddedRow } from '@/types/study';
-import type { StudyQueueResult, StudyCard, DeckStudyConfig, CardReviewResult, StudyQueueLimitsRow, StudyPlanRow, StudyProfileRow, CardUpdatePayload, StudyStatsSummaryRow, ActivityBreakdownResult, HourlyBreakdownRow, RetentionRow, CardsAddedRow } from '@/types/study';
+export type { StudyQueueResult, StudyCard, DeckStudyConfig, CardReviewResult, StudyQueueLimitsRow, StudyPlanRow, StudyProfileRow, CardUpdatePayload, StudyStatsSummaryRow, ActivityBreakdownResult, ActivityDayRow, HourlyBreakdownRow, RetentionRow, CardsAddedRow, ReviewProfileCounters } from '@/types/study';
+import type { StudyQueueResult, StudyCard, DeckStudyConfig, CardReviewResult, StudyQueueLimitsRow, StudyPlanRow, StudyProfileRow, CardUpdatePayload, StudyStatsSummaryRow, ActivityBreakdownResult, HourlyBreakdownRow, RetentionRow, CardsAddedRow, ReviewProfileCounters } from '@/types/study';
 
 interface BuildStudyQueueResult {
   cards: StudyCard[];
