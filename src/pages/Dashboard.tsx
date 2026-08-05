@@ -216,6 +216,13 @@ const Dashboard = () => {
     });
   }, [state.isInsideSala, state.currentFolders, state.decks, state.getAggregateStats]);
 
+  /** A pasta is a level-2 folder (it lives inside a sala). */
+  const isInsidePasta = useMemo(() => {
+    if (!state.currentFolderId) return false;
+    const current = state.folders.find(f => f.id === state.currentFolderId);
+    return !!current?.parent_id;
+  }, [state.currentFolderId, state.folders]);
+
   const handleSalaClick = useCallback((folderId: string) => {
     state.setCurrentFolderId(folderId);
   }, [state]);
@@ -328,6 +335,11 @@ const Dashboard = () => {
             onPendingClick={handlePendingClick}
             decksWithPendingUpdates={state.decksWithPendingUpdates}
             organizeMode={organizeMode}
+            hasFolders={pastas.length > 0}
+            isInsidePasta={isInsidePasta}
+            onCreateDeck={() => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
+            onCreateAI={() => state.setAiDeckOpen(true)}
+            onImport={() => state.setImportOpen(true)}
           />
         )}
 
@@ -386,6 +398,7 @@ const Dashboard = () => {
         createType={state.createType} setCreateType={state.setCreateType}
         createName={state.createName} setCreateName={state.setCreateName}
         createParentDeckId={state.createParentDeckId} setCreateParentDeckId={state.setCreateParentDeckId}
+        folderKind={state.currentFolderId ? 'pasta' : 'sala'}
         onCreateSubmit={actions.handleCreateSubmit}
         isCreating={state.createDeck.isPending || state.createFolder.isPending}
         renameTarget={state.renameTarget} setRenameTarget={state.setRenameTarget}
