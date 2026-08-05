@@ -176,7 +176,7 @@ const DeckDetailContent = () => {
       <div className="relative bg-muted/50 overflow-hidden">
         {/* Blurred background image (same style as Sala) */}
         <div className="absolute inset-0">
-          <img src={folderImageUrl || defaultSalaIcon} alt="" className="w-full h-full object-cover opacity-30 blur-sm" />
+          <img loading="lazy" decoding="async" src={folderImageUrl || defaultSalaIcon} alt="" className="w-full h-full object-cover opacity-30 blur-sm" />
           <div className="absolute inset-0 bg-gradient-to-b from-background/60 to-background" />
         </div>
 

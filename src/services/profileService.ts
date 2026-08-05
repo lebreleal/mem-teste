@@ -44,3 +44,81 @@ export async function uploadAvatar(userId: string, file: File): Promise<string> 
 
   return publicUrl;
 }
+
+// ─── Core profile row (used by useProfile / dashboard bootstrap) ───
+
+export interface ProfileData {
+  id: string;
+  energy: number;
+  ai_credits: number;
+  ai_credits_purchased: number;
+  successful_cards_counter: number;
+  daily_cards_studied: number;
+  daily_energy_earned: number;
+  daily_new_cards_limit: number;
+  daily_study_minutes: number;
+  last_energy_recharge: string | null;
+  last_study_reset_date: string | null;
+  created_at: string;
+  weekly_new_cards: Record<string, number> | null;
+  weekly_study_minutes: Record<string, number> | null;
+  is_profile_public: boolean;
+  current_streak: number;
+}
+
+const PROFILE_COLUMNS =
+  'id, energy, ai_credits, ai_credits_purchased, successful_cards_counter, daily_cards_studied, daily_energy_earned, daily_new_cards_limit, daily_study_minutes, last_energy_recharge, last_study_reset_date, created_at, weekly_new_cards, weekly_study_minutes, is_profile_public, current_streak';
+
+export async function fetchProfile(userId: string): Promise<ProfileData> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select(PROFILE_COLUMNS)
+    .eq('id', userId)
+    .single();
+  if (error) throw error;
+  return data as unknown as ProfileData;
+}
+
+/**
+ * Postgres `numeric` columns chegam pelo Realtime como STRING (ex.: "1817"),
+ * diferente do REST (que devolve number). Sem normalizar, o cache do perfil
+ * fica com strings e qualquer soma vira concatenação — foi o que zerava a
+ * exibição dos créditos após qualquer UPDATE no perfil.
+ */
+const NUMERIC_PROFILE_FIELDS = [
+  'energy', 'ai_credits', 'ai_credits_purchased', 'successful_cards_counter',
+  'daily_cards_studied', 'daily_energy_earned', 'daily_new_cards_limit',
+  'daily_study_minutes', 'current_streak',
+] as const;
+
+function normalizeProfileRow(row: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...row };
+  for (const key of NUMERIC_PROFILE_FIELDS) {
+    const v = out[key];
+    if (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v))) {
+      out[key] = Number(v);
+    }
+  }
+  return out;
+}
+
+/** Realtime UPDATE stream for a single profile row. Callers own the unsubscribe. */
+export function subscribeToProfileRow(
+  userId: string,
+  onUpdate: (row: Record<string, unknown>) => void
+) {
+  const channel = supabase
+    .channel(`profile-${userId}-${Date.now()}`)
+    .on(
+      'postgres_changes' as 'system',
+      { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` },
+      (payload: { new?: Record<string, unknown> }) => {
+        if (payload?.new) onUpdate(normalizeProfileRow(payload.new));
+      }
+    )
+    .subscribe();
+
+  return () => {
+    void supabase.removeChannel(channel);
+  };
+}

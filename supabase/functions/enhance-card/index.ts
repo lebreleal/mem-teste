@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { handleCors, jsonResponse, getModelMap, deductEnergy, refundEnergy, logTokenUsage, fetchPromptConfig, getAIConfig } from "../_shared/utils.ts";
+import { handleCors, jsonResponse, getModelMap, estimateCredits, holdCredits, refundCredits, settleAndLog, fetchPromptConfig, getAIConfig, aiHeaders } from "../_shared/utils.ts";
 
 const DEFAULT_SYSTEM_PROMPT = `Você é um especialista em educação e criação de flashcards, aplicando rigorosamente as 20 Regras de Formulação do Conhecimento do Dr. Piotr Wozniak (SuperMemo).
 
@@ -77,13 +77,13 @@ Deno.serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
 
-  let energyDeducted = false;
-  let deductedCost = 0;
+  let creditsHeld = false;
+  let heldCredits = 0;
   let supabase: any;
   let userId = "";
 
   try {
-    const { front, back, cardType, aiModel, energyCost, customPrompt } = await req.json();
+    const { front, back, cardType, aiModel, customPrompt } = await req.json();
     const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
     if (!AI_KEY) throw new Error("AI API key is not configured");
     if (!front || !front.trim()) return jsonResponse({ error: "Escreva algo no card antes de melhorar." }, 400);
@@ -96,17 +96,17 @@ Deno.serve(async (req) => {
       if (user) userId = user.id;
     }
 
-    const cost = energyCost || 0;
-    if (userId && cost > 0) {
-      const ok = await deductEnergy(supabase, userId, cost);
-      if (!ok) return jsonResponse({ error: "Créditos IA insuficientes", requiresCredits: true }, 402);
-      energyDeducted = true;
-      deductedCost = cost;
-    }
-
     const promptConfig = await fetchPromptConfig(supabase, "enhance_card");
     const MODEL_MAP = await getModelMap(supabase);
     const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "google/gemini-2.5-flash";
+
+    // Server-side pricing: never trust a cost sent by the client.
+    if (userId) {
+      heldCredits = await estimateCredits(supabase, selectedModel, String(front || "").length + String(back || "").length + String(customPrompt || "").length + 2000, 1200);
+      const creditsOk = await holdCredits(supabase, userId, heldCredits, "enhance_card");
+      if (!creditsOk) return jsonResponse({ error: "Créditos IA insuficientes", requiresCredits: true, requiredCredits: heldCredits }, 402);
+      creditsHeld = true;
+    }
     let systemPrompt = promptConfig?.system_prompt || DEFAULT_SYSTEM_PROMPT;
     let userContent = "";
 
@@ -132,29 +132,29 @@ Deno.serve(async (req) => {
 
     const response = await fetch(AI_URL, {
       method: "POST",
-      headers: { Authorization: `Bearer ${AI_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: selectedModel, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userContent }], tools, tool_choice: { type: "function", function: { name: "return_improved_card" } } }),
+      headers: aiHeaders(AI_KEY),
+      body: JSON.stringify({ model: selectedModel, usage: { include: true }, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userContent }], tools, tool_choice: { type: "function", function: { name: "return_improved_card" } } }),
     });
 
     if (!response.ok) {
-      if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
+      if (creditsHeld) await refundCredits(supabase, userId, heldCredits);
       if (response.status === 429) return jsonResponse({ error: "Rate limit excedido." }, 429);
       const t = await response.text(); console.error("AI error:", response.status, t); throw new Error("AI error");
     }
 
     const data = await response.json();
-    if (userId) await logTokenUsage(supabase, userId, "enhance_card", selectedModel, data.usage, cost);
+    const chargedCredits = userId ? await settleAndLog(supabase, userId, heldCredits, "enhance_card", selectedModel, data) : 0;
 
     const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
     if (!toolCall) {
-      if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
+      if (creditsHeld) await refundCredits(supabase, userId, heldCredits);
       throw new Error("No tool call in response");
     }
     const result = JSON.parse(toolCall.function.arguments);
     return jsonResponse(result);
   } catch (e) {
     console.error("enhance-card error:", e);
-    if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
+    if (creditsHeld) await refundCredits(supabase, userId, heldCredits);
     return jsonResponse({ error: e instanceof Error ? e.message : "Unknown error" }, 500);
   }
 });

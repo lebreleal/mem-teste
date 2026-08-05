@@ -20,7 +20,6 @@ export interface GenerateDeckParams {
   cardFormats: CardFormat[];
   customInstructions?: string;
   aiModel: string;
-  energyCost: number;
 }
 
 export interface GenerateDeckResult {
@@ -36,7 +35,6 @@ export interface TutorParams {
   correctIndex?: number;
   selectedIndex?: number;
   aiModel: string;
-  energyCost: number;
 }
 
 /** Generate flashcards from text content via edge function. */
@@ -49,7 +47,6 @@ export async function generateDeckCards(params: GenerateDeckParams): Promise<Gen
       cardFormats: params.cardFormats,
       customInstructions: params.customInstructions,
       aiModel: params.aiModel,
-      energyCost: params.energyCost,
     },
   });
   if (error) throw error;

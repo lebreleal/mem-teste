@@ -12,8 +12,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import LazyRichEditor from '@/components/LazyRichEditor';
 import { IconImage, IconSwap, IconInfo } from '@/components/icons';
-import cartaoInvertidoResposta from '@/assets/cartao-invertido-resposta.png';
-import cartaoInvertidoPergunta from '@/assets/cartao-invertido-pergunta.png';
+import cartaoInvertidoResposta from '@/assets/cartao-invertido-resposta.webp';
+import cartaoInvertidoPergunta from '@/assets/cartao-invertido-pergunta.webp';
 
 export type CardEditorType = 'basic' | 'cloze' | 'multiple_choice' | 'image_occlusion';
 
@@ -170,11 +170,11 @@ const ReversedCardsToggle = () => {
           </div>
           <div className="flex items-center justify-center gap-3">
             <div className="rounded-xl border border-border bg-background p-2 flex-1 flex items-center justify-center">
-              <img src={cartaoInvertidoResposta} alt="Cartão normal" className="h-28 w-auto rounded-lg object-contain" />
+              <img loading="lazy" decoding="async" src={cartaoInvertidoResposta} alt="Cartão normal" className="h-28 w-auto rounded-lg object-contain" />
             </div>
             <span className="text-xl text-primary font-bold select-none shrink-0">+</span>
             <div className="rounded-xl border border-border bg-background p-2 flex-1 flex items-center justify-center">
-              <img src={cartaoInvertidoPergunta} alt="Cartão invertido" className="h-28 w-auto rounded-lg object-contain" />
+              <img loading="lazy" decoding="async" src={cartaoInvertidoPergunta} alt="Cartão invertido" className="h-28 w-auto rounded-lg object-contain" />
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
@@ -351,7 +351,7 @@ export const CardEditorForm = ({
           <div className="flex-shrink-0">
             {isImageMode && occlusionImageUrl ? (
               <button type="button" onClick={onOpenOcclusion} className="relative group inline-block rounded-lg overflow-hidden border border-border">
-                <img src={occlusionImageUrl} alt="Oclusão" className="h-16 w-16 object-cover rounded-lg" />
+                <img loading="lazy" decoding="async" src={occlusionImageUrl} alt="Oclusão" className="h-16 w-16 object-cover rounded-lg" />
                 <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center bg-primary/80 py-0.5">
                   <IconImage className="h-2.5 w-2.5 text-primary-foreground" />
                 </div>

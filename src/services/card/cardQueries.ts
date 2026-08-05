@@ -191,12 +191,5 @@ export async function fetchReviewDueCount(deckIds: string[], nowISO: string): Pr
   return count ?? 0;
 }
 
-/** Fetch study plan deck_ids for a user. */
-export async function fetchStudyPlanDeckIds(userId: string): Promise<Array<{ deck_ids: string[] | null }>> {
-  const { data, error } = await supabase
-    .from('study_plans')
-    .select('deck_ids')
-    .eq('user_id', userId);
-  if (error) throw error;
-  return (data ?? []) as Array<{ deck_ids: string[] | null }>;
-}
+/** Fetch study plan deck_ids for a user. Canonical implementation lives in studyService. */
+export { fetchStudyPlanDeckIds } from '@/services/studyService';

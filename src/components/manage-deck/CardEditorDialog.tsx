@@ -3,9 +3,11 @@ import { Loader2, X } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import LazyRichEditor from '@/components/LazyRichEditor';
-import OcclusionEditor from '@/components/manage-deck/OcclusionEditor';
+import OcclusionEditor from '@/components/manage-deck/LazyOcclusionEditor';
 import AttachmentPreviewModal from '@/components/manage-deck/AttachmentPreviewModal';
 import { OCCLUSION_COLORS } from '@/lib/occlusionColors';
+import { buildOcclusionFront } from '@/lib/occlusion';
+
 import { IconCheck } from '@/components/icons';
 import type { ImageAttachment } from '@/components/RichEditor';
 import type { EditorCardType } from '@/hooks/useManageDeck';
@@ -54,23 +56,14 @@ function buildFrontWithOcclusion(params: {
   rects: Array<{ id: string; color?: string }>;
   canvasSize: { w: number; h: number } | null;
 }) {
-  const colorGroups: Record<string, string[]> = {};
-  params.rects.forEach((r) => {
-    const color = r.color || OCCLUSION_COLORS[0].fill;
-    if (!colorGroups[color]) colorGroups[color] = [];
-    colorGroups[color].push(r.id);
-  });
-
-  return JSON.stringify({
+  return buildOcclusionFront({
     imageUrl: params.imageUrl,
-    frontText: params.frontText,
     rects: params.rects,
-    allRects: params.rects,
-    canvasWidth: params.canvasSize?.w ?? 0,
-    canvasHeight: params.canvasSize?.h ?? 0,
-    colorGroups,
+    canvasSize: params.canvasSize,
+    frontText: params.frontText,
   });
 }
+
 
 export const CardEditorDialog = ({
   editorOpen, setEditorOpen, editingId,

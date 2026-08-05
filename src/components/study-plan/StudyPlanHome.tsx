@@ -39,8 +39,8 @@ interface StudyPlanHomeProps {
   allDeckIds: string[];
   metrics: PlanMetrics | null;
   avgSecondsPerCard: number;
-  isPremium: boolean;
   calibrationFactor?: number;
+
   updateCapacity: UpdateCapacityMutation;
   updateNewCardsLimit: UpdateNewCardsLimitMutation;
   reorderObjectives: ReorderObjectivesMutation;
@@ -52,7 +52,7 @@ interface StudyPlanHomeProps {
 
 export const StudyPlanHome = ({
   plans, activeDecks, globalCapacity, expandedDeckIds, allDeckIds, metrics,
-  avgSecondsPerCard, isPremium, calibrationFactor, updateCapacity, updateNewCardsLimit,
+  avgSecondsPerCard, calibrationFactor, updateCapacity, updateNewCardsLimit,
   reorderObjectives, updatePlan,
   onNavigateBack, onStartNewPlan, onStartEdit,
 }: StudyPlanHomeProps) => {
@@ -162,11 +162,8 @@ export const StudyPlanHome = ({
                 </Card>
               );
             })}
-            {!isPremium && plans.length >= 1 ? (
-              <Card className="border-dashed border-primary/30"><CardContent className="p-3"><div className="flex items-center gap-3"><div className="h-7 w-7 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0"><Crown className="h-3.5 w-3.5 text-amber-500" /></div><div className="flex-1"><p className="text-xs font-medium">Mais objetivos?</p><p className="text-[10px] text-muted-foreground">Assine Premium para objetivos ilimitados.</p></div></div></CardContent></Card>
-            ) : (
-              <Button variant="outline" size="sm" className="w-full text-xs" onClick={onStartNewPlan}><Plus className="h-3.5 w-3.5 mr-1.5" /> Adicionar Objetivo</Button>
-            )}
+            <Button variant="outline" size="sm" className="w-full text-xs" onClick={onStartNewPlan}><Plus className="h-3.5 w-3.5 mr-1.5" /> Adicionar Objetivo</Button>
+
           </div>
         )}
 

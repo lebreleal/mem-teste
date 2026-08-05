@@ -5,7 +5,7 @@
  */
 
 import { useState } from 'react';
-import { ChevronDown, ChevronLeft } from 'lucide-react';
+import { ChevronDown, ChevronLeft, FolderPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { IconInfo, IconDeck, IconImport, IconAIGradient } from '@/components/icons';
 import {
@@ -44,15 +44,16 @@ interface DashboardModalsProps {
   onCreateDeckAI: () => void;
   onImportCards: () => void;
 
-  /** When true, labels say "Sub-baralho" instead of "Baralho" (inside a deck pai) */
-  isSubDeckContext?: boolean;
+  /** Show the "Criar pasta" entry (only inside a sala, never inside a pasta) */
+  canCreateFolder?: boolean;
+  onCreateFolder?: () => void;
 }
 
 const DashboardModals = (props: DashboardModalsProps) => {
   const [addMenuStep, setAddMenuStep] = useState<'main' | 'create-deck'>('main');
-  const isSub = props.isSubDeckContext ?? false;
-  const deckLabel = isSub ? 'sub-baralho' : 'baralho';
-  const deckLabelCap = isSub ? 'Sub-baralho' : 'Baralho';
+  const isSub = false;
+  const deckLabel = 'baralho';
+  const deckLabelCap = 'Baralho';
 
   return (
     <>
@@ -185,6 +186,16 @@ const DashboardModals = (props: DashboardModalsProps) => {
                 </button>
                 <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 shrink-0" />
                </button>
+              {props.canCreateFolder && props.onCreateFolder && (
+                <button
+                  className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
+                  onClick={() => { props.setSalaAddMenuOpen(false); setAddMenuStep('main'); props.onCreateFolder!(); }}
+                >
+                  <FolderPlus className="h-5 w-5 text-muted-foreground shrink-0" />
+                  <span className="text-sm font-medium text-foreground flex-1">Criar pasta</span>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90 shrink-0" />
+                </button>
+              )}
               <button
                 className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
                 onClick={() => { props.setSalaAddMenuOpen(false); setAddMenuStep('main'); props.onImportCards(); }}

@@ -148,7 +148,6 @@ const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, is
           body: JSON.stringify({
             messages: apiMessages,
             aiModel: model,
-            energyCost: cost,
             skipPersist: true,
           }),
         });

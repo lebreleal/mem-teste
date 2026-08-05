@@ -4,19 +4,17 @@ import { fetchProfileName, updateProfileName, verifyPassword, updatePassword, up
 import { useAuth } from '@/hooks/useAuth';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { useToast } from '@/hooks/use-toast';
-import { useSubscription } from '@/hooks/useSubscription';
 import BottomNav from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { ArrowLeft, Loader2, ExternalLink, BarChart3, BrainCircuit, Gauge, Wallet, Bot, LogOut, Lock, User, Save, Camera } from 'lucide-react';
+import { ArrowLeft, Loader2, ExternalLink, BarChart3, Bot, LogOut, Lock, User, Save, Camera } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 
 const Profile = () => {
   const { user, signOut } = useAuth();
   const { isAdmin } = useIsAdmin();
-  const { isPremium, plan } = useSubscription();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -158,17 +156,8 @@ const Profile = () => {
           onClick={() => setEditPasswordOpen(true)}
         />
 
-        {/* Subscription Section */}
-        <SectionHeader className="mt-6">Assinatura</SectionHeader>
-
-        <ProfileRow
-          label={isPremium ? `Plano ${plan ?? 'Premium'}` : 'Plano gratuito'}
-          sub={isPremium ? 'Toque para gerenciar.' : 'Toque para mais informações.'}
-          icon={<ExternalLink className="h-4.5 w-4.5 text-muted-foreground" />}
-          onClick={() => navigate('/dashboard')}
-        />
-
         {/* Shortcuts Section */}
+
         <SectionHeader className="mt-6">Atalhos</SectionHeader>
 
         <ProfileRow
@@ -176,25 +165,6 @@ const Profile = () => {
           sub="Heatmap, gráficos e desempenho"
           icon={<BarChart3 className="h-4.5 w-4.5 text-muted-foreground" />}
           onClick={() => navigate('/desempenho')}
-        />
-        <ProfileRow
-          label="Biblioteca de Temas"
-          sub="Gerenciar temas, importar e estudar"
-          icon={<BrainCircuit className="h-4.5 w-4.5 text-muted-foreground" />}
-          onClick={() => navigate('/conceitos')}
-        />
-        <ProfileRow
-          label="Planejamento"
-          sub="Retenção e o que fazer hoje"
-          icon={<Gauge className="h-4.5 w-4.5 text-muted-foreground" />}
-          onClick={() => navigate('/planejamento')}
-        />
-        <ProfileRow
-          label="Carteira"
-          sub="Carteira, tier de criador e transações"
-          icon={<Wallet className="h-4.5 w-4.5 text-muted-foreground" />}
-          onClick={() => isAdmin ? navigate('/memograna') : toast({ title: 'Em desenvolvimento', description: 'Carteira estará disponível em breve!' })}
-          badge={!isAdmin ? 'BREVE' : undefined}
         />
         {isAdmin && (
           <ProfileRow

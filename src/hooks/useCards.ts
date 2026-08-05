@@ -14,7 +14,10 @@ export const useCards = (deckId: string, opts?: { enableQuery?: boolean }) => {
     queryKey: ['cards', deckId],
     queryFn: () => cardService.fetchCards(deckId),
     enabled: enableQuery && !!user && !!deckId,
+    // Opening the editor from a list must not refetch the whole deck again.
+    staleTime: 120_000,
   });
+
 
   const createCard = useMutation({
     mutationFn: async (input: { frontContent: string; backContent: string; cardType?: string; createdAt?: string } | { cards: { frontContent: string; backContent: string; cardType: string }[] }) => {
@@ -27,8 +30,8 @@ export const useCards = (deckId: string, opts?: { enableQuery?: boolean }) => {
   });
 
   const updateCard = useMutation({
-    mutationFn: ({ id, frontContent, backContent }: { id: string; frontContent: string; backContent: string }) =>
-      cardService.updateCard(id, frontContent, backContent),
+    mutationFn: ({ id, frontContent, backContent, cardType }: { id: string; frontContent: string; backContent: string; cardType?: string }) =>
+      cardService.updateCard(id, frontContent, backContent, cardType),
     onSuccess: () => invalidateDeckRelatedQueries(queryClient, deckId),
   });
 

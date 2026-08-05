@@ -6,14 +6,14 @@ import type { DeckWithStats } from '@/types/deck';
 // Re-export for backward compatibility
 export type { DeckWithStats } from '@/types/deck';
 
-export const useDecks = () => {
+export const useDecks = (options?: { enabled?: boolean }) => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
   const decksQuery = useQuery({
     queryKey: ['decks', user?.id],
     queryFn: () => deckService.fetchDecksWithStats(user!.id),
-    enabled: !!user,
+    enabled: !!user && (options?.enabled ?? true),
     staleTime: 2 * 60_000, // 2 min — avoid refetch on every focus/render
   });
 

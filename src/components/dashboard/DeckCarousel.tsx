@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import type { DeckWithStats } from '@/types/deck';
 import { calculateRealStudyTime, type RealStudyMetrics, DEFAULT_STUDY_METRICS, DEFAULT_CALIBRATION_FACTOR } from '@/lib/studyUtils';
+import { usePrefetchStudy } from '@/hooks/usePrefetchStudy';
 
 type AggregateStats = { new_count: number; learning_count: number; review_count: number; newReviewed: number; newGraduated: number; reviewed: number };
 
@@ -73,6 +74,7 @@ function getDeckTodayStats(deck: DeckWithStats, aggregateMap: Map<string, Aggreg
 
 function DeckStudyCard({ deck, aggregateMap, studyMetrics, calibrationFactor = DEFAULT_CALIBRATION_FACTOR, objectiveName, globalNewRemaining, allocatedNew }: { deck: DeckWithStats; aggregateMap: Map<string, AggregateStats>; studyMetrics: RealStudyMetrics; calibrationFactor?: number; objectiveName?: string; globalNewRemaining?: number; allocatedNew?: number }) {
   const navigate = useNavigate();
+  const prefetchStudy = usePrefetchStudy();
   const stats = getDeckTodayStats(deck, aggregateMap, allocatedNew != null ? allocatedNew : globalNewRemaining);
   const { newAvailable: rawNewAvailable, reviewAvailable, learningAvailable, studiedToday } = stats;
   // If allocatedNew is provided, override newAvailable with it (already distributed)
@@ -123,7 +125,7 @@ function DeckStudyCard({ deck, aggregateMap, studyMetrics, calibrationFactor = D
       <Progress value={progressPercent} className="h-1.5" />
       <p className="text-[10px] text-muted-foreground">{studiedToday}/{totalToday} cards · {progressPercent}% concluído</p>
       <div className="flex items-center gap-2 mt-auto">
-        <Button size="sm" className="flex-1 h-8 text-xs" onClick={() => navigate(`/study/${deck.id}`)}>
+        <Button size="sm" className="flex-1 h-8 text-xs" onMouseEnter={() => prefetchStudy(deck.id)} onTouchStart={() => prefetchStudy(deck.id)} onClick={() => navigate(`/study/${deck.id}`)}>
           <Play className="h-3 w-3 mr-1" /> Estudar
         </Button>
         <Button size="icon" variant="outline" className="h-8 w-8 rounded-full shrink-0" onClick={() => navigate(`/decks/${deck.id}`)}>

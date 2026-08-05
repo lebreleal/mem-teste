@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { OCCLUSION_COLORS } from '@/lib/occlusionColors';
+import { normalizeClozeExtra } from '@/lib/occlusion';
 
 export type EditorCardType = 'basic' | 'cloze' | 'image_occlusion';
 
@@ -149,8 +150,8 @@ export function useManageDeck() {
     if (hasNums) {
       // Create one card per unique number (text cloze + image occlusion colors)
       if (editingId) {
-        const backJson = JSON.stringify({ clozeTarget: allNums[0] || 1, extra: back });
-        updateCard.mutate({ id: editingId, frontContent: front, backContent: backJson }, {
+        const backJson = JSON.stringify({ clozeTarget: allNums[0] || 1, extra: normalizeClozeExtra(front, back) });
+        updateCard.mutate({ id: editingId, frontContent: front, backContent: backJson, cardType: detectedType }, {
           onSuccess: onSuccessFn('Cartão atualizado!'),
         });
       } else if (allNums.length <= 1) {
@@ -174,7 +175,7 @@ export function useManageDeck() {
     // Basic card (no cloze, no image occlusion)
     const backContent = back;
     if (editingId) {
-      updateCard.mutate({ id: editingId, frontContent: front, backContent }, {
+      updateCard.mutate({ id: editingId, frontContent: front, backContent, cardType: detectedType }, {
         onSuccess: onSuccessFn('Cartão atualizado!'),
       });
     } else {
@@ -203,7 +204,7 @@ export function useManageDeck() {
     try {
       let backToSend = back;
       const { data, error } = await supabase.functions.invoke('enhance-card', {
-        body: { front, back: backToSend, cardType: editorType || 'basic', aiModel: model, energyCost: 1 },
+        body: { front, back: backToSend, cardType: editorType || 'basic', aiModel: model },
       });
       if (error) throw error;
       if (data.error) { toast({ title: data.error, variant: 'destructive' }); return; }
@@ -246,7 +247,6 @@ export function useManageDeck() {
           back,
           cardType: 'basic',
           aiModel: model,
-          energyCost: 1,
           customPrompt: templatePrompt,
         },
       });

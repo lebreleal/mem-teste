@@ -25,6 +25,8 @@ import { useEnergy } from '@/hooks/useEnergy';
 import { useAIModel } from '@/hooks/useAIModel';
 import { useToast } from '@/hooks/use-toast';
 import { OCCLUSION_COLORS } from '@/lib/occlusionColors';
+import { buildColorGroups, buildColorNums } from '@/lib/occlusion';
+
 import * as cardService from '@/services/cardService';
 
 interface StudyCardActionsProps {
@@ -43,6 +45,8 @@ interface StudyCardActionsProps {
     updates: { id: string; front_content: string; back_content: string }[],
     deletedIds: string[],
     replacementForActiveCard?: { id: string; front_content: string; back_content: string } | null,
+    /** Novos irmãos criados nesta edição (nova oclusão / novo cloze). */
+    newSiblings?: Array<Record<string, unknown>>,
   ) => void;
   onOpenChat?: () => void;
   chatHasMessages?: boolean;
@@ -329,18 +333,11 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
       throw new Error('Adicione a imagem e pelo menos uma oclusão');
     }
 
-    // Build color groups and preserve permanent color → cloze mapping
-    const colorGroups: Record<string, string[]> = {};
-    const imageNums = new Set<number>();
-    allRects.forEach((r) => {
-      const color = r.color || OCCLUSION_COLORS[0].fill;
-      if (!colorGroups[color]) colorGroups[color] = [];
-      colorGroups[color].push(r.id);
-      const colorIndex = OCCLUSION_COLORS.findIndex(c => c.fill === color);
-      imageNums.add(colorIndex >= 0 ? colorIndex + 1 : 1);
-    });
+    // One card per distinct color; occlusion numbers live in their own range.
+    const colorGroups = buildColorGroups(allRects);
+    const colorNums = buildColorNums(allRects);
+    const allNums: number[] = Object.values(colorNums).sort((a, b) => a - b);
 
-    const allNums = [...imageNums].sort((a, b) => a - b);
 
     // Also merge text cloze nums from frontText
     const frontText = (frontData as Record<string, unknown>).frontText as string | undefined;
@@ -353,8 +350,10 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
 
     // Update frontData with colorGroups
     frontData.colorGroups = colorGroups;
+    frontData.colorNums = colorNums;
     frontData.activeRectIds = allRects.map(r => r.id);
     const frontStr = JSON.stringify(frontData);
+
 
     // Fetch existing siblings
     const allSiblingCards = await fetchClozeSiblings([editCardDeckIdRef.current], originalFrontRef.current);
@@ -419,13 +418,14 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
       .filter(id => !updatedSiblings.some(update => update.id === id));
 
     const updatePromises = updatedSiblings.map(update =>
-      cardService.updateCard(update.id, update.front_content, update.back_content)
+      cardService.updateCard(update.id, update.front_content, update.back_content, 'image_occlusion')
     );
     const deletePromises = deleteIds.map(id => cardService.deleteCardWithReviewLogs(id));
 
     await Promise.all([...updatePromises, ...deletePromises]);
+    let createdSiblings: Array<Record<string, unknown>> = [];
     if (remainingNumsToAdd.length > 0) {
-      await cardService.createCards(editCardDeckIdRef.current, remainingNumsToAdd.map(n => ({
+      createdSiblings = await cardService.createCards(editCardDeckIdRef.current, remainingNumsToAdd.map(n => ({
         frontContent: frontStr,
         backContent: JSON.stringify({ clozeTarget: n, extra: userBack }),
         cardType: 'image_occlusion',
@@ -440,7 +440,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
       });
     }
 
-    onSiblingsUpdated?.(updatedSiblings, deleteIds, replacementForActiveCard);
+    onSiblingsUpdated?.(updatedSiblings, deleteIds, replacementForActiveCard, createdSiblings);
   };
 
   /** Save cloze with sibling reconciliation */
@@ -453,18 +453,14 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
     try {
       const parsed = JSON.parse(frontContent);
       if (parsed.allRects) {
-        const imageNums = new Set<number>();
-        (parsed.allRects as Array<{ id: string; color?: string }>).forEach(r => {
-          const color = r.color || OCCLUSION_COLORS[0].fill;
-          const colorIndex = OCCLUSION_COLORS.findIndex(c => c.fill === color);
-          imageNums.add(colorIndex >= 0 ? colorIndex + 1 : 1);
-        });
-        imageNums.forEach(n => {
+        const imageNums = buildColorNums(parsed.allRects as Array<{ id: string; color?: string }>);
+        Object.values(imageNums).forEach(n => {
           if (!uniqueNums.includes(n)) uniqueNums.push(n);
         });
         uniqueNums.sort((a, b) => a - b);
       }
     } catch {}
+
 
     if (uniqueNums.length === 0) uniqueNums = [1];
 
@@ -538,7 +534,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
 
     // Update existing siblings with new front_content (created_at is NOT changed)
     const updatePromises = updatedSiblings.map(update =>
-      cardService.updateCard(update.id, update.front_content, update.back_content)
+      cardService.updateCard(update.id, update.front_content, update.back_content, 'cloze')
     );
 
     // Delete orphaned siblings — they lose their FSRS data
@@ -547,8 +543,9 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
     await Promise.all([...updatePromises, ...deletePromises]);
 
     // Create new cards for added cloze numbers
+    let createdSiblings: Array<Record<string, unknown>> = [];
     if (remainingNumsToAdd.length > 0) {
-      await cardService.createCards(editCardDeckIdRef.current, remainingNumsToAdd.map(n => ({
+      createdSiblings = await cardService.createCards(editCardDeckIdRef.current, remainingNumsToAdd.map(n => ({
         frontContent: frontContent,
         backContent: JSON.stringify({ clozeTarget: n, extra: userBack }),
         cardType: 'cloze',
@@ -563,7 +560,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
       });
     }
 
-    onSiblingsUpdated?.(updatedSiblings, deleteIds, replacementForActiveCard);
+    onSiblingsUpdated?.(updatedSiblings, deleteIds, replacementForActiveCard, createdSiblings);
   };
 
   // AI Improve
@@ -581,8 +578,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
     setIsImproving(true);
     try {
       const data = await enhanceCard({
-        front, back, cardType: 'basic', aiModel: model, energyCost: 1,
-      });
+        front, back, cardType: 'basic', aiModel: model, });
 
       if (data.error) { toast({ title: data.error, variant: 'destructive' }); return; }
       if (data.unchanged) { toast({ title: '✨ Este card já está ótimo!', description: 'Não há melhorias a fazer.' }); return; }
@@ -662,7 +658,6 @@ Retorne o front com a sintaxe {{c1::resposta}} e back vazio.`;
         back: correctAnswer,
         cardType: 'basic',
         aiModel: model,
-        energyCost: 1,
         customPrompt,
       });
 

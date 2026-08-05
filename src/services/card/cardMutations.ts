@@ -59,11 +59,13 @@ export async function createCards(deckId: string, cards: { frontContent: string;
   return allData;
 }
 
-/** Update a card's content. */
-export async function updateCard(id: string, frontContent: string, backContent: string) {
+/** Update a card's content (and optionally its type, keeping content and card_type in sync). */
+export async function updateCard(id: string, frontContent: string, backContent: string, cardType?: string) {
+  const payload: { front_content: string; back_content: string; card_type?: string } = { front_content: frontContent, back_content: backContent };
+  if (cardType) payload.card_type = cardType;
   const { data, error } = await supabase
     .from('cards')
-    .update({ front_content: frontContent, back_content: backContent })
+    .update(payload)
     .eq('id', id)
     .select()
     .single();

@@ -33,8 +33,8 @@ interface StudyPlanWizardProps {
   globalCapacity: GlobalCapacity;
   metrics: PlanMetrics | null;
   avgSecondsPerCard: number;
-  isPremium: boolean;
   isEditing: boolean;
+
   editingPlanId: string | null;
   createPlan: CreatePlanMutation;
   updatePlan: UpdatePlanMutation;
@@ -44,7 +44,8 @@ interface StudyPlanWizardProps {
 
 export const StudyPlanWizard = ({
   plans, activeDecks, globalCapacity, metrics, avgSecondsPerCard,
-  isPremium, isEditing, editingPlanId,
+  isEditing, editingPlanId,
+
   createPlan, updatePlan, deletePlan, onBack,
 }: StudyPlanWizardProps) => {
   const navigate = useNavigate();

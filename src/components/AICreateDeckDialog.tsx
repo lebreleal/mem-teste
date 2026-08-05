@@ -62,7 +62,7 @@ const AICreateDeckDialog = ({ open, onOpenChange, folderId, parentDeckId, existi
       <DialogContent className="sm:max-w-3xl max-h-[90dvh] sm:max-h-[90vh] flex flex-col p-4 sm:p-6" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle className="font-display flex items-center gap-2">
-            <Sparkles className="h-5 w-5" style={{ color: 'hsl(var(--energy-purple))' }} />
+            <Sparkles className="h-5 w-5 text-primary" />
             {stepTitle[flow.step] || (parentDeckId ? 'Criar Sub-baralho com IA' : 'Criar Deck com IA')}
           </DialogTitle>
         </DialogHeader>
@@ -104,7 +104,6 @@ const AICreateDeckDialog = ({ open, onOpenChange, folderId, parentDeckId, existi
 
         {flow.step === 'config' && (
           <ConfigStep
-            isPremium={flow.isPremium}
             detailLevel={flow.detailLevel}
             onDetailLevelChange={flow.setDetailLevel}
             cardFormats={flow.cardFormats}

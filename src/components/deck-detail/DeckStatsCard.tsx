@@ -14,6 +14,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useStudyPlan } from '@/hooks/useStudyPlan';
 import { fetchDeckHierarchyIds } from '@/services/uiQueryService';
 import { IconDeck, IconInfo } from '@/components/icons';
+import { useWarmStudyQueue } from '@/hooks/usePrefetchStudy';
 
 interface DeckStatsCardProps {
   mode?: 'cards';
@@ -28,6 +29,10 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
   } = useDeckDetail();
   const { user } = useAuth();
   const { realStudyMetrics, calibrationFactor } = useStudyPlan();
+  // Warm the study queue while the user is still reading the deck screen, so
+  // pressing "Estudar" renders the session from cache instead of waiting on
+  // the build_study_queue round trip.
+  useWarmStudyQueue(deckId);
 
   // === Card classification from server-side RPC (handles any deck size) ===
   const diffCounts = useMemo(() => {

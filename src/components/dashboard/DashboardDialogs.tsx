@@ -120,7 +120,7 @@ const FolderBrowser = ({
             onClick={() => { setMoveBrowseFolderId(f.id); setSearchQuery(''); }}
             className="flex w-full max-w-full min-w-0 items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors"
           >
-            <img src={f.image_url || defaultSalaIcon} alt={f.name} className="h-8 w-8 rounded-lg object-cover shrink-0" />
+            <img loading="lazy" decoding="async" src={f.image_url || defaultSalaIcon} alt={f.name} className="h-8 w-8 rounded-lg object-cover shrink-0" />
             <span className="flex-1 min-w-0 text-left font-medium truncate">{f.name}</span>
             <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
           </button>
@@ -139,13 +139,15 @@ const FolderBrowser = ({
   );
 };
 
-/** Move dialog specifically for decks — 2 phases */
+/**
+ * Move dialog for decks.
+ * Hierarquia: Sala > Pasta > Deck. Um deck só pode viver numa sala ou numa pasta.
+ */
 const DeckMoveDialog = ({
   moveTarget,
   setMoveTarget,
   moveBrowseFolderId,
   setMoveBrowseFolderId,
-  moveParentDeckId,
   setMoveParentDeckId,
   folders,
   decks,
@@ -164,33 +166,17 @@ const DeckMoveDialog = ({
   const [switchSala, setSwitchSala] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Current deck info
   const currentDeck = decks.find(d => d.id === moveTarget.id);
   const currentFolderId = moveBrowseFolderId;
   const currentFolder = folders.find(f => f.id === currentFolderId);
+  const parentSala = currentFolder?.parent_id ? folders.find(f => f.id === currentFolder.parent_id) : null;
 
-  // Is this deck a matéria (has children)?
-  const isMateria = decks.some(d => d.parent_deck_id === moveTarget.id);
+  /** Pastas (nível 2) dentro da sala atual */
+  const pastasInFolder = useMemo(() => {
+    if (!currentFolderId || currentFolder?.parent_id) return [];
+    return folders.filter(f => f.parent_id === currentFolderId && !f.is_archived);
+  }, [currentFolderId, currentFolder, folders]);
 
-  // Get descendant deck IDs to exclude from targets
-  const getDescendantIds = (deckId: string): string[] => {
-    const children = decks.filter(d => d.parent_deck_id === deckId);
-    return [deckId, ...children.flatMap(c => getDescendantIds(c.id))];
-  };
-  const excludeIds = new Set(getDescendantIds(moveTarget.id));
-
-  // Matérias in the current folder (excluding self and descendants)
-  const materiasInFolder = useMemo(() => {
-    if (!currentFolderId) return [];
-    return decks.filter(d =>
-      d.folder_id === currentFolderId &&
-      !d.parent_deck_id &&
-      !excludeIds.has(d.id) &&
-      decks.some(child => child.parent_deck_id === d.id) // has children = is matéria
-    );
-  }, [currentFolderId, decks, excludeIds]);
-
-  // All own salas for switch mode (exclude community/followed folders)
   const allSalas = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     return folders.filter(f => !f.is_archived && !f.parent_id && !f.source_turma_id && (q ? f.name.toLowerCase().includes(q) : true));
@@ -203,26 +189,16 @@ const DeckMoveDialog = ({
     setSearchQuery('');
   };
 
-  const handleMoveToRoot = () => {
-    onMoveSubmit(null);
-  };
+  const handleMoveHere = () => onMoveSubmit(null);
 
-  const handleMoveToMateria = (materiaId: string) => {
-    onMoveSubmit(materiaId);
-  };
-
-  const handleMoveToSala = (salaId: string) => {
+  const handlePickSala = (salaId: string) => {
     setMoveBrowseFolderId(salaId);
     setMoveParentDeckId(null);
     setSwitchSala(false);
     setSearchQuery('');
   };
 
-  const handleMoveConfirmSala = () => {
-    onMoveSubmit(null);
-  };
-
-  // Phase: switching sala
+  // Fase: trocando de sala
   if (switchSala) {
     return (
       <div className="space-y-3 min-w-0">
@@ -242,10 +218,10 @@ const DeckMoveDialog = ({
           {allSalas.map(f => (
             <button
               key={f.id}
-              onClick={() => handleMoveToSala(f.id)}
+              onClick={() => handlePickSala(f.id)}
               className={`flex w-full max-w-full min-w-0 items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors ${f.id === currentFolderId ? 'bg-primary/5' : ''}`}
             >
-              <img src={f.image_url || defaultSalaIcon} alt={f.name} className="h-8 w-8 rounded-lg object-cover shrink-0" />
+              <img loading="lazy" decoding="async" src={f.image_url || defaultSalaIcon} alt={f.name} className="h-8 w-8 rounded-lg object-cover shrink-0" />
               <span className="flex-1 min-w-0 text-left font-medium truncate">{f.name}</span>
               {f.id === currentFolderId && <span className="text-xs text-primary font-medium shrink-0">Atual</span>}
             </button>
@@ -258,96 +234,55 @@ const DeckMoveDialog = ({
     );
   }
 
-  // If we already switched to a new sala, show confirmation
-  if (currentFolderId && currentDeck && currentDeck.folder_id !== currentFolderId) {
-    return (
-      <div className="space-y-3 min-w-0">
-        <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border/50 min-w-0">
-          <img src={currentFolder?.image_url || defaultSalaIcon} alt={currentFolder?.name} className="h-10 w-10 rounded-lg object-cover shrink-0" />
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-foreground truncate">{currentFolder?.name}</p>
-            <p className="text-xs text-muted-foreground">Sala de destino</p>
-          </div>
-        </div>
+  // Fase padrão: destino atual + pastas para entrar
+  const isCurrentLocation = currentDeck?.folder_id === currentFolderId;
 
-        {!isMateria && (() => {
-          const materiasInNewFolder = decks.filter(d =>
-            d.folder_id === currentFolderId &&
-            !d.parent_deck_id &&
-            !excludeIds.has(d.id) &&
-            decks.some(child => child.parent_deck_id === d.id)
-          );
-          if (materiasInNewFolder.length === 0) return null;
-          return (
-            <div className="space-y-1 min-w-0">
-              <p className="text-xs text-muted-foreground font-medium px-1">Mover para dentro de um baralho-pai:</p>
-              <div className="max-h-40 w-full min-w-0 overflow-y-auto overflow-x-hidden rounded-lg border border-border divide-y divide-border">
-                {materiasInNewFolder.map(m => (
-                  <button
-                    key={m.id}
-                    onClick={() => handleMoveToMateria(m.id)}
-                    className="flex w-full max-w-full min-w-0 items-center gap-3 px-4 py-2.5 text-sm hover:bg-muted/50 transition-colors"
-                  >
-                    <span className="flex-1 min-w-0 text-left truncate">{m.name}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          );
-        })()}
-
-        <div className="flex gap-2 pt-1 min-w-0">
-          <Button variant="outline" size="sm" onClick={() => { setMoveBrowseFolderId(currentDeck?.folder_id ?? null); }} className="flex-1 min-w-0">Voltar</Button>
-          <Button size="sm" onClick={handleMoveConfirmSala} className="flex-1 min-w-0">Mover para esta sala</Button>
-        </div>
-      </div>
-    );
-  }
-
-  // Default phase: within current sala
   return (
     <div className="space-y-3 min-w-0">
-      {/* Current sala context */}
       {currentFolder && (
         <div className="flex items-center gap-2 px-1 min-w-0">
-          <img src={currentFolder.image_url || defaultSalaIcon} alt={currentFolder.name} className="h-6 w-6 rounded-md object-cover shrink-0" />
+          {parentSala ? (
+            <button
+              onClick={() => setMoveBrowseFolderId(parentSala.id)}
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors shrink-0"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span className="truncate max-w-[120px]">{parentSala.name}</span>
+            </button>
+          ) : (
+            <img loading="lazy" decoding="async" src={currentFolder.image_url || defaultSalaIcon} alt={currentFolder.name} className="h-6 w-6 rounded-md object-cover shrink-0" />
+          )}
+          {parentSala && <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
           <span className="text-sm font-medium text-foreground truncate min-w-0">{currentFolder.name}</span>
         </div>
       )}
 
-      {!isMateria && materiasInFolder.length > 0 && (
+      {pastasInFolder.length > 0 && (
         <div className="space-y-1 min-w-0">
-          <p className="text-xs text-muted-foreground font-medium px-1">Mover para um baralho-pai:</p>
+          <p className="text-xs text-muted-foreground font-medium px-1">Mover para uma pasta:</p>
           <div className="max-h-48 w-full min-w-0 overflow-y-auto overflow-x-hidden rounded-lg border border-border divide-y divide-border">
-            {materiasInFolder.map(m => (
+            {pastasInFolder.map(p => (
               <button
-                key={m.id}
-                onClick={() => handleMoveToMateria(m.id)}
-                className={`flex w-full max-w-full min-w-0 items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors ${currentDeck?.parent_deck_id === m.id ? 'bg-primary/5' : ''}`}
+                key={p.id}
+                onClick={() => setMoveBrowseFolderId(p.id)}
+                className={`flex w-full max-w-full min-w-0 items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors ${currentDeck?.folder_id === p.id ? 'bg-primary/5' : ''}`}
               >
-                <span className="flex-1 min-w-0 text-left font-medium truncate">{m.name}</span>
-                {currentDeck?.parent_deck_id === m.id && <span className="text-xs text-primary font-medium shrink-0">Atual</span>}
+                <Layers className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="flex-1 min-w-0 text-left font-medium truncate">{p.name}</span>
+                {currentDeck?.folder_id === p.id && <span className="text-xs text-primary font-medium shrink-0">Atual</span>}
+                <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
               </button>
             ))}
           </div>
         </div>
       )}
 
-      {/* Move to root of sala (if currently inside a matéria) */}
-      {currentDeck?.parent_deck_id && (
-         <Button variant="outline" size="sm" onClick={handleMoveToRoot} className="w-full max-w-full gap-2 text-sm">
-           <Layers className="h-4 w-4" />
-           Tirar do baralho-pai (mover para a sala)
-         </Button>
-      )}
+      <Button size="sm" onClick={handleMoveHere} disabled={isCurrentLocation} className="w-full max-w-full text-sm">
+        {isCurrentLocation
+          ? 'O baralho já está aqui'
+          : currentFolder?.parent_id ? 'Mover para esta pasta' : 'Mover para esta sala'}
+      </Button>
 
-      {!isMateria && materiasInFolder.length === 0 && !currentDeck?.parent_deck_id && (
-        <div className="px-4 py-4 text-center text-sm text-muted-foreground rounded-lg border border-border">
-          Nenhum baralho-pai nesta sala para mover
-        </div>
-      )}
-
-      {/* Switch sala button */}
       <Button variant="outline" size="sm" onClick={() => setSwitchSala(true)} className="w-full max-w-full gap-2 text-sm">
         <RefreshCw className="h-4 w-4" />
         Trocar de sala
@@ -360,12 +295,13 @@ const DeckMoveDialog = ({
   );
 };
 
+
 const DashboardDialogs = (props: DashboardDialogsProps) => {
   const isInsideDeck = !!props.moveParentDeckId;
 
   // Determine submit label for move
   const getMoveSubmitLabel = () => {
-    if (isInsideDeck) return 'Mover como sub-deck';
+    if (isInsideDeck) return 'Mover aqui';
     if (props.moveBrowseFolderId) return 'Mover para esta sala';
     return 'Mover aqui';
   };
@@ -377,7 +313,7 @@ const DashboardDialogs = (props: DashboardDialogsProps) => {
         <DialogContent className="sm:max-w-md max-w-[calc(100vw-2rem)]">
           <DialogHeader>
             <DialogTitle className="font-display text-center">
-              {props.createType === 'folder' ? 'Criar nova Sala' : props.createParentDeckId ? 'Novo Subbaralho' : 'Novo Baralho'}
+              {props.createType === 'folder' ? 'Criar nova Sala' : 'Novo Baralho'}
             </DialogTitle>
             {props.createType === 'folder' && (
               <p className="text-sm text-muted-foreground text-center pt-1">
@@ -463,7 +399,7 @@ const DashboardDialogs = (props: DashboardDialogsProps) => {
             <AlertDialogDescription>
               {props.deleteTarget?.type === 'folder'
                 ? 'A sala será excluída. Baralhos não arquivados dentro dela serão excluídos permanentemente. Itens arquivados serão preservados e movidos para o Início.'
-                : 'Todos os cards, sub-decks e registros de revisão serão excluídos permanentemente.'}
+                : 'Todos os cards e registros de revisão serão excluídos permanentemente.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

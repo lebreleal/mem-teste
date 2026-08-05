@@ -118,7 +118,7 @@ export async function fetchTurmaMembers(turmaId: string): Promise<TurmaMember[]>
 
 export async function changeMemberRole(turmaId: string, userId: string, role: TurmaRole) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- partial update not in generated types
-  const { error } = await supabase.from('turma_members').update({ role } as Record<string, unknown>).eq('turma_id', turmaId).eq('user_id', userId);
+  const { error } = await supabase.from('turma_members').update({ role }).eq('turma_id', turmaId).eq('user_id', userId);
   if (error) throw error;
 }
 
@@ -129,6 +129,6 @@ export async function removeMember(turmaId: string, userId: string) {
 
 export async function toggleSubscriber(turmaId: string, userId: string, isSubscriber: boolean) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- partial update not in generated types
-  const { error } = await supabase.from('turma_members').update({ is_subscriber: isSubscriber } as Record<string, unknown>).eq('turma_id', turmaId).eq('user_id', userId);
+  const { error } = await supabase.from('turma_members').update({ is_subscriber: isSubscriber }).eq('turma_id', turmaId).eq('user_id', userId);
   if (error) throw error;
 }

@@ -73,6 +73,87 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_credit_ledger: {
+        Row: {
+          amount: number
+          balance_after: number
+          cost_usd: number
+          created_at: string
+          description: string
+          entry_type: string
+          feature_key: string | null
+          id: string
+          model: string | null
+          reference_id: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          balance_after?: number
+          cost_usd?: number
+          created_at?: string
+          description?: string
+          entry_type: string
+          feature_key?: string | null
+          id?: string
+          model?: string | null
+          reference_id?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          balance_after?: number
+          cost_usd?: number
+          created_at?: string
+          description?: string
+          entry_type?: string
+          feature_key?: string | null
+          id?: string
+          model?: string | null
+          reference_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ai_model_catalog: {
+        Row: {
+          completion_usd_per_token: number
+          context_length: number
+          id: string
+          is_active: boolean
+          label: string
+          model_id: string
+          notes: string
+          prompt_usd_per_token: number
+          tier: string
+          updated_at: string
+        }
+        Insert: {
+          completion_usd_per_token?: number
+          context_length?: number
+          id?: string
+          is_active?: boolean
+          label: string
+          model_id: string
+          notes?: string
+          prompt_usd_per_token?: number
+          tier?: string
+          updated_at?: string
+        }
+        Update: {
+          completion_usd_per_token?: number
+          context_length?: number
+          id?: string
+          is_active?: boolean
+          label?: string
+          model_id?: string
+          notes?: string
+          prompt_usd_per_token?: number
+          tier?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       ai_prompts: {
         Row: {
           default_model: string
@@ -130,34 +211,43 @@ export type Database = {
       ai_token_usage: {
         Row: {
           completion_tokens: number
+          cost_usd: number
           created_at: string
           energy_cost: number
           feature_key: string
+          generation_id: string | null
           id: string
           model: string
           prompt_tokens: number
+          provider: string
           total_tokens: number
           user_id: string
         }
         Insert: {
           completion_tokens?: number
+          cost_usd?: number
           created_at?: string
           energy_cost?: number
           feature_key: string
+          generation_id?: string | null
           id?: string
           model: string
           prompt_tokens?: number
+          provider?: string
           total_tokens?: number
           user_id: string
         }
         Update: {
           completion_tokens?: number
+          cost_usd?: number
           created_at?: string
           energy_cost?: number
           feature_key?: string
+          generation_id?: string | null
           id?: string
           model?: string
           prompt_tokens?: number
+          provider?: string
           total_tokens?: number
           user_id?: string
         }
@@ -424,6 +514,53 @@ export type Database = {
             columns: ["concept_id"]
             isOneToOne: false
             referencedRelation: "deck_concepts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deck_access_codes: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string
+          deck_id: string
+          id: string
+          note: string
+          owner_id: string
+          owner_name: string
+          redeemed_at: string | null
+          redeemed_by: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by: string
+          deck_id: string
+          id?: string
+          note?: string
+          owner_id: string
+          owner_name?: string
+          redeemed_at?: string | null
+          redeemed_by?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string
+          deck_id?: string
+          id?: string
+          note?: string
+          owner_id?: string
+          owner_name?: string
+          redeemed_at?: string | null
+          redeemed_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deck_access_codes_deck_id_fkey"
+            columns: ["deck_id"]
+            isOneToOne: false
+            referencedRelation: "decks"
             referencedColumns: ["id"]
           },
         ]
@@ -775,6 +912,8 @@ export type Database = {
           easy_graduating_interval: number
           folder_id: string | null
           id: string
+          imported_owner_name: string | null
+          imported_source_deck_id: string | null
           interval_modifier: number
           is_archived: boolean
           is_free_in_community: boolean
@@ -809,6 +948,8 @@ export type Database = {
           easy_graduating_interval?: number
           folder_id?: string | null
           id?: string
+          imported_owner_name?: string | null
+          imported_source_deck_id?: string | null
           interval_modifier?: number
           is_archived?: boolean
           is_free_in_community?: boolean
@@ -843,6 +984,8 @@ export type Database = {
           easy_graduating_interval?: number
           folder_id?: string | null
           id?: string
+          imported_owner_name?: string | null
+          imported_source_deck_id?: string | null
           interval_modifier?: number
           is_archived?: boolean
           is_free_in_community?: boolean
@@ -1507,53 +1650,10 @@ export type Database = {
         }
         Relationships: []
       }
-      mission_definitions: {
-        Row: {
-          category: string
-          created_at: string
-          description: string
-          icon: string
-          id: string
-          is_active: boolean
-          key: string
-          reward_credits: number
-          sort_order: number
-          target_type: string
-          target_value: number
-          title: string
-        }
-        Insert: {
-          category?: string
-          created_at?: string
-          description?: string
-          icon?: string
-          id?: string
-          is_active?: boolean
-          key: string
-          reward_credits?: number
-          sort_order?: number
-          target_type?: string
-          target_value?: number
-          title: string
-        }
-        Update: {
-          category?: string
-          created_at?: string
-          description?: string
-          icon?: string
-          id?: string
-          is_active?: boolean
-          key?: string
-          reward_credits?: number
-          sort_order?: number
-          target_type?: string
-          target_value?: number
-          title?: string
-        }
-        Relationships: []
-      }
       profiles: {
         Row: {
+          ai_credits: number
+          ai_credits_purchased: number
           created_at: string
           creator_tier: number
           current_streak: number
@@ -1568,6 +1668,7 @@ export type Database = {
           id: string
           is_banned: boolean
           is_profile_public: boolean
+          last_daily_credits_grant: string | null
           last_energy_recharge: string | null
           last_grading_reset_date: string | null
           last_study_reset_date: string | null
@@ -1583,6 +1684,8 @@ export type Database = {
           weekly_study_minutes: Json | null
         }
         Insert: {
+          ai_credits?: number
+          ai_credits_purchased?: number
           created_at?: string
           creator_tier?: number
           current_streak?: number
@@ -1597,6 +1700,7 @@ export type Database = {
           id: string
           is_banned?: boolean
           is_profile_public?: boolean
+          last_daily_credits_grant?: string | null
           last_energy_recharge?: string | null
           last_grading_reset_date?: string | null
           last_study_reset_date?: string | null
@@ -1612,6 +1716,8 @@ export type Database = {
           weekly_study_minutes?: Json | null
         }
         Update: {
+          ai_credits?: number
+          ai_credits_purchased?: number
           created_at?: string
           creator_tier?: number
           current_streak?: number
@@ -1626,6 +1732,7 @@ export type Database = {
           id?: string
           is_banned?: boolean
           is_profile_public?: boolean
+          last_daily_credits_grant?: string | null
           last_energy_recharge?: string | null
           last_grading_reset_date?: string | null
           last_study_reset_date?: string | null
@@ -2816,56 +2923,6 @@ export type Database = {
           },
         ]
       }
-      user_missions: {
-        Row: {
-          claimed_at: string | null
-          completed_at: string | null
-          created_at: string
-          id: string
-          is_claimed: boolean
-          is_completed: boolean
-          mission_id: string
-          period_start: string
-          progress: number
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          claimed_at?: string | null
-          completed_at?: string | null
-          created_at?: string
-          id?: string
-          is_claimed?: boolean
-          is_completed?: boolean
-          mission_id: string
-          period_start?: string
-          progress?: number
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          claimed_at?: string | null
-          completed_at?: string | null
-          created_at?: string
-          id?: string
-          is_claimed?: boolean
-          is_completed?: boolean
-          mission_id?: string
-          period_start?: string
-          progress?: number
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "user_missions_mission_id_fkey"
-            columns: ["mission_id"]
-            isOneToOne: false
-            referencedRelation: "mission_definitions"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       user_roles: {
         Row: {
           id: string
@@ -2889,6 +2946,50 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_create_deck_access_codes: {
+        Args: { p_count?: number; p_deck_id: string; p_note?: string }
+        Returns: {
+          code: string
+          created_at: string
+          created_by: string
+          deck_id: string
+          id: string
+          note: string
+          owner_id: string
+          owner_name: string
+          redeemed_at: string | null
+          redeemed_by: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "deck_access_codes"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      admin_get_ai_cost_breakdown: {
+        Args: { p_date_from?: string; p_date_to?: string }
+        Returns: {
+          calls: number
+          cost_usd: number
+          dimension: string
+          label: string
+          total_tokens: number
+        }[]
+      }
+      admin_get_ai_cost_by_user: {
+        Args: { p_date_from?: string; p_date_to?: string; p_limit?: number }
+        Returns: {
+          calls: number
+          cost_usd: number
+          energy_cost: number
+          last_used_at: string
+          total_tokens: number
+          user_email: string
+          user_id: string
+          user_name: string
+        }[]
+      }
       admin_get_global_token_usage: {
         Args: {
           p_date_from?: string
@@ -2898,12 +2999,14 @@ export type Database = {
         }
         Returns: {
           completion_tokens: number
+          cost_usd: number
           created_at: string
           energy_cost: number
           feature_key: string
           id: string
           model: string
           prompt_tokens: number
+          provider: string
           total_tokens: number
           user_email: string
           user_id: string
@@ -2913,6 +3016,8 @@ export type Database = {
       admin_get_profiles: {
         Args: { p_limit?: number; p_offset?: number; p_search?: string }
         Returns: {
+          ai_credits: number
+          ai_credits_purchased: number
           created_at: string
           creator_tier: number
           daily_cards_studied: number
@@ -2970,28 +3075,19 @@ export type Database = {
           total_tokens: number
         }[]
       }
-      admin_update_profile:
-        | {
-            Args: {
-              p_energy?: number
-              p_is_banned?: boolean
-              p_memocoins?: number
-              p_name?: string
-              p_user_id: string
-            }
-            Returns: undefined
-          }
-        | {
-            Args: {
-              p_energy?: number
-              p_is_banned?: boolean
-              p_memocoins?: number
-              p_name?: string
-              p_premium_expires_at?: string
-              p_user_id: string
-            }
-            Returns: undefined
-          }
+      admin_update_profile: {
+        Args: {
+          p_ai_credits?: number
+          p_ai_credits_purchased?: number
+          p_energy?: number
+          p_is_banned?: boolean
+          p_memocoins?: number
+          p_name?: string
+          p_premium_expires_at?: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
       batch_reorder_decks: {
         Args: { p_deck_ids: string[] }
         Returns: undefined
@@ -3133,6 +3229,10 @@ export type Database = {
       }
       get_community_preview_stats: {
         Args: { p_turma_id: string }
+        Returns: Json
+      }
+      get_dashboard_summary: {
+        Args: { p_tz_offset_minutes?: number }
         Returns: Json
       }
       get_deck_concept_names: {
@@ -3278,6 +3378,16 @@ export type Database = {
         }[]
       }
       get_user_time_calibration: { Args: { p_user_id: string }; Returns: Json }
+      grant_ai_credits: {
+        Args: {
+          p_credits: number
+          p_description?: string
+          p_entry_type: string
+          p_user_id: string
+        }
+        Returns: number
+      }
+      grant_daily_ai_credits: { Args: never; Returns: number }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -3288,6 +3398,10 @@ export type Database = {
       has_turma_permission: {
         Args: { _permission: string; _turma_id: string; _user_id: string }
         Returns: boolean
+      }
+      hold_ai_credits: {
+        Args: { p_credits: number; p_feature_key: string; p_user_id: string }
+        Returns: number
       }
       increment_concept_count: {
         Args: { p_concept_id: string; p_field: string }
@@ -3307,8 +3421,18 @@ export type Database = {
         Args: { p_turma_id: string }
         Returns: Json
       }
+      redeem_deck_access_code: { Args: { p_code: string }; Returns: string }
       refund_energy: {
         Args: { p_cost: number; p_user_id: string }
+        Returns: undefined
+      }
+      reorder_folders: { Args: { p_ordered_ids: string[] }; Returns: undefined }
+      reorder_turma_exams: {
+        Args: { p_ordered_ids: string[] }
+        Returns: undefined
+      }
+      reorder_turma_lesson_files: {
+        Args: { p_ordered_ids: string[] }
         Returns: undefined
       }
       resolve_community_deck_source: {
@@ -3339,6 +3463,17 @@ export type Database = {
           result_type: string
           snippet: string
         }[]
+      }
+      settle_ai_credits: {
+        Args: {
+          p_actual: number
+          p_cost_usd?: number
+          p_feature_key: string
+          p_held: number
+          p_model?: string
+          p_user_id: string
+        }
+        Returns: number
       }
       strip_html: { Args: { p_text: string }; Returns: string }
       submit_review: {

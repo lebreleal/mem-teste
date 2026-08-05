@@ -3,7 +3,7 @@
  * Returns normalized bounding boxes (0-1) for each text region.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders, handleCors, jsonResponse, getAIConfig, getModelMap } from "../_shared/utils.ts";
+import { corsHeaders, handleCors, jsonResponse, getAIConfig, getModelMap, aiHeaders, chargeAndLog } from "../_shared/utils.ts";
 
 Deno.serve(async (req) => {
   const cors = handleCors(req);
@@ -40,12 +40,10 @@ Return a JSON array of objects, each with normalized coordinates (0 to 1 relativ
 
     const response = await fetch(url, {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
+      headers: aiHeaders(apiKey),
       body: JSON.stringify({
         model,
+        usage: { include: true },
         messages: [
           { role: "system", content: systemPrompt },
           {
@@ -68,6 +66,8 @@ Return a JSON array of objects, each with normalized coordinates (0 to 1 relativ
     }
 
     const aiData = await response.json();
+    // Track this call like every other AI call (exact OpenRouter cost).
+    await chargeAndLog(supabase, user.id, "detect_occlusion", model, aiData);
     const content = aiData.choices?.[0]?.message?.content || "";
 
     // Parse JSON from response (may have markdown code fences)

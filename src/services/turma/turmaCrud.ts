@@ -423,20 +423,38 @@ export async function removeTurmaMember(turmaId: string, userId: string) {
   if (error) throw error;
 }
 
-export async function ensureShareSlug(turmaId: string): Promise<string> {
-  const { data } = await supabase.from('turmas').select('share_slug').eq('id', turmaId).single();
+/** Converts a room name into a friendly, URL-safe slug. */
+export function slugifyName(name: string): string {
+  return (name || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+}
+
+/**
+ * Returns the room's share slug, generating a friendly one from its name when missing.
+ * Falls back to a short random suffix only when the name is unusable or already taken.
+ */
+export async function ensureShareSlug(turmaId: string, name?: string): Promise<string> {
+  const { data } = await supabase.from('turmas').select('share_slug, name').eq('id', turmaId).single();
   const existing = data?.share_slug;
   if (existing) return existing;
 
+  const base = slugifyName(name || (data?.name as string) || '') || 'sala';
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  let generated = '';
+  const randomSuffix = () => Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+
+  let generated = base;
   for (let attempt = 0; attempt < 10; attempt++) {
-    generated = '';
-    for (let i = 0; i < 6; i++) generated += chars[Math.floor(Math.random() * chars.length)];
     const { data: clash } = await supabase.from('turmas').select('id').eq('share_slug', generated).limit(1);
     if (!clash || clash.length === 0) break;
+    generated = `${base}-${randomSuffix()}`;
   }
 
   await supabase.from('turmas').update({ share_slug: generated } as never).eq('id', turmaId);
   return generated;
 }
+

@@ -57,10 +57,31 @@ export interface UsageEntry {
   user_email: string;
   feature_key: string;
   model: string;
+  provider: string;
   prompt_tokens: number;
   completion_tokens: number;
   total_tokens: number;
   energy_cost: number;
+  cost_usd: number;
+}
+
+export interface UsageByUser {
+  user_id: string;
+  user_name: string | null;
+  user_email: string | null;
+  calls: number;
+  total_tokens: number;
+  energy_cost: number;
+  cost_usd: number;
+  last_used_at: string;
+}
+
+export interface UsageBreakdownRow {
+  dimension: 'model' | 'feature' | 'day';
+  label: string;
+  calls: number;
+  total_tokens: number;
+  cost_usd: number;
 }
 
 export async function fetchGlobalTokenUsage(params: {
@@ -79,10 +100,39 @@ export async function fetchGlobalTokenUsage(params: {
   return (data as unknown as UsageEntry[]) || [];
 }
 
+export async function fetchAICostByUser(params: {
+  dateFrom: string | null;
+  dateTo: string | null;
+  limit?: number;
+}): Promise<UsageByUser[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC not in generated types
+  const { data, error } = await (supabase.rpc as any)('admin_get_ai_cost_by_user', {
+    p_date_from: params.dateFrom,
+    p_date_to: params.dateTo,
+    p_limit: params.limit ?? 100,
+  });
+  if (error) throw error;
+  return (data as unknown as UsageByUser[]) || [];
+}
+
+export async function fetchAICostBreakdown(params: {
+  dateFrom: string | null;
+  dateTo: string | null;
+}): Promise<UsageBreakdownRow[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC not in generated types
+  const { data, error } = await (supabase.rpc as any)('admin_get_ai_cost_breakdown', {
+    p_date_from: params.dateFrom,
+    p_date_to: params.dateTo,
+  });
+  if (error) throw error;
+  return (data as unknown as UsageBreakdownRow[]) || [];
+}
+
 export async function deleteTokenUsageEntry(entryId: string): Promise<void> {
   const { error } = await supabase.from('ai_token_usage').delete().eq('id', entryId);
   if (error) throw error;
 }
+
 
 export async function getAuthToken(): Promise<string> {
   const { data: { session } } = await supabase.auth.getSession();

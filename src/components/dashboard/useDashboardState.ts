@@ -9,6 +9,7 @@ import { useDecks, type DeckWithStats } from '@/hooks/useDecks';
 import { useFolders } from '@/hooks/useFolders';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
+import { useDashboardSummary } from '@/hooks/useDashboardSummary';
 import { fetchCommunityDeckUpdates } from '@/services/dashboardService';
 import type { Folder } from '@/types/folder';
 
@@ -16,8 +17,10 @@ export interface BreadcrumbItem { id: string | null; name: string }
 
 export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: string[]) {
   const { user } = useAuth();
-  const { decks, isLoading: decksLoading, createDeck, deleteDeck, archiveDeck, duplicateDeck, resetProgress, moveDeck, reorderDecks } = useDecks();
-  const { folders, isLoading: foldersLoading, createFolder, updateFolder, deleteFolder, archiveFolder, moveFolder, reorderFolders } = useFolders();
+  // Single consolidated round-trip: seeds the decks/folders/profile caches.
+  const summary = useDashboardSummary();
+  const { decks, isLoading: decksLoading, createDeck, deleteDeck, archiveDeck, duplicateDeck, resetProgress, moveDeck, reorderDecks } = useDecks({ enabled: summary.isSeeded });
+  const { folders, isLoading: foldersLoading, createFolder, updateFolder, deleteFolder, archiveFolder, moveFolder, reorderFolders } = useFolders({ enabled: summary.isSeeded });
 
   const [searchParams, setSearchParams] = useSearchParams();
   const currentFolderId = searchParams.get('folder') || null;
@@ -104,7 +107,7 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
 
   const globalNewRemaining = Math.max(0, todayGlobalNewLimit - globalNewReviewedToday);
 
-  const isLoading = decksLoading || foldersLoading;
+  const isLoading = summary.isLoading || decksLoading || foldersLoading;
 
   const toggleExpand = (deckId: string) => {
     setExpandedDecks(prev => {
@@ -139,6 +142,13 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
 
   /** Are we at the root level (showing salas) or inside a folder? */
   const isInsideSala = currentFolderId !== null;
+
+  /** True when the current folder is a pasta (level 2) — pastas cannot contain folders */
+  const currentFolderIsPasta = useMemo(() => {
+    if (!currentFolderId) return false;
+    const f = (folders as Folder[]).find(x => x.id === currentFolderId);
+    return !!f?.parent_id;
+  }, [folders, currentFolderId]);
 
   const currentDecks = useMemo(
     () => {
@@ -346,7 +356,7 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
     deckMap, childrenIndex,
     currentFolderId, setCurrentFolderId,
     isInsideSala,
-    currentFolders, currentDecks, allRootDecks, communityDecks, decksWithPendingUpdates,
+    currentFolders, currentFolderIsPasta, currentDecks, allRootDecks, communityDecks, decksWithPendingUpdates,
     archivedDecks, archivedFolders, totalArchived,
     breadcrumb, moveBreadcrumb, movableFolders,
     expandedDecks, toggleExpand,

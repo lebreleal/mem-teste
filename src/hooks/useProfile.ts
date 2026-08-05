@@ -2,86 +2,70 @@
  * Centralized profile hook with 5-minute staleTime.
  * Shared across useEnergy, useStudyStats, useDashboardState, useStudyPlan, etc.
  * Eliminates redundant profile fetches (~5 per page load → 1).
+ *
+ * All Supabase access lives in `services/profileService` — this hook only owns
+ * caching and the singleton Realtime subscription lifecycle.
  */
 
 import { useEffect } from 'react';
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
-import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
+import { fetchProfile, subscribeToProfileRow, type ProfileData } from '@/services/profileService';
+import type { QueryClient as ReactQueryClient } from '@tanstack/react-query';
 
-export interface ProfileData {
-  id: string;
-  energy: number;
-  successful_cards_counter: number;
-  daily_cards_studied: number;
-  daily_energy_earned: number;
-  daily_new_cards_limit: number;
-  daily_study_minutes: number;
-  last_energy_recharge: string | null;
-  last_study_reset_date: string | null;
-  created_at: string;
-  weekly_new_cards: Record<string, number> | null;
-  weekly_study_minutes: Record<string, number> | null;
-  is_profile_public: boolean;
-  current_streak: number;
-}
-
-const PROFILE_COLUMNS = 'id, energy, successful_cards_counter, daily_cards_studied, daily_energy_earned, daily_new_cards_limit, daily_study_minutes, last_energy_recharge, last_study_reset_date, created_at, weekly_new_cards, weekly_study_minutes, is_profile_public, current_streak';
+export type { ProfileData };
 
 export const profileQueryKey = (userId?: string) => ['profile', userId];
+
+let unsubscribeProfile: (() => void) | null = null;
+let subscribedUserId: string | null = null;
+let profileSubscriberCount = 0;
+
+/**
+ * Singleton channel: Supabase rejects adding postgres_changes callbacks to an
+ * already-subscribed channel, so every consumer shares one subscription.
+ */
+const subscribeToProfile = (userId: string, queryClient: ReactQueryClient) => {
+  profileSubscriberCount += 1;
+
+  if (!unsubscribeProfile || subscribedUserId !== userId) {
+    unsubscribeProfile?.();
+    subscribedUserId = userId;
+    unsubscribeProfile = subscribeToProfileRow(userId, (newRow) => {
+      queryClient.setQueryData(profileQueryKey(userId), (old: ProfileData | undefined) =>
+        old ? { ...old, ...newRow } : old
+      );
+    });
+  }
+
+  return () => {
+    profileSubscriberCount = Math.max(0, profileSubscriberCount - 1);
+    if (profileSubscriberCount !== 0 || !unsubscribeProfile) return;
+    const teardown = unsubscribeProfile;
+    unsubscribeProfile = null;
+    subscribedUserId = null;
+    teardown();
+  };
+};
 
 export const useProfile = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const userId = user?.id;
 
   const query = useQuery<ProfileData>({
-    queryKey: profileQueryKey(user?.id),
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select(PROFILE_COLUMNS)
-        .eq('id', user!.id)
-        .single();
-      if (error) throw error;
-      return data as unknown as ProfileData;
-    },
-    enabled: !!user,
+    queryKey: profileQueryKey(userId),
+    queryFn: () => fetchProfile(userId!),
+    enabled: !!userId,
     staleTime: 5 * 60_000, // 5 minutes
     refetchOnWindowFocus: false,
   });
 
   // Realtime subscription: auto-update cache when profile changes server-side
   useEffect(() => {
-    if (!user) return;
-
-    const channel = supabase
-      .channel(`profile-${user.id}`)
-      .on(
-        'postgres_changes' as 'system',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'profiles',
-          filter: `id=eq.${user.id}`,
-        },
-        (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
-          // Update cache directly with new data (avoid refetch)
-          const newRow = 'new' in payload ? payload.new : null;
-          if (newRow) {
-            queryClient.setQueryData(profileQueryKey(user.id), (old: ProfileData | undefined) => {
-              if (!old) return old;
-              return { ...old, ...newRow };
-            });
-          }
-        },
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user?.id, queryClient]);
+    if (!userId) return;
+    return subscribeToProfile(userId, queryClient);
+  }, [userId, queryClient]);
 
   return query;
 };
@@ -90,15 +74,7 @@ export const useProfile = () => {
 export const prefetchProfile = async (userId: string, queryClient: QueryClient) => {
   await queryClient.prefetchQuery({
     queryKey: profileQueryKey(userId),
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select(PROFILE_COLUMNS)
-        .eq('id', userId)
-        .single();
-      if (error) throw error;
-      return data as unknown as ProfileData;
-    },
+    queryFn: () => fetchProfile(userId),
     staleTime: 5 * 60_000,
   });
 };

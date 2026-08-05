@@ -6,7 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import ScrollToTop from "@/components/ScrollToTop";
@@ -20,18 +20,18 @@ const Study = lazy(() => import("./pages/Study"));
 const ManageDeck = lazy(() => import("./pages/ManageDeck"));
 const DeckSettings = lazy(() => import("./pages/DeckSettings"));
 const Profile = lazy(() => import("./pages/Profile"));
-const Turmas = lazy(() => import("./pages/Turmas"));
+const RedeemCode = lazy(() => import("./pages/RedeemCode"));
 const TurmaDetail = lazy(() => import("./pages/TurmaDetail"));
 const LessonDetail = lazy(() => import("./pages/LessonDetail"));
 const ActivityView = lazy(() => import("./pages/ActivityView"));
-const Performance = lazy(() => import("./pages/Performance"));
 const StudyPlan = lazy(() => import("./pages/StudyPlan"));
 const StatsPage = lazy(() => import("./pages/StatsPage"));
 const AdminIA = lazy(() => import("./pages/AdminIA"));
 const AdminUsers = lazy(() => import("./pages/AdminUsers"));
+const AdminAccessCodes = lazy(() => import("./pages/AdminAccessCodes"));
 const AdminLogs = lazy(() => import("./pages/AdminLogs"));
 const AdminUsageReport = lazy(() => import("./pages/AdminUsageReport"));
-const MateriaDetail = lazy(() => import("./pages/MateriaDetail"));
+const MateriaRedirect = lazy(() => import("./pages/MateriaRedirect"));
 const Install = lazy(() => import("./pages/Install"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const TermsOfService = lazy(() => import("./pages/TermsOfService"));
@@ -99,17 +99,23 @@ const App = () => (
               <Route path="/decks/:deckId/manage" element={<ProtectedRoute><ManageDeck /></ProtectedRoute>} />
               <Route path="/decks/:deckId/settings" element={<ProtectedRoute><DeckSettings /></ProtectedRoute>} />
               <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-              <Route path="/explorar" element={<ProtectedRoute><Turmas /></ProtectedRoute>} />
-              <Route path="/turmas" element={<ProtectedRoute><Turmas /></ProtectedRoute>} />
+              {/* "Explorar" was removed: decks are unlocked with an access code. */}
+              <Route path="/resgatar" element={<ProtectedRoute><RedeemCode /></ProtectedRoute>} />
+              <Route path="/explorar" element={<Navigate to="/resgatar" replace />} />
+
               <Route path="/turmas/:turmaId" element={<ProtectedRoute><TurmaDetail /></ProtectedRoute>} />
               <Route path="/turmas/:turmaId/lessons/:lessonId" element={<ProtectedRoute><LessonDetail /></ProtectedRoute>} />
               <Route path="/activity" element={<ProtectedRoute><ActivityView /></ProtectedRoute>} />
-              <Route path="/planejamento" element={<ProtectedRoute><Performance /></ProtectedRoute>} />
+              {/* "Planejamento", "Biblioteca de Temas" e "Carteira" foram removidos. */}
+              <Route path="/planejamento" element={<Navigate to="/desempenho" replace />} />
+              <Route path="/conceitos" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/memograna" element={<Navigate to="/dashboard" replace />} />
               <Route path="/plano" element={<ProtectedRoute><StudyPlan /></ProtectedRoute>} />
               <Route path="/desempenho" element={<ProtectedRoute><StatsPage /></ProtectedRoute>} />
-              <Route path="/materia/:id" element={<ProtectedRoute><MateriaDetail /></ProtectedRoute>} />
+              <Route path="/materia/:id" element={<ProtectedRoute><MateriaRedirect /></ProtectedRoute>} />
               <Route path="/admin/ia" element={<ProtectedRoute><AdminIA /></ProtectedRoute>} />
               <Route path="/admin/users" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
+              <Route path="/admin/codigos" element={<ProtectedRoute><AdminAccessCodes /></ProtectedRoute>} />
               <Route path="/admin/logs" element={<ProtectedRoute><AdminLogs /></ProtectedRoute>} />
               <Route path="/admin/usage" element={<ProtectedRoute><AdminUsageReport /></ProtectedRoute>} />
               <Route path="/install" element={<Install />} />

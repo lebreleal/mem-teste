@@ -8,6 +8,8 @@ import { supabase } from '@/integrations/supabase/client';
 import * as cardService from '@/services/cardService';
 import { invalidateDeckRelatedQueries } from '@/lib/queryKeys';
 import { OCCLUSION_COLORS } from '@/lib/occlusionColors';
+import { buildOcclusionFront, occlusionNums, normalizeClozeExtra } from '@/lib/occlusion';
+
 
 import { Button } from '@/components/ui/button';
 import { CardContent as CardPreviewContent, buildVirtualCards } from '@/components/deck-detail/CardPreviewSheet';
@@ -19,7 +21,7 @@ import { useToast } from '@/hooks/use-toast';
 import LazyRichEditor from '@/components/LazyRichEditor';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
-import OcclusionEditor from '@/components/manage-deck/OcclusionEditor';
+import OcclusionEditor from '@/components/manage-deck/LazyOcclusionEditor';
 import AttachmentPreviewModal from '@/components/manage-deck/AttachmentPreviewModal';
 import { enhanceCard } from '@/services/card/cardAI';
 import { markdownToHtml } from '@/lib/markdownToHtml';
@@ -219,14 +221,11 @@ const ManageDeck = () => {
     const plainText = front.replace(/<[^>]*>/g, '');
     const clozeMatches = [...plainText.matchAll(/\{\{c(\d+)::/g)];
     clozeMatches.forEach(m => nums.add(parseInt(m[1])));
-    // From image occlusion colors
+    // From image occlusion colors (own numeric range, no collision with text)
     if (occlusionRects.length > 0) {
-      const usedColors = new Set(occlusionRects.map((r: { color?: string }) => r.color || OCCLUSION_COLORS[0].fill));
-      usedColors.forEach(color => {
-        const idx = OCCLUSION_COLORS.findIndex(c => c.fill === color);
-        if (idx >= 0) nums.add(idx + 1);
-      });
+      occlusionNums(occlusionRects as { id: string; color?: string }[]).forEach(n => nums.add(n));
     }
+
     return [...nums].sort((a, b) => a - b);
   }, [front, occlusionRects]);
 
@@ -239,23 +238,19 @@ const ManageDeck = () => {
     let frontContent = frontWithImages;
     let backContent = back + backImgTags;
     if (detectedType === 'image_occlusion') {
-      // Reconstruct colorGroups from rects
-      const colorGroups: Record<string, string[]> = {};
-      occlusionRects.forEach((r: { id: string; color?: string }) => {
-        const color = r.color || OCCLUSION_COLORS[0].fill;
-        if (!colorGroups[color]) colorGroups[color] = [];
-        colorGroups[color].push(r.id);
-      });
-      frontContent = JSON.stringify({
-        imageUrl: occlusionImageUrl, frontText: frontWithImages, rects: occlusionRects, allRects: occlusionRects,
-        canvasWidth: occlusionCanvasSize?.w ?? 0, canvasHeight: occlusionCanvasSize?.h ?? 0,
-        colorGroups,
+      frontContent = buildOcclusionFront({
+        imageUrl: occlusionImageUrl,
+        rects: occlusionRects as { id: string; color?: string }[],
+        canvasSize: occlusionCanvasSize,
+        frontText: frontWithImages,
       });
     }
+
     // Set clozeTarget from unified nums
     const allNums = collectAllNums();
     if (allNums.length > 0) {
-      backContent = JSON.stringify({ clozeTarget: allNums[0] || 1, extra: back + backImgTags });
+      const extra = normalizeClozeExtra(frontContent, back + backImgTags);
+      backContent = JSON.stringify({ clozeTarget: allNums[0] || 1, extra });
     }
     return { frontContent, backContent, cardType: detectedType };
   }, [front, back, frontAttachedImages, backAttachedImages, occlusionImageUrl, occlusionRects, occlusionCanvasSize, detectCardType, collectAllNums]);
@@ -306,8 +301,8 @@ const ManageDeck = () => {
         for (const sibling of siblingCardIds) {
           if (numsSet.has(sibling.clozeTarget)) {
             // Update front content (and preserve its existing clozeTarget)
-            const backJson = JSON.stringify({ clozeTarget: sibling.clozeTarget, extra: back });
-            updatePromises.push(cardService.updateCard(sibling.id, frontContent, backJson));
+            const backJson = JSON.stringify({ clozeTarget: sibling.clozeTarget, extra: normalizeClozeExtra(frontContent, back) });
+            updatePromises.push(cardService.updateCard(sibling.id, frontContent, backJson, cardType));
           } else {
             // This target no longer exists in content — delete
             deleteIds.push(sibling.id);
@@ -324,7 +319,7 @@ const ManageDeck = () => {
         if (numsToAdd.length > 0) {
           const newCards = numsToAdd.map(n => ({
             frontContent,
-            backContent: JSON.stringify({ clozeTarget: n, extra: back }),
+            backContent: JSON.stringify({ clozeTarget: n, extra: normalizeClozeExtra(frontContent, back) }),
             cardType,
           }));
           const lastSiblingIdx = group ? group[group.length - 1] : selectedIndex;
@@ -347,7 +342,7 @@ const ManageDeck = () => {
         invalidateDeckRelatedQueries(queryClient, deckId!);
         setIsDirty(false);
       } else {
-        updateCard.mutate({ id: currentCard.id, frontContent, backContent }, { onSuccess: () => setIsDirty(false) });
+        updateCard.mutate({ id: currentCard.id, frontContent, backContent, cardType }, { onSuccess: () => setIsDirty(false) });
       }
     } catch {
       toast({ title: 'Erro ao salvar', variant: 'destructive' });
@@ -513,7 +508,7 @@ const ManageDeck = () => {
     if (energy < 1) { toast({ title: 'Créditos insuficientes', variant: 'destructive' }); return; }
     setIsAICreating(true);
     try {
-      const data = await enhanceCard({ front, back, cardType: 'basic', aiModel: model, energyCost: 1, customPrompt: templatePrompt });
+      const data = await enhanceCard({ front, back, cardType: 'basic', aiModel: model, customPrompt: templatePrompt });
       if (data?.error) { toast({ title: data.error, variant: 'destructive' }); return; }
       queryClient.invalidateQueries({ queryKey: ['profile'] });
       if (data?.front) { setFront(markdownToHtml(data.front)); setIsDirty(true); }

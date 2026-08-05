@@ -1,4 +1,4 @@
-import { Zap, Crown, Sparkles } from 'lucide-react';
+import { Zap, Sparkles } from 'lucide-react';
 import { type AIModel, MODEL_CONFIG } from '@/hooks/useAIModel';
 
 interface AIModelSelectorProps {
@@ -6,7 +6,6 @@ interface AIModelSelectorProps {
   onChange: (model: AIModel) => void;
   baseCost?: number;
   compact?: boolean;
-  isPremium?: boolean;
 }
 
 const MODEL_STATS: Record<AIModel, { speed: number; intelligence: number; tagline: string }> = {
@@ -36,10 +35,10 @@ const StatBar = ({ value, max = 5, color }: { value: number; max?: number; color
   </div>
 );
 
-const AIModelSelector = ({ model, onChange, baseCost, compact = false, isPremium = false }: AIModelSelectorProps) => {
+const AIModelSelector = ({ model, onChange, baseCost, compact = false }: AIModelSelectorProps) => {
   const getDisplayCost = (m: AIModel) => {
     if (baseCost === undefined) return undefined;
-    const multiplier = m === 'flash' && isPremium ? 0.5 : MODEL_CONFIG[m].costMultiplier;
+    const multiplier = MODEL_CONFIG[m].costMultiplier;
     return Math.ceil(baseCost * multiplier);
   };
 
@@ -87,13 +86,6 @@ const AIModelSelector = ({ model, onChange, baseCost, compact = false, isPremium
                 : 'border-border hover:border-muted-foreground/30'
             }`}
           >
-            {/* Pro badge */}
-            {isPro && (
-              <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[8px] font-black px-2 py-0.5 rounded-bl-lg uppercase tracking-wider">
-                Premium
-              </div>
-            )}
-
             <div className="flex items-center gap-1.5 mb-1">
               {isPro ? (
                 <Sparkles className="h-4 w-4 text-primary" />
@@ -101,7 +93,6 @@ const AIModelSelector = ({ model, onChange, baseCost, compact = false, isPremium
                 <Zap className="h-4 w-4 text-warning" />
               )}
               <span className="text-sm font-bold text-foreground">{MODEL_CONFIG[m].label}</span>
-              {isPro && <Crown className="h-3.5 w-3.5 text-warning" />}
             </div>
 
             <p className="text-[10px] text-muted-foreground mb-2.5 leading-tight line-clamp-2">{stats.tagline}</p>
@@ -119,14 +110,14 @@ const AIModelSelector = ({ model, onChange, baseCost, compact = false, isPremium
             </div>
 
             {isPro && !isSelected && (
-              <p className="text-[9px] text-primary font-semibold mt-2 animate-pulse">
-                Uso maior de créditos para resultados superiores.
+              <p className="text-[9px] text-primary font-semibold mt-2">
+                Consome mais créditos por token gerado.
               </p>
             )}
 
             {baseCost !== undefined && (
-              <p className="text-[10px] font-semibold mt-2" style={{ color: 'hsl(var(--energy-purple))' }}>
-                {getDisplayCost(m)} créditos
+              <p className="text-[10px] font-semibold mt-2 text-warning">
+                ≈ {getDisplayCost(m)} créditos · cobrado pelo uso real
               </p>
             )}
           </button>

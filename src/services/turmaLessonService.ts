@@ -208,7 +208,8 @@ export async function fetchCardsForCopy(deckId: string) {
   const { data, error } = await supabase
     .from('cards')
     .select('front_content, back_content, card_type')
-    .eq('deck_id', deckId);
+    .eq('deck_id', deckId)
+    .limit(500);
   if (error) throw error;
   return (data ?? []) as Array<{ front_content: string; back_content: string; card_type: string }>;
 }

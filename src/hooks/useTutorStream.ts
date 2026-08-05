@@ -69,7 +69,6 @@ export function useTutorStream(energy: number, model: string, tutorCost: number,
           correctIndex: options?.correctIndex,
           selectedIndex: options?.selectedIndex,
           aiModel: model,
-          energyCost: tutorCost,
         }),
         signal: controller.signal,
       });

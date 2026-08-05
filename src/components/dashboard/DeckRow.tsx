@@ -6,7 +6,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDown, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings, Play, GripVertical, Layers } from 'lucide-react';
+import { ChevronDown, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings, Play, GripVertical } from 'lucide-react';
 import { IconDeck } from '@/components/icons';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { DeckWithStats } from '@/hooks/useDecks';
@@ -75,17 +75,6 @@ const DeckMenu = ({ deck, onRename, onMove, onArchive, onDelete, navigate, onCre
       </button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="end" className="w-44" onClick={(e) => e.stopPropagation()}>
-      {/* Only show subdeck options for root decks (no parent) */}
-      {!deck.parent_deck_id && onCreateSubDeck && (
-        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onCreateSubDeck(deck.id); }}>
-          <Layers className="h-4 w-4 mr-2" /> Criar sub-baralho
-        </DropdownMenuItem>
-      )}
-      {!deck.parent_deck_id && onCreateSubDeckAI && (
-        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onCreateSubDeckAI(deck.id); }}>
-          <Layers className="h-4 w-4 mr-2" /> Sub-baralho com IA
-        </DropdownMenuItem>
-      )}
       <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onRename(deck); }}>
         <Pencil className="h-4 w-4 mr-2" /> Renomear
       </DropdownMenuItem>
@@ -211,12 +200,6 @@ const DeckRow = ({
       }
       return;
     }
-    // Root deck (no parent) → always navigate to materia detail page
-    // so user can manage sub-decks, even if none exist yet
-    if (!deck.parent_deck_id) {
-      navigate(`/materia/${deck.id}`);
-      return;
-    }
     navigate(`/decks/${deck.id}`, readOnlyNavState ? { state: readOnlyNavState } : undefined);
   };
 
@@ -227,9 +210,10 @@ const DeckRow = ({
 
   // Warm the destination before the click lands (hover / touch = intent).
   const handleIntent = () => {
-    if (deckSelectionMode || isErrorDeck || deck.parent_deck_id === null) return;
+    if (deckSelectionMode || isErrorDeck) return;
     prefetchDeck(deck.id);
   };
+
 
   return (
     <>

@@ -62,7 +62,7 @@ const ShareSalaModal = ({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) setEditingSlug(false); }}>
-      <DialogContent className="sm:max-w-md max-w-[calc(100vw-2rem)]">
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md max-h-[85vh] overflow-y-auto rounded-2xl p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle className="text-lg font-bold">Compartilhar sala</DialogTitle>
         </DialogHeader>
@@ -70,16 +70,16 @@ const ShareSalaModal = ({
         <div className="space-y-4 pt-1">
           {/* Visibility toggle */}
           <div className="flex items-center justify-between rounded-xl bg-muted/40 px-4 py-3.5">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 min-w-0">
               <IconGlobe className={`h-5 w-5 shrink-0 ${isPublished ? 'text-primary' : 'text-muted-foreground'}`} />
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-medium text-foreground">
                   {isPublished ? 'Aberta para todos' : 'Só você tem acesso'}
                 </p>
                 <p className="text-[11px] text-muted-foreground leading-snug">
                   {isPublished
-                    ? 'Sua sala aparece no Explorar e qualquer pessoa com o link pode entrar'
-                    : 'Ative para publicar no Explorar e permitir que outros entrem pelo link'}
+                    ? 'Qualquer pessoa com o link pode entrar na sua sala'
+                    : 'Ative para liberar o acesso pelo link'}
                 </p>
               </div>
             </div>
@@ -94,13 +94,13 @@ const ShareSalaModal = ({
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               {editingSlug ? (
-                <div className="flex items-center gap-2 flex-1">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
                   <span className="text-xs text-muted-foreground shrink-0">/c/</span>
                   <Input
                     value={shareSlug}
-                    onChange={(e) => onSlugChange(e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, ''))}
-                    className="h-8 text-sm"
-                    placeholder="seu-link"
+                    onChange={(e) => onSlugChange(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                    className="h-8 text-sm min-w-0 flex-1"
+                    placeholder="minha-sala"
                     autoFocus
                   />
                   <Button
@@ -114,8 +114,8 @@ const ShareSalaModal = ({
                 </div>
               ) : (
                 <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <div className="flex-1 truncate rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-                    {fullLink}
+                  <div className="min-w-0 flex-1 truncate rounded-lg bg-muted/50 px-3 py-2 text-xs sm:text-sm text-muted-foreground" title={fullLink}>
+                    {fullLink.replace(/^https?:\/\//, '')}
                   </div>
                   <button
                     onClick={() => setEditingSlug(true)}

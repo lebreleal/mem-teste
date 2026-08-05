@@ -66,7 +66,7 @@ const StudyWeightsSheet = ({ open, onOpenChange, folders, decks, getSubDecks, ge
       });
     }
     return rootFolders.map(f => {
-      const folderDecks = decks.filter(d => d.folder_id === f.id && !d.parent_deck_id && !d.is_archived);
+      const folderDecks = decks.filter(d => !d.is_archived && !!d.folder_id && (d.folder_id === f.id || folders.some(sf => sf.id === d.folder_id && sf.parent_id === f.id)));
       let totalCards = 0;
       for (const d of folderDecks) {
         totalCards += d.total_cards ?? 0;

@@ -74,7 +74,7 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
           onSuccess: (newDeck: { id: string } | undefined) => {
             state.setCreateType(null); state.setCreateName('');
             if (state.createParentDeckId) {
-              toast({ title: 'Subbaralho criado!' });
+              toast({ title: 'Baralho criado!' });
               state.toggleExpand(state.createParentDeckId);
             } else {
               toast({ title: 'Baralho criado!' });

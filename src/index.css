@@ -1,4 +1,19 @@
-@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&display=swap');
+/* Self-hosted variable fonts: removes the Google Fonts round-trip from the
+   critical path (was an @import, which blocks CSS parsing on a 3rd-party host). */
+@font-face {
+  font-family: 'Nunito';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('/fonts/nunito-var.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url('/fonts/inter-var.woff2') format('woff2');
+}
 
 @tailwind base;
 @tailwind components;
@@ -529,4 +544,21 @@
 .ai-prose pre code {
   background: none;
   padding: 0;
+}
+
+/* Dark mode: neutraliza cores de texto quase pretas salvas inline no conteúdo dos cartões */
+.dark .prose [style*="color: rgb(0"],
+.dark .prose [style*="color: rgb(10"],
+.dark .prose [style*="color: rgb(23"],
+.dark .prose [style*="color: rgb(15"],
+.dark .prose [style*="color:#000"],
+.dark .prose [style*="color: #000"],
+.dark .prose [style*="color: black"],
+.dark .ai-prose [style*="color: rgb(0"],
+.dark .ai-prose [style*="color: rgb(10"],
+.dark .ai-prose [style*="color: rgb(23"],
+.dark .ai-prose [style*="color:#000"],
+.dark .ai-prose [style*="color: #000"],
+.dark .ai-prose [style*="color: black"] {
+  color: inherit !important;
 }

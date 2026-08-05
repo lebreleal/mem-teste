@@ -167,7 +167,8 @@ interface DeckDetailContextValue {
   openNew: () => void;
   openEdit: (card: CardRow) => void;
   handleSave: (addAnother: boolean) => void;
-  handleDelete: () => void;
+  handleDelete: (onlyThis?: boolean) => void;
+  handleDuplicateCard: (card: CardRow) => Promise<void>;
   handleMoveCard: () => Promise<void>;
   handleBulkMove: () => Promise<void>;
   handleBulkDelete: () => Promise<void>;
@@ -642,7 +643,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     mcOptions, setMcOptions, mcCorrectIndex, setMcCorrectIndex,
     energy, spendEnergy, model, setModel, getCost, createExam: createExamStub, addNotification, updateNotification,
     resetForm: handlers.resetForm, openNew: handlers.openNew, openEdit: handlers.openEdit,
-    handleSave: handlers.handleSave, handleDelete: handlers.handleDelete, handleMoveCard: handlers.handleMoveCard,
+    handleSave: handlers.handleSave, handleDelete: handlers.handleDelete, handleDuplicateCard: handlers.handleDuplicateCard, handleMoveCard: handlers.handleMoveCard,
     handleBulkMove: handlers.handleBulkMove, handleBulkDelete: handlers.handleBulkDelete,
     handleImprove: handlers.handleImprove, applyImprovement: handlers.applyImprovement,
     uploadOcclusionFile: handlers.uploadOcclusionFile, handleOcclusionAttach: handlers.handleOcclusionAttach, handleOcclusionPaste: handlers.handleOcclusionPaste,

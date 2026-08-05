@@ -115,7 +115,8 @@ export interface TrialCard {
 export async function fetchTrialCards(deckId: string): Promise<TrialCard[]> {
   const { data } = await supabase.from('cards')
     .select('id, front_content, back_content, card_type, stability, difficulty, state, scheduled_date, last_reviewed_at')
-    .eq('deck_id', deckId);
+    .eq('deck_id', deckId)
+    .limit(500);
   return (data ?? []) as unknown as TrialCard[];
 }
 

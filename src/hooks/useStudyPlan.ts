@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { TablesUpdate } from '@/integrations/supabase/types';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { useMemo, useCallback } from 'react';
@@ -619,9 +620,9 @@ export function useStudyPlan(options?: { full?: boolean }) {
   // ─── Global capacity mutations (profile-level) ───
   const updateCapacity = useMutation({
     mutationFn: async (input: { daily_study_minutes: number; weekly_study_minutes?: WeeklyMinutes | null; daily_new_cards_limit?: number }) => {
-      const updateData: Record<string, unknown> = {
+      const updateData: TablesUpdate<'profiles'> = {
         daily_study_minutes: input.daily_study_minutes,
-        weekly_study_minutes: input.weekly_study_minutes ?? null,
+        weekly_study_minutes: (input.weekly_study_minutes ?? null) as TablesUpdate<'profiles'>['weekly_study_minutes'],
       };
       if (input.daily_new_cards_limit != null) {
         updateData.daily_new_cards_limit = input.daily_new_cards_limit;
@@ -637,9 +638,9 @@ export function useStudyPlan(options?: { full?: boolean }) {
 
   const updateNewCardsLimit = useMutation({
     mutationFn: async (input: { limit: number; weeklyNewCards?: WeeklyNewCards | null }) => {
-      const updateData: Record<string, unknown> = { daily_new_cards_limit: input.limit };
+      const updateData: TablesUpdate<'profiles'> = { daily_new_cards_limit: input.limit };
       if (input.weeklyNewCards !== undefined) {
-        updateData.weekly_new_cards = input.weeklyNewCards;
+        updateData.weekly_new_cards = input.weeklyNewCards as TablesUpdate<'profiles'>['weekly_new_cards'];
       }
       const { error } = await supabase
         .from('profiles')

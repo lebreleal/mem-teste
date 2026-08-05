@@ -228,18 +228,22 @@ export async function reorderTurmaDecks(orderedIds: string[]) {
 
 /** Batch-update sort_order for turma lesson files. */
 export async function reorderTurmaFiles(orderedIds: string[]) {
-  for (let i = 0; i < orderedIds.length; i++) {
-    const { error } = await supabase.from('turma_lesson_files').update({ sort_order: i }).eq('id', orderedIds[i]);
-    if (error) throw error;
-  }
+  if (orderedIds.length === 0) return;
+  const { error } = await (supabase.rpc as unknown as (fn: string, params: Record<string, unknown>) => Promise<{ error: unknown }>)(
+    'reorder_turma_lesson_files',
+    { p_ordered_ids: orderedIds }
+  );
+  if (error) throw error;
 }
 
-/** Batch-update sort_order for turma exams. */
+/** Batch-update sort_order for turma exams (single transaction). */
 export async function reorderTurmaExams(orderedIds: string[]) {
-  for (let i = 0; i < orderedIds.length; i++) {
-    const { error } = await supabase.from('turma_exams').update({ sort_order: i }).eq('id', orderedIds[i]);
-    if (error) throw error;
-  }
+  if (orderedIds.length === 0) return;
+  const { error } = await (supabase.rpc as unknown as (fn: string, params: Record<string, unknown>) => Promise<{ error: unknown }>)(
+    'reorder_turma_exams',
+    { p_ordered_ids: orderedIds }
+  );
+  if (error) throw error;
 }
 
 // ── Turma Ratings ──

@@ -1,28 +1,19 @@
 import React from 'react';
 import { List, type RowComponentProps } from 'react-window';
-import { sanitizeHtml } from '@/lib/sanitize';
-import { Pencil, Trash2, Send, Plus } from 'lucide-react';
+import { getCardPreview, getCardBackText, getCardStatusBorder } from '@/lib/cardPreview';
+import CardThumb from '@/components/cards/CardThumb';
+import EmptyDeckState from '@/components/cards/EmptyDeckState';
+
+import { Pencil, Trash2, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 
-const ITEM_HEIGHT = 88;
 
-function getCardBorderColor(card: any): string {
-  if (card.state === 0 && card.last_rating == null) return 'border-l-muted-foreground/40';
-  const lr = card.last_rating;
-  if (lr != null) {
-    if (lr === 1) return 'border-l-destructive';
-    if (lr === 2) return 'border-l-warning';
-    if (lr === 3) return 'border-l-success';
-    return 'border-l-info';
-  }
-  // Fallback for old cards without last_rating
-  const d = card.difficulty ?? 5;
-  if (d <= 3) return 'border-l-info';
-  if (d <= 5) return 'border-l-success';
-  if (d <= 7) return 'border-l-warning';
-  return 'border-l-destructive';
-}
+
+/** Must stay in sync with CardList (deck detail) so both lists breathe alike. */
+const ITEM_HEIGHT = 104;
+const ROW_GAP = 10;
+
 
 interface ManageDeckCardListProps {
   cards: any[];
@@ -46,40 +37,28 @@ const CardRow = ({ index, style, cards, isCommunityDeck, openEdit, setDeleteId, 
   const card = cards[index];
   if (!card) return null;
 
+  // Same preview engine, thumbnail, colours and layout as the deck detail
+  // list, so both screens look identical for every card type.
+  const preview = getCardPreview(card.front_content, card.card_type);
+  const backText = getCardBackText(card);
+
   return (
-    <div style={{ ...style, paddingBottom: 12 }}>
-      <div className={`group flex items-center gap-4 rounded-xl border border-border/50 border-l-4 ${getCardBorderColor(card)} bg-card p-4 shadow-sm transition-shadow hover:shadow-md h-full`}>
-        <div className="flex-1 min-w-0">
-          {card.card_type === 'image_occlusion' ? (() => {
-            try {
-              const d = JSON.parse(card.front_content);
-              const rectCount = d.allRects?.length || 0;
-              return (
-                <div className="flex items-center gap-2 mt-0.5">
-                  <div className="h-10 w-14 rounded border border-border/50 bg-muted/50 overflow-hidden shrink-0">
-                    {d.imageUrl && <img src={d.imageUrl} alt="" className="h-full w-full object-cover" />}
-                  </div>
-                  <span className="text-xs text-muted-foreground">{rectCount} área{rectCount !== 1 ? 's' : ''} oculta{rectCount !== 1 ? 's' : ''}</span>
-                </div>
-              );
-            } catch { return <p className="text-sm text-muted-foreground">Oclusão de imagem</p>; }
-          })() : (
-            <>
-              <div className="text-sm font-medium text-card-foreground line-clamp-1 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.front_content) }} />
-              {card.card_type !== 'multiple_choice' && (
-                <div className="mt-1 text-xs text-muted-foreground line-clamp-1 prose prose-xs max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.back_content) }} />
-              )}
-            </>
-          )}
-          {card.card_type === 'multiple_choice' && (() => {
-            try {
-              const mc = JSON.parse(card.back_content);
-              return <p className="mt-1 text-xs text-muted-foreground">{mc.options?.length || 0} opções · Resposta: {mc.options?.[mc.correctIndex]}</p>;
-            } catch { return null; }
-          })()}
-          
+    <div style={{ ...style, paddingBottom: ROW_GAP }}>
+      <div className={`group flex h-full items-center gap-3 overflow-hidden rounded-xl border border-border/50 border-l-4 ${getCardStatusBorder(card)} bg-card px-4 py-3 shadow-sm transition-shadow hover:shadow-md`}>
+        <div className="flex flex-1 min-w-0 items-start gap-2.5">
+          {preview.imageUrl && <CardThumb src={preview.imageUrl} />}
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-card-foreground leading-snug line-clamp-2">
+              {preview.text || (preview.imageUrl ? '' : 'Sem conteúdo')}
+            </p>
+            {backText && (
+              <p className="mt-1 text-xs text-muted-foreground leading-snug line-clamp-1">{backText}</p>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+
+
+        <div className="flex items-center gap-1 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
           {isCommunityDeck ? (
             <Button variant="ghost" size="icon" className="h-8 w-8 text-primary" onClick={() => setSuggestCard(card)} title="Sugerir correção">
               <Send className="h-3.5 w-3.5" />
@@ -97,6 +76,7 @@ const CardRow = ({ index, style, cards, isCommunityDeck, openEdit, setDeleteId, 
 };
 CardRow.displayName = 'CardRow';
 
+
 export const ManageDeckCardList = ({ cards, isLoading, isCommunityDeck, openNew, openEdit, setDeleteId, setSuggestCard }: ManageDeckCardListProps) => {
   if (isLoading) {
     return (
@@ -107,14 +87,9 @@ export const ManageDeckCardList = ({ cards, isLoading, isCommunityDeck, openNew,
   }
 
   if (cards.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-16 text-center">
-        <h3 className="font-display text-lg font-semibold text-foreground">Nenhum card ainda</h3>
-        <p className="mt-1 text-sm text-muted-foreground">Adicione flashcards para começar a estudar.</p>
-        <Button onClick={openNew} className="mt-4 gap-2"><Plus className="h-4 w-4" /> Adicionar Card</Button>
-      </div>
-    );
+    return <EmptyDeckState onAdd={openNew} />;
   }
+
 
   const listHeight = Math.min(cards.length * ITEM_HEIGHT, 600);
 

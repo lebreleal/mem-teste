@@ -4,7 +4,6 @@ import { ArrowLeft, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useStudyPlan, type StudyPlan as StudyPlanType } from '@/hooks/useStudyPlan';
 import { useDecks } from '@/hooks/useDecks';
-import { useSubscription } from '@/hooks/useSubscription';
 import { useToast } from '@/hooks/use-toast';
 import { StudyPlanWizard } from '@/components/study-plan/StudyPlanWizard';
 import { StudyPlanHome } from '@/components/study-plan/StudyPlanHome';
@@ -18,7 +17,6 @@ const StudyPlan = () => {
     calcImpact, createPlan, updatePlan, deletePlan, updateCapacity, updateNewCardsLimit, reorderObjectives,
   } = useStudyPlan({ full: true });
   const { decks, isLoading: decksLoading } = useDecks();
-  const { isPremium } = useSubscription();
   const activeDecks = useMemo(() => (decks ?? []).filter(d => !d.is_archived), [decks]);
 
   const [view, setView] = useState<'home' | 'wizard'>('home');
@@ -32,14 +30,11 @@ const StudyPlan = () => {
   }, []);
 
   const startNewPlan = useCallback(() => {
-    if (!isPremium && plans.length >= 1) {
-      toast({ title: 'Limite atingido', description: 'Assine Premium para criar mais objetivos.', variant: 'destructive' });
-      return;
-    }
     setEditingPlanId(null);
     setIsEditing(false);
     setView('wizard');
-  }, [isPremium, plans.length, toast]);
+  }, []);
+
 
   const startEdit = useCallback((p: StudyPlanType) => {
     setEditingPlanId(p.id);
@@ -63,8 +58,8 @@ const StudyPlan = () => {
         globalCapacity={globalCapacity}
         metrics={metrics}
         avgSecondsPerCard={avgSecondsPerCard}
-        isPremium={isPremium}
         isEditing={isEditing}
+
         editingPlanId={editingPlanId}
         createPlan={createPlan}
         updatePlan={updatePlan}
@@ -90,8 +85,8 @@ const StudyPlan = () => {
         allDeckIds={allDeckIds}
         metrics={metrics}
         avgSecondsPerCard={avgSecondsPerCard}
-        isPremium={isPremium}
         calibrationFactor={calibrationFactor}
+
         updateCapacity={updateCapacity}
         updateNewCardsLimit={updateNewCardsLimit}
         reorderObjectives={reorderObjectives}

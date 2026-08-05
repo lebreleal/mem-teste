@@ -226,14 +226,13 @@ const LessonDetail = () => {
       const od = await fetchOriginalDeckInfo(td.deck_id);
       const subjectName = subject?.name || 'Sem Matéria';
 
-      let parentDeck = latestDecks.find((d) => d.name === subjectName && d.folder_id === (turmaFolder as any).id && !d.parent_deck_id);
-      let parentDeckId: string | null = null;
-      if (!parentDeck) {
-        const existingParentNames = latestDecks.filter((d) => d.folder_id === (turmaFolder as any).id && !d.parent_deck_id).map((d) => d.name);
-        const parentName = resolveNameConflict(subjectName, existingParentNames);
-        const newParent = await createDeckWithSource({ name: parentName, userId: user.id, folderId: (turmaFolder as any).id, parentDeckId: null });
-        parentDeckId = newParent.id;
-      } else { parentDeckId = parentDeck.id; }
+      // Hierarquia: Sala > Pasta (matéria) > Deck (aula). Sem sub-baralhos.
+      let subjectFolder = folders.find(f => f.name === subjectName && f.parent_id === (turmaFolder as any).id);
+      if (!subjectFolder) {
+        const created = await createFolder.mutateAsync({ name: subjectName, parentId: (turmaFolder as any).id });
+        subjectFolder = created as any;
+      }
+      const targetFolderId = (subjectFolder as any).id as string;
 
       const lessonLabel = lesson?.lesson_date ? `${format(new Date(lesson.lesson_date + 'T00:00:00'), 'dd/MM', { locale: ptBR })} - ${lesson.name}` : lesson?.name || od.name;
 
@@ -264,12 +263,12 @@ const LessonDetail = () => {
         return { synced: true, count: missingCards.length, deckId: existingLinked.id, wasArchived: existingLinked.is_archived };
       }
 
-      const existingChildNames = latestDecks.filter((d) => d.parent_deck_id === parentDeckId).map((d) => d.name);
+      const existingChildNames = latestDecks.filter((d) => d.folder_id === targetFolderId).map((d) => d.name);
       const childName = resolveNameConflict(lessonLabel, existingChildNames);
 
       const newDeck = await createDeckWithSource({
-        name: childName, userId: user.id, folderId: (turmaFolder as any).id,
-        parentDeckId, algorithmMode: od.algorithm_mode,
+        name: childName, userId: user.id, folderId: targetFolderId,
+        parentDeckId: null, algorithmMode: od.algorithm_mode,
         dailyNewLimit: od.daily_new_limit, dailyReviewLimit: od.daily_review_limit, sourceTurmaDeckId: td.id,
       });
       const cards = await fetchCardsForCopy(td.deck_id);
@@ -316,20 +315,19 @@ const LessonDetail = () => {
       }
       const od = await fetchOriginalDeckInfo(td.deck_id);
       const subjectName = subject?.name || 'Sem Matéria';
-      let parentDeck = latestDecks.find((d) => d.name === subjectName && d.folder_id === (turmaFolder as any).id && !d.parent_deck_id);
-      let parentDeckId: string | null = null;
-      if (!parentDeck) {
-        const existingParentNames = latestDecks.filter((d) => d.folder_id === (turmaFolder as any).id && !d.parent_deck_id).map((d) => d.name);
-        const parentName = resolveNameConflict(subjectName, existingParentNames);
-        const newParent = await createDeckWithSource({ name: parentName, userId: user.id, folderId: (turmaFolder as any).id, parentDeckId: null });
-        parentDeckId = newParent.id;
-      } else { parentDeckId = parentDeck.id; }
+      // Hierarquia: Sala > Pasta (matéria) > Deck (aula). Sem sub-baralhos.
+      let subjectFolder = folders.find(f => f.name === subjectName && f.parent_id === (turmaFolder as any).id);
+      if (!subjectFolder) {
+        const created = await createFolder.mutateAsync({ name: subjectName, parentId: (turmaFolder as any).id });
+        subjectFolder = created as any;
+      }
+      const targetFolderId = (subjectFolder as any).id as string;
       const lessonLabel = lesson?.lesson_date ? `${format(new Date(lesson.lesson_date + 'T00:00:00'), 'dd/MM', { locale: ptBR })} - ${lesson.name}` : lesson?.name || od.name;
-      const existingChildNames = latestDecks.filter((d) => d.parent_deck_id === parentDeckId).map((d) => d.name);
+      const existingChildNames = latestDecks.filter((d) => d.folder_id === targetFolderId).map((d) => d.name);
       const childName = resolveNameConflict(lessonLabel, existingChildNames);
       const newDeck = await createDeckWithSource({
-        name: childName, userId: user.id, folderId: (turmaFolder as any).id,
-        parentDeckId, algorithmMode: od.algorithm_mode,
+        name: childName, userId: user.id, folderId: targetFolderId,
+        parentDeckId: null, algorithmMode: od.algorithm_mode,
         dailyNewLimit: od.daily_new_limit, dailyReviewLimit: od.daily_review_limit,
       });
       const cards = await fetchCardsForCopy(td.deck_id);

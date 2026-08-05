@@ -28,7 +28,7 @@ interface ProfileNameRow { id: string; name: string }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- turma_decks not in generated types  
 const tdTable = () => (supabase.from as (t: string) => ReturnType<typeof supabase.from>)('turma_decks');
 
-const DECK_ALL_COLS = 'id, name, parent_deck_id, folder_id, user_id, daily_new_limit, daily_review_limit, algorithm_mode, learning_steps, requested_retention, max_interval, interval_modifier, easy_bonus, easy_graduating_interval, shuffle_cards, is_live_deck, source_turma_deck_id, source_listing_id, bury_siblings, bury_new_siblings, bury_review_siblings, bury_learning_siblings, is_archived, is_public, is_free_in_community, community_id, sort_order, allow_duplication, synced_at, created_at, updated_at' as const;
+const DECK_ALL_COLS = 'id, name, parent_deck_id, folder_id, user_id, daily_new_limit, daily_review_limit, algorithm_mode, learning_steps, requested_retention, max_interval, interval_modifier, easy_bonus, easy_graduating_interval, shuffle_cards, is_live_deck, source_turma_deck_id, source_listing_id, bury_siblings, bury_new_siblings, bury_review_siblings, bury_learning_siblings, is_archived, is_public, is_free_in_community, community_id, sort_order, allow_duplication, synced_at, created_at, updated_at, imported_source_deck_id, imported_owner_name' as const;
 
 /** Resolve a unique deck name by appending (1), (2), etc. if needed. */
 export async function resolveUniqueDeckName(userId: string, baseName: string): Promise<string> {
@@ -166,7 +166,7 @@ export async function changeAlgorithm(deckId: string, algorithmMode: string, for
   return { childCount: children?.length ?? 0, shouldReset: forceReset };
 }
 
-/** Create a copy of a deck with a different algorithm as a sub-deck. */
+/** Create a copy of a deck with a different algorithm, as a sibling deck in the same pasta/sala. */
 export async function createAlgorithmCopy(userId: string, deckId: string, algorithmMode: string, algorithmLabel: string) {
   const { data: currentDeck } = await supabase.from('decks').select('name, folder_id').eq('id', deckId).single();
   if (!currentDeck) throw new Error('Deck not found');
@@ -178,7 +178,6 @@ export async function createAlgorithmCopy(userId: string, deckId: string, algori
       user_id: userId,
       folder_id: typed.folder_id,
       algorithm_mode: algorithmMode,
-      parent_deck_id: deckId,
     })
     .select().single();
   if (error || !newDeck) throw error || new Error('Failed to create deck');

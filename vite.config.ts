@@ -21,7 +21,32 @@ export default defineConfig(({ mode }) => ({
       includeAssets: ["favicon.svg", "apple-touch-icon-180x180.png", "pwa-192x192.png"],
       workbox: {
         navigateFallbackDenylist: [/^\/~oauth/],
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        globPatterns: ["**/*.{js,css,html,ico,svg,woff2}"],
+        /**
+         * Heavy, route-specific bundles (editor, PDF, charts, sql-wasm) and
+         * raster images are pulled out of the install-time precache — they used
+         * to make the service worker download ~3.8 MB on first visit. They are
+         * still cached, but lazily, the first time a route actually needs them.
+         */
+        globIgnores: [
+          "**/vendor-tiptap-*.js",
+          "**/vendor-pdf-*.js",
+          "**/ComposedChart-*.js",
+          "**/sql-wasm*-*.js",
+          "**/*.{png,jpg,jpeg,webp}",
+        ],
+        runtimeCaching: [
+          {
+            urlPattern: ({ request }: { request: Request }) => request.destination === "script",
+            handler: "StaleWhileRevalidate",
+            options: { cacheName: "js-lazy", expiration: { maxEntries: 60, maxAgeSeconds: 60 * 60 * 24 * 30 } },
+          },
+          {
+            urlPattern: ({ request }: { request: Request }) => request.destination === "image",
+            handler: "CacheFirst",
+            options: { cacheName: "images", expiration: { maxEntries: 120, maxAgeSeconds: 60 * 60 * 24 * 30 } },
+          },
+        ],
       },
       manifest: {
         name: "MemoCards",
@@ -63,15 +88,23 @@ export default defineConfig(({ mode }) => ({
     target: 'es2022',
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-tiptap': [
-            '@tiptap/react', '@tiptap/starter-kit', '@tiptap/extension-image',
-            '@tiptap/extension-underline', '@tiptap/extension-color',
-            '@tiptap/extension-text-style',
-          ],
-          'vendor-pdf': ['pdfjs-dist'],
-          'vendor-supabase': ['@supabase/supabase-js'],
+        /**
+         * Function form (not object form): the object form let shared modules
+         * such as react/jsx-runtime fall into vendor-tiptap, which turned that
+         * 384KB chunk into a dependency of the entry and made Vite inject a
+         * <link rel="modulepreload"> for it on every route.
+         */
+        manualChunks(id: string) {
+          if (!id.includes('node_modules')) return;
+          const path = id.split('node_modules/').pop() ?? '';
+          if (/^(\.pnpm\/)?(react|react-dom|react-router|react-router-dom|scheduler)(@|\/|$)/.test(path)) {
+            return 'vendor-react';
+          }
+          if (path.includes('@tiptap') || path.includes('prosemirror')) {
+            return 'vendor-tiptap';
+          }
+          if (path.includes('pdfjs-dist')) return 'vendor-pdf';
+          if (path.includes('@supabase')) return 'vendor-supabase';
         },
       },
     },

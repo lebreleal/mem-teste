@@ -52,7 +52,7 @@ const PageSelectionStep = ({
             }`}
           >
             {page.thumbnailUrl ? (
-              <img src={page.thumbnailUrl} alt={`Página ${page.pageNumber}`} className="w-full aspect-[4/3] object-cover bg-white" />
+              <img loading="lazy" decoding="async" src={page.thumbnailUrl} alt={`Página ${page.pageNumber}`} className="w-full aspect-[4/3] object-cover bg-white" />
             ) : (
               <div className="w-full aspect-[4/3] bg-muted flex items-center justify-center p-2">
                 <p className="text-[8px] text-muted-foreground line-clamp-4 text-center leading-tight">
@@ -74,8 +74,8 @@ const PageSelectionStep = ({
     <div className="flex items-center justify-between pt-2 border-t border-border/50">
       <div className="text-xs text-muted-foreground">
         <span className="font-bold text-foreground">{selectedCount}</span> páginas selecionadas ·{' '}
-        <span className="font-bold" style={{ color: totalCredits > energy ? 'hsl(var(--destructive))' : 'hsl(var(--energy-purple))' }}>
-          {totalCredits} créditos IA
+        <span className={`font-bold ${totalCredits > energy ? 'text-destructive' : 'text-warning'}`}>
+          ≈ {totalCredits} créditos IA
         </span>
         {' '}(você tem {energy})
       </div>

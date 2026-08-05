@@ -103,7 +103,7 @@ const DashboardActions = ({
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={onCreateDeck}><BookOpen className="mr-2 h-4 w-4" /> Criar baralho</DropdownMenuItem>
-                    <DropdownMenuItem onClick={onCreateAI}><Brain className="mr-2 h-4 w-4" style={{ color: 'hsl(var(--energy-purple))' }} /> Criar com IA</DropdownMenuItem>
+                    <DropdownMenuItem onClick={onCreateAI}><Brain className="mr-2 h-4 w-4 text-primary" /> Criar com IA</DropdownMenuItem>
                     <DropdownMenuItem onClick={onImport}><Download className="mr-2 h-4 w-4" /> Importar cartões</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>

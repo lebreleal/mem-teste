@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { OCCLUSION_COLORS } from '@/lib/occlusionColors';
+import { colorForOcclusionTarget, type OcclusionPayload } from '@/lib/occlusion';
+
 import type { Rating } from '@/lib/fsrs';
 import type { DeckStudyConfig } from '@/types/study';
 import { buildPreviewParams, getPreviewIntervals, getCardDifficulty, getDifficultyColor, getDifficultyBgColor } from '@/lib/flashCardUtils';
@@ -136,7 +138,7 @@ function renderOcclusion(frontContent: string, revealed: boolean, fallbackCanvas
     // Determine which shapes are "active" (occluded for this card) based on clozeTarget
     let activeIds: Set<string>;
     if (clozeTarget != null && clozeTarget > 0) {
-      const targetFill = OCCLUSION_COLORS[clozeTarget - 1]?.fill;
+      const targetFill = colorForOcclusionTarget(data as OcclusionPayload, clozeTarget);
       if (targetFill) {
         activeIds = new Set(allRects.filter(r => (r.color || OCCLUSION_COLORS[0].fill) === targetFill).map(r => r.id));
       } else {
@@ -145,6 +147,7 @@ function renderOcclusion(frontContent: string, revealed: boolean, fallbackCanvas
     } else {
       activeIds = new Set(data.activeRectIds || allRects.map(r => r.id));
     }
+
 
     const svgShapes = allRects.map((r: OcclusionRect) => {
       const isActive = activeIds.has(r.id);

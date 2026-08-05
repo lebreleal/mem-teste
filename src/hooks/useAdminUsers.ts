@@ -7,7 +7,8 @@ export interface AdminProfile {
   name: string;
   email: string;
   energy: number;
-  memocoins: number;
+  ai_credits: number;
+  ai_credits_purchased: number;
   creator_tier: number;
   is_banned: boolean;
   created_at: string;
@@ -80,12 +81,15 @@ export const useAdminUsers = () => {
     return () => clearTimeout(t);
   }, [search, fetchUsers]);
 
-  const updateProfile = async (userId: string, updates: { name?: string; energy?: number; memocoins?: number; is_banned?: boolean }) => {
-    const { error } = await supabase.rpc('admin_update_profile', {
+  const updateProfile = async (userId: string, updates: { name?: string; ai_credits?: number; ai_credits_purchased?: number; is_banned?: boolean }) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await supabase.rpc('admin_update_profile' as any, {
       p_user_id: userId,
       p_name: updates.name ?? null,
-      p_energy: updates.energy ?? null,
-      p_memocoins: updates.memocoins ?? null,
+      p_energy: null,
+      p_ai_credits: updates.ai_credits ?? null,
+      p_ai_credits_purchased: updates.ai_credits_purchased ?? null,
+      p_memocoins: null,
       p_is_banned: updates.is_banned ?? null,
     });
     if (error) {
@@ -127,15 +131,6 @@ export const useAdminUsers = () => {
       toast({ title: 'Erro', description: 'Falha ao conceder premium.', variant: 'destructive' });
       return false;
     }
-
-    // Log the gift as a memocoin transaction for audit trail
-    await supabase.from('memocoin_transactions').insert({
-      user_id: userId,
-      amount: 0,
-      type: 'credit',
-      description,
-      reference_id: `admin_gift_${plan}_${new Date().toISOString().slice(0, 10)}`,
-    });
 
     toast({ title: '🎁 Premium concedido!', description });
     await fetchUsers(search);
