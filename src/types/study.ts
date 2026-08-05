@@ -114,6 +114,8 @@ export interface ReviewProfileCounters {
   successful_cards_counter: number;
   daily_cards_studied: number;
   daily_energy_earned: number;
+  /** Authoritative study streak (local day UTC-3) maintained by submit_review. */
+  current_streak?: number;
 }
 
 export interface CardReviewResult {

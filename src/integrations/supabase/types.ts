@@ -3106,6 +3106,10 @@ export type Database = {
         }
         Returns: Json
       }
+      compute_user_streak: {
+        Args: { p_tz_offset_minutes?: number; p_user_id: string }
+        Returns: number
+      }
       count_cards_by_deck_ids: {
         Args: { p_deck_ids: string[] }
         Returns: {
