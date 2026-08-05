@@ -13,6 +13,9 @@ export {
   fetchDescendantCardCounts,
   fetchDescendantCardsPage,
   fetchCardsForExport,
+  searchCardsInDecks,
+  fetchReviewDueCount,
+  fetchStudyPlanDeckIds,
   type CardMeta,
   type DescendantCardCounts,
 } from './cardQueries';
@@ -32,8 +35,6 @@ export {
   unfreezeCard,
   burySingleCard,
   patchCard,
-  countReviewDueCards,
-  fetchStudyPlanDeckIds,
   uploadCardImage,
 } from './cardMutations';
 

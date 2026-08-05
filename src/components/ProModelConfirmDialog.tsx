@@ -18,22 +18,22 @@ interface ProModelConfirmDialogProps {
 }
 
 const ProModelConfirmDialog = ({ open, onConfirm, onCancel, baseCost }: ProModelConfirmDialogProps) => {
-  const flashCost = baseCost ?? 2;
-  const proCost = flashCost * 5;
+  const flashCost = baseCost ?? 0;
+  const proCost = flashCost * 10;
 
   return (
     <AlertDialog open={open} onOpenChange={(o) => { if (!o) onCancel(); }}>
       <AlertDialogContent className="max-w-sm">
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5" style={{ color: 'hsl(var(--energy-purple))' }} />
+            <Sparkles className="h-5 w-5 text-primary" />
             Mudar para Raciocínio Pro?
           </AlertDialogTitle>
           <AlertDialogDescription className="text-left space-y-2">
             <p>
-              O modelo <strong>Pro</strong> usa raciocínio avançado e consome{' '}
-              <strong className="text-foreground">{proCost} créditos</strong> por uso
-              (vs. {flashCost} no Flash).
+              O modelo <strong>Pro</strong> usa raciocínio avançado e consome bem mais créditos
+              por token gerado{flashCost > 0 ? ` (estimativa ≈ ${proCost} créditos, vs. ≈ ${flashCost} no Flash)` : ''}.
+              A cobrança final é sempre feita pelo uso real de tokens.
             </p>
             <p>Deseja continuar com o modelo Pro?</p>
           </AlertDialogDescription>

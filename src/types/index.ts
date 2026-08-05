@@ -7,7 +7,6 @@ export * from './deck';
 export * from './folder';
 export * from './turma';
 export * from './energy';
-export * from './performance';
 export * from './ai';
 export * from './study';
 export * from './community';

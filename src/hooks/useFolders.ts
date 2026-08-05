@@ -6,14 +6,14 @@ import type { Folder } from '@/types/folder';
 // Re-export for backward compatibility
 export type { Folder } from '@/types/folder';
 
-export const useFolders = () => {
+export const useFolders = (options?: { enabled?: boolean }) => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
   const foldersQuery = useQuery({
     queryKey: ['folders', user?.id],
     queryFn: () => folderService.fetchFolders(user!.id),
-    enabled: !!user,
+    enabled: !!user && (options?.enabled ?? true),
     staleTime: 2 * 60_000,
   });
 

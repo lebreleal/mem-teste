@@ -1,13 +1,15 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { corsHeaders, handleCors, jsonResponse, getModelMap, deductEnergy, refundEnergy, getAIConfig, fetchWithRetry, streamWithUsageCapture } from "../_shared/utils.ts";
+import { corsHeaders, handleCors, jsonResponse, getModelMap, estimateCredits, holdCredits, refundCredits, getAIConfig, fetchWithRetry, streamWithUsageCapture, aiHeaders } from "../_shared/utils.ts";
+
+const MAX_OUTPUT_TOKENS = 4096;
 
 Deno.serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
 
-  let energyDeducted = false;
-  let deductedCost = 0;
+  let creditsHeld = false;
+  let heldCredits = 0;
   let supabase: any;
   let userId = "";
 
@@ -25,17 +27,9 @@ Deno.serve(async (req) => {
     }
     userId = user.id;
 
-    const { messages, aiModel, energyCost, conversationId } = await req.json();
+    const { messages, aiModel } = await req.json();
     const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
     if (!AI_KEY) return jsonResponse({ error: "AI API key não configurada" }, 500);
-
-    const cost = energyCost || 0;
-    if (userId && cost > 0) {
-      const ok = await deductEnergy(supabase, userId, cost);
-      if (!ok) return jsonResponse({ error: "Créditos IA insuficientes", requiresCredits: true }, 402);
-      energyDeducted = true;
-      deductedCost = cost;
-    }
 
     const modelMap = await getModelMap(supabase);
     const selectedModel = modelMap[aiModel || "flash"] || modelMap.flash;
@@ -47,13 +41,20 @@ Deno.serve(async (req) => {
       ...(messages || []).map((m: any) => ({ role: m.role, content: m.content })),
     ];
 
+    // Server-side pricing: never trust a cost sent by the client.
+    heldCredits = await estimateCredits(supabase, selectedModel, JSON.stringify(chatMessages).length, MAX_OUTPUT_TOKENS);
+    const ok = await holdCredits(supabase, userId, heldCredits, "ai_chat");
+    if (!ok) return jsonResponse({ error: "Créditos IA insuficientes", requiresCredits: true, requiredCredits: heldCredits }, 402);
+    creditsHeld = true;
+
     const response = await fetchWithRetry(AI_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
+      headers: aiHeaders(AI_KEY),
       body: JSON.stringify({
         model: selectedModel,
+        usage: { include: true },
         messages: chatMessages,
-        max_tokens: 4096,
+        max_tokens: MAX_OUTPUT_TOKENS,
         temperature: 0.7,
         stream: true,
         stream_options: { include_usage: true },
@@ -63,18 +64,18 @@ Deno.serve(async (req) => {
     if (!response.ok) {
       const errText = await response.text();
       console.error("AI error:", response.status, errText);
-      if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
+      if (creditsHeld) await refundCredits(supabase, userId, heldCredits);
       if (response.status === 429) return jsonResponse({ error: "Limite de requisições excedido." }, 429);
       if (response.status === 403) return jsonResponse({ error: "API do Google AI não ativada." }, 502);
       if (response.status === 503) return jsonResponse({ error: "Modelo sobrecarregado. Tente Flash." }, 503);
       return jsonResponse({ error: "Serviço de IA indisponível" }, 502);
     }
 
-    // Stream started successfully — credits are consumed legitimately
-    return streamWithUsageCapture(response, supabase, userId, "ai_chat", selectedModel, cost);
+    // Stream started — the hold is settled against real usage when it ends.
+    return streamWithUsageCapture(response, supabase, userId, "ai_chat", selectedModel, heldCredits);
   } catch (err) {
     console.error("Error:", err);
-    if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
+    if (creditsHeld) await refundCredits(supabase, userId, heldCredits);
     return jsonResponse({ error: "Erro interno" }, 500);
   }
 });

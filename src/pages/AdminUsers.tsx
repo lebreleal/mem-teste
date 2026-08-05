@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { useAuth } from '@/hooks/useAuth';
-import { useAdminUsers, type AdminProfile, type UserDeck, type TokenUsageSummary, type TokenUsageEntry, type StudyDay, type PremiumGiftPlan } from '@/hooks/useAdminUsers';
-import { invokeImpersonate, verifyOtp, fetchProfilePremiumExpiry } from '@/services/adminService';
+import { useAdminUsers, type AdminProfile, type UserDeck, type TokenUsageSummary, type TokenUsageEntry, type StudyDay } from '@/hooks/useAdminUsers';
+import { invokeImpersonate, verifyOtp } from '@/services/adminService';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Loader2, Search, User, BookOpen, Zap, Calendar, Ban, Save, ChevronRight, DollarSign, LogIn, Trash2, RefreshCw, Crown, Gift } from 'lucide-react';
+import { ArrowLeft, Loader2, Search, User, BookOpen, Zap, Calendar, Ban, Save, ChevronRight, DollarSign, LogIn, Trash2, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 
@@ -39,17 +39,11 @@ const calcCostUSD = (model: string, promptTokens: number, completionTokens: numb
   return (promptTokens / 1_000_000) * pricing.input + (realOutputTokens / 1_000_000) * pricing.output;
 };
 
-const PLAN_LABELS: Record<PremiumGiftPlan, string> = {
-  monthly: '1 Mês',
-  annual: '1 Ano',
-  lifetime: 'Vitalício',
-};
-
 const AdminUsers = () => {
   const navigate = useNavigate();
   const { isAdmin, loading: adminLoading } = useIsAdmin();
   const { session } = useAuth();
-  const { users, loading, search, setSearch, updateProfile, grantPremium, getUserDecks, getUserTokenUsage, getUserTokenUsageDetailed, getUserStudyHistory, deleteTokenUsageEntry } = useAdminUsers();
+  const { users, loading, search, setSearch, updateProfile, getUserDecks, getUserTokenUsage, getUserTokenUsageDetailed, getUserStudyHistory, deleteTokenUsageEntry } = useAdminUsers();
   const { toast } = useToast();
   
   const [selectedUser, setSelectedUser] = useState<AdminProfile | null>(null);
@@ -63,8 +57,6 @@ const AdminUsers = () => {
   const [usdToBrl, setUsdToBrl] = useState<number | null>(null);
   const [impersonating, setImpersonating] = useState(false);
   const [refreshingAI, setRefreshingAI] = useState(false);
-  const [giftPlan, setGiftPlan] = useState<PremiumGiftPlan>('monthly');
-  const [grantingPremium, setGrantingPremium] = useState(false);
 
   const handleImpersonate = async (user: AdminProfile) => {
     if (!session) return;
@@ -103,7 +95,7 @@ const AdminUsers = () => {
 
   const openUser = async (user: AdminProfile) => {
     setSelectedUser(user);
-    setEditState({ name: user.name, energy: user.energy, memocoins: user.memocoins, is_banned: user.is_banned });
+    setEditState({ name: user.name, ai_credits: user.ai_credits, ai_credits_purchased: user.ai_credits_purchased, is_banned: user.is_banned });
     setLoadingDetail(true);
     const [d, t, td, s] = await Promise.all([getUserDecks(user.id), getUserTokenUsage(user.id), getUserTokenUsageDetailed(user.id), getUserStudyHistory(user.id)]);
     setDecks(d); setTokenUsage(t); setTokenUsageDetailed(td); setStudyHistory(s);
@@ -114,31 +106,15 @@ const AdminUsers = () => {
     if (!selectedUser) return;
     setSaving(true);
     const ok = await updateProfile(selectedUser.id, {
-      name: editState.name, energy: editState.energy,
-      memocoins: editState.memocoins, is_banned: editState.is_banned,
+      name: editState.name, ai_credits: editState.ai_credits, ai_credits_purchased: editState.ai_credits_purchased, is_banned: editState.is_banned,
     });
     if (ok) setSelectedUser(prev => prev ? { ...prev, ...editState } : null);
     setSaving(false);
   };
 
-  const handleGrantPremium = async () => {
-    if (!selectedUser) return;
-    setGrantingPremium(true);
-    const ok = await grantPremium(selectedUser.id, giftPlan);
-    if (ok) {
-      const premiumExpiry = await fetchProfilePremiumExpiry(selectedUser.id);
-      setSelectedUser(prev => prev ? { ...prev, premium_expires_at: premiumExpiry } : null);
-    }
-    setGrantingPremium(false);
-  };
-
   const totalCostUSD = tokenUsage.reduce((sum, t) => sum + calcCostUSD(t.model, Number(t.total_prompt_tokens), Number(t.total_completion_tokens), Number(t.total_tokens_sum)), 0);
   const totalCostBRL = usdToBrl ? totalCostUSD * usdToBrl : null;
 
-  // Premium status helpers
-  const userPremiumExpires = selectedUser?.premium_expires_at;
-  const isUserPremium = !!userPremiumExpires && new Date(userPremiumExpires) > new Date();
-  const isLifetime = !!userPremiumExpires && new Date(userPremiumExpires).getFullYear() > 2090;
 
   if (adminLoading) return <div className="flex items-center justify-center min-h-screen"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
   if (!isAdmin) return <div className="flex flex-col items-center justify-center min-h-screen gap-4 p-4"><p className="text-lg text-muted-foreground">Acesso restrito.</p><Button variant="outline" onClick={() => navigate('/dashboard')}>Voltar</Button></div>;
@@ -173,8 +149,7 @@ const AdminUsers = () => {
                         <p className="text-xs text-muted-foreground truncate">{u.email}</p>
                       </div>
                       <div className="flex items-center gap-3 text-xs text-muted-foreground shrink-0">
-                        <span>⚡ {u.energy}</span>
-                        <span>🪙 {Number(u.memocoins).toFixed(0)}</span>
+                        <span title="Diários + comprados">👑 {(Number(u.ai_credits ?? 0) + Number(u.ai_credits_purchased ?? 0)).toLocaleString('pt-BR')}</span>
                         <ChevronRight className="w-4 h-4" />
                       </div>
                     </CardContent>
@@ -205,16 +180,19 @@ const AdminUsers = () => {
                     <Label>Nome</Label>
                     <Input value={editState.name || ''} onChange={e => setEditState(s => ({ ...s, name: e.target.value }))} />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2">
-                      <Label>Energia (Créditos IA)</Label>
-                      <Input type="number" value={editState.energy ?? 0} onChange={e => setEditState(s => ({ ...s, energy: parseInt(e.target.value) || 0 }))} />
+                      <Label>Créditos diários</Label>
+                      <Input type="number" value={editState.ai_credits ?? 0} onChange={e => setEditState(s => ({ ...s, ai_credits: parseInt(e.target.value) || 0 }))} />
+                      <p className="text-[11px] text-muted-foreground">Renovam todo dia (50), não acumulam.</p>
                     </div>
                     <div className="space-y-2">
-                      <Label>MemoCoins</Label>
-                      <Input type="number" value={editState.memocoins ?? 0} onChange={e => setEditState(s => ({ ...s, memocoins: parseFloat(e.target.value) || 0 }))} />
+                      <Label>Créditos comprados</Label>
+                      <Input type="number" value={editState.ai_credits_purchased ?? 0} onChange={e => setEditState(s => ({ ...s, ai_credits_purchased: parseInt(e.target.value) || 0 }))} />
+                      <p className="text-[11px] text-muted-foreground">Saldo permanente do usuário.</p>
                     </div>
                   </div>
+                  <p className="text-xs text-muted-foreground">👑 Total disponível: {(Number(editState.ai_credits ?? 0) + Number(editState.ai_credits_purchased ?? 0)).toLocaleString('pt-BR')}</p>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Ban className="w-4 h-4 text-destructive" />
@@ -223,7 +201,7 @@ const AdminUsers = () => {
                     <Switch checked={editState.is_banned ?? false} onCheckedChange={v => setEditState(s => ({ ...s, is_banned: v }))} />
                   </div>
                   <div className="text-xs text-muted-foreground space-y-1">
-                    <p>Tier criador: {selectedUser.creator_tier} · Cards totais estudados: {selectedUser.successful_cards_counter}</p>
+                    <p>Cards totais estudados: {selectedUser.successful_cards_counter}</p>
                     <p>Criado em: {format(new Date(selectedUser.created_at), 'dd/MM/yyyy HH:mm')}</p>
                   </div>
                   <Button onClick={handleSave} disabled={saving} className="w-full">
@@ -237,62 +215,6 @@ const AdminUsers = () => {
                 </CardContent>
               </Card>
 
-              {/* Grant Premium Card */}
-              <Card className="border-warning/30">
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Crown className="w-4 h-4 text-warning" />
-                    Presentear Premium
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {isUserPremium ? (
-                    <div className="flex items-center gap-2 rounded-lg bg-warning/10 px-3 py-2">
-                      <Crown className="w-4 h-4 text-warning" fill="hsl(var(--warning))" />
-                      <div className="text-sm">
-                        <p className="font-medium text-foreground">
-                          {isLifetime ? 'Premium Vitalício ativo' : 'Premium ativo'}
-                        </p>
-                        {!isLifetime && (
-                          <p className="text-xs text-muted-foreground">
-                            Expira em {format(new Date(userPremiumExpires!), 'dd/MM/yyyy HH:mm')}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">Este usuário não tem premium ativo.</p>
-                  )}
-
-                  <div className="flex items-end gap-3">
-                    <div className="flex-1 space-y-1.5">
-                      <Label className="text-xs">Plano</Label>
-                      <Select value={giftPlan} onValueChange={v => setGiftPlan(v as PremiumGiftPlan)}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="monthly">🎁 1 Mês</SelectItem>
-                          <SelectItem value="annual">🎁 1 Ano</SelectItem>
-                          <SelectItem value="lifetime">🎁 Vitalício</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <Button
-                      onClick={handleGrantPremium}
-                      disabled={grantingPremium}
-                      className="gap-2"
-                      variant="default"
-                    >
-                      {grantingPremium ? <Loader2 className="w-4 h-4 animate-spin" /> : <Gift className="w-4 h-4" />}
-                      Presentear
-                    </Button>
-                  </div>
-                  <p className="text-[10px] text-muted-foreground">
-                    O usuário verá a mensagem "Presenteado pelo administrador" e terá acesso premium imediato.
-                  </p>
-                </CardContent>
-              </Card>
             </TabsContent>
 
             <TabsContent value="decks" className="space-y-2">

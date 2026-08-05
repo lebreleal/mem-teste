@@ -16,6 +16,8 @@ import {
 import {
   Search, Plus, Trash2, X, CheckCheck, ArrowUpRight, PenLine, Sparkles, Download, Filter,
   MoreVertical, Eye, Flame, ChevronDown,
+  SquareDashed,
+  Copy,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
@@ -26,9 +28,17 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchCardTagsBatch } from '@/services/dashboardService';
 
 import { shortDisplayId } from '@/lib/shortId';
+import { getCardPreview, getCardBackText, getCardStatusBorder } from '@/lib/cardPreview';
+import CardThumb from '@/components/cards/CardThumb';
+import EmptyDeckState from '@/components/cards/EmptyDeckState';
+
+
+
 
 const PAGE_SIZE_UI = 50;
-const GROUP_ROW_HEIGHT = 120;
+const GROUP_ROW_HEIGHT = 104;
+/** Vertical gap between every card row — identical for all card types. */
+const ROW_GAP = 10;
 
 /** Batch-fetch tags for visible card IDs only. */
 const useCardTagsBatch = (cardIds: string[]) => {
@@ -66,7 +76,7 @@ const CardList = () => {
     totalCards, allCards, filteredCards, selectionMode, setSelectionMode,
     selectedCards, setSelectedCards, toggleCardSelection, selectAllCards,
     search, setSearch, typeFilter, setTypeFilter, stateFilter, setStateFilter,
-    openEdit, openNew, setDeleteId, setAiAddCardsOpen, setImportOpen,
+    openEdit, openNew, setDeleteId, handleDuplicateCard, setAiAddCardsOpen, setImportOpen,
     setBulkMoveOpen, setMoveTargetDeck, handleBulkDelete,
     actualNewCount, learningCount, totalReviewStateCards,
     newPct, learningPct, masteredPct,
@@ -334,15 +344,20 @@ const CardList = () => {
 
       {/* Card list */}
       {filteredCards.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-12 text-center">
-          <h3 className="font-display text-lg font-semibold text-foreground">
-            {hasActiveFilter ? 'Nenhum cartão encontrado' : 'Nenhum cartão ainda'}
-          </h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {hasActiveFilter ? 'Tente ajustar os filtros.' : 'Adicione flashcards para começar a estudar.'}
-          </p>
-        </div>
+        hasActiveFilter ? (
+          <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-12 text-center">
+            <h3 className="font-display text-lg font-semibold text-foreground">Nenhum cartão encontrado</h3>
+            <p className="mt-1 text-sm text-muted-foreground">Tente ajustar os filtros.</p>
+          </div>
+        ) : (
+          <EmptyDeckState
+            onAdd={openNew}
+            onAI={() => setAiAddCardsOpen(true)}
+            onImport={() => setImportOpen(true)}
+          />
+        )
       ) : (
+
         <CardListContent
           filteredCards={filteredCards}
           visibleCount={visibleCount}
@@ -357,6 +372,7 @@ const CardList = () => {
           unfreezeCard={unfreezeCard}
           openEdit={openEdit}
           setDeleteId={setDeleteId}
+          handleDuplicateCard={handleDuplicateCard}
           hasMoreCards={hasMoreCards}
           loadMoreCards={loadMoreCards}
           totalCards={totalCards}
@@ -381,7 +397,7 @@ const CardListContent = ({
   filteredCards, visibleCount, setVisibleCount,
   selectionMode, selectedCards, toggleCardSelection,
   setPreviewIndex, getStateInfo, stripHtml,
-  isFrozenCard, unfreezeCard, openEdit, setDeleteId,
+  isFrozenCard, unfreezeCard, openEdit, setDeleteId, handleDuplicateCard,
   hasMoreCards, loadMoreCards, totalCards,
   isLinkedDeck, deckId,
 }: any) => {
@@ -411,10 +427,17 @@ const CardListContent = ({
 
   const isClozeCard = (c: any) => c.card_type === 'cloze' || getClozeDisplayText(c) !== null;
 
-  // Group cloze cards by front_content to show as stacked
+  // Group siblings that share the same source material so the list shows one
+  // stacked entry instead of N near-identical rows:
+  //   - cloze cards → same cloze text
+  //   - image occlusion cards → same image
   const groups = useMemo(() => {
     const result: { cards: typeof visibleCards; isClozeGroup: boolean }[] = [];
     const usedIds = new Set<string>();
+    const occlusionImage = (c: any) => {
+      const p = getCardPreview(c.front_content, c.card_type);
+      return p.isOcclusion ? p.imageUrl : null;
+    };
     visibleCards.forEach((card: any) => {
       if (usedIds.has(card.id)) return;
       if (isClozeCard(card)) {
@@ -424,10 +447,19 @@ const CardListContent = ({
         );
         siblings.forEach((s: any) => usedIds.add(s.id));
         result.push({ cards: siblings, isClozeGroup: siblings.length > 1 });
-      } else {
-        usedIds.add(card.id);
-        result.push({ cards: [card], isClozeGroup: false });
+        return;
       }
+      const img = occlusionImage(card);
+      if (img) {
+        const siblings = visibleCards.filter(
+          (c: any) => !usedIds.has(c.id) && occlusionImage(c) === img
+        );
+        siblings.forEach((s: any) => usedIds.add(s.id));
+        result.push({ cards: siblings, isClozeGroup: siblings.length > 1 });
+        return;
+      }
+      usedIds.add(card.id);
+      result.push({ cards: [card], isClozeGroup: false });
     });
     return result;
   }, [visibleCards]);
@@ -450,6 +482,7 @@ const CardListContent = ({
     unfreezeCard: (id: string) => void;
     openEdit: (card: any) => void;
     setDeleteId: (id: string | null) => void;
+    handleDuplicateCard: (card: any) => void;
     isLinkedDeck: boolean;
     filteredCards: any[];
     tagsMap: Record<string, { id: string; name: string; is_official: boolean }[]>;
@@ -460,24 +493,39 @@ const CardListContent = ({
     getClozeNumbers: (s: string) => number[];
   }
 
-  const groupRowRenderer = useCallback(({ index, style, groups: gs, selectionMode: sm, selectedCards: sc, toggleCardSelection: tcc, setPreviewIndex: spi, getStateInfo: gsi, stripHtml: shtml, isFrozenCard: ifc, unfreezeCard: ufc, openEdit: oe, setDeleteId: sdi, isLinkedDeck: ild, filteredCards: fc, tagsMap: tm, setSuggestCard: ssc, setCommunityWarningOpen: scwo, isClozeCard: icc, getClozeDisplayText: gcdt, getClozeNumbers: gcn }: RowComponentProps<CardListGroupRowProps>): React.ReactElement | null => {
+  const groupRowRenderer = useCallback(({ index, style, groups: gs, selectionMode: sm, selectedCards: sc, toggleCardSelection: tcc, setPreviewIndex: spi, getStateInfo: gsi, stripHtml: shtml, isFrozenCard: ifc, unfreezeCard: ufc, openEdit: oe, setDeleteId: sdi, handleDuplicateCard: hdc, isLinkedDeck: ild, filteredCards: fc, tagsMap: tm, setSuggestCard: ssc, setCommunityWarningOpen: scwo, isClozeCard: icc, getClozeDisplayText: gcdt, getClozeNumbers: gcn }: RowComponentProps<CardListGroupRowProps>): React.ReactElement | null => {
     const group = gs[index];
     if (!group) return null;
     const card = group.cards[0];
     const isCloze = icc(card);
     const isMultiple = card.card_type === 'multiple_choice';
-    const isOcclusion = card.card_type === 'image_occlusion';
+    // Never trust card_type alone: legacy occlusion rows were saved with a
+    // generic type while storing `{"imageUrl": ...}` JSON, which leaked as raw
+    // text in the list. The preview parser normalises both shapes.
+    const preview = getCardPreview(card.front_content, card.card_type);
+    const isOcclusion = preview.isOcclusion;
+
+    // A grouped entry (same cloze text / same occlusion image) may have its
+    // first sibling without a readable front text. Falling back to the first
+    // sibling that *does* have text avoids the "empty card" rows.
+    const groupPreviewText = preview.text
+      || (group.cards
+        .map((c: any) => getCardPreview(c.front_content, c.card_type).text)
+        .find((t: string) => !!t) ?? '');
+    const groupImageUrl = preview.imageUrl
+      || (group.cards
+        .map((c: any) => getCardPreview(c.front_content, c.card_type).imageUrl)
+        .find((u: string | null) => !!u) ?? null);
+
+    const groupBackText = getCardBackText(card)
+      || (group.cards.map((c: any) => getCardBackText(c)).find((t: string) => !!t) ?? '');
+
     const isSelected = sc.has(card.id);
     const frozen = ifc(card);
 
-    const borderColor = (() => {
-      if (card.state === 0 || card.state == null) return 'border-l-muted';
-      const d = card.difficulty ?? 5;
-      if (d <= 3) return 'border-l-info';
-      if (d <= 5) return 'border-l-success';
-      if (d <= 7) return 'border-l-warning';
-      return 'border-l-destructive';
-    })();
+    // Same colour source as the editor list, so a red card stays red on both.
+    const borderColor = getCardStatusBorder(card);
+
 
     let mcOptions: string[] = [];
     let mcCorrectIdx = -1;
@@ -492,16 +540,22 @@ const CardListContent = ({
     const clozeText = isCloze ? gcdt(card) : null;
 
     return (
-      <div style={{ ...style, paddingBottom: 10 }}>
-        <div className="relative">
+      // The row slot has a fixed height; every wrapper below must inherit it
+      // (`h-full`) so each card box ends up with the exact same height and the
+      // gap between rows is identical for cloze, occlusion and basic cards.
+      <div style={{ ...style, paddingBottom: ROW_GAP }}>
+        <div className="relative h-full">
           {group.isClozeGroup && (
             <div className="absolute inset-x-1 -bottom-1 h-2 rounded-b-xl border border-t-0 border-border/40 bg-card/50" />
           )}
           <div
-            className={`group rounded-xl border border-l-4 ${borderColor} bg-card p-4 transition-colors cursor-pointer relative h-full overflow-hidden ${
+            className={`group rounded-xl border border-l-4 ${borderColor} bg-card px-4 py-3 transition-colors cursor-pointer relative h-full overflow-hidden flex items-center ${
               frozen ? 'opacity-50' : ''
             } ${
-              isSelected ? 'border-primary/50 bg-primary/5' : 'border-border/60 hover:border-border hover:shadow-sm'
+              // Never override the left border on hover: it carries the card
+
+              // status colour and turning it grey loses that signal.
+              isSelected ? 'border-y-primary/50 border-r-primary/50 bg-primary/5' : 'border-y-border/60 border-r-border/60 hover:bg-muted/20 hover:shadow-sm'
             }`}
             onClick={() => {
               if (sm) {
@@ -513,7 +567,7 @@ const CardListContent = ({
               spi(flatIdx >= 0 ? flatIdx : 0);
             }}
           >
-            <div className="flex items-start gap-3">
+            <div className="flex w-full items-center gap-3">
               {sm && (
                 <div
                   className="pt-0.5 shrink-0"
@@ -530,100 +584,68 @@ const CardListContent = ({
                 </div>
               )}
               <div className="flex-1 min-w-0">
-                {(() => {
-                  const stateInfo = gsi(card);
-                  return (
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <span className="text-[10px] font-mono text-muted-foreground/60">{shortDisplayId(card.id)}</span>
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${stateInfo.color}`}>
-                        {stateInfo.label}
-                      </span>
-                      {card.state >= 2 && card.scheduled_date && (
-                        <span className="text-[10px] text-muted-foreground">
-                          {new Date(card.scheduled_date) <= new Date() ? 'Revisão agora' : `Próx: ${new Date(card.scheduled_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}`}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })()}
-                {isCloze && clozeText ? (
-                  <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">
-                    {(() => {
-                      const plain = shtml(clozeText);
-                      const parts: React.ReactNode[] = [];
-                      const regex = /\{\{c(\d+)::([^}]*)\}\}/g;
-                      let lastIdx = 0;
-                      let m;
-                      let k = 0;
-                      const BADGE_STYLE = 'bg-primary/15 text-primary border-b-2 border-primary/50 rounded';
-                      while ((m = regex.exec(plain)) !== null) {
-                        if (m.index > lastIdx) parts.push(<span key={k++}>{plain.slice(lastIdx, m.index)}</span>);
-                        const n = parseInt(m[1]);
-                        parts.push(
-                          <span key={k++} className={`inline-flex items-baseline gap-px px-1 py-0 text-xs font-semibold ${BADGE_STYLE}`}>
-                            <span className="text-[7px] font-bold opacity-50 leading-none" style={{ verticalAlign: 'super' }}>{n}</span>
-                            {m[2]}
-                          </span>
-                        );
-                        lastIdx = m.index + m[0].length;
-                      }
-                      if (lastIdx < plain.length) parts.push(<span key={k++}>{plain.slice(lastIdx)}</span>);
-                      return parts;
-                    })()}
-                  </p>
-                ) : isOcclusion ? (
-                  (() => {
-                    try {
-                      const data = JSON.parse(card.front_content);
-                      const rectCount = data.allRects?.length || 0;
-                      return (
-                        <div className="flex items-center gap-2">
-                          <div className="h-10 w-14 rounded border border-border/50 bg-muted/50 overflow-hidden shrink-0">
-                            {data.imageUrl && (
-                              <img src={data.imageUrl} alt="" className="h-full w-full object-cover" />
-                            )}
-                          </div>
-                          <span className="text-xs text-muted-foreground">{rectCount} área{rectCount !== 1 ? 's' : ''} oculta{rectCount !== 1 ? 's' : ''}</span>
-                        </div>
-                      );
-                    } catch {
-                      return <p className="text-sm text-muted-foreground">Oclusão de imagem</p>;
-                    }
-                  })()
-                ) : (
-                  <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">
-                    {shtml(card.front_content)}
-                  </p>
+                {/* Only cloze cards carry a type chip. Image / occlusion cards
+                    are already identified by their own thumbnail, and plain
+                    cards stay clean with no icon at all. */}
+                {isCloze && (
+                  <div className="flex items-center gap-1.5 mb-1.5 text-muted-foreground">
+                    <SquareDashed className="h-3.5 w-3.5" />
+                    <span className="text-[11px] font-semibold uppercase tracking-wide">Cloze</span>
+                  </div>
                 )}
 
-                {isMultiple && mcOptions.length > 0 ? (
-                  <div className="mt-2 space-y-0.5">
-                    {mcOptions.map((opt: string, oi: number) => (
-                      <p key={oi} className={`text-xs leading-snug ${oi === mcCorrectIdx ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-muted-foreground'}`}>
-                        {oi === mcCorrectIdx ? '✓ ' : '  '}{opt}
-                      </p>
-                    ))}
+                {/* One single layout for EVERY card type: optional thumbnail on
+                    the left, then a text column where the answer sits directly
+                    under the question, left-aligned with it. */}
+                <div className="flex items-start gap-2.5">
+                  {groupImageUrl && <CardThumb src={groupImageUrl} />}
+
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">
+                      {isCloze && clozeText
+                        ? (() => {
+                            const plain = shtml(clozeText);
+                            const parts: React.ReactNode[] = [];
+                            const regex = /\{\{c(\d+)::([^}]*)\}\}/g;
+                            let lastIdx = 0;
+                            let m;
+                            let k = 0;
+                            const BADGE_STYLE = 'bg-primary/15 text-primary border-b-2 border-primary/50 rounded';
+                            while ((m = regex.exec(plain)) !== null) {
+                              if (m.index > lastIdx) parts.push(<span key={k++}>{plain.slice(lastIdx, m.index)}</span>);
+                              const n = parseInt(m[1]);
+                              parts.push(
+                                <span key={k++} className={`inline-flex items-baseline gap-px px-1 py-0 text-xs font-semibold ${BADGE_STYLE}`}>
+                                  <span className="text-[7px] font-bold opacity-50 leading-none" style={{ verticalAlign: 'super' }}>{n}</span>
+                                  {m[2]}
+                                </span>
+                              );
+                              lastIdx = m.index + m[0].length;
+                            }
+                            if (lastIdx < plain.length) parts.push(<span key={k++}>{plain.slice(lastIdx)}</span>);
+                            return parts;
+                          })()
+                        : (groupPreviewText || (groupImageUrl ? '' : 'Sem conteúdo'))}
+                    </p>
+
+                    {isMultiple && mcOptions.length > 0 ? (
+                      <div className="mt-1 space-y-0.5">
+                        {mcOptions.map((opt: string, oi: number) => (
+                          <p key={oi} className={`text-xs leading-snug ${oi === mcCorrectIdx ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-muted-foreground'}`}>
+                            {oi === mcCorrectIdx ? '✓ ' : '  '}{opt}
+                          </p>
+                        ))}
+                      </div>
+                    ) : groupBackText ? (
+                      <p className="mt-1 text-xs text-muted-foreground leading-snug line-clamp-1">{groupBackText}</p>
+                    ) : null}
+
                   </div>
-                ) : !isOcclusion && !isCloze && card.back_content ? (
-                  <p className="text-xs text-muted-foreground mt-1.5 leading-snug line-clamp-1">
-                    {(() => {
-                      const raw = card.back_content;
-                      try {
-                        const parsed = JSON.parse(raw);
-                        if (parsed && typeof parsed.clozeTarget === 'number') {
-                          return shtml(parsed.extra || '');
-                        }
-                        if (parsed && parsed.options) {
-                          return (parsed.options as string[]).join(' · ');
-                        }
-                      } catch { /* not JSON */ }
-                      return shtml(raw);
-                    })()}
-                  </p>
-                ) : null}
+                </div>
 
                 <CardTagsInline cardId={card.id} tagsMap={tm} />
               </div>
+
 
               <div className="flex items-center gap-1 shrink-0">
                 {!sm && (
@@ -657,6 +679,9 @@ const CardListContent = ({
                       )}
                       {!ild && (
                         <>
+                          <DropdownMenuItem onClick={(e: any) => { e.stopPropagation(); hdc(card); }}>
+                            <Copy className="mr-2 h-4 w-4" /> Duplicar
+                          </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={(e: any) => { e.stopPropagation(); sdi(card.id); }}>
                             <Trash2 className="mr-2 h-4 w-4" /> Excluir
@@ -687,7 +712,7 @@ const CardListContent = ({
         rowProps={{
           groups, selectionMode, selectedCards, toggleCardSelection,
           setPreviewIndex, getStateInfo, stripHtml, isFrozenCard, unfreezeCard,
-          openEdit, setDeleteId, isLinkedDeck, filteredCards, tagsMap,
+          openEdit, setDeleteId, handleDuplicateCard, isLinkedDeck, filteredCards, tagsMap,
           setSuggestCard, setCommunityWarningOpen, isClozeCard, getClozeDisplayText, getClozeNumbers,
         }}
         overscanCount={10}

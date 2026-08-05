@@ -9,12 +9,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useEnergy } from '@/hooks/useEnergy';
-import { usePremium } from '@/hooks/usePremium';
 import { useAIModel } from '@/hooks/useAIModel';
 import { useAISources, type AISource } from '@/hooks/useAISources';
 import { extractPDFPages, splitTextIntoPages } from '@/lib/pdfUtils';
 import { CREDITS_PER_PAGE } from '@/types/ai';
-import { usePendingDecks } from '@/stores/usePendingDecks';
+import { usePendingDecks, saveGenerationSnapshot, clearGenerationSnapshot } from '@/stores/usePendingDecks';
 import * as aiService from '@/services/aiService';
 import * as deckService from '@/services/deckService';
 import * as cardService from '@/services/cardService';
@@ -41,7 +40,7 @@ interface UseAIDeckFlowParams {
 export function useAIDeckFlow({ onOpenChange, folderId, parentDeckId, existingDeckId, existingDeckName, pendingReviewData }: UseAIDeckFlowParams) {
   const { user } = useAuth();
   const { energy } = useEnergy();
-  const { isPremium } = usePremium();
+  
   const { model, setModel, getCost, MODEL_CONFIG, pendingPro, confirmPro, cancelPro } = useAIModel();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -120,7 +119,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, parentDeckId, existingDe
   }, [pendingReviewData]);
 
   const selectedPages = pages.filter(p => p.selected);
-  const totalCredits = selectedPages.length * getCost(CREDITS_PER_PAGE, isPremium);
+  const totalCredits = selectedPages.length * getCost(CREDITS_PER_PAGE);
   const busy = isLoading || isSaving;
 
   const resetState = useCallback(() => {
@@ -331,9 +330,15 @@ export function useAIDeckFlow({ onOpenChange, folderId, parentDeckId, existingDe
     // Store text sample for AI tag suggestions
     const sampleText = selected.slice(0, 3).map(p => p.textContent).join('\n').substring(0, 2000);
     textSampleRef.current = sampleText;
-    // Page-based batching: group selected pages into batches of 10
+    // Page-based batching with sentence overlap between consecutive batches
     const PAGES_PER_BATCH = 3;
     const CONCURRENT_BATCHES = 3;
+
+    /** Last 2-3 sentences of a text, used as read-only context for the next batch. */
+    const tailContext = (text: string): string => {
+      const sentences = text.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 0);
+      return sentences.slice(-3).join(' ').slice(-600).trim();
+    };
 
     const textBatches: { text: string; pageCount: number }[] = [];
     for (let i = 0; i < selected.length; i += PAGES_PER_BATCH) {
@@ -355,56 +360,85 @@ export function useAIDeckFlow({ onOpenChange, folderId, parentDeckId, existingDe
     let failedCount = 0;
     let lastErrorMsg = '';
 
-    // Bloco 5: Refined density factor (chars per card)
-    const densityFactor = detailLevel === 'comprehensive' ? 80 : detailLevel === 'essential' ? 400 : 150;
+    // Chars per card — used as a CEILING, not a target (server treats it as max).
+    const densityFactor = detailLevel === 'comprehensive' ? 150 : detailLevel === 'essential' ? 400 : 220;
+
+    const callBatch = (batchIndex: number) => {
+      const batch = textBatches[batchIndex];
+      const batchCost = batch.pageCount * getCost(CREDITS_PER_PAGE);
+
+      const batchCardCount = targetCardCount > 0
+        ? Math.max(3, Math.ceil(targetCardCount / totalBatches))
+        : Math.max(3, Math.ceil(batch.text.length / densityFactor));
+
+      const previousTail = batchIndex > 0 ? tailContext(textBatches[batchIndex - 1].text) : '';
+      const overlapBlock = previousTail
+        ? `[CONTEXTO ANTERIOR — apenas para continuidade, NÃO gere cartões deste trecho]\n${previousTail}\n\n`
+        : '';
+
+      const orderPrefix = totalBatches > 1
+        ? `[CONTEXTO: Este é o trecho ${batchIndex + 1} de ${totalBatches} do material, em ORDEM SEQUENCIAL. Gere cartões seguindo a ordem do texto.]\n\n`
+        : '';
+
+      return aiService.generateDeckCards({
+        textContent: orderPrefix + overlapBlock + batch.text,
+        cardCount: batchCardCount,
+        detailLevel,
+        cardFormats,
+        customInstructions: customInstructions.trim() || undefined,
+        aiModel: model,
+      }).then(res => ({ res, batchCost }));
+    };
+
+    const absorb = (value: { res: aiService.GenerateDeckResult; batchCost: number }) => {
+      allCards.push(...value.res.cards);
+      // Energy is only counted for calls that actually succeeded (server refunds failures).
+      totalEnergyCost += value.batchCost;
+      if (value.res.usage) {
+        aggregatedUsage.prompt_tokens += value.res.usage.prompt_tokens;
+        aggregatedUsage.completion_tokens += value.res.usage.completion_tokens;
+        aggregatedUsage.total_tokens += value.res.usage.total_tokens;
+      }
+      const modelConfig = MODEL_CONFIG[model as keyof typeof MODEL_CONFIG];
+      if (modelConfig) usedModel = modelConfig.backendModel as string;
+    };
 
     for (let i = 0; i < totalBatches; i += CONCURRENT_BATCHES) {
-      const group = textBatches.slice(i, i + CONCURRENT_BATCHES);
+      const groupIndexes = textBatches
+        .slice(i, i + CONCURRENT_BATCHES)
+        .map((_, gi) => i + gi);
       const groupStart = Date.now();
 
-      const groupPromises = group.map((batch, gi) => {
-        const batchIndex = i + gi;
-        const batchText = batch.text;
-        const batchCost = batch.pageCount * getCost(CREDITS_PER_PAGE, isPremium);
-        totalEnergyCost += batchCost;
+      const results = await Promise.allSettled(groupIndexes.map(idx => callBatch(idx)));
 
-        const batchCardCount = targetCardCount > 0
-          ? Math.max(3, Math.ceil(targetCardCount / totalBatches))
-          : Math.max(3, Math.ceil(batchText.length / densityFactor));
-
-        const orderPrefix = totalBatches > 1
-          ? `[CONTEXTO: Este é o trecho ${batchIndex + 1} de ${totalBatches} do material, em ORDEM SEQUENCIAL. Gere cartões seguindo a ordem do texto.]\n\n`
-          : '';
-
-        return aiService.generateDeckCards({
-          textContent: orderPrefix + batchText,
-          cardCount: batchCardCount,
-          detailLevel,
-          cardFormats,
-          customInstructions: customInstructions.trim() || undefined,
-          aiModel: model,
-          energyCost: batchCost,
-        });
-      });
-
-      const results = await Promise.allSettled(groupPromises);
-      for (const result of results) {
+      const retryIndexes: number[] = [];
+      results.forEach((result, gi) => {
         if (result.status === 'fulfilled') {
-          allCards.push(...result.value.cards);
-          if (result.value.usage) {
-            aggregatedUsage.prompt_tokens += result.value.usage.prompt_tokens;
-            aggregatedUsage.completion_tokens += result.value.usage.completion_tokens;
-            aggregatedUsage.total_tokens += result.value.usage.total_tokens;
-          }
-          const modelConfig = MODEL_CONFIG[model as keyof typeof MODEL_CONFIG];
-          if (modelConfig) usedModel = modelConfig.backendModel as string;
+          absorb(result.value);
         } else {
-          failedCount++;
           const msg = result.reason?.message || '';
           if (msg) lastErrorMsg = msg;
-          console.error(`Batch call failed:`, result.reason);
+          console.error('Batch call failed, will retry once:', result.reason);
+          retryIndexes.push(groupIndexes[gi]);
         }
+      });
+
+      // One retry per failed batch, with a short backoff.
+      if (retryIndexes.length > 0) {
+        await new Promise(r => setTimeout(r, 1500));
+        const retryResults = await Promise.allSettled(retryIndexes.map(idx => callBatch(idx)));
+        retryResults.forEach((result) => {
+          if (result.status === 'fulfilled') {
+            absorb(result.value);
+          } else {
+            failedCount++;
+            const msg = result.reason?.message || '';
+            if (msg) lastErrorMsg = msg;
+            console.error('Batch call failed after retry:', result.reason);
+          }
+        });
       }
+
 
       const groupDuration = Date.now() - groupStart;
       completedGroups++;
@@ -417,7 +451,21 @@ export function useAIDeckFlow({ onOpenChange, folderId, parentDeckId, existingDe
       if (isBackgroundRef.current && pendingIdRef.current) {
         updatePending(pendingIdRef.current, { progress: { current: completedBatches, total: totalBatches } });
       }
+
+      // Snapshot for refresh/crash recovery
+      saveGenerationSnapshot({
+        id: pendingId,
+        name: deckName || 'Baralho IA',
+        folderId: folderId ?? null,
+        existingDeckId: existingDeckId ?? null,
+        cards: allCards,
+        textSample: textSampleRef.current,
+        progress: { current: completedBatches, total: totalBatches },
+        updatedAt: Date.now(),
+      });
     }
+
+    clearGenerationSnapshot();
 
     // Server logs token usage per batch automatically.
 
@@ -425,6 +473,15 @@ export function useAIDeckFlow({ onOpenChange, folderId, parentDeckId, existingDe
 
     // Bloco 4: Deduplicate cards across all batches
     const dedupedCards = deduplicateCards(allCards);
+
+    // Partial failure is now visible instead of silent
+    if (failedCount > 0 && dedupedCards.length > 0) {
+      toast({
+        title: '⚠️ Geração parcial',
+        description: `${failedCount} de ${totalBatches} trechos falharam. Os cartões dos trechos restantes foram gerados — você pode gerar os que faltaram novamente.`,
+      });
+    }
+
 
     if (isBackgroundRef.current && pendingIdRef.current) {
       if (dedupedCards.length > 0) {
@@ -487,7 +544,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, parentDeckId, existingDe
         setIsSaving(false); setIsLoading(false);
       }
     }
-  }, [pages, targetCardCount, detailLevel, cardFormats, customInstructions, model, getCost, toast, queryClient, deckName, saveCardsToDeck, updatePending, removePending, resetState, MODEL_CONFIG, deduplicateCards, isPremium]);
+  }, [pages, targetCardCount, detailLevel, cardFormats, customInstructions, model, getCost, toast, queryClient, deckName, folderId, existingDeckId, saveCardsToDeck, updatePending, removePending, resetState, MODEL_CONFIG, deduplicateCards]);
 
   // === Dismiss to background ===
   const handleDismissToBackground = useCallback(() => {
@@ -608,7 +665,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, parentDeckId, existingDe
     customInstructions, setCustomInstructions, targetCardCount, setTargetCardCount,
     genProgress, cards, editingIdx, editFront, setEditFront, editBack, setEditBack,
     isSaving, isLoading, busy, fileInputRef,
-    selectedPages, totalCredits, energy, model, setModel, isPremium,
+    selectedPages, totalCredits, energy, model, setModel,
     pendingPro, confirmPro, cancelPro,
     textSample: textSampleRef.current,
     // AI Sources

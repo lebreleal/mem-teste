@@ -136,7 +136,7 @@ const PublicCommunity = () => {
       {/* Hero banner — identical to Dashboard sala view */}
       <div className="relative bg-muted/50 overflow-hidden">
         <div className="absolute inset-0">
-          <img src={coverUrl || defaultSalaIcon} alt="" className="w-full h-full object-cover opacity-30 blur-sm" />
+          <img loading="lazy" decoding="async" src={coverUrl || defaultSalaIcon} alt="" className="w-full h-full object-cover opacity-30 blur-sm" />
           <div className="absolute inset-0 bg-gradient-to-b from-background/60 to-background" />
         </div>
 
@@ -154,7 +154,7 @@ const PublicCommunity = () => {
 
           {/* Sala image + name + creator */}
           <div className="flex items-center gap-3 mb-2">
-            <img src={coverUrl || defaultSalaIcon} alt={turma.name} className="h-14 w-14 rounded-xl object-cover border border-border/30 shadow-sm" />
+            <img loading="lazy" decoding="async" src={coverUrl || defaultSalaIcon} alt={turma.name} className="h-14 w-14 rounded-xl object-cover border border-border/30 shadow-sm" />
             <div className="flex-1 min-w-0">
               <h1 className="text-lg font-display font-bold text-foreground truncate">{turma.name}</h1>
               <div className="flex items-center gap-1.5 mt-0.5">

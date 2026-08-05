@@ -12,7 +12,6 @@ export async function enhanceCard(params: {
   back: string;
   cardType: string;
   aiModel: string;
-  energyCost: number;
   customPrompt?: string;
 }) {
   const { data, error } = await supabase.functions.invoke('enhance-card', { body: params });

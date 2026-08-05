@@ -203,7 +203,7 @@ const SalaHero = ({
       {/* Hero banner */}
       <div className="relative bg-muted/50 overflow-hidden">
         <div className="absolute inset-0">
-          <img src={heroImage || defaultSalaIcon} alt="" className="w-full h-full object-cover opacity-30 blur-sm" />
+          <img loading="lazy" decoding="async" src={heroImage || defaultSalaIcon} alt="" className="w-full h-full object-cover opacity-30 blur-sm" />
           <div className="absolute inset-0 bg-gradient-to-b from-background/60 to-background" />
         </div>
 
@@ -288,7 +288,7 @@ const SalaHero = ({
           {/* Sala image + name */}
           <div className="flex items-center gap-3 mb-2">
             <div className="relative shrink-0">
-              <img src={heroImage || defaultSalaIcon} alt={folderName} className="h-14 w-14 rounded-xl object-cover border border-border/30 shadow-sm" />
+              <img loading="lazy" decoding="async" src={heroImage || defaultSalaIcon} alt={folderName} className="h-14 w-14 rounded-xl object-cover border border-border/30 shadow-sm" />
               {!isComm && (
                 <button
                   onClick={() => setSalaImageOpen(true)}
@@ -318,7 +318,7 @@ const SalaHero = ({
                 <span className="text-xs font-medium text-foreground">{displayName}</span>
                 {!isComm && avatarUrl && (
                   <div className="h-5 w-5 rounded-full overflow-hidden bg-muted shrink-0">
-                    <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+                    <img loading="lazy" decoding="async" src={avatarUrl} alt="" className="h-full w-full object-cover" />
                   </div>
                 )}
               </div>

@@ -7,7 +7,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, lazy, Suspense } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { OCCLUSION_COLORS } from '@/lib/occlusionColors';
-import { X, ChevronLeft, ChevronRight, PenLine, MoreVertical, Trash2, ArrowUpRight, Flame } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, PenLine, MoreVertical, Trash2, ArrowUpRight, Flame, Copy } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
 import {
@@ -42,11 +42,25 @@ export interface VirtualCard {
   clozeTarget?: number;
 }
 
+/**
+ * Legacy rows stored occlusion JSON while keeping a generic `card_type`, which
+ * leaked the raw JSON into the preview. Detect by payload, never by type only.
+ */
+export function parseOcclusionPayload(front: string | null | undefined): any | null {
+  const raw = (front ?? '').trim();
+  if (!raw.startsWith('{')) return null;
+  try {
+    const p = JSON.parse(raw);
+    return p && typeof p === 'object' && typeof p.imageUrl === 'string' ? p : null;
+  } catch { return null; }
+}
+
 export function buildVirtualCards(cards: CardRow[]): VirtualCard[] {
   const result: VirtualCard[] = [];
   const processedClozeGroups = new Set<string>();
 
-  const hasClozeContent = (c: CardRow) => c.card_type === 'cloze' || c.card_type === 'image_occlusion' || /\{\{c\d+::.+?\}\}/.test(c.front_content);
+  const hasClozeContent = (c: CardRow) => c.card_type === 'cloze' || c.card_type === 'image_occlusion' || !!parseOcclusionPayload(c.front_content) || /\{\{c\d+::.+?\}\}/.test(c.front_content);
+
 
   cards.forEach(card => {
     if (hasClozeContent(card)) {
@@ -85,13 +99,13 @@ export function CardContent({
 }: { vc: VirtualCard; revealed: boolean; onClick?: () => void; className?: string }) {
   const card = vc.card;
 
-  const isCloze = card?.card_type === 'cloze' || (card && /\{\{c\d+::.+?\}\}/.test(card.front_content));
-  const isMultiple = card?.card_type === 'multiple_choice';
-  const isOcclusion = card?.card_type === 'image_occlusion';
+  const occlusionData: { imageUrl?: string; allRects?: any[]; rects?: any[]; activeRectIds?: string[]; canvasWidth?: number; canvasHeight?: number; frontText?: string } | null =
+    card ? parseOcclusionPayload(card.front_content) : null;
+  const isOcclusion = !!occlusionData;
+  const isCloze = !isOcclusion && (card?.card_type === 'cloze' || (!!card && /\{\{c\d+::.+?\}\}/.test(card.front_content)));
+  const isMultiple = !isOcclusion && card?.card_type === 'multiple_choice';
   const clozeTarget = vc.clozeTarget;
 
-  let occlusionData: { imageUrl?: string; allRects?: any[]; activeRectIds?: string[]; canvasWidth?: number; canvasHeight?: number; frontText?: string } | null = null;
-  if (isOcclusion) { try { occlusionData = JSON.parse(card.front_content); } catch {} }
 
   const [occlusionFallbackCanvas, setOcclusionFallbackCanvas] = useState<{ w: number; h: number } | null>(null);
 
@@ -125,7 +139,7 @@ export function CardContent({
   const frontContent = (() => {
     try {
       if (isOcclusion && occlusionData?.imageUrl) {
-        const rects = occlusionData.allRects || [];
+        const rects = occlusionData.allRects || occlusionData.rects || [];
         const vbW = occlusionData.canvasWidth || occlusionFallbackCanvas?.w || (() => {
           const xs = rects.flatMap((r: any) => r.points ? r.points.map((p: any) => p.x) : [r.x, r.x + r.w]);
           return Math.max(...xs, 100) * 1.02;
@@ -307,7 +321,7 @@ interface Props {
 
 
 const CardPreviewSheet = forwardRef<HTMLDivElement, Props>(({ cards, initialIndex, open, onClose }, _ref) => {
-  const { openEdit, setDeleteId, setMoveCardId, isFrozenCard, unfreezeCard, deck, decks } = useDeckDetail();
+  const { openEdit, setDeleteId, handleDuplicateCard, setMoveCardId, isFrozenCard, unfreezeCard, deck, decks } = useDeckDetail();
   const isMobile = useIsMobile();
 
   // Check if this is a linked deck (including linked ancestors)
@@ -413,7 +427,7 @@ const CardPreviewSheet = forwardRef<HTMLDivElement, Props>(({ cards, initialInde
 
   if (!open || !card) return null;
 
-  const isCloze = card?.card_type === 'cloze' || (card && /\{\{c\d+::.+?\}\}/.test(card.front_content));
+  const isCloze = !parseOcclusionPayload(card?.front_content) && (card?.card_type === 'cloze' || (!!card && /\{\{c\d+::.+?\}\}/.test(card.front_content)));
   const clozeTarget = vc?.clozeTarget;
 
 
@@ -470,6 +484,9 @@ const CardPreviewSheet = forwardRef<HTMLDivElement, Props>(({ cards, initialInde
                       <Flame className="mr-2 h-4 w-4" /> Descongelar
                     </DropdownMenuItem>
                   )}
+                  <DropdownMenuItem onClick={() => { handleDuplicateCard(card as any); }}>
+                    <Copy className="mr-2 h-4 w-4" /> Duplicar
+                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => { onClose(); setDeleteId(card.id); }}>
                     <Trash2 className="mr-2 h-4 w-4" /> Excluir

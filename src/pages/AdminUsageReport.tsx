@@ -1,19 +1,31 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
-import { fetchGlobalTokenUsage, deleteTokenUsageEntry, type UsageEntry } from '@/services/adminService';
+import {
+  fetchGlobalTokenUsage,
+  fetchAICostByUser,
+  fetchAICostBreakdown,
+  deleteTokenUsageEntry,
+  type UsageEntry,
+} from '@/services/adminService';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { ArrowLeft, Loader2, Search, CalendarIcon, DollarSign, Zap, BarChart3, Trash2 } from 'lucide-react';
+import {
+  ArrowLeft, Loader2, Search, CalendarIcon, DollarSign, Zap, BarChart3,
+  Trash2, Users, Cpu, Activity, RefreshCw,
+} from 'lucide-react';
 import { format, subDays, startOfDay, endOfDay } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
-// Feature key → friendly name
 const FEATURE_NAMES: Record<string, string> = {
   generate_deck: 'Gerar Deck',
   ai_tutor: 'Tutor IA',
@@ -22,126 +34,142 @@ const FEATURE_NAMES: Record<string, string> = {
   ai_chat: 'Chat IA',
   detect_import_format: 'Detectar Formato',
   organize_import: 'Organizar Importação',
+  detect_occlusion: 'Detectar Oclusão',
 };
-
-// Pricing per 1M tokens (USD) — calibrated against Google Cloud Billing (Feb 2026)
-// Output price is a blended rate (thinking + regular output tokens).
-const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-  'gemini-2.5-pro': { input: 1.25, output: 10.00 },
-  'gemini-2.5-flash': { input: 0.30, output: 2.50 },        // blended thinking+regular from billing
-  'gemini-2.5-flash-lite': { input: 0.10, output: 0.40 },
-  'gemini-2.0-flash': { input: 0.10, output: 0.40 },
-  'gpt-4o-mini': { input: 0.15, output: 0.60 },
-  'gpt-4o': { input: 2.50, output: 10.00 },
-  'gpt-3.5-turbo': { input: 0.50, output: 1.50 },
-};
-
-// total_tokens includes thinking tokens; real output = total - prompt
-const calcCostUSD = (model: string, promptTokens: number, completionTokens: number, totalTokens: number): number => {
-  const pricing = MODEL_PRICING[model] ?? { input: 0.15, output: 0.60 };
-  const realOutputTokens = Math.max(totalTokens - promptTokens, completionTokens);
-  return (promptTokens / 1_000_000) * pricing.input + (realOutputTokens / 1_000_000) * pricing.output;
-};
-
-// UsageEntry type imported from adminService
 
 type DatePreset = 'today' | '7d' | '30d' | 'custom';
+
+const usd = (v: number) => `$${v.toFixed(v < 1 ? 4 : 2)}`;
+const compact = (v: number) => v.toLocaleString('pt-BR');
 
 const AdminUsageReport = () => {
   const navigate = useNavigate();
   const { isAdmin, loading: adminLoading } = useIsAdmin();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  const [entries, setEntries] = useState<UsageEntry[]>([]);
-  const [loading, setLoading] = useState(false);
   const [userSearch, setUserSearch] = useState('');
   const [datePreset, setDatePreset] = useState<DatePreset>('7d');
   const [customFrom, setCustomFrom] = useState<Date | undefined>();
   const [customTo, setCustomTo] = useState<Date | undefined>();
-  const [usdToBrl, setUsdToBrl] = useState<number | null>(null);
+  const [usdToBrl, setUsdToBrl] = useState<number>(5.5);
 
   useEffect(() => {
     fetch('https://open.er-api.com/v6/latest/USD')
       .then(r => r.json())
       .then(data => { if (data?.rates?.BRL) setUsdToBrl(data.rates.BRL); })
-      .catch(() => setUsdToBrl(5.50));
+      .catch(() => undefined);
   }, []);
 
-  const getDateRange = useCallback((): { from: string | null; to: string | null } => {
+  const range = useMemo(() => {
     const now = new Date();
     switch (datePreset) {
-      case 'today':
-        return { from: startOfDay(now).toISOString(), to: endOfDay(now).toISOString() };
-      case '7d':
-        return { from: subDays(now, 7).toISOString(), to: null };
-      case '30d':
-        return { from: subDays(now, 30).toISOString(), to: null };
-      case 'custom':
-        return {
-          from: customFrom ? startOfDay(customFrom).toISOString() : null,
-          to: customTo ? endOfDay(customTo).toISOString() : null,
-        };
-      default:
-        return { from: null, to: null };
+      case 'today': return { from: startOfDay(now).toISOString(), to: endOfDay(now).toISOString() };
+      case '7d': return { from: subDays(now, 7).toISOString(), to: null };
+      case '30d': return { from: subDays(now, 30).toISOString(), to: null };
+      case 'custom': return {
+        from: customFrom ? startOfDay(customFrom).toISOString() : null,
+        to: customTo ? endOfDay(customTo).toISOString() : null,
+      };
     }
   }, [datePreset, customFrom, customTo]);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    const { from, to } = getDateRange();
-    try {
-      const data = await fetchGlobalTokenUsage({ dateFrom: from, dateTo: to, limit: 500 });
-      setEntries(data);
-    } catch {
-      toast({ title: 'Erro', description: 'Falha ao carregar dados.', variant: 'destructive' });
-    }
-    setLoading(false);
-  }, [getDateRange, toast]);
+  const key = [range.from, range.to];
 
-  useEffect(() => {
-    if (isAdmin) fetchData();
-  }, [isAdmin, datePreset, customFrom, customTo, fetchData]);
+  const byUserQ = useQuery({
+    queryKey: ['admin-ai-cost-user', ...key],
+    queryFn: () => fetchAICostByUser({ dateFrom: range.from, dateTo: range.to, limit: 100 }),
+    enabled: isAdmin,
+    staleTime: 60_000,
+  });
 
-  const deleteEntry = async (entryId: string) => {
+  const breakdownQ = useQuery({
+    queryKey: ['admin-ai-cost-breakdown', ...key],
+    queryFn: () => fetchAICostBreakdown({ dateFrom: range.from, dateTo: range.to }),
+    enabled: isAdmin,
+    staleTime: 60_000,
+  });
+
+  const entriesQ = useQuery({
+    queryKey: ['admin-ai-usage-entries', ...key],
+    queryFn: () => fetchGlobalTokenUsage({ dateFrom: range.from, dateTo: range.to, limit: 300 }),
+    enabled: isAdmin,
+    staleTime: 60_000,
+  });
+
+  const users = byUserQ.data ?? [];
+  const breakdown = breakdownQ.data ?? [];
+  const entries = entriesQ.data ?? [];
+
+  const totals = useMemo(() => {
+    const cost = users.reduce((s, u) => s + Number(u.cost_usd), 0);
+    const calls = users.reduce((s, u) => s + Number(u.calls), 0);
+    const tokens = users.reduce((s, u) => s + Number(u.total_tokens), 0);
+    const energy = users.reduce((s, u) => s + Number(u.energy_cost), 0);
+    return { cost, calls, tokens, energy, avg: calls ? cost / calls : 0 };
+  }, [users]);
+
+  const filteredUsers = userSearch
+    ? users.filter(u =>
+        (u.user_name || '').toLowerCase().includes(userSearch.toLowerCase()) ||
+        (u.user_email || '').toLowerCase().includes(userSearch.toLowerCase()))
+    : users;
+
+  const models = breakdown.filter(b => b.dimension === 'model');
+  const features = breakdown.filter(b => b.dimension === 'feature');
+  const days = breakdown.filter(b => b.dimension === 'day').slice().sort((a, b) => a.label.localeCompare(b.label));
+  const maxDay = Math.max(1, ...days.map(d => Number(d.cost_usd)));
+
+  const refreshAll = () => {
+    queryClient.invalidateQueries({ queryKey: ['admin-ai-cost-user'] });
+    queryClient.invalidateQueries({ queryKey: ['admin-ai-cost-breakdown'] });
+    queryClient.invalidateQueries({ queryKey: ['admin-ai-usage-entries'] });
+  };
+
+  const removeEntry = async (entry: UsageEntry) => {
     try {
-      await deleteTokenUsageEntry(entryId);
-      setEntries(prev => prev.filter(e => e.id !== entryId));
-      toast({ title: 'Registro deletado!' });
+      await deleteTokenUsageEntry(entry.id);
+      refreshAll();
+      toast({ title: 'Registro removido' });
     } catch {
       toast({ title: 'Erro', description: 'Falha ao deletar.', variant: 'destructive' });
     }
   };
 
-  // Filter by user search
-  const filtered = userSearch
-    ? entries.filter(e =>
-        (e.user_name || '').toLowerCase().includes(userSearch.toLowerCase()) ||
-        (e.user_email || '').toLowerCase().includes(userSearch.toLowerCase())
-      )
-    : entries;
+  if (adminLoading) {
+    return <div className="flex items-center justify-center min-h-screen"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
+  }
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4 p-4">
+        <p className="text-lg text-muted-foreground">Acesso restrito.</p>
+        <Button variant="outline" onClick={() => navigate('/dashboard')}>Voltar</Button>
+      </div>
+    );
+  }
 
-  // Summary
-  const totalCalls = filtered.length;
-  const totalTokens = filtered.reduce((s, e) => s + Number(e.total_tokens), 0);
-  const totalEnergy = filtered.reduce((s, e) => s + Number(e.energy_cost), 0);
-  const totalCostUSD = filtered.reduce((s, e) => s + calcCostUSD(e.model, Number(e.prompt_tokens), Number(e.completion_tokens), Number(e.total_tokens)), 0);
-  const totalCostBRL = usdToBrl ? totalCostUSD * usdToBrl : null;
-
-  if (adminLoading) return <div className="flex items-center justify-center min-h-screen"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
-  if (!isAdmin) return <div className="flex flex-col items-center justify-center min-h-screen gap-4 p-4"><p className="text-lg text-muted-foreground">Acesso restrito.</p><Button variant="outline" onClick={() => navigate('/dashboard')}>Voltar</Button></div>;
+  const loading = byUserQ.isLoading || breakdownQ.isLoading;
 
   return (
     <div className="min-h-screen bg-background pb-24">
-      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b px-4 py-3 flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/admin/ia')}>
-          <ArrowLeft className="w-5 h-5" />
-        </Button>
-        <BarChart3 className="w-5 h-5 text-primary" />
-        <h1 className="font-semibold text-lg">Relatório de Uso IA</h1>
-      </div>
+      <header className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => navigate('/admin/ia')}>
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <BarChart3 className="w-5 h-5 text-primary shrink-0" />
+          <div className="min-w-0 flex-1">
+            <h1 className="font-semibold text-base sm:text-lg leading-tight truncate">Custos de IA</h1>
+            <p className="text-[11px] text-muted-foreground truncate">OpenRouter · custo real por chamada</p>
+          </div>
+          <Button variant="ghost" size="icon" onClick={refreshAll} aria-label="Atualizar">
+            <RefreshCw className={cn('w-4 h-4', (byUserQ.isFetching || breakdownQ.isFetching) && 'animate-spin')} />
+          </Button>
+        </div>
+      </header>
 
-      <div className="max-w-4xl mx-auto p-4 space-y-4">
-        {/* Date filter buttons */}
+      <div className="max-w-5xl mx-auto p-4 space-y-5">
+        {/* Period */}
         <div className="flex flex-wrap gap-2">
           {(['today', '7d', '30d', 'custom'] as DatePreset[]).map(preset => (
             <Button
@@ -155,126 +183,179 @@ const AdminUsageReport = () => {
           ))}
         </div>
 
-        {/* Custom date pickers */}
         {datePreset === 'custom' && (
           <div className="flex gap-2 flex-wrap">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className={cn("justify-start text-left font-normal", !customFrom && "text-muted-foreground")}>
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {customFrom ? format(customFrom, 'dd/MM/yyyy') : 'Data início'}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar mode="single" selected={customFrom} onSelect={setCustomFrom} initialFocus className="p-3 pointer-events-auto" />
-              </PopoverContent>
-            </Popover>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className={cn("justify-start text-left font-normal", !customTo && "text-muted-foreground")}>
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {customTo ? format(customTo, 'dd/MM/yyyy') : 'Data fim'}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar mode="single" selected={customTo} onSelect={setCustomTo} initialFocus className="p-3 pointer-events-auto" />
-              </PopoverContent>
-            </Popover>
+            {([['Data início', customFrom, setCustomFrom], ['Data fim', customTo, setCustomTo]] as const).map(([label, value, setter]) => (
+              <Popover key={label}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className={cn('justify-start font-normal', !value && 'text-muted-foreground')}>
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {value ? format(value, 'dd/MM/yyyy') : label}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single" selected={value} onSelect={setter} initialFocus className="p-3 pointer-events-auto" />
+                </PopoverContent>
+              </Popover>
+            ))}
           </div>
         )}
 
-        {/* User search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input placeholder="Filtrar por nome ou email do usuário..." value={userSearch} onChange={e => setUserSearch(e.target.value)} className="pl-9" />
+        {/* KPIs */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            { label: 'Custo total', value: loading ? null : usd(totals.cost), sub: `R$ ${(totals.cost * usdToBrl).toFixed(2)}`, icon: DollarSign },
+            { label: 'Chamadas', value: loading ? null : compact(totals.calls), sub: `${usd(totals.avg)} / chamada`, icon: Activity },
+            { label: 'Tokens', value: loading ? null : compact(totals.tokens), sub: `${users.length} usuário(s)`, icon: Cpu },
+            { label: 'Créditos consumidos', value: loading ? null : `⚡ ${compact(totals.energy)}`, sub: 'energia dos usuários', icon: Zap },
+          ].map(kpi => (
+            <Card key={kpi.label}>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                  <kpi.icon className="w-3.5 h-3.5" />
+                  <span className="text-[11px] uppercase tracking-wide">{kpi.label}</span>
+                </div>
+                {kpi.value === null
+                  ? <Skeleton className="h-7 w-24" />
+                  : <p className="text-xl font-semibold font-mono tabular-nums">{kpi.value}</p>}
+                <p className="text-[11px] text-muted-foreground mt-1 truncate">{kpi.sub}</p>
+              </CardContent>
+            </Card>
+          ))}
         </div>
 
-        {/* Summary card */}
-        <Card className="border-primary/30 bg-primary/5">
-          <CardContent className="py-4 px-4">
-            <div className="flex items-center gap-2 mb-3">
-              <DollarSign className="w-4 h-4 text-primary" />
-              <p className="font-semibold text-sm">Resumo</p>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-muted-foreground">Custo USD</p>
-                <p className="font-mono text-lg font-bold text-foreground">${totalCostUSD.toFixed(4)}</p>
+        {/* Daily trend */}
+        {days.length > 0 && (
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Custo por dia</CardTitle></CardHeader>
+            <CardContent className="pt-0">
+              <div className="flex items-end gap-1 h-28">
+                {days.map(d => (
+                  <div key={d.label} className="flex-1 flex flex-col justify-end items-center gap-1 group">
+                    <div
+                      className="w-full rounded-t bg-primary/70 group-hover:bg-primary transition-colors min-h-[2px]"
+                      style={{ height: `${(Number(d.cost_usd) / maxDay) * 100}%` }}
+                      title={`${d.label}: ${usd(Number(d.cost_usd))}`}
+                    />
+                    <span className="text-[9px] text-muted-foreground">{d.label.slice(8)}</span>
+                  </div>
+                ))}
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Custo BRL</p>
-                <p className="font-mono text-lg font-bold text-foreground">{totalCostBRL !== null ? `R$ ${totalCostBRL.toFixed(4)}` : '...'}</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-2 mt-3 text-xs text-muted-foreground">
-              <div>
-                <p>Chamadas</p>
-                <p className="font-mono font-medium text-foreground">{totalCalls}</p>
-              </div>
-              <div>
-                <p>Tokens</p>
-                <p className="font-mono font-medium text-foreground">{totalTokens.toLocaleString()}</p>
-              </div>
-              <div>
-                <p>Créditos IA</p>
-                <p className="font-mono font-medium text-foreground">⚡ {totalEnergy}</p>
-              </div>
-            </div>
-            {usdToBrl && (
-              <p className="text-[10px] text-muted-foreground mt-2">Câmbio: 1 USD = {usdToBrl.toFixed(2)} BRL</p>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
-        {/* Entries */}
-        {loading ? (
-          <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
-        ) : (
-          <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">{filtered.length} registro(s)</p>
-            {filtered.map(entry => {
-              const costUSD = calcCostUSD(entry.model, Number(entry.prompt_tokens), Number(entry.completion_tokens), Number(entry.total_tokens));
-              const costBRL = usdToBrl ? costUSD * usdToBrl : null;
+        <Tabs defaultValue="users">
+          <TabsList className="w-full grid grid-cols-3">
+            <TabsTrigger value="users" className="text-xs sm:text-sm"><Users className="w-3.5 h-3.5 mr-1.5" />Usuários</TabsTrigger>
+            <TabsTrigger value="breakdown" className="text-xs sm:text-sm"><Cpu className="w-3.5 h-3.5 mr-1.5" />Modelos</TabsTrigger>
+            <TabsTrigger value="log" className="text-xs sm:text-sm"><Activity className="w-3.5 h-3.5 mr-1.5" />Registros</TabsTrigger>
+          </TabsList>
+
+          {/* Users */}
+          <TabsContent value="users" className="space-y-3 mt-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input placeholder="Buscar usuário..." value={userSearch} onChange={e => setUserSearch(e.target.value)} className="pl-9" />
+            </div>
+            {loading && <Skeleton className="h-20 w-full" />}
+            {!loading && filteredUsers.length === 0 && (
+              <p className="text-center text-sm text-muted-foreground py-8">Nenhum consumo no período.</p>
+            )}
+            {filteredUsers.map(u => {
+              const share = totals.cost > 0 ? (Number(u.cost_usd) / totals.cost) * 100 : 0;
               return (
-                <Card key={entry.id}>
-                  <CardContent className="py-3 px-4">
-                    <div className="flex items-center justify-between">
+                <Card key={u.user_id}>
+                  <CardContent className="p-4 space-y-2">
+                    <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="font-medium text-sm">{FEATURE_NAMES[entry.feature_key] || entry.feature_key}</p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {entry.user_name || entry.user_email || entry.user_id.slice(0, 8)} · {format(new Date(entry.created_at), 'dd/MM/yyyy HH:mm:ss')}
-                        </p>
+                        <p className="font-medium text-sm truncate">{u.user_name || 'Sem nome'}</p>
+                        <p className="text-xs text-muted-foreground truncate">{u.user_email || u.user_id.slice(0, 8)}</p>
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <Badge variant="secondary" className="text-xs font-mono">{entry.model}</Badge>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                          onClick={() => deleteEntry(entry.id)}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
+                      <div className="text-right shrink-0">
+                        <p className="font-mono font-semibold text-sm">{usd(Number(u.cost_usd))}</p>
+                        <p className="text-[11px] text-muted-foreground font-mono">R$ {(Number(u.cost_usd) * usdToBrl).toFixed(2)}</p>
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">
-                      <span>Prompt: {Number(entry.prompt_tokens).toLocaleString()}</span>
-                      <span>Completion: {Number(entry.completion_tokens).toLocaleString()}</span>
-                      {(() => { const thinking = Number(entry.total_tokens) - Number(entry.prompt_tokens) - Number(entry.completion_tokens); return thinking > 0 ? <span className="text-orange-500">Thinking: {thinking.toLocaleString()}</span> : null; })()}
-                      <span>Total: {Number(entry.total_tokens).toLocaleString()}</span>
-                      <span className="text-primary font-medium">⚡ {Number(entry.energy_cost)}</span>
-                    </div>
-                    <div className="flex gap-4 mt-1 text-xs">
-                      <span className="font-mono text-primary font-medium">${costUSD.toFixed(4)}</span>
-                      {costBRL !== null && <span className="font-mono text-primary font-medium">R$ {costBRL.toFixed(4)}</span>}
+                    <Progress value={share} className="h-1.5" />
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+                      <span>{compact(Number(u.calls))} chamadas</span>
+                      <span>{compact(Number(u.total_tokens))} tokens</span>
+                      <span>⚡ {compact(Number(u.energy_cost))}</span>
+                      <span>{share.toFixed(1)}% do total</span>
+                      <span>Último: {format(new Date(u.last_used_at), 'dd/MM HH:mm')}</span>
                     </div>
                   </CardContent>
                 </Card>
               );
             })}
-            {filtered.length === 0 && <p className="text-center text-muted-foreground py-8">Nenhum registro encontrado.</p>}
-          </div>
-        )}
+          </TabsContent>
+
+          {/* Breakdown */}
+          <TabsContent value="breakdown" className="space-y-4 mt-4">
+            {[{ title: 'Por modelo', rows: models }, { title: 'Por recurso', rows: features }].map(section => (
+              <Card key={section.title}>
+                <CardHeader className="pb-2"><CardTitle className="text-sm">{section.title}</CardTitle></CardHeader>
+                <CardContent className="pt-0 space-y-3">
+                  {section.rows.length === 0 && <p className="text-xs text-muted-foreground">Sem dados.</p>}
+                  {section.rows.map(r => {
+                    const share = totals.cost > 0 ? (Number(r.cost_usd) / totals.cost) * 100 : 0;
+                    return (
+                      <div key={r.label} className="space-y-1">
+                        <div className="flex items-center justify-between gap-3 text-sm">
+                          <span className="truncate font-medium">{FEATURE_NAMES[r.label] || r.label}</span>
+                          <span className="font-mono shrink-0">{usd(Number(r.cost_usd))}</span>
+                        </div>
+                        <Progress value={share} className="h-1.5" />
+                        <p className="text-[11px] text-muted-foreground">
+                          {compact(Number(r.calls))} chamadas · {compact(Number(r.total_tokens))} tokens · {share.toFixed(1)}%
+                        </p>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            ))}
+          </TabsContent>
+
+          {/* Raw log */}
+          <TabsContent value="log" className="space-y-2 mt-4">
+            {entriesQ.isLoading && <Skeleton className="h-16 w-full" />}
+            {!entriesQ.isLoading && entries.length === 0 && (
+              <p className="text-center text-sm text-muted-foreground py-8">Nenhum registro.</p>
+            )}
+            {entries.map(entry => (
+              <Card key={entry.id}>
+                <CardContent className="p-3 sm:p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate">{FEATURE_NAMES[entry.feature_key] || entry.feature_key}</p>
+                      <p className="text-[11px] text-muted-foreground truncate">
+                        {entry.user_name || entry.user_email || entry.user_id.slice(0, 8)} · {format(new Date(entry.created_at), 'dd/MM/yyyy HH:mm:ss')}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="font-mono text-sm font-semibold">{usd(Number(entry.cost_usd))}</span>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => removeEntry(entry)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[11px] text-muted-foreground">
+                    <Badge variant="secondary" className="text-[10px] font-mono">{entry.model}</Badge>
+                    <span>in {compact(Number(entry.prompt_tokens))}</span>
+                    <span>out {compact(Number(entry.completion_tokens))}</span>
+                    <span>total {compact(Number(entry.total_tokens))}</span>
+                    <span className="text-primary">⚡ {Number(entry.energy_cost)}</span>
+                    <span className="font-mono">R$ {(Number(entry.cost_usd) * usdToBrl).toFixed(4)}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </TabsContent>
+        </Tabs>
+
+        <p className="text-[10px] text-center text-muted-foreground">Câmbio: 1 USD = R$ {usdToBrl.toFixed(2)}</p>
       </div>
     </div>
   );

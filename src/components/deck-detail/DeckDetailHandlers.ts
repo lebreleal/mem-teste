@@ -11,6 +11,8 @@ import * as cardService from '@/services/cardService';
 import * as deckService from '@/services/deckService';
 import { invalidateDeckRelatedQueries } from '@/lib/queryKeys';
 import { OCCLUSION_COLORS } from '@/lib/occlusionColors';
+import { buildOcclusionFront, occlusionNums, type OcclusionShapeLike } from '@/lib/occlusion';
+
 import type { CardRow } from '@/types/deck';
 import type { useToast } from '@/hooks/use-toast';
 import type { QueryClient } from '@tanstack/react-query';
@@ -178,17 +180,11 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
     if (occlusionImageUrl && occlusionRects.length > 0) {
       const allRects = occlusionRects;
       const userBack = back;
-      const cw = occlusionCanvasSize?.w ?? undefined;
-      const ch = occlusionCanvasSize?.h ?? undefined;
       const frontText = front.trim() ? front : undefined;
 
-      // Collect unique color nums from image
-      const usedColors = new Set(allRects.map((r: OcclusionRect) => r.color || OCCLUSION_COLORS[0].fill));
-      const imageNums: number[] = [];
-      usedColors.forEach(color => {
-        const idx = OCCLUSION_COLORS.findIndex(c => c.fill === color);
-        if (idx >= 0) imageNums.push(idx + 1);
-      });
+      // One card per distinct color; occlusion numbers live in their own range
+      // (>= 101) so they never collide with text cloze numbers.
+      const imageNums = occlusionNums(allRects as OcclusionShapeLike[]);
 
       // Also collect text cloze nums
       const textPlain = front.replace(/<[^>]*>/g, '');
@@ -197,19 +193,13 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
 
       const allNums = [...new Set([...imageNums, ...textNums])].sort((a, b) => a - b);
 
-      // Build colorGroups
-      const colorGroups: Record<string, string[]> = {};
-      allRects.forEach((r: OcclusionRect) => {
-        const color = r.color || OCCLUSION_COLORS[0].fill;
-        if (!colorGroups[color]) colorGroups[color] = [];
-        colorGroups[color].push(r.id);
+      const frontData = buildOcclusionFront({
+        imageUrl: occlusionImageUrl,
+        rects: allRects as OcclusionShapeLike[],
+        canvasSize: occlusionCanvasSize,
+        frontText,
       });
 
-      const frontData = JSON.stringify({
-        imageUrl: occlusionImageUrl, allRects, activeRectIds: allRects.map((r: OcclusionRect) => r.id),
-        canvasWidth: cw, canvasHeight: ch, colorGroups,
-        ...(frontText ? { frontText } : {}),
-      });
 
       if (editingId) {
         // Sibling reconciliation for image occlusion edit
@@ -254,7 +244,9 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
               backContent: JSON.stringify({ clozeTarget: n, extra: userBack }),
               cardType: 'image_occlusion',
             }));
-            await cardService.createCards(deckId, newCards);
+            const baseCreatedAt = allSiblingCards.find(c => c.id === editingId)?.created_at
+              ?? allSiblingCards.map(c => c.created_at).sort()[0];
+            await cardService.createCards(deckId, newCards, baseCreatedAt);
           }
           invalidateDeckRelatedQueries(queryClient, deckId);
           onSuccess();
@@ -341,7 +333,9 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
         try {
           await Promise.all([...updatePromises, ...deletePromises]);
           if (newCards.length > 0) {
-            await cardService.createCards(deckId, newCards);
+            const baseCreatedAt = allSiblingCards.find(c => c.id === editingId)?.created_at
+              ?? allSiblingCards.map(c => c.created_at).sort()[0];
+            await cardService.createCards(deckId, newCards, baseCreatedAt);
           }
           invalidateDeckRelatedQueries(queryClient, deckId);
           onSuccess();
@@ -365,11 +359,15 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
     }
   }, [front, back, occlusionImageUrl, occlusionRects, cardType, mcOptions, mcCorrectIndex, editingId, toast, createCard, updateCard, resetForm, allCards, allDeckIds, deckId, queryClient, occlusionCanvasSize, setFront, setBack, setEditingId, setMcOptions, setMcCorrectIndex, setOcclusionImageUrl, setOcclusionRects, setOcclusionModalOpen, setEditorOpen]);
 
-  const handleDelete = useCallback(async () => {
+  /**
+   * Delete a card. `onlyThis` deletes the single row even when it belongs to a
+   * cloze / image-occlusion group; otherwise the whole group goes.
+   */
+  const handleDelete = useCallback(async (onlyThis = false) => {
     if (!deleteId) return;
     const card = allCards.find(c => c.id === deleteId);
     const hasSiblings = card?.card_type === 'cloze' || card?.card_type === 'image_occlusion';
-    if (hasSiblings) {
+    if (hasSiblings && !onlyThis) {
       let frontContent = card?.front_content;
       if (!frontContent) {
         frontContent = await fetchCardFrontContent(deleteId);
@@ -381,15 +379,42 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
           await cardService.bulkDeleteCards(ids);
           invalidateDeckRelatedQueries(queryClient, deckId);
           toast({ title: `${ids.length} cartão${ids.length > 1 ? 'ões' : ''} excluído${ids.length > 1 ? 's' : ''}` });
-        } catch {
-          toast({ title: 'Erro ao excluir', variant: 'destructive' });
+        } catch (e: unknown) {
+          toast({ title: 'Erro ao excluir', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
         }
         setDeleteId(null);
         return;
       }
     }
-    deleteCardMutation.mutate(deleteId, { onSuccess: () => { setDeleteId(null); toast({ title: 'Card excluído' }); } });
+    deleteCardMutation.mutate(deleteId, {
+      onSuccess: () => { setDeleteId(null); toast({ title: 'Card excluído' }); },
+      onError: (e: unknown) => {
+        toast({ title: 'Erro ao excluir', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      },
+    });
   }, [deleteId, deleteCardMutation, toast, allCards, allDeckIds, deckId, queryClient, setDeleteId]);
+
+  /** Duplicate a card (its group siblings included) right below the original. */
+  const handleDuplicateCard = useCallback(async (card: CardRow) => {
+    try {
+      let frontContent = card.front_content;
+      if (!frontContent) frontContent = await fetchCardFrontContent(card.id);
+      const isGroup = card.card_type === 'cloze' || card.card_type === 'image_occlusion';
+      const rows = isGroup && frontContent
+        ? await cardService.fetchClozeSiblings(allDeckIds, frontContent)
+        : [{ ...card, front_content: frontContent }];
+      const payload = rows.map(r => ({
+        frontContent: r.front_content ?? frontContent ?? '',
+        backContent: r.back_content ?? '',
+        cardType: r.card_type ?? 'basic',
+      }));
+      await cardService.createCards(deckId, payload);
+      invalidateDeckRelatedQueries(queryClient, deckId);
+      toast({ title: payload.length > 1 ? `${payload.length} cartões duplicados` : 'Cartão duplicado' });
+    } catch (e: unknown) {
+      toast({ title: 'Erro ao duplicar', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    }
+  }, [allDeckIds, deckId, queryClient, toast]);
 
   const handleMoveCard = useCallback(async () => {
     if (!moveCardId || !moveTargetDeck) return;
@@ -428,7 +453,7 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
       await cardService.bulkDeleteCards(ids);
       toast({ title: `${ids.length} card${ids.length > 1 ? 's' : ''} excluído${ids.length > 1 ? 's' : ''}!` });
       invalidateDeckRelatedQueries(queryClient, deckId);
-    } catch { toast({ title: 'Erro ao excluir', variant: 'destructive' }); }
+    } catch (e: unknown) { toast({ title: 'Erro ao excluir', description: e instanceof Error ? e.message : undefined, variant: 'destructive' }); }
     setSelectedCards(new Set()); setSelectionMode(false);
   }, [selectedCards, deckId, queryClient, toast, setSelectedCards, setSelectionMode]);
 
@@ -474,7 +499,7 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
     try {
       let backToSend = back;
       if (cardType === 'multiple_choice') backToSend = JSON.stringify({ options: mcOptions.filter(o => o.trim()), correctIndex: mcCorrectIndex });
-      const data = await cardService.enhanceCard({ front, back: backToSend, cardType: cardType || 'basic', aiModel: model, energyCost: 1 });
+      const data = await cardService.enhanceCard({ front, back: backToSend, cardType: cardType || 'basic', aiModel: model });
       if (data.error) { toast({ title: data.error, variant: 'destructive' }); return; }
       if (data.unchanged) { toast({ title: '✨ Este card já está ótimo!', description: 'Não há melhorias a fazer.' }); return; }
       queryClient.invalidateQueries({ queryKey: ['profile'] });
@@ -539,7 +564,7 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
       const newDeck = await deckService.createAlgorithmCopy(user.id, deckId, algorithmConfirm.value, algorithmConfirm.label);
       invalidateDeckRelatedQueries(queryClient);
       const created = newDeck as unknown as CreatedDeck;
-      toast({ title: 'Cópia criada!', description: `"${created.name}" como sub-baralho.` });
+      toast({ title: 'Cópia criada!', description: `"${created.name}" criado.` });
       setAlgorithmConfirm(null); setAlgorithmModalOpen(false);
       navigate(`/decks/${created.id}`);
     } catch { toast({ title: 'Erro ao criar cópia', variant: 'destructive' }); }
@@ -569,8 +594,7 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
         textContent, cardCount: examTotalQuestions, detailLevel: 'standard',
         cardFormats: [...(mcCount > 0 ? ['multiple_choice'] : []), ...(examWrittenCount > 0 ? ['qa'] : [])],
         customInstructions: `PROVA ACADÊMICA. Gere ${mcCount} questões de múltipla escolha (${examOptionsCount} alternativas cada) e ${examWrittenCount} dissertativas.\nCada questão DEVE ter um ENUNCIADO (caso clínico, situação-problema ou texto-base) na "front", separado da pergunta por "---".\nDissertativas: "front" = enunciado + pergunta, "back" = resposta completa.\nBaseie-se APENAS no material fornecido. Varie a dificuldade.`,
-        aiModel: model, energyCost: totalCost,
-      });
+        aiModel: model, });
       if (fnError || aiData?.error) throw new Error(aiData?.error || 'Erro na geração');
       queryClient.invalidateQueries({ queryKey: ['profile'] });
 
@@ -590,7 +614,7 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
   }, [deckId, deck, examTotalQuestions, examWrittenCount, examTitle, examOptionsCount, examTimeLimit, model, addNotification, updateNotification, createExam, queryClient, toast, setExamModalOpen, setExamGenerating]);
 
   return {
-    resetForm, openNew, openEdit, handleSave, handleDelete, handleMoveCard,
+    resetForm, openNew, openEdit, handleSave, handleDelete, handleDuplicateCard, handleMoveCard,
     toggleCardSelection, selectAllCards, handleBulkMove, handleBulkDelete,
     uploadOcclusionFile, handleOcclusionAttach, handleOcclusionPaste,
     handleImprove, applyImprovement, handleImportCards,

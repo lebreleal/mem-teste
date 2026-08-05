@@ -13,6 +13,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { compressImage } from '@/lib/imageUtils';
 import { useToast } from '@/hooks/use-toast';
 import { OCCLUSION_COLORS } from '@/lib/occlusionColors';
+import { buildOcclusionFront, countOcclusionGroups } from '@/lib/occlusion';
+
 import {
   IconRect, IconPolygon, IconFreehand, IconEraser, IconEyeOpen, IconEyeClosed,
   IconSparkle, IconUpload, IconClose, IconCheck, IconTrash, IconCursor, IconHand,
@@ -431,22 +433,14 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
 
   const handleSave = () => {
     if (!imageUrl || shapes.length === 0) return;
-    const colorGroups = new Map<string, string[]>();
-    shapes.forEach(s => {
-      const color = s.color || COLORS[0].fill;
-      if (!colorGroups.has(color)) colorGroups.set(color, []);
-      colorGroups.get(color)!.push(s.id);
-    });
-    const frontContent = JSON.stringify({
+    const frontContent = buildOcclusionFront({
       imageUrl,
-      allRects: shapes,
-      activeRectIds: shapes.map(s => s.id),
-      colorGroups: Object.fromEntries(colorGroups),
-      canvasWidth: imgSize.w,
-      canvasHeight: imgSize.h,
+      rects: shapes,
+      canvasSize: { w: imgSize.w, h: imgSize.h },
     });
     onSave(frontContent, '');
   };
+
 
   const handleDetectAI = async () => {
     if (!imageUrl) return;
@@ -711,7 +705,13 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
         </button>
         <div className="flex-1 min-w-0 text-center">
           <p className="text-sm font-semibold text-foreground">Oclusão de imagem</p>
+          {shapes.length > 0 && (
+            <p className="text-[11px] text-muted-foreground">
+              {countOcclusionGroups(shapes)} cartão{countOcclusionGroups(shapes) === 1 ? '' : 'ões'} · 1 por cor
+            </p>
+          )}
         </div>
+
         <button
           onClick={handleSave}
           disabled={isSaving || shapes.length === 0}

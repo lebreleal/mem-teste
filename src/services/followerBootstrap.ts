@@ -117,63 +117,8 @@ export async function syncFollowerDecks(userId: string, folderId: string): Promi
 
   if (syncPairs.length === 0) return 0;
 
-  // 3. Fetch source sub-decks in batch
-  const allSourceDeckIds = syncPairs.map(p => p.sourceDeckId);
-  const { data: sourceSubDecks } = await supabase
-    .from('decks')
-    .select('id, name, parent_deck_id')
-    .in('parent_deck_id', allSourceDeckIds);
+  // Sub-baralhos não existem mais (Sala > Pasta > Deck): sincronizamos apenas os espelhos diretos.
 
-  // For each source deck, add sub-deck sync pairs
-  if (sourceSubDecks && sourceSubDecks.length > 0) {
-    // Get local sub-decks in batch
-    const localRootIds = mirrorDecks.map(d => d.id);
-    const { data: localSubDecks } = await supabase
-      .from('decks')
-      .select('id, name, parent_deck_id')
-      .eq('user_id', userId)
-      .in('parent_deck_id', localRootIds);
-
-    const localSubMap = new Map<string, Map<string, string>>(); // parentId → Map<name, id>
-    for (const ls of (localSubDecks ?? []) as SourceSubDeckRow[]) {
-      if (!ls.parent_deck_id) continue;
-      if (!localSubMap.has(ls.parent_deck_id)) localSubMap.set(ls.parent_deck_id, new Map());
-      localSubMap.get(ls.parent_deck_id)!.set(ls.name, ls.id);
-    }
-
-    // Create missing sub-decks and add sync pairs
-    for (const srcSub of sourceSubDecks as SourceSubDeckRow[]) {
-      // Find the local root that mirrors this source parent
-      const mirrorDeck = mirrorDecks.find(
-        m => turmaDeckMap.get(m.source_turma_deck_id!) === srcSub.parent_deck_id
-      );
-      if (!mirrorDeck) continue;
-
-      const nameMap = localSubMap.get(mirrorDeck.id);
-      let localSubId = nameMap?.get(srcSub.name);
-
-      if (!localSubId) {
-        const { data: newSub } = await supabase
-          .from('decks')
-          .insert({
-            user_id: userId,
-            name: srcSub.name,
-            folder_id: folderId,
-            parent_deck_id: mirrorDeck.id,
-            daily_new_limit: 20,
-            daily_review_limit: 9999,
-          })
-          .select('id')
-          .single();
-        if (newSub) localSubId = newSub.id;
-      }
-
-      if (localSubId) {
-        syncPairs.push({ localDeckId: localSubId, sourceDeckId: srcSub.id });
-        allProcessedDeckIds.push(localSubId);
-      }
-    }
-  }
 
   // 4. BATCH: fetch all existing origin_deck_ids from local decks
   const allLocalDeckIds = syncPairs.map(p => p.localDeckId);

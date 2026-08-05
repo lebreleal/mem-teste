@@ -59,11 +59,13 @@ export async function createCards(deckId: string, cards: { frontContent: string;
   return allData;
 }
 
-/** Update a card's content. */
-export async function updateCard(id: string, frontContent: string, backContent: string) {
+/** Update a card's content (and optionally its type, keeping content and card_type in sync). */
+export async function updateCard(id: string, frontContent: string, backContent: string, cardType?: string) {
+  const payload: { front_content: string; back_content: string; card_type?: string } = { front_content: frontContent, back_content: backContent };
+  if (cardType) payload.card_type = cardType;
   const { data, error } = await supabase
     .from('cards')
-    .update({ front_content: frontContent, back_content: backContent })
+    .update(payload)
     .eq('id', id)
     .select()
     .single();
@@ -156,28 +158,6 @@ export async function patchCard(cardId: string, fields: { front_content?: string
     .update(fields)
     .eq('id', cardId);
   if (error) throw error;
-}
-
-/** Count review-state cards due now across multiple deck IDs. */
-export async function countReviewDueCards(deckIds: string[], nowISO: string): Promise<number> {
-  const { count, error } = await supabase
-    .from('cards')
-    .select('id', { count: 'exact', head: true })
-    .in('deck_id', deckIds)
-    .eq('state', 2)
-    .lte('scheduled_date', nowISO);
-  if (error) throw error;
-  return count ?? 0;
-}
-
-/** Fetch study plan deck_ids for a user. */
-export async function fetchStudyPlanDeckIds(userId: string): Promise<Array<{ deck_ids: string[] | null }>> {
-  const { data, error } = await supabase
-    .from('study_plans')
-    .select('deck_ids')
-    .eq('user_id', userId);
-  if (error) throw error;
-  return (data ?? []) as Array<{ deck_ids: string[] | null }>;
 }
 
 /** Upload a card image to storage. Returns the public URL. */

@@ -95,7 +95,6 @@ const DeckSettings = () => {
   const [buryLearningSiblings, setBuryLearningSiblings] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [parentDeckId, setParentDeckId] = useState<string | null>(null);
   const [sourceTurmaDeckId, setSourceTurmaDeckId] = useState<string | null>(null);
   const [sourceListingId, setSourceListingId] = useState<string | null>(null);
   const [communityId, setCommunityId] = useState<string | null>(null);
@@ -122,34 +121,19 @@ const DeckSettings = () => {
     staleTime: 30_000,
   });
 
-  const getRootAncestorId = useMemo(() => {
-    return (id: string): string => {
-      const visited = new Set<string>();
-      let currentId: string = id;
-      while (true) {
-        if (visited.has(currentId)) return currentId;
-        visited.add(currentId);
-        const deck = decks.find(d => d.id === currentId);
-        if (!deck?.parent_deck_id) return currentId;
-        currentId = deck.parent_deck_id;
-      }
-    };
-  }, [decks]);
 
   const objectiveRootIds = useMemo(() => {
     const roots = new Set<string>();
     for (const plan of studyPlansQuery.data ?? []) {
       for (const id of (plan.deck_ids ?? [])) {
-        roots.add(getRootAncestorId(id));
+        roots.add(id);
       }
     }
     return roots;
-  }, [studyPlansQuery.data, getRootAncestorId]);
+  }, [studyPlansQuery.data]);
 
-  const currentDeckRootId = useMemo(() => {
-    if (!deckId) return null;
-    return getRootAncestorId(deckId);
-  }, [deckId, getRootAncestorId]);
+  const currentDeckRootId = deckId ?? null;
+
 
   const isDeckLockedByObjective = useMemo(() => {
     if (!currentDeckRootId) return false;
@@ -170,7 +154,6 @@ const DeckSettings = () => {
       setIntervalModifier(data.interval_modifier ?? 100);
       setMaxInterval(data.max_interval ?? 1000);
       setEasyGraduatingInterval(data.easy_graduating_interval ?? 15);
-      setParentDeckId(data.parent_deck_id ?? null);
       setIsPublic(data.is_public ?? true);
       setAllowDuplication(data.allow_duplication ?? false);
       setSourceTurmaDeckId(data.source_turma_deck_id ?? null);
@@ -281,16 +264,8 @@ const DeckSettings = () => {
 
   const isCommunityDeck = useMemo(() => {
     if (sourceTurmaDeckId || sourceListingId || communityId) return true;
-    if (!deckId) return false;
-    let parentId = decks.find(d => d.id === deckId)?.parent_deck_id;
-    while (parentId) {
-      const parent = decks.find(d => d.id === parentId);
-      if (!parent) break;
-      if (parent.source_turma_deck_id || parent.source_listing_id || parent.is_live_deck || parent.community_id) return true;
-      parentId = parent.parent_deck_id;
-    }
     return false;
-  }, [sourceTurmaDeckId, sourceListingId, communityId, deckId, decks]);
+  }, [sourceTurmaDeckId, sourceListingId, communityId]);
 
   const handleDetachDeck = async () => {
     if (!deckId || !user) return;
@@ -460,8 +435,8 @@ const DeckSettings = () => {
               <SettingsRow
                 icon={<Layers className="h-5 w-5" />}
                 label="Algoritmo de Aprendizagem"
-                subtitle={parentDeckId ? `${algoLabel} (herdado do pai)` : algoLabel}
-                onClick={parentDeckId ? () => toast({ title: 'Algoritmo herdado', description: 'Este sub-baralho herda o algoritmo do baralho pai.' }) : () => setAlgorithmModal(true)}
+                subtitle={algoLabel}
+                onClick={() => setAlgorithmModal(true)}
               />
             </SettingsGroup>
 
@@ -469,15 +444,11 @@ const DeckSettings = () => {
               <SettingsRow
                 icon={<BookOpen className="h-5 w-5" />}
                 label="Configurações de estudo"
-                subtitle={parentDeckId
-                  ? 'Herdado do baralho pai'
-                  : isDeckLockedByObjective
+                subtitle={isDeckLockedByObjective
                     ? 'Bloqueado por objetivo ativo (Meu Plano)'
                     : `${dailyNewLimit} novos · ${dailyReviewLimit} revisões/dia`}
                 onClick={
-                  parentDeckId
-                    ? () => toast({ title: 'Configuração herdada', description: 'As configurações de estudo são definidas pelo baralho pai.' })
-                    : isDeckLockedByObjective
+                  isDeckLockedByObjective
                       ? () => toast({
                           title: 'Bloqueado pelo Meu Plano',
                           description: 'Remova este baralho dos objetivos para editar os limites diários nas configurações do deck.',

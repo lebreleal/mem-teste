@@ -35,7 +35,7 @@ const StudySalaSheet = ({ open, onOpenChange, folders, decks, getAggregateStats 
   const folderStats = useMemo(() => {
     const map = new Map<string, { totalNew: number; totalLearning: number; totalReview: number; totalCards: number; masteredCards: number }>();
     for (const f of rootFolders) {
-      const folderDecks = decks.filter(d => d.folder_id === f.id && !d.parent_deck_id && !d.is_archived);
+      const folderDecks = decks.filter(d => !d.is_archived && !!d.folder_id && (d.folder_id === f.id || folders.some(sf => sf.id === d.folder_id && sf.parent_id === f.id)));
       let totalNew = 0, totalLearning = 0, totalReview = 0, totalCards = 0, masteredCards = 0;
       const collectAll = (deckList: DeckWithStats[]) => {
         for (const d of deckList) {
@@ -60,7 +60,7 @@ const StudySalaSheet = ({ open, onOpenChange, folders, decks, getAggregateStats 
     const result = new Map<string, number>();
 
     for (const f of rootFolders) {
-      const folderDecks = decks.filter(d => d.folder_id === f.id && !d.parent_deck_id && !d.is_archived);
+      const folderDecks = decks.filter(d => !d.is_archived && !!d.folder_id && (d.folder_id === f.id || folders.some(sf => sf.id === d.folder_id && sf.parent_id === f.id)));
       let totalDue = 0;
 
       for (const rootDeck of folderDecks) {

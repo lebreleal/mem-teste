@@ -8,14 +8,16 @@
 import { createContext, useContext, useState, useMemo, useCallback, useEffect, useRef, type ReactNode } from 'react';
 import type { User } from '@supabase/supabase-js';
 import type { CardMeta, DescendantCardCounts } from '@/services/cardService';
-import { countReviewDueCards, fetchStudyPlanDeckIds, unfreezeCard as unfreezeCardService } from '@/services/card/cardMutations';
+import { fetchReviewDueCount, fetchStudyPlanDeckIds } from '@/services/card/cardQueries';
+import { unfreezeCard as unfreezeCardService } from '@/services/card/cardMutations';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCards } from '@/hooks/useCards';
 import { useDecks } from '@/hooks/useDecks';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useEnergy } from '@/hooks/useEnergy';
 import { useAIModel } from '@/hooks/useAIModel';
 import * as cardService from '@/services/cardService';
@@ -165,7 +167,8 @@ interface DeckDetailContextValue {
   openNew: () => void;
   openEdit: (card: CardRow) => void;
   handleSave: (addAnother: boolean) => void;
-  handleDelete: () => void;
+  handleDelete: (onlyThis?: boolean) => void;
+  handleDuplicateCard: (card: CardRow) => Promise<void>;
   handleMoveCard: () => Promise<void>;
   handleBulkMove: () => Promise<void>;
   handleBulkDelete: () => Promise<void>;
@@ -268,10 +271,15 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   }, [decks]);
 
   // ─── Queries ───────────────────────────
+  // The deck list is already cached globally, so the detail screen must not
+  // wait a round-trip to render its shell: seed from cache with a stale
+  // timestamp so TanStack still revalidates in the background.
   const { data: deck, isLoading: deckLoading } = useQuery({
     queryKey: ['deck', deckId],
     queryFn: () => deckService.fetchDeck(deckId),
     enabled: !!user && !!deckId,
+    initialData: () => deckMap.get(deckId) as unknown as DeckRow | undefined,
+    initialDataUpdatedAt: 0,
   });
 
   // Count review cards actually due today (scheduled_date <= now), not ALL review-state cards
@@ -289,7 +297,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
         }
         frontier = nextFrontier;
       }
-      return countReviewDueCards(allIds, nowISO);
+      return fetchReviewDueCount(allIds, nowISO);
     },
     enabled: !!user && !!deckId && decks.length > 0,
     staleTime: 30_000,
@@ -312,8 +320,8 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   // Detect community deck (belongs to another user) — RPCs filter by auth.uid(), so use direct queries instead
   const isCommunityDeck = !!deck && !!user && deck.user_id !== user.id;
 
-  const CARDS_PAGE = 200;
-  const [displayLimit, setDisplayLimit] = useState(CARDS_PAGE);
+  const CARDS_PAGE = 100;
+  
 
   // Card counts: use RPC for own decks, direct query for community decks
   // For community decks, all cards are "new" from the viewer's perspective (owner's state is irrelevant)
@@ -347,15 +355,16 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     enabled: !!user && !!deckId && !deckLoading,
   });
 
-  // Display cards: use RPC for own decks, direct query for community decks
-  // For community decks, override state/difficulty to show as "new" from viewer's perspective
-  const { data: displayCards = [], isLoading: displayCardsLoading } = useQuery({
-    queryKey: ['cards-display', deckId, displayLimit, isCommunityDeck],
-    queryFn: async () => {
+  // Display cards: cumulative pagination (Lei 1G) — each "load more" fetches
+  // only the next page instead of re-downloading everything from offset 0.
+  const cardsInfinite = useInfiniteQuery({
+    queryKey: ['cards-display', deckId, isCommunityDeck],
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }) => {
       if (isCommunityDeck) {
         const cards = await cardService.fetchCards(deckId);
         // Reset state and difficulty so gauge shows 0% progress for the viewer
-        return cards.slice(0, displayLimit).map((c) => ({
+        return cards.slice(pageParam, pageParam + CARDS_PAGE).map((c) => ({
           ...c,
           state: 0,
           difficulty: 0,
@@ -364,17 +373,41 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
           last_reviewed_at: null,
         })) as cardService.CardRow[];
       }
-      return cardService.fetchDescendantCardsPage(deckId, displayLimit, 0);
+      return cardService.fetchDescendantCardsPage(deckId, CARDS_PAGE, pageParam);
     },
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.length < CARDS_PAGE ? undefined : allPages.length * CARDS_PAGE,
     enabled: !!user && !!deckId && !deckLoading,
   });
 
-  const allCardsLoading = cardCountsLoading || displayCardsLoading;
-  const allCards = displayCards;
+  const displayCards = useMemo(
+    () => (cardsInfinite.data?.pages ?? []).flat() as CardRow[],
+    [cardsInfinite.data],
+  );
+
+  // Server-side search (Lei 1G): local filtering would only see loaded pages.
+  const debouncedSearch = useDebouncedValue(search.trim(), 300);
+  const isSearching = debouncedSearch.length >= 2;
+
+  const { data: searchResults = [], isFetching: searchLoading } = useQuery({
+    queryKey: ['cards-search', deckId, debouncedSearch],
+    queryFn: () => cardService.searchCardsInDecks(allDeckIds, debouncedSearch),
+    enabled: !!user && isSearching,
+    staleTime: 60_000,
+  });
+
+  const allCardsLoading = isSearching
+    ? searchLoading
+    : (cardCountsLoading || cardsInfinite.isLoading);
+  const allCards = isSearching ? searchResults : displayCards;
 
   // Legacy auto-sync removed — bootstrap_follower_decks RPC handles card copying now
 
-  const loadMoreCards = useCallback(() => { setDisplayLimit(prev => prev + CARDS_PAGE); }, []);
+  const loadMoreCards = useCallback(() => {
+    if (cardsInfinite.hasNextPage && !cardsInfinite.isFetchingNextPage) cardsInfinite.fetchNextPage();
+  }, [cardsInfinite]);
+
+
 
   const stats = useMemo(() => {
     if (!cardCounts) return undefined;
@@ -522,7 +555,9 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
       else if (stateFilter === 'dificil') result = result.filter(c => c.state !== 0 && c.state != null && !isFrozenCard(c) && (c.difficulty ?? 5) > 5 && (c.difficulty ?? 5) <= 7);
       else if (stateFilter === 'errei') result = result.filter(c => c.state !== 0 && c.state != null && !isFrozenCard(c) && (c.difficulty ?? 5) > 7);
     }
-    if (search.trim()) {
+    // When isSearching, the server already applied the term (Lei 1G) — the
+    // local pass would only re-filter the same rows.
+    if (!isSearching && search.trim()) {
       const q = search.toLowerCase();
       result = result.filter(c => c.front_content.toLowerCase().includes(q) || c.back_content.toLowerCase().includes(q));
     }
@@ -531,7 +566,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
       const bFrozen = isFrozenCard(b) ? 1 : 0;
       return aFrozen - bFrozen;
     });
-  }, [allCards, search, typeFilter, stateFilter, isFrozenCard]);
+  }, [allCards, search, isSearching, typeFilter, stateFilter, isFrozenCard]);
 
   const getStateInfo = useCallback((card: CardRow) => {
     if (isFrozenCard(card)) return { label: '❄️ Congelado', color: 'text-info bg-info/10' };
@@ -586,7 +621,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     setAlgorithmConfirm, setAlgorithmModalOpen, setExamModalOpen, setExamGenerating,
   });
 
-  const hasMoreCards = displayLimit < totalCards;
+  const hasMoreCards = !isSearching && (cardsInfinite.hasNextPage ?? false);
 
   const value: DeckDetailContextValue = {
     deckId, deck, deckLoading, allCards, allCardsLoading, filteredCards, cardCounts, loadMoreCards, hasMoreCards, stats, decks,
@@ -608,7 +643,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     mcOptions, setMcOptions, mcCorrectIndex, setMcCorrectIndex,
     energy, spendEnergy, model, setModel, getCost, createExam: createExamStub, addNotification, updateNotification,
     resetForm: handlers.resetForm, openNew: handlers.openNew, openEdit: handlers.openEdit,
-    handleSave: handlers.handleSave, handleDelete: handlers.handleDelete, handleMoveCard: handlers.handleMoveCard,
+    handleSave: handlers.handleSave, handleDelete: handlers.handleDelete, handleDuplicateCard: handlers.handleDuplicateCard, handleMoveCard: handlers.handleMoveCard,
     handleBulkMove: handlers.handleBulkMove, handleBulkDelete: handlers.handleBulkDelete,
     handleImprove: handlers.handleImprove, applyImprovement: handlers.applyImprovement,
     uploadOcclusionFile: handlers.uploadOcclusionFile, handleOcclusionAttach: handlers.handleOcclusionAttach, handleOcclusionPaste: handlers.handleOcclusionPaste,

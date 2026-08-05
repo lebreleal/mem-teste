@@ -4,6 +4,10 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
+import { TZ_OFFSET_SP } from '@/lib/dateUtils';
+import type { DeckWithStats } from '@/types/deck';
+import type { Folder } from '@/types/folder';
+import type { ProfileData } from '@/hooks/useProfile';
 
 // ─── Types ───
 
@@ -322,4 +326,32 @@ export async function fetchCommunityDeckUpdates(userId: string): Promise<Set<str
     if (row.has_update) pending.add(row.local_deck_id);
   }
   return pending;
+}
+
+// ─── Consolidated dashboard bootstrap ───
+
+/**
+ * Single-round-trip dashboard payload (profile + folders + decks with stats).
+ * Replaces the previous fan-out of independent queries on Dashboard mount.
+ */
+export interface DashboardSummary {
+  profile: ProfileData | null;
+  folders: Folder[];
+  decks: DeckWithStats[];
+}
+
+export async function fetchDashboardSummary(): Promise<DashboardSummary> {
+  const { data, error } = await (supabase.rpc as unknown as (
+    fn: string,
+    params: Record<string, unknown>
+  ) => Promise<{ data: unknown; error: unknown }>)('get_dashboard_summary', {
+    p_tz_offset_minutes: TZ_OFFSET_SP,
+  });
+  if (error) throw error;
+  const payload = (data ?? {}) as Partial<DashboardSummary>;
+  return {
+    profile: payload.profile ?? null,
+    folders: payload.folders ?? [],
+    decks: payload.decks ?? [],
+  };
 }

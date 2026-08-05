@@ -33,4 +33,6 @@ export const FORMAT_OPTIONS: { value: CardFormat; label: string }[] = [
 
 export const CREDITS_PER_PAGE = 2;
 
-export const ACCEPTED_FILE_TYPES = 'application/pdf,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,text/csv';
+// Only formats with real extraction support (PDF + plain text). DOCX/PPTX voltam quando houver extração real.
+export const ACCEPTED_FILE_TYPES = 'application/pdf,text/plain,text/markdown,text/csv';
+

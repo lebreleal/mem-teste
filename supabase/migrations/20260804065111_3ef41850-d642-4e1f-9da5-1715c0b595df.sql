@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS idx_review_logs_user_reviewed ON public.review_logs (user_id, reviewed_at DESC);

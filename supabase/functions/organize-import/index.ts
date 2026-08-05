@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders, handleCors, jsonResponse, logTokenUsage, getAIConfig, getModelMap } from "../_shared/utils.ts";
+import { corsHeaders, handleCors, jsonResponse, getAIConfig, getModelMap, aiHeaders, extractUsage, chargeAndLog, type AIUsage } from "../_shared/utils.ts";
 
 interface DeckNode {
   name: string;
@@ -132,7 +132,7 @@ async function organizeBatch(
   batchCount: number,
   totalCards: number,
   deckName: string | null,
-): Promise<{ decks: DeckNode[]; usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number } }> {
+): Promise<{ decks: DeckNode[]; usage: AIUsage; model: string }> {
   const userPrompt = deckName
     ? `Organize estes ${batchCount} flashcards (de um total de ${totalCards}) como subdecks de "${deckName}".\nOs índices são GLOBAIS, mantenha-os exatamente como estão:\n\n${cardLines}`
     : `Organize estes ${batchCount} flashcards (de um total de ${totalCards}) em uma árvore temática.\nOs índices são GLOBAIS, mantenha-os exatamente como estão:\n\n${cardLines}`;
@@ -142,9 +142,10 @@ async function organizeBatch(
   const organizeModel = modelMap.pro;
   const response = await fetch(AI_URL, {
     method: "POST",
-    headers: { Authorization: `Bearer ${AI_KEY}`, "Content-Type": "application/json" },
+    headers: aiHeaders(AI_KEY),
     body: JSON.stringify({
       model: organizeModel,
+      usage: { include: true },
       messages: [
         { role: "system", content: buildSystemPrompt(deckName) },
         { role: "user", content: userPrompt },
@@ -166,9 +167,9 @@ async function organizeBatch(
   if (!toolCall) throw new Error("No tool call in response");
 
   const result = JSON.parse(toolCall.function.arguments);
-  const usage = data.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+  const usage = extractUsage(data);
 
-  return { decks: result.decks || [], usage };
+  return { decks: result.decks || [], usage, model: organizeModel };
 }
 
 function mergeBatchResults(allBatches: DeckNode[][]): DeckNode[] {
@@ -266,7 +267,11 @@ Deno.serve(async (req) => {
       const batch = batches[b];
       console.log(`Batch ${b + 1}/${batches.length}: ${batch.count} cards`);
 
-      const { decks, usage } = await organizeBatch(batch.lines, batch.count, totalCards, parentDeckName);
+      const { decks, usage, model: batchModel } = await organizeBatch(batch.lines, batch.count, totalCards, parentDeckName);
+      // Every AI call gets its own usage row with the exact OpenRouter cost.
+      if (userId) {
+        await chargeAndLog(supabase, userId, "organize_import", batchModel, { usage, id: usage.generation_id });
+      }
       allBatchDecks.push(decks);
 
       totalPromptTokens += usage.prompt_tokens;
@@ -308,12 +313,6 @@ Deno.serve(async (req) => {
     for (const deck of mergedDecks) {
       const total = collectLeafIndices(deck).length;
       console.log(`Deck "${deck.name}": ${total} cards, ${deck.standalone ? 'STANDALONE' : 'child'}, ${deck.children ? deck.children.length + ' children' : 'leaf'}`);
-    }
-
-    if (userId) {
-      const logModelMap = await getModelMap(null as any);
-      await logTokenUsage(supabase, userId, "organize_import", logModelMap.pro,
-        { prompt_tokens: totalPromptTokens, completion_tokens: totalCompletionTokens, total_tokens: totalTokens }, 0);
     }
 
     return jsonResponse({ subdecks: mergedDecks, total_cards: totalCards });

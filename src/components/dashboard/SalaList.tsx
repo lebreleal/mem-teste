@@ -110,7 +110,11 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
         const isCommunity = !!f.source_turma_id;
         const meta = isCommunity && communityMeta ? communityMeta.get(f.source_turma_id!) : undefined;
 
-        const folderDecks = decksByFolder.get(f.id) ?? [];
+        const childFolderIds = folders.filter(cf => cf.parent_id === f.id && !cf.is_archived).map(cf => cf.id);
+        const folderDecks = [
+          ...(decksByFolder.get(f.id) ?? []),
+          ...childFolderIds.flatMap(cid => decksByFolder.get(cid) ?? []),
+        ];
         let totalCards = 0, masteredCards = 0, dueCount = 0;
 
         const collectStats = (deckList: DeckWithStats[]) => {

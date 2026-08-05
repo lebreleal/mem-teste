@@ -232,13 +232,14 @@ export async function importDeckWithSubdecks(
       ...(algorithmMode ? { algorithm_mode: algorithmMode } : {}),
     } as any).select().single();
   if (parentErr || !parentDeck) throw parentErr;
-  const parentId = (parentDeck as any).id;
+  void parentDeck;
 
-  // 2. BFS: process the tree level-by-level
-  type QueueItem = { node: SubdeckNode; resolvedParentId: string | null };
+  // 2. BFS: flatten the tree — sub-baralhos não existem mais (Sala > Pasta > Deck).
+  //    Cada nó vira um deck na mesma pasta, com o caminho no nome.
+  type QueueItem = { node: SubdeckNode; prefix: string };
   let queue: QueueItem[] = subdecks.map(sd => ({
     node: sd,
-    resolvedParentId: (sd as any).standalone ? null : parentId,
+    prefix: (sd as any).standalone ? '' : `${parentName} / `,
   }));
 
   const deckCards: { deckId: string; indices: number[] }[] = [];
@@ -250,10 +251,10 @@ export async function importDeckWithSubdecks(
     for (let i = 0; i < queue.length; i += DECK_BATCH) {
       const batch = queue.slice(i, i + DECK_BATCH);
       const rows = batch.map(item => ({
-        name: item.node.name,
+        name: `${item.prefix}${item.node.name}`.slice(0, 200),
         user_id: userId,
         folder_id: folderId,
-        parent_deck_id: item.resolvedParentId,
+        parent_deck_id: null,
         ...(algorithmMode ? { algorithm_mode: algorithmMode } : {}),
       }));
 
@@ -271,8 +272,9 @@ export async function importDeckWithSubdecks(
           }
 
           if (node.children?.length) {
+            const childPrefix = `${batch[j].prefix}${node.name} / `;
             for (const child of node.children) {
-              nextQueue.push({ node: child, resolvedParentId: deckId });
+              nextQueue.push({ node: child, prefix: childPrefix });
             }
           }
         }

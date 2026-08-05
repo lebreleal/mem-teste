@@ -6,10 +6,11 @@
 
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDown, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings, Play, GripVertical, Layers } from 'lucide-react';
+import { ChevronDown, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings, Play, GripVertical } from 'lucide-react';
 import { IconDeck } from '@/components/icons';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { DeckWithStats } from '@/hooks/useDecks';
+import { usePrefetchDeck } from '@/hooks/usePrefetchDeck';
 import type { DragReorderHandlers } from '@/hooks/useDragReorder';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
 import {
@@ -74,17 +75,6 @@ const DeckMenu = ({ deck, onRename, onMove, onArchive, onDelete, navigate, onCre
       </button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="end" className="w-44" onClick={(e) => e.stopPropagation()}>
-      {/* Only show subdeck options for root decks (no parent) */}
-      {!deck.parent_deck_id && onCreateSubDeck && (
-        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onCreateSubDeck(deck.id); }}>
-          <Layers className="h-4 w-4 mr-2" /> Criar sub-baralho
-        </DropdownMenuItem>
-      )}
-      {!deck.parent_deck_id && onCreateSubDeckAI && (
-        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onCreateSubDeckAI(deck.id); }}>
-          <Layers className="h-4 w-4 mr-2" /> Sub-baralho com IA
-        </DropdownMenuItem>
-      )}
       <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onRename(deck); }}>
         <Pencil className="h-4 w-4 mr-2" /> Renomear
       </DropdownMenuItem>
@@ -176,6 +166,7 @@ const DeckRow = ({
   organizeMode = false,
 }: DeckRowProps) => {
   const navigate = useNavigate();
+  const prefetchDeck = usePrefetchDeck();
   const { isAdmin } = useIsAdmin();
   const isErrorDeck = deck.name === ERROR_DECK_NAME;
   const [showDevModal, setShowDevModal] = useState(false);
@@ -209,12 +200,6 @@ const DeckRow = ({
       }
       return;
     }
-    // Root deck (no parent) → always navigate to materia detail page
-    // so user can manage sub-decks, even if none exist yet
-    if (!deck.parent_deck_id) {
-      navigate(`/materia/${deck.id}`);
-      return;
-    }
     navigate(`/decks/${deck.id}`, readOnlyNavState ? { state: readOnlyNavState } : undefined);
   };
 
@@ -222,6 +207,13 @@ const DeckRow = ({
     e.stopPropagation();
     navigate(`/decks/${deckId}`, readOnlyNavState ? { state: readOnlyNavState } : undefined);
   };
+
+  // Warm the destination before the click lands (hover / touch = intent).
+  const handleIntent = () => {
+    if (deckSelectionMode || isErrorDeck) return;
+    prefetchDeck(deck.id);
+  };
+
 
   return (
     <>
@@ -238,6 +230,9 @@ const DeckRow = ({
         } : {})}
         className={`group flex items-center gap-3 px-4 py-4 cursor-pointer transition-all hover:bg-muted/50 ${dragHandlers ? dragHandlers.className : ''}`}
         onClick={handleClick}
+        onMouseEnter={handleIntent}
+        onTouchStart={handleIntent}
+        onFocus={handleIntent}
       >
         {organizeMode && (
           <GripVertical className="h-4 w-4 text-muted-foreground/50 shrink-0 cursor-grab active:cursor-grabbing" />

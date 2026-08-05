@@ -37,9 +37,11 @@ const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
   const isInsideSala = isOnDashboard && location.search.includes('folder=');
   const isDisabledAdd = (!isOnDashboard && !isOnMateria) || (isInsideSala && isCommunityFolder);
 
-  const handleExplorar = () => {
-    navigate('/turmas');
+  // "Explorar" no longer exists: decks are unlocked with an access code.
+  const handleRedeem = () => {
+    navigate('/resgatar');
   };
+
 
   const handleAdd = () => {
     if (isDisabledAdd) return;
@@ -50,7 +52,7 @@ const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
   const items: NavItem[] = [
     { icon: Home, label: 'Home', onClick: () => navigate('/dashboard'), active: isActive('/dashboard') },
     { icon: Plus, label: 'Adicionar', onClick: handleAdd, active: false, accent: true, disabled: isDisabledAdd, dimmed: isInsideSala && isCommunityFolder },
-    { icon: Compass, label: 'Explorar', onClick: handleExplorar, active: isActive('/explorar') || isActive('/turmas') },
+    { icon: Compass, label: 'Explorar', onClick: handleRedeem, active: isActive('/resgatar') },
   ];
 
   return (

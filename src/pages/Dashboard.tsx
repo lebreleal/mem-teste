@@ -30,11 +30,12 @@ import { useDashboardSalas } from '@/hooks/useDashboardSalas';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
 import DeckList from '@/components/dashboard/DeckList';
 import SalaList from '@/components/dashboard/SalaList';
+import PastaRow from '@/components/dashboard/PastaRow';
 import SalaHero from '@/components/dashboard/SalaHero';
 import DashboardDialogs from '@/components/dashboard/DashboardDialogs';
 import DashboardModals from '@/components/dashboard/DashboardModals';
 import ShareSalaModal from '@/components/dashboard/ShareSalaModal';
-const PremiumModal = lazy(() => import('@/components/dashboard/PremiumModal'));
+const CreditsDialog = lazy(() => import('@/components/CreditsDialog'));
 
 const StudyWeightsSheet = lazy(() => import('@/components/dashboard/StudyWeightsSheet'));
 const StudySalaSheet = lazy(() => import('@/components/dashboard/StudySalaSheet'));
@@ -78,9 +79,10 @@ const Dashboard = () => {
   }, [plans, allDeckIds, state.decks, state.deckMap]);
 
   planRootIdsRef.current = planRootIds;
-  const { isPremium, refreshStatus } = useSubscription();
+  const { refreshStatus } = useSubscription();
   const { isAdmin } = useIsAdmin();
-  const defaultAlgorithm = isPremium ? 'fsrs' : 'sm2';
+  const defaultAlgorithm = 'fsrs';
+
 
   // Salas hook (community bootstrap, leave, publish, detach, share, image)
   const salas = useDashboardSalas({
@@ -174,19 +176,17 @@ const Dashboard = () => {
     return total;
   }, [state.currentDecks, state.allRootDecks, state.isInsideSala, state.getAggregateStats]);
 
-  // Collect all deck IDs in the current sala
+  // Collect all deck IDs in the current folder, including decks inside its pastas
   const salaDeckIds = useMemo(() => {
     if (!state.isInsideSala) return [] as string[];
-    const ids: string[] = [];
-    const childrenIndex = state.childrenIndex;
-    const collect = (deckId: string) => {
-      ids.push(deckId);
-      const children = childrenIndex.get(deckId) ?? [];
-      for (const c of children) { if (!c.is_archived) collect(c.id); }
-    };
-    for (const deck of state.currentDecks) collect(deck.id);
-    return ids;
-  }, [state.isInsideSala, state.currentDecks, state.childrenIndex]);
+    const folderIds = new Set<string>([state.currentFolderId!]);
+    for (const f of state.folders) {
+      if (!f.is_archived && f.parent_id === state.currentFolderId) folderIds.add(f.id);
+    }
+    return state.decks
+      .filter(d => !d.is_archived && d.folder_id && folderIds.has(d.folder_id))
+      .map(d => d.id);
+  }, [state.isInsideSala, state.currentFolderId, state.folders, state.decks]);
 
   // Compute difficulty stats
   const salaDifficultyStats = useMemo(() => {
@@ -202,6 +202,27 @@ const Dashboard = () => {
     return { novo, facil, bom, dificil, errei };
   }, [salaDeckIds, state.deckMap]);
 
+  /** Pastas (level-2 folders) inside the current sala */
+  const pastas = useMemo(() => {
+    if (!state.isInsideSala) return [] as { id: string; name: string; deckCount: number; dueCount: number }[];
+    return state.currentFolders.map(f => {
+      const folderDecks = state.decks.filter(d => !d.is_archived && d.folder_id === f.id);
+      let dueCount = 0;
+      for (const d of folderDecks) {
+        const s2 = state.getAggregateStats(d);
+        dueCount += s2.new_count + s2.learning_count + s2.review_count;
+      }
+      return { id: f.id, name: f.name, deckCount: folderDecks.length, dueCount };
+    });
+  }, [state.isInsideSala, state.currentFolders, state.decks, state.getAggregateStats]);
+
+  /** A pasta is a level-2 folder (it lives inside a sala). */
+  const isInsidePasta = useMemo(() => {
+    if (!state.currentFolderId) return false;
+    const current = state.folders.find(f => f.id === state.currentFolderId);
+    return !!current?.parent_id;
+  }, [state.currentFolderId, state.folders]);
+
   const handleSalaClick = useCallback((folderId: string) => {
     state.setCurrentFolderId(folderId);
   }, [state]);
@@ -210,8 +231,7 @@ const Dashboard = () => {
     <div className="min-h-screen bg-background">
       {!state.isInsideSala && (
         <DashboardHeader
-          onCreditsOpen={() => { state.setPremiumTab('credits'); state.setPremiumOpen(true); }}
-          onPremiumOpen={() => { state.setPremiumTab('plans'); state.setPremiumOpen(true); }}
+          onCreditsOpen={() => state.setPremiumOpen(true)}
         />
       )}
 
@@ -271,6 +291,25 @@ const Dashboard = () => {
           />
         )}
 
+        {/* Inside Sala: pastas (folders) first, then decks */}
+        {state.isInsideSala && pastas.length > 0 && (
+          <div className="divide-y divide-border/50">
+            {pastas.map(p => (
+              <PastaRow
+                key={p.id}
+                id={p.id}
+                name={p.name}
+                deckCount={p.deckCount}
+                dueCount={p.dueCount}
+                onClick={() => state.setCurrentFolderId(p.id)}
+                onRename={salas.isCommunityFolder ? undefined : () => { state.setRenameTarget({ type: 'folder', id: p.id, name: p.name }); state.setRenameName(p.name); }}
+                onArchive={salas.isCommunityFolder ? undefined : () => state.archiveFolder.mutate(p.id)}
+                onDelete={salas.isCommunityFolder ? undefined : () => state.setDeleteTarget({ type: 'folder', id: p.id, name: p.name })}
+              />
+            ))}
+          </div>
+        )}
+
         {/* Inside Sala: Deck List */}
         {state.isInsideSala && (
           <DeckList
@@ -286,23 +325,7 @@ const Dashboard = () => {
             getAggregateStats={state.getAggregateStats}
             getCommunityLinkId={state.getCommunityLinkId}
             navigateToCommunity={actions.handleNavigateCommunity}
-             onCreateSubDeck={salas.isCommunityFolder ? () => {} : (deckId) => {
-               const parentDeck = state.decks.find(d => d.id === deckId);
-               if (parentDeck?.parent_deck_id) {
-                 toast({ title: 'Subbaralhos só podem ter 1 nível de profundidade', variant: 'destructive' });
-                 return;
-               }
-               state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(deckId);
-             }}
-             onCreateSubDeckAI={salas.isCommunityFolder ? undefined : (deckId) => {
-               const parentDeck = state.decks.find(d => d.id === deckId);
-               if (parentDeck?.parent_deck_id) {
-                 toast({ title: 'Subbaralhos só podem ter 1 nível de profundidade', variant: 'destructive' });
-                 return;
-               }
-               setAiDeckParentId(deckId); setAiDeckParentName(parentDeck?.name ?? null);
-               state.setAiDeckOpen(true);
-             }}
+            onCreateSubDeck={() => {}}
             onRenameDeck={salas.isCommunityFolder ? () => {} : (d) => { state.setRenameTarget({ type: 'deck', id: d.id, name: d.name }); state.setRenameName(d.name); }}
             onMoveDeck={salas.isCommunityFolder ? () => {} : (d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(d.folder_id || state.currentFolderId); state.setMoveParentDeckId(null); }}
             onArchiveDeck={salas.isCommunityFolder ? () => {} : (id) => state.archiveDeck.mutate(id)}
@@ -312,6 +335,11 @@ const Dashboard = () => {
             onPendingClick={handlePendingClick}
             decksWithPendingUpdates={state.decksWithPendingUpdates}
             organizeMode={organizeMode}
+            hasFolders={pastas.length > 0}
+            isInsidePasta={isInsidePasta}
+            onCreateDeck={() => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
+            onCreateAI={() => state.setAiDeckOpen(true)}
+            onImport={() => state.setImportOpen(true)}
           />
         )}
 
@@ -370,6 +398,7 @@ const Dashboard = () => {
         createType={state.createType} setCreateType={state.setCreateType}
         createName={state.createName} setCreateName={state.setCreateName}
         createParentDeckId={state.createParentDeckId} setCreateParentDeckId={state.setCreateParentDeckId}
+        folderKind={state.currentFolderId ? 'pasta' : 'sala'}
         onCreateSubmit={actions.handleCreateSubmit}
         isCreating={state.createDeck.isPending || state.createFolder.isPending}
         renameTarget={state.renameTarget} setRenameTarget={state.setRenameTarget}
@@ -409,6 +438,8 @@ const Dashboard = () => {
          onCreateDeckManual={() => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
          onCreateDeckAI={() => state.setAiDeckOpen(true)}
          onImportCards={() => { state.setImportOpen(true); state.setImportDeckId(null); state.setImportDeckName(''); }}
+         canCreateFolder={state.isInsideSala && !salas.isCommunityFolder && !state.currentFolderIsPasta}
+         onCreateFolder={() => { state.setCreateType('folder'); state.setCreateName(''); }}
       />
 
       <ShareSalaModal
@@ -493,16 +524,16 @@ const Dashboard = () => {
               state.setAiDeckOpen(open);
               if (!open) { setPendingReviewData(null); setAiDeckParentId(null); setAiDeckParentName(null); }
             }}
-            folderId={pendingReviewData?.folderId ?? (aiDeckParentId ? state.decks.find(d => d.id === aiDeckParentId)?.folder_id ?? state.currentFolderId : state.currentFolderId)}
-            parentDeckId={aiDeckParentId}
+            folderId={pendingReviewData?.folderId ?? state.currentFolderId}
+            parentDeckId={null}
             existingDeckId={null}
-            existingDeckName={aiDeckParentName}
+            existingDeckName={null}
             pendingReviewData={pendingReviewData}
           />
         )}
       </Suspense>
       <Suspense fallback={<SuspenseLoading />}>
-        {state.premiumOpen && <PremiumModal open={state.premiumOpen} onClose={() => state.setPremiumOpen(false)} defaultTab={state.premiumTab} />}
+        {state.premiumOpen && <CreditsDialog open={state.premiumOpen} onOpenChange={state.setPremiumOpen} />}
       </Suspense>
 
       <Suspense fallback={null}>

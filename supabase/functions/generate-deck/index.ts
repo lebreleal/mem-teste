@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { corsHeaders, handleCors, jsonResponse, getModelMap, deductEnergy, refundEnergy, logTokenUsage, fetchPromptConfig, getAIConfig, fetchWithRetry } from "../_shared/utils.ts";
+import { corsHeaders, handleCors, jsonResponse, getModelMap, estimateCredits, holdCredits, refundCredits, settleCredits, logTokenUsage, fetchPromptConfig, getAIConfig, fetchWithRetry, aiHeaders, extractUsage, resolveCostUSD } from "../_shared/utils.ts";
 
 const DEFAULT_SYSTEM_PROMPT = `Você é um especialista em educação e criação de flashcards, aplicando rigorosamente as 20 Regras de Formulação do Conhecimento do Dr. Piotr Wozniak (SuperMemo).
 
@@ -249,8 +249,8 @@ Deno.serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
 
-  let energyDeducted = false;
-  let deductedCost = 0;
+  let creditsHeld = false;
+  let heldCredits = 0;
   let supabase: any;
   let userId = "";
 
@@ -264,19 +264,11 @@ Deno.serve(async (req) => {
     if (userError || !user) return jsonResponse({ error: "Token inválido" }, 401);
     userId = user.id;
 
-    const { textContent, cardCount, detailLevel, cardFormats, customInstructions, aiModel, energyCost } = await req.json();
+    const { textContent, cardCount, detailLevel, cardFormats, customInstructions, aiModel } = await req.json();
 
     const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
     if (!AI_KEY) return jsonResponse({ error: "AI API key não configurada" }, 500);
     if (!textContent?.trim()) return jsonResponse({ error: "textContent é obrigatório" }, 400);
-
-    const cost = energyCost || 0;
-    if (cost > 0) {
-      const ok = await deductEnergy(supabase, userId, cost);
-      if (!ok) return jsonResponse({ error: "Créditos IA insuficientes", requiresCredits: true }, 402);
-      energyDeducted = true;
-      deductedCost = cost;
-    }
 
     const promptConfig = await fetchPromptConfig(supabase, "generate_deck");
     const MODEL_MAP = await getModelMap(supabase);
@@ -284,25 +276,34 @@ Deno.serve(async (req) => {
     const isFlashLite = selectedModel.includes("flash-lite");
     const temperature = promptConfig?.temperature ?? 0.5;
 
+    // Server-side pricing: never trust a cost sent by the client.
+    const outputCeiling = Math.min(Math.max((cardCount > 0 ? cardCount : 40) * 220, 4000), 65000);
+    heldCredits = await estimateCredits(supabase, selectedModel, String(textContent).length + 4000, outputCeiling);
+    const creditsOk = await holdCredits(supabase, userId, heldCredits, "generate_deck");
+    if (!creditsOk) return jsonResponse({ error: "Créditos IA insuficientes", requiresCredits: true, requiredCredits: heldCredits }, 402);
+    creditsHeld = true;
+
+
     const trimmedContent = textContent;
     const requestedCount = cardCount > 0 ? Math.min(Math.max(cardCount, 3), 80) : 0;
     // Filter out multiple_choice from formats (no longer supported)
     const formats = (cardFormats?.length ? cardFormats : ["qa", "cloze"]).filter((f: string) => f !== "multiple_choice");
     if (formats.length === 0) formats.push("qa", "cloze");
 
-    // Flash-lite uses simplified prompt; Pro/Flash use full prompt
+    // O prompt do admin (ai_prompts) vale para TODOS os modelos; o prompt
+    // simplificado só entra como fallback quando não há prompt configurado.
     let systemPrompt: string;
     if (customInstructions && /prova|exame|questões/i.test(customInstructions)) {
       systemPrompt = "Você é um gerador de questões de prova acadêmica de alta qualidade. Gere apenas o JSON solicitado, sem texto adicional.";
-    } else if (isFlashLite) {
-      systemPrompt = FLASH_SYSTEM_PROMPT;
     } else {
-      systemPrompt = promptConfig?.system_prompt || DEFAULT_SYSTEM_PROMPT;
+      systemPrompt = promptConfig?.system_prompt || (isFlashLite ? FLASH_SYSTEM_PROMPT : DEFAULT_SYSTEM_PROMPT);
     }
 
+
     const countInstruction = requestedCount > 0
-      ? `Crie exatamente ${requestedCount} cartões.`
-      : `Crie a quantidade NECESSÁRIA de cartões para cobrir o material no nível "${detailLevel}". NÃO limite artificialmente — gere tantos cartões quantos forem necessários para garantir cobertura adequada.`;
+      ? `Gere NO MÁXIMO ${requestedCount} cartões. Esse número é um TETO, não uma meta: se o conteúdo não sustentar essa quantidade de fatos distintos, gere menos. É PROIBIDO inventar, repetir ou fatiar trivialidades para atingir o número.`
+      : `Gere a quantidade de cartões que o conteúdo realmente sustenta no nível "${detailLevel}". Qualidade vence quantidade: nunca invente informação nem crie cartões triviais para aumentar o total.`;
+
 
     const formatInstructions = isFlashLite ? getFlashFormatInstructions(formats) : getFormatInstructions(formats);
 
@@ -388,9 +389,10 @@ ${getOutputExamples(formats)}`;
 
     const aiResponse = await fetchWithRetry(AI_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
+      headers: aiHeaders(AI_KEY),
       body: JSON.stringify({
         model: selectedModel,
+        usage: { include: true },
         messages: [{ role: "system", content: systemPrompt }, { role: "user", content: fullPrompt }],
         temperature,
         max_tokens: 65000,
@@ -409,7 +411,7 @@ ${getOutputExamples(formats)}`;
     if (!aiResponse.ok) {
       const errText = await aiResponse.text();
       console.error("AI error:", aiResponse.status, errText);
-      if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
+      if (creditsHeld) await refundCredits(supabase, userId, heldCredits);
       if (aiResponse.status === 429) return jsonResponse({ error: "Limite de requisições excedido. Tente em alguns segundos." }, 429);
       if (aiResponse.status === 403) return jsonResponse({ error: "API do Google AI não ativada. Verifique o console." }, 502);
       if (aiResponse.status === 503) return jsonResponse({ error: "Modelo sobrecarregado. Tente o modelo Flash." }, 503);
@@ -422,11 +424,8 @@ ${getOutputExamples(formats)}`;
     const reasoningTokens = rawUsage.completion_tokens_details?.reasoning_tokens || 0;
     const cachedTokens = rawUsage.prompt_tokens_details?.cached_tokens || 0;
 
-    const usage = {
-      prompt_tokens: rawUsage.prompt_tokens || 0,
-      completion_tokens: rawUsage.completion_tokens || 0,
-      total_tokens: rawUsage.total_tokens || 0,
-    };
+    // Exact OpenRouter accounting (usage.cost) + generation id for cost lookup.
+    const usage = extractUsage(aiData);
 
     const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
     let cards: { front: string; back: string; type: string; options?: string[]; correctIndex?: number }[];
@@ -440,8 +439,8 @@ ${getOutputExamples(formats)}`;
           "reasoning_tokens:", reasoningTokens, "cached_tokens:", cachedTokens);
       } catch (parseErr) {
         console.error("Tool call parse error:", parseErr, "raw:", toolCall.function.arguments.substring(0, 500));
-        if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
-        await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
+        if (creditsHeld) await refundCredits(supabase, userId, heldCredits);
+        await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, 0);
         return jsonResponse({ error: "A IA não conseguiu gerar cards. Tente novamente ou use menos conteúdo.", usage }, 500);
       }
     } else {
@@ -489,47 +488,86 @@ ${getOutputExamples(formats)}`;
           }
         } catch {
           console.error("Parse failed, raw:", rawContent.substring(0, 500));
-          if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
-          await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
+          if (creditsHeld) await refundCredits(supabase, userId, heldCredits);
+          await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, 0);
           return jsonResponse({ error: "A IA não conseguiu gerar cards. Tente novamente ou use menos conteúdo.", usage }, 500);
         }
       }
     }
 
     if (!Array.isArray(cards) || cards.length === 0) {
-      if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
-      await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
+      if (creditsHeld) await refundCredits(supabase, userId, heldCredits);
+      await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, 0);
       return jsonResponse({ error: "Nenhum cartão gerado.", usage }, 400);
     }
 
     const CLOZE_REGEX = /\{\{c\d+::/;
-    cards = cards.map(c => {
-      const mappedType = mapCardType(c.type, formats);
+    const PLACEHOLDER_BACK = /^(informação não fornecida|n\/a|-|\.)$/i;
+    let discardedCount = 0;
 
-      if (mappedType === "cloze" && !CLOZE_REGEX.test(c.front || "")) {
-        console.warn("Cloze card missing syntax, reclassifying to basic:", (c.front || "").substring(0, 80));
+    cards = cards
+      .map(c => {
+        const mappedType = mapCardType(c.type, formats);
         const front = (c.front || "").trim();
-        const needsQuestionMark = front.endsWith(":") || front.endsWith("...");
+        const back = (c.back || "").trim();
+
+        // Cloze without the {{cN::}} syntax: only salvageable when there is a real answer.
+        if (mappedType === "cloze" && !CLOZE_REGEX.test(front)) {
+          if (!back || PLACEHOLDER_BACK.test(back)) {
+            console.warn("Discarding invalid cloze card (no syntax, no usable back):", front.substring(0, 80));
+            discardedCount++;
+            return null;
+          }
+          const needsQuestionMark = front.endsWith(":") || front.endsWith("...");
+          return {
+            front: needsQuestionMark ? front.replace(/[:.]+$/, "?") : front,
+            back,
+            type: "basic" as string,
+          };
+        }
+
+        if (!front) {
+          discardedCount++;
+          return null;
+        }
+
+        // Inverse mismatch: markers present but the model declared another type.
+        if (CLOZE_REGEX.test(front)) {
+          return { front, back: "", type: "cloze" as string };
+        }
+
+
+        if (mappedType !== "cloze" && (!back || PLACEHOLDER_BACK.test(back))) {
+          console.warn("Discarding basic card without answer:", front.substring(0, 80));
+          discardedCount++;
+          return null;
+        }
+
         return {
-          front: needsQuestionMark ? front.replace(/[:\.]+$/, "?") : front,
-          back: c.back || "Informação não fornecida",
-          type: "basic" as string,
+          front,
+          back: mappedType === "cloze" ? "" : back,
+          type: mappedType,
         };
-      }
+      })
+      .filter((c): c is { front: string; back: string; type: string } => c !== null);
 
-      return {
-        front: c.front || "",
-        back: mappedType === "cloze" ? "" : (c.back || ""),
-        type: mappedType,
-      };
-    });
+    if (discardedCount > 0) console.warn(`Discarded ${discardedCount} malformed card(s).`);
 
-    await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
+    if (cards.length === 0) {
+      if (creditsHeld) await refundCredits(supabase, userId, heldCredits);
+      await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, 0);
+      return jsonResponse({ error: "Nenhum cartão válido gerado.", usage }, 400);
+    }
 
-    return jsonResponse({ cards, usage });
+
+    const costUsd = await resolveCostUSD(selectedModel, usage);
+    const chargedCredits = await settleCredits(supabase, userId, heldCredits, "generate_deck", selectedModel, usage, costUsd);
+    await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, chargedCredits, usage.generation_id, costUsd);
+
+    return jsonResponse({ cards, usage, creditsCharged: chargedCredits });
   } catch (err) {
     console.error("Error:", err);
-    if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
+    if (creditsHeld) await refundCredits(supabase, userId, heldCredits);
     return jsonResponse({ error: "Erro interno do servidor" }, 500);
   }
 });

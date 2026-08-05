@@ -4,7 +4,7 @@
 
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { useEnergy } from '@/hooks/useEnergy';
+import { useAICredits } from '@/hooks/useAICredits';
 import { useStudyStats } from '@/hooks/useStudyStats';
 import { useTheme } from '@/hooks/useTheme';
 
@@ -14,14 +14,14 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import {
-  Flame, Brain, Timer, Moon, Sun, Bell, Menu, BookOpen, UserCircle, Lightbulb, LogOut, FileText, X,
+  Flame, Crown, Timer, Moon, Sun, Bell, Menu, BookOpen, UserCircle, Lightbulb, LogOut, FileText, X,
 } from 'lucide-react';
 import CreditsDialog from '@/components/CreditsDialog';
 
 const TurmaHeader = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
-  const { energy } = useEnergy();
+  const { credits } = useAICredits();
   const { data: studyStats } = useStudyStats();
   const { theme, toggleTheme } = useTheme();
   const [creditsOpen, setCreditsOpen] = useState(false);
@@ -41,8 +41,8 @@ const TurmaHeader = () => {
               <span className="text-xs font-bold tabular-nums text-foreground">{streak}</span>
             </button>
             <button onClick={() => setCreditsOpen(true)} className="flex items-center gap-1.5 rounded-full px-3 py-1.5 transition-colors hover:bg-muted/50">
-              <Brain className="h-4 w-4" style={{ color: 'hsl(var(--energy-purple, 270 70% 60%))' }} />
-              <span className="text-xs font-bold tabular-nums text-foreground">{energy}</span>
+              <Crown className="h-4 w-4 text-warning" fill="hsl(var(--warning))" />
+              <span className="text-xs font-bold tabular-nums text-foreground">{credits}</span>
             </button>
           </div>
           <div className="flex items-center gap-1.5">

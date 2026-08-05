@@ -108,6 +108,16 @@ export interface CardUpdatePayload {
 }
 
 /** Return value of submitCardReview. */
+/** Profile counters returned by the atomic submit_review RPC. */
+export interface ReviewProfileCounters {
+  energy: number;
+  successful_cards_counter: number;
+  daily_cards_studied: number;
+  daily_energy_earned: number;
+  /** Authoritative study streak (local day UTC-3) maintained by submit_review. */
+  current_streak?: number;
+}
+
 export interface CardReviewResult {
   state: number;
   stability: number;
@@ -118,6 +128,8 @@ export interface CardReviewResult {
   movedToError: boolean;
   returnedFromError: boolean;
   originDeckName: string | null;
+  /** Server-computed counters (single source of truth for profile stats). */
+  counters?: ReviewProfileCounters | null;
 }
 
 /** Row from get_activity_daily_breakdown RPC (returns a JSON object). */

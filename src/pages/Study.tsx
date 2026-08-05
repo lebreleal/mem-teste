@@ -11,6 +11,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useStudySession } from '@/hooks/useStudySession';
 import type { StudyCard, DeckStudyConfig } from '@/types/study';
 import { useEnergy } from '@/hooks/useEnergy';
+import { useAICredits } from '@/hooks/useAICredits';
 import { getNextReadyIndex, parseStepToMinutes, extractImageUrls } from '@/lib/studyUtils';
 import { useAIModel } from '@/hooks/useAIModel';
 import { invalidateStudyQueries } from '@/lib/queryKeys';
@@ -24,7 +25,9 @@ import SessionComplete from '@/components/study/SessionComplete';
 import StudyDialogs from '@/components/study/StudyDialogs';
 import StudyPausedModal from '@/components/study/StudyPausedModal';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Brain, Moon, Sun, Timer, RefreshCw, Info } from 'lucide-react';
+import { ArrowLeft, Brain, Crown, Moon, Sun, Timer, RefreshCw, Info } from 'lucide-react';
+import { formatCredits } from '@/lib/creditsFormat';
+
 import { useTheme } from '@/hooks/useTheme';
 import StudyCardActions from '@/components/StudyCardActions';
 import { useToast } from '@/hooks/use-toast';
@@ -51,7 +54,8 @@ const Study = () => {
   const { toast } = useToast();
   const { queue, isLoading, isFetching, submitReview, algorithmMode, isLiveDeck, deckConfig, deckConfigs } = useStudySession(deckId ?? '', folderId);
   const { theme, toggleTheme } = useTheme();
-  const { energy, addSuccessfulCard } = useEnergy();
+  const { credits } = useAICredits();
+  const energy = credits;
   const { model, setModel, getCost, pendingPro, confirmPro, cancelPro } = useAIModel();
   const goBack = useCallback(() => {
     // Note: study queries are invalidated once on unmount (cleanup effect below),
@@ -184,22 +188,25 @@ const Study = () => {
   const currentCard = displayedCard ?? nextCard;
 
   // Prefetch images so they are cached before the user reaches each card.
-  // Looks far ahead (the whole near queue) and dedupes via a ref so we never
-  // re-trigger the same download — images then render instantly with the text.
+  // Order matters: the ACTIVE card is warmed first (it is what the user is
+  // waiting for), then the next 3 cards of the queue (Lei 1B). A ref dedupes
+  // downloads so the same URL is never requested twice in a session.
   const prefetchedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (localQueue.length === 0) return;
     const currentIdx = currentCard ? localQueue.findIndex(c => c.id === currentCard.id) : 0;
     const start = currentIdx >= 0 ? currentIdx : 0;
-    const upcoming = localQueue.slice(start, start + 15);
-    for (const c of upcoming) {
-      for (const url of extractImageUrls((c.front_content ?? '') + (c.back_content ?? ''))) {
+    const upcoming = localQueue.slice(start, start + 4); // active + next 3
+    upcoming.forEach((c, i) => {
+      for (const url of extractImageUrls(`${c.front_content ?? ''}${c.back_content ?? ''}`)) {
         if (prefetchedRef.current.has(url)) continue;
         prefetchedRef.current.add(url);
         const img = new Image();
+        // The active card competes with the render; the lookahead must not.
+        img.setAttribute('fetchpriority', i === 0 ? 'high' : 'low');
         img.src = url;
       }
-    }
+    });
   }, [currentCard?.id, localQueue]);
 
 
@@ -243,7 +250,7 @@ const Study = () => {
     undo.saveSnapshot({ queue: [...localQueue], reviewCount, cardKey, cardId: card.id, actionType: 'review', prevCardState: { stability: card.stability, difficulty: card.difficulty, state: card.state, scheduled_date: card.scheduled_date, last_reviewed_at: card.last_reviewed_at ?? null } });
     tutor.abortTutor(); const elapsed = Date.now() - cardShownAt.current;
     if (elapsed < FAST_THRESHOLD_MS) { if (fastWarningTimer.current) clearTimeout(fastWarningTimer.current); fastWarningTimer.current = setTimeout(() => {}, 3000); }
-    if (rating > 2) addSuccessfulCard.mutate({ flowMultiplier: 1.0 });
+    // Success counters are incremented server-side inside submit_review (atomic).
     // Determine if card stays in session: Again always stays; Hard stays for learning;
     // Good stays if card is in learning/new AND has more steps before graduation
     const cardConfig = getCardDeckConfig(card);
@@ -284,7 +291,7 @@ const Study = () => {
         if (shouldKeep && result.interval_days === 0) { setLocalQueue(prev => prev.map(c => c.id === card.id ? { ...c, state: result.state, stability: result.stability, difficulty: result.difficulty, scheduled_date: result.scheduled_date, learning_step: result.learning_step ?? 0 } : c)); }
       },
     });
-  }, [localQueue, reviewCount, cardKey, deckConfig, deckConfigs, getCardDeckConfig, undo, tutor, addSuccessfulCard, submitReview, user]);
+  }, [localQueue, reviewCount, cardKey, deckConfig, deckConfigs, getCardDeckConfig, undo, tutor, submitReview, user]);
 
   const handleRate = useCallback(async (rating: Rating) => {
     if (!currentCard || isTransitioning) return;
@@ -341,7 +348,7 @@ const Study = () => {
         <div className="flex items-center gap-1.5 sm:gap-2.5">
           <button onClick={toggleTheme} className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Alternar tema">{theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}</button>
           <button onClick={() => window.dispatchEvent(new CustomEvent('open-pomodoro'))} className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Pomodoro"><Timer className="h-3.5 w-3.5" /></button>
-          <div className="flex items-center gap-1 rounded-xl px-2 py-1" style={{ background: 'hsl(var(--energy-purple) / 0.1)' }}><Brain className="h-3.5 w-3.5" style={{ color: 'hsl(var(--energy-purple))' }} /><span className="text-xs font-bold text-foreground tabular-nums">{energy}</span></div>
+          <div className="flex items-center gap-1 rounded-xl px-2 py-1 bg-warning/10"><Crown className="h-3.5 w-3.5 text-warning" fill="hsl(var(--warning))" /><span className="text-xs font-bold text-foreground tabular-nums">{formatCredits(credits)}</span></div>
           <AIModelSelector model={model} onChange={setModel} baseCost={BASE_TUTOR_COST} compact />
         </div>
       </header>
@@ -361,7 +368,7 @@ const Study = () => {
             stability={currentCard.stability} difficulty={currentCard.difficulty} state={currentCard.state}
             scheduledDate={currentCard.scheduled_date} lastReviewedAt={currentCard.last_reviewed_at}
             cardType={currentCard.card_type} learningStep={currentCard.learning_step ?? 0} lastRating={currentCard.last_rating}
-            onRate={handleRate} isSubmitting={submitReview.isPending || isTransitioning}
+            onRate={handleRate} isSubmitting={isTransitioning}
             quickReview={algorithmMode === 'quick_review'} algorithmMode={algorithmMode}
             deckConfig={getCardDeckConfig(currentCard)} energy={energy} tutorCost={TUTOR_COST}
             onTutorRequest={(options) => tutor.handleTutorRequest(currentCard, options)}
@@ -393,7 +400,7 @@ const Study = () => {
                     return filtered;
                   }); setCardKey(prev => prev + 1);
                 }}
-                onSiblingsUpdated={(updates, deletedIds, replacementForActiveCard) => {
+                onSiblingsUpdated={(updates, deletedIds, replacementForActiveCard, newSiblings) => {
                   let nextDisplayedCard: StudyCard | null = null;
                   const currentCardId = currentCard.id;
 
@@ -405,6 +412,18 @@ const Study = () => {
 
                     if (deletedIds.length > 0) {
                       q = q.filter(c => !deletedIds.includes(c.id));
+                    }
+
+                    // Novos irmãos (nova oclusão / novo cloze) entram logo após o cartão
+                    // atual, preservando a ordem de criação — nunca no fim da fila.
+                    if (newSiblings && newSiblings.length > 0) {
+                      const existingIds = new Set(q.map(c => c.id));
+                      const toInsert = (newSiblings as unknown as StudyCard[]).filter(c => c?.id && !existingIds.has(c.id));
+                      if (toInsert.length > 0) {
+                        const idx = q.findIndex(c => c.id === currentCardId);
+                        const at = idx >= 0 ? idx + 1 : q.length;
+                        q = [...q.slice(0, at), ...toInsert, ...q.slice(at)];
+                      }
                     }
 
                     if (replacementForActiveCard && deletedIds.includes(currentCardId)) {

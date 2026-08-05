@@ -92,7 +92,7 @@ const DeckDetailDialogs = () => {
                         className="relative inline-block rounded-lg overflow-hidden border border-border"
                         title="Editar oclusões"
                       >
-                        <img src={ctx.occlusionImageUrl} alt="Imagem de oclusão" className="h-14 w-14 object-cover rounded-lg" />
+                        <img loading="lazy" decoding="async" src={ctx.occlusionImageUrl} alt="Imagem de oclusão" className="h-14 w-14 object-cover rounded-lg" />
                         <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center bg-primary/80 py-0.5">
                           <ImageIcon className="h-3 w-3 text-primary-foreground" />
                         </div>
@@ -297,14 +297,39 @@ const DeckDetailDialogs = () => {
       {/* Delete confirmation */}
       <AlertDialog open={!!ctx.deleteId} onOpenChange={open => !open && ctx.setDeleteId(null)}>
         <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="font-display">Excluir card?</AlertDialogTitle>
-            <AlertDialogDescription>Essa ação não pode ser desfeita.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={ctx.handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Excluir</AlertDialogAction>
-          </AlertDialogFooter>
+          {(() => {
+            const target = ctx.allCards.find(c => c.id === ctx.deleteId);
+            const isGrouped = target?.card_type === 'cloze' || target?.card_type === 'image_occlusion';
+            return (
+              <>
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="font-display">Excluir card?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {isGrouped
+                      ? 'Este cartão faz parte de um grupo (cloze / oclusão). Você pode excluir apenas ele ou o grupo inteiro. Essa ação não pode ser desfeita.'
+                      : 'Essa ação não pode ser desfeita.'}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
+                  <AlertDialogCancel className="mt-0">Cancelar</AlertDialogCancel>
+                  {isGrouped && (
+                    <AlertDialogAction
+                      onClick={() => ctx.handleDelete(true)}
+                      className="bg-destructive/10 text-destructive hover:bg-destructive/20"
+                    >
+                      Excluir apenas este
+                    </AlertDialogAction>
+                  )}
+                  <AlertDialogAction
+                    onClick={() => ctx.handleDelete(false)}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    {isGrouped ? 'Excluir grupo' : 'Excluir'}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </>
+            );
+          })()}
         </AlertDialogContent>
       </AlertDialog>
 
@@ -369,7 +394,7 @@ const DeckDetailDialogs = () => {
                       <Copy className="h-4 w-4 shrink-0" />
                       <div className="text-left">
                         <p className="font-medium">Criar cópia com {ctx.algorithmConfirm.label}</p>
-                        <p className="text-xs text-muted-foreground">Novo sub-baralho, o atual permanece intacto</p>
+                        <p className="text-xs text-muted-foreground">Novo baralho, o atual permanece intacto</p>
                       </div>
                     </Button>
                   </div>

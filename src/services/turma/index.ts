@@ -19,6 +19,7 @@ export {
   publishDecksToTurma,
   removeTurmaMember,
   ensureShareSlug,
+  slugifyName,
 } from './turmaCrud';
 
 // Members & Ranking

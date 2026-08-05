@@ -14,7 +14,6 @@ import type { DetailLevel, CardFormat } from './types';
 import type { AIModel } from '@/hooks/useAIModel';
 
 interface ConfigStepProps {
-  isPremium?: boolean;
   detailLevel: DetailLevel;
   onDetailLevelChange: (v: DetailLevel) => void;
   cardFormats: CardFormat[];
@@ -28,7 +27,7 @@ interface ConfigStepProps {
   selectedPageCount: number;
   totalCredits: number;
   energy: number;
-  getCost: (base: number, isPremium?: boolean) => number;
+  getCost: (base: number) => number;
   onBack: () => void;
   onGenerate: () => void;
 }
@@ -37,7 +36,6 @@ type ConfigSubStep = 0 | 1 | 2;
 const SUB_STEP_LABELS = ['Nível de detalhe', 'Formato do cartão', 'Ajustes finais'];
 
 const ConfigStep = ({
-  isPremium = false,
   detailLevel, onDetailLevelChange, cardFormats, onToggleFormat,
   targetCardCount, onTargetCardCountChange, customInstructions, onCustomInstructionsChange,
   model, onModelChange, selectedPageCount, totalCredits, energy, getCost,
@@ -213,13 +211,13 @@ const ConfigStep = ({
             {/* Model selector */}
             <div className="space-y-2">
               <Label className="text-sm font-bold">Modelo de IA</Label>
-              <AIModelSelector model={model} onChange={onModelChange} baseCost={CREDITS_PER_PAGE * selectedPageCount} isPremium={isPremium} />
+              <AIModelSelector model={model} onChange={onModelChange} baseCost={CREDITS_PER_PAGE * selectedPageCount} />
             </div>
 
             {/* Credit summary */}
             <div className="rounded-xl border border-border bg-muted/30 p-3 text-xs text-muted-foreground space-y-1">
-              <p><span className="font-bold text-foreground">{selectedPageCount}</span> páginas · <span className="font-bold text-foreground">{getCost(CREDITS_PER_PAGE, isPremium)}</span> créditos por página</p>
-              <p>Total: <span className="font-bold" style={{ color: 'hsl(var(--energy-purple))' }}>{totalCredits} créditos IA</span></p>
+              <p><span className="font-bold text-foreground">{selectedPageCount}</span> páginas · <span className="font-bold text-foreground">{getCost(CREDITS_PER_PAGE)}</span> créditos por página</p>
+              <p>Estimativa total: <span className="font-bold text-warning">≈ {totalCredits} créditos IA</span> <span className="text-[10px]">(cobrança final pelo uso real)</span></p>
               <p>Disponível agora: <span className="font-bold text-foreground tabular-nums">{energy}</span> créditos</p>
             </div>
           </div>

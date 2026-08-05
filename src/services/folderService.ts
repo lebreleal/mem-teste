@@ -76,12 +76,14 @@ export async function uploadFolderImage(folderId: string, file: File): Promise<s
   return imageUrl;
 }
 
-/** Batch-update sort_order for a list of folder IDs. */
+/** Batch-update sort_order for a list of folder IDs in a single transaction. */
 export async function reorderFolders(orderedIds: string[]) {
-  for (let i = 0; i < orderedIds.length; i++) {
-    const { error } = await supabase.from('folders').update({ sort_order: i } as any).eq('id', orderedIds[i]);
-    if (error) throw error;
-  }
+  if (orderedIds.length === 0) return;
+  const { error } = await (supabase.rpc as unknown as (fn: string, params: Record<string, unknown>) => Promise<{ error: unknown }>)(
+    'reorder_folders',
+    { p_ordered_ids: orderedIds }
+  );
+  if (error) throw error;
 }
 
 /** Fetch image_url for a folder. */

@@ -138,6 +138,36 @@ export async function fetchDescendantCardsPage(deckId: string, limit: number, of
 }
 
 
+/**
+ * Server-side search across a deck and its descendants (Lei 1G: paginated
+ * lists must not be searched client-side — results would be limited to the
+ * rows already downloaded).
+ */
+export async function searchCardsInDecks(deckIds: string[], query: string, limit = 200): Promise<CardRow[]> {
+  const term = query.trim();
+  if (deckIds.length === 0 || term.length < 2) return [];
+  const escaped = term.replace(/[%_,()]/g, ' ').trim();
+  if (!escaped) return [];
+  const results: CardRow[] = [];
+  for (let i = 0; i < deckIds.length; i += IN_BATCH) {
+    const batch = deckIds.slice(i, i + IN_BATCH);
+    const { data, error } = await withRetry(() =>
+      supabase
+        .from('cards')
+        .select(CARD_COLS)
+        .in('deck_id', batch)
+        .or(`front_content.ilike.%${escaped}%,back_content.ilike.%${escaped}%`)
+        .order('created_at', { ascending: false })
+        .limit(limit) as unknown as Promise<{ data: CardRow[] | null; error: unknown }>,
+    );
+    if (error) throw error;
+    if (data) results.push(...data);
+    if (results.length >= limit) break;
+  }
+  return results.slice(0, limit);
+}
+
+
 /** Fetch card contents for export (CSV / Anki). */
 export async function fetchCardsForExport(deckId: string) {
   const { data, error } = await supabase
@@ -148,3 +178,18 @@ export async function fetchCardsForExport(deckId: string) {
   if (error) throw error;
   return data ?? [];
 }
+
+/** Count review-state cards due now across multiple deck IDs. */
+export async function fetchReviewDueCount(deckIds: string[], nowISO: string): Promise<number> {
+  const { count, error } = await supabase
+    .from('cards')
+    .select('id', { count: 'exact', head: true })
+    .in('deck_id', deckIds)
+    .eq('state', 2)
+    .lte('scheduled_date', nowISO);
+  if (error) throw error;
+  return count ?? 0;
+}
+
+/** Fetch study plan deck_ids for a user. Canonical implementation lives in studyService. */
+export { fetchStudyPlanDeckIds } from '@/services/studyService';

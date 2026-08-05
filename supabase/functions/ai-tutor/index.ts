@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { handleCors, jsonResponse, getModelMap, deductEnergy, refundEnergy, fetchPromptConfig, getAIConfig, fetchWithRetry, streamWithUsageCapture } from "../_shared/utils.ts";
+import { handleCors, jsonResponse, getModelMap, estimateCredits, holdCredits, refundCredits, fetchPromptConfig, getAIConfig, fetchWithRetry, streamWithUsageCapture, aiHeaders, settleAndLog } from "../_shared/utils.ts";
 
 Deno.serve(async (req) => {
   const cors = handleCors(req);
@@ -11,14 +11,14 @@ Deno.serve(async (req) => {
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
   };
 
-  let energyDeducted = false;
-  let deductedCost = 0;
+  let creditsHeld = false;
+  let heldCredits = 0;
   let supabase: any;
   let userId = "";
 
   try {
     const body = await req.json();
-    const { frontContent, backContent, action, mcOptions, correctIndex, selectedIndex, aiModel, energyCost, type, question, options, correctIndex: qCorrectIndex, userAnswer, concept, deckId } = body;
+    const { frontContent, backContent, action, mcOptions, correctIndex, selectedIndex, aiModel, type, question, options, correctIndex: qCorrectIndex, userAnswer, concept, deckId } = body;
     const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
     if (!AI_KEY) return jsonResponse({ error: "AI API key não configurada" }, 500);
 
@@ -39,17 +39,16 @@ Deno.serve(async (req) => {
     if (userError || !user) return jsonResponse({ error: "Token inválido" }, 401);
     userId = user.id;
 
-    const cost = energyCost || 0;
-    if (cost > 0) {
-      const ok = await deductEnergy(supabase, userId, cost);
-      if (!ok) return jsonResponse({ error: "Créditos IA insuficientes", requiresCredits: true }, 402);
-      energyDeducted = true;
-      deductedCost = cost;
-    }
-
     const promptConfig = await fetchPromptConfig(supabase, "ai_tutor");
     const MODEL_MAP = await getModelMap(supabase);
     const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "google/gemini-2.5-flash";
+
+    // Server-side pricing: never trust a cost sent by the client.
+    heldCredits = await estimateCredits(supabase, selectedModel, JSON.stringify(body).length, 1500);
+    const creditsOk = await holdCredits(supabase, userId, heldCredits, "ai_tutor");
+    if (!creditsOk) return jsonResponse({ error: "Créditos IA insuficientes", requiresCredits: true, requiredCredits: heldCredits }, 402);
+    creditsHeld = true;
+
 
     // ─── Concept Extraction (non-streaming, returns JSON) ───
     if (isConceptMode) {
@@ -104,9 +103,10 @@ Retorne 2-5 conceitos. Responda SOMENTE o JSON array, sem markdown.`;
 
       const cResponse = await fetchWithRetry(AI_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
+        headers: aiHeaders(AI_KEY),
         body: JSON.stringify({
           model: selectedModel,
+          usage: { include: true },
           messages: [
             { role: "system", content: "Você extrai conceitos de questões. Responda APENAS JSON." },
             { role: "user", content: cPrompt },
@@ -119,6 +119,8 @@ Retorne 2-5 conceitos. Responda SOMENTE o JSON array, sem markdown.`;
       if (!cResponse.ok) return jsonResponse({ concepts: [] });
 
       const cData = await cResponse.json();
+      await settleAndLog(supabase, userId, heldCredits, "ai_tutor", selectedModel, cData);
+      creditsHeld = false;
       const rawText = cData.choices?.[0]?.message?.content || "[]";
       try {
         const cleaned = rawText.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
@@ -166,9 +168,10 @@ Regras:
 
       const gcResponse = await fetchWithRetry(AI_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
+        headers: aiHeaders(AI_KEY),
         body: JSON.stringify({
           model: selectedModel,
+          usage: { include: true },
           messages: [
             { role: "system", content: "Você cria flashcards educacionais. Responda APENAS JSON." },
             { role: "user", content: gcPrompt },
@@ -179,18 +182,20 @@ Regras:
       });
 
       if (!gcResponse.ok) {
-        if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
+        if (creditsHeld) await refundCredits(supabase, userId, heldCredits);
         return jsonResponse({ error: "Serviço de IA indisponível" }, 502);
       }
 
       const gcData = await gcResponse.json();
+      await settleAndLog(supabase, userId, heldCredits, "ai_tutor", selectedModel, gcData);
+      creditsHeld = false;
       const gcRaw = gcData.choices?.[0]?.message?.content || "[]";
       try {
         const cleaned = gcRaw.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
         const cards = JSON.parse(cleaned);
         return jsonResponse({ cards: Array.isArray(cards) ? cards : [] });
       } catch {
-        if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
+        if (creditsHeld) await refundCredits(supabase, userId, heldCredits);
         return jsonResponse({ cards: [] });
       }
     }
@@ -221,9 +226,10 @@ Responda na mesma língua do conceito. Máximo 300 palavras. Seja direto e objet
 
       const ceResponse = await fetchWithRetry(AI_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
+        headers: aiHeaders(AI_KEY),
         body: JSON.stringify({
           model: selectedModel,
+          usage: { include: true },
           messages: [
             { role: "system", content: "COMECE IMEDIATAMENTE pelo conteúdo. PROIBIDO saudações, elogios ou preâmbulos. Vá direto ao ponto. Você é um tutor educacional." },
             { role: "user", content: cePrompt },
@@ -234,11 +240,13 @@ Responda na mesma língua do conceito. Máximo 300 palavras. Seja direto e objet
       });
 
       if (!ceResponse.ok) {
-        if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
+        if (creditsHeld) await refundCredits(supabase, userId, heldCredits);
         return jsonResponse({ error: "Serviço de IA indisponível" }, 502);
       }
 
       const ceData = await ceResponse.json();
+      await settleAndLog(supabase, userId, heldCredits, "ai_tutor", selectedModel, ceData);
+      creditsHeld = false;
       const ceText = ceData.choices?.[0]?.message?.content || "";
       return jsonResponse({ response: ceText });
     }
@@ -258,9 +266,10 @@ Responda na mesma língua do conceito. Máximo 300 palavras. Seja direto e objet
 
       const oeResponse = await fetchWithRetry(AI_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
+        headers: aiHeaders(AI_KEY),
         body: JSON.stringify({
           model: selectedModel,
+          usage: { include: true },
           messages: [
             { role: "system", content: "COMECE IMEDIATAMENTE pelo conteúdo. PROIBIDO saudações, elogios ou preâmbulos. Vá direto ao ponto." },
             { role: "user", content: oePrompt },
@@ -271,11 +280,13 @@ Responda na mesma língua do conceito. Máximo 300 palavras. Seja direto e objet
       });
 
       if (!oeResponse.ok) {
-        if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
+        if (creditsHeld) await refundCredits(supabase, userId, heldCredits);
         return jsonResponse({ error: "Serviço de IA indisponível" }, 502);
       }
 
       const oeData = await oeResponse.json();
+      await settleAndLog(supabase, userId, heldCredits, "ai_tutor", selectedModel, oeData);
+      creditsHeld = false;
       const oeText = oeData.choices?.[0]?.message?.content || "";
       return jsonResponse({ response: oeText });
     }
@@ -300,9 +311,10 @@ Responda na mesma língua do conceito. Máximo 300 palavras. Seja direto e objet
 
       const qResponse = await fetchWithRetry(AI_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
+        headers: aiHeaders(AI_KEY),
         body: JSON.stringify({
           model: selectedModel,
+          usage: { include: true },
           messages: [
             { role: "system", content: antiPreamble },
             { role: "user", content: qPrompt },
@@ -313,11 +325,13 @@ Responda na mesma língua do conceito. Máximo 300 palavras. Seja direto e objet
       });
 
       if (!qResponse.ok) {
-        if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
+        if (creditsHeld) await refundCredits(supabase, userId, heldCredits);
         return jsonResponse({ error: "Serviço de IA indisponível" }, 502);
       }
 
       const qData = await qResponse.json();
+      await settleAndLog(supabase, userId, heldCredits, "ai_tutor", selectedModel, qData);
+      creditsHeld = false;
       const responseText = qData.choices?.[0]?.message?.content || "";
       return jsonResponse({ response: responseText });
     }
@@ -356,9 +370,10 @@ Responda na mesma língua do conceito. Máximo 300 palavras. Seja direto e objet
 
     const response = await fetchWithRetry(AI_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
+      headers: aiHeaders(AI_KEY),
       body: JSON.stringify({
         model: selectedModel,
+        usage: { include: true },
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: prompt },
@@ -372,7 +387,7 @@ Responda na mesma língua do conceito. Máximo 300 palavras. Seja direto e objet
 
     if (!response.ok) {
       const errText = await response.text(); console.error("AI error:", response.status, errText);
-      if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
+      if (creditsHeld) await refundCredits(supabase, userId, heldCredits);
       if (response.status === 429) return jsonResponse({ error: "Limite de requisições excedido." }, 429);
       if (response.status === 403) return jsonResponse({ error: "API do Google AI não ativada." }, 502);
       if (response.status === 503) return jsonResponse({ error: "Modelo sobrecarregado. Tente Flash." }, 503);
@@ -380,10 +395,10 @@ Responda na mesma língua do conceito. Máximo 300 palavras. Seja direto e objet
     }
 
     // Stream started successfully — credits are consumed legitimately
-    return streamWithUsageCapture(response, supabase, userId, "ai_tutor", selectedModel, cost);
+    return streamWithUsageCapture(response, supabase, userId, "ai_tutor", selectedModel, heldCredits);
   } catch (err) {
     console.error("Error:", err);
-    if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
+    if (creditsHeld) await refundCredits(supabase, userId, heldCredits);
     return jsonResponse({ error: "Internal error" }, 500);
   }
 });

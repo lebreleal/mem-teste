@@ -207,10 +207,11 @@ export function useDashboardSalas({ currentFolderId, setCurrentFolderId, folders
       await refetchTurma();
     }
     if (!slug && turmaId) {
-      slug = await ensureShareSlug(turmaId);
+      const cFolder = folders.find(f => f.id === currentFolderId);
+      slug = await ensureShareSlug(turmaId, userTurma?.name || cFolder?.name);
       await refetchTurma();
     }
-    setShareSlugEdit(slug || turmaId?.substring(0, 8) || '');
+    setShareSlugEdit(slug || '');
     setShareModalOpen(true);
   }, [userTurma, folders, currentFolderId, user, refetchTurma]);
 
