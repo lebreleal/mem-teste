@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Progress } from '@/components/ui/progress';
 import DeckRow from './DeckRow';
 import { usePendingDecks, type PendingDeck } from '@/stores/usePendingDecks';
+import EmptyDeckState from '@/components/cards/EmptyDeckState';
 import { useDragReorder } from '@/hooks/useDragReorder';
 import type { DeckWithStats } from '@/hooks/useDecks';
 
@@ -53,6 +54,15 @@ interface DeckListProps {
   
   // Organize mode
   organizeMode?: boolean;
+
+  /** True when the current sala already lists pastas — suppresses the "empty sala" notice. */
+  hasFolders?: boolean;
+  /** True when the current location is a pasta (level-2 folder) instead of a sala. */
+  isInsidePasta?: boolean;
+  // Empty-state actions (pasta variant follows the standard EmptyDeckState pattern)
+  onCreateDeck?: () => void;
+  onCreateAI?: () => void;
+  onImport?: () => void;
 }
 
 const DeckList = ({
@@ -61,6 +71,8 @@ const DeckList = ({
   navigateToCommunity, onReorderDecks,
   decksWithPendingUpdates, onPendingClick,
   organizeMode = false,
+  hasFolders = false, isInsidePasta = false,
+  onCreateDeck, onCreateAI, onImport,
   ...deckRowProps
 }: DeckListProps) => {
   const { pendingDecks } = usePendingDecks();
@@ -114,6 +126,20 @@ const DeckList = ({
         </div>
       );
     }
+    // Inside a pasta: reuse the standard empty-collection layout.
+    if (isInsidePasta) {
+      return (
+        <EmptyDeckState
+          title="Nenhum baralho nesta pasta"
+          addLabel="Criar baralho"
+          onAdd={() => onCreateDeck?.()}
+          onAI={onCreateAI}
+          onImport={onImport}
+        />
+      );
+    }
+    // A sala that already has pastas is not empty — no notice at all.
+    if (hasFolders) return null;
     return (
       <div className="flex flex-col items-center justify-center py-8 sm:py-12 text-center px-4">
         <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
