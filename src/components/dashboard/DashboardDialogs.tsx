@@ -30,6 +30,8 @@ interface DashboardDialogsProps {
   setCreateParentDeckId: (v: string | null) => void;
   onCreateSubmit: () => void;
   isCreating?: boolean;
+  /** What a new folder means at the current level: a top-level sala or a pasta inside a sala. */
+  folderKind?: 'sala' | 'pasta';
 
   // Rename
   renameTarget: { type: 'deck' | 'folder'; id: string; name: string } | null;
@@ -298,6 +300,7 @@ const DeckMoveDialog = ({
 
 const DashboardDialogs = (props: DashboardDialogsProps) => {
   const isInsideDeck = !!props.moveParentDeckId;
+  const isPasta = props.folderKind === 'pasta';
 
   // Determine submit label for move
   const getMoveSubmitLabel = () => {
@@ -313,18 +316,22 @@ const DashboardDialogs = (props: DashboardDialogsProps) => {
         <DialogContent className="sm:max-w-md max-w-[calc(100vw-2rem)]">
           <DialogHeader>
             <DialogTitle className="font-display text-center">
-              {props.createType === 'folder' ? 'Criar nova Sala' : 'Novo Baralho'}
+              {props.createType === 'folder'
+                ? (isPasta ? 'Criar nova pasta' : 'Criar nova Sala')
+                : 'Novo Baralho'}
             </DialogTitle>
             {props.createType === 'folder' && (
               <p className="text-sm text-muted-foreground text-center pt-1">
-                Uma sala organiza seus baralhos e matérias em um só lugar. (ex: "Medicina 2026", "Concurso Federal", "Residência Cardio")
+                {isPasta
+                  ? 'Uma pasta organiza os baralhos dentro desta sala. (ex: "Cardiologia", "Semestre 1", "Revisões")'
+                  : 'Uma sala organiza seus baralhos e matérias em um só lugar. (ex: "Medicina 2026", "Concurso Federal", "Residência Cardio")'}
               </p>
             )}
           </DialogHeader>
           <form onSubmit={e => { e.preventDefault(); props.onCreateSubmit(); }} className="space-y-4">
             <div className="space-y-2">
               {props.createType !== 'folder' && <Label>Nome</Label>}
-              <Input value={props.createName} onChange={e => props.setCreateName(e.target.value)} placeholder={props.createType === 'folder' ? "ex: 'Residência 2026'" : 'Ex: Vocabulário'} autoFocus maxLength={100} />
+              <Input value={props.createName} onChange={e => props.setCreateName(e.target.value)} placeholder={props.createType === 'folder' ? (isPasta ? "ex: 'Cardiologia'" : "ex: 'Residência 2026'") : 'Ex: Vocabulário'} autoFocus maxLength={100} />
             </div>
             <div className={props.createType === 'folder' ? 'flex justify-center' : 'flex justify-end gap-2'}>
               {props.createType !== 'folder' && (
