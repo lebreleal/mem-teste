@@ -554,13 +554,28 @@ ${getOutputExamples(formats)}`;
 
     const CLOZE_REGEX = /\{\{c\d+::/;
     const PLACEHOLDER_BACK = /^(informação não fornecida|n\/a|-|\.)$/i;
+    /** Remove cloze markers, keeping the hidden answer as plain text. */
+    const stripCloze = (s: string) => s.replace(/\{\{c\d+::(.*?)(?:::.*?)?\}\}/g, "$1");
     let discardedCount = 0;
 
     cards = cards
       .map(c => {
         const mappedType = mapCardType(c.type, formats);
-        const front = (c.front || "").trim();
-        const back = (c.back || "").trim();
+        let front = (c.front || "").trim();
+        let back = (c.back || "").trim();
+
+        // Field shift / empty front: the statement sometimes lands in `back`.
+        // Recover it instead of persisting a card with no front (renders blank).
+        if (!front && back) {
+          front = back;
+          back = "";
+          if (CLOZE_REGEX.test(front)) return { front, back: "", type: "cloze" as string };
+        }
+
+        if (!front) {
+          discardedCount++;
+          return null;
+        }
 
         // Cloze without the {{cN::}} syntax: only salvageable when there is a real answer.
         if (mappedType === "cloze" && !CLOZE_REGEX.test(front)) {
@@ -572,14 +587,9 @@ ${getOutputExamples(formats)}`;
           const needsQuestionMark = front.endsWith(":") || front.endsWith("...");
           return {
             front: needsQuestionMark ? front.replace(/[:.]+$/, "?") : front,
-            back,
+            back: stripCloze(back),
             type: "basic" as string,
           };
-        }
-
-        if (!front) {
-          discardedCount++;
-          return null;
         }
 
         // Inverse mismatch: markers present but the model declared another type.
@@ -587,6 +597,12 @@ ${getOutputExamples(formats)}`;
           return { front, back: "", type: "cloze" as string };
         }
 
+        // Basic card whose ANSWER carries cloze markers: the model produced a
+        // cloze statement in the wrong field. The statement is self-contained,
+        // so promote it to a real cloze card instead of leaking `{{c1::}}` to the UI.
+        if (CLOZE_REGEX.test(back)) {
+          return { front: back, back: "", type: "cloze" as string };
+        }
 
         if (mappedType !== "cloze" && (!back || PLACEHOLDER_BACK.test(back))) {
           console.warn("Discarding basic card without answer:", front.substring(0, 80));
@@ -595,12 +611,13 @@ ${getOutputExamples(formats)}`;
         }
 
         return {
-          front,
-          back: mappedType === "cloze" ? "" : back,
+          front: stripCloze(front),
+          back: mappedType === "cloze" ? "" : stripCloze(back),
           type: mappedType,
         };
       })
       .filter((c): c is { front: string; back: string; type: string } => c !== null);
+
 
     if (discardedCount > 0) console.warn(`Discarded ${discardedCount} malformed card(s).`);
 
