@@ -12,6 +12,7 @@ import { useEnergy } from '@/hooks/useEnergy';
 import { useAIModel } from '@/hooks/useAIModel';
 import { useAISources, type AISource } from '@/hooks/useAISources';
 import { extractPDFPages, splitTextIntoPages } from '@/lib/pdfUtils';
+import { deduplicateGeneratedCards } from '@/lib/cardDedup';
 import { CREDITS_PER_PAGE } from '@/types/ai';
 import { usePendingDecks, saveGenerationSnapshot, clearGenerationSnapshot } from '@/stores/usePendingDecks';
 import * as aiService from '@/services/aiService';
