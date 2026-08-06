@@ -178,11 +178,12 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
     }
   }, [shapeColor]);
 
-  useEffect(() => {
-    if (!selectedId) return;
-    const selectedShape = shapes.find(shape => shape.id === selectedId);
-    if (selectedShape?.color) setShapeColor(selectedShape.color);
-  }, [selectedId, shapes]);
+  // NOTE: do NOT sync `shapeColor` from `selectedId` in an effect. Drawing a shape
+  // selects it, and that effect would immediately undo `autoSwitchColor`, making
+  // every new shape reuse the previous color — collapsing all occlusions into a
+  // single card (1 card per DISTINCT color). Every explicit selection path
+  // already sets the color synchronously.
+
 
   const activateSelection = useCallback((shape: OcclusionShape, pointerPos?: { x: number; y: number }) => {
     setTool('select');
@@ -449,20 +450,27 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
       const data = await invokeDetectOcclusion(imageUrl);
       if (data?.regions && Array.isArray(data.regions) && data.regions.length > 0) {
         pushHistory();
-        const newShapes: OcclusionShape[] = data.regions.map((r: Record<string, number>) => ({
+        // One card per DISTINCT color: detected regions must NOT share a color,
+        // otherwise N detected areas collapse into a single card.
+        const used = new Set(shapes.map(s => s.color || COLORS[0].fill));
+        const freeColors = COLORS.filter(c => !used.has(c.fill));
+        const pickColor = (i: number) =>
+          (freeColors.length > 0 ? freeColors[i % freeColors.length] : COLORS[i % COLORS.length]).fill;
+        const newShapes: OcclusionShape[] = data.regions.map((r: Record<string, number>, i: number) => ({
           id: crypto.randomUUID(),
           type: 'rect' as const,
           x: r.x * imgSize.w,
           y: r.y * imgSize.h,
           w: r.w * imgSize.w,
           h: r.h * imgSize.h,
-          color: shapeColor,
+          color: pickColor(i),
         }));
         setShapes(prev => [...prev, ...newShapes]);
         toast({ title: `✨ ${newShapes.length} área${newShapes.length > 1 ? 's' : ''} detectada${newShapes.length > 1 ? 's' : ''}!` });
       } else {
         toast({ title: 'Nenhum texto detectado na imagem' });
       }
+
     } catch (err: unknown) {
       console.error('AI detect error:', err);
       toast({ title: 'Erro ao detectar', description: err instanceof Error ? err.message : 'Erro desconhecido', variant: 'destructive' });
