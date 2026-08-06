@@ -387,39 +387,90 @@ ${getOutputExamples(formats)}`;
 
     console.log(`Using model: ${selectedModel} (flashLite=${isFlashLite}), textLen: ${trimmedContent.length}, formats: ${formats.join(",")}, detail: ${detailLevel}`);
 
-    const aiResponse = await fetchWithRetry(AI_URL, {
-      method: "POST",
-      headers: aiHeaders(AI_KEY),
-      body: JSON.stringify({
+    /**
+     * Reasoning models (gemini-2.5-pro) intermittently return an EMPTY message:
+     * no tool_call and content === "" (thinking budget consumed the output cap).
+     * We therefore retry: 2nd attempt keeps tools but caps reasoning; 3rd attempt
+     * drops tools entirely and asks for plain JSON.
+     */
+    type Attempt = { useTools: boolean; lowReasoning: boolean; maxTokens: number };
+    const attempts: Attempt[] = [
+      { useTools: true, lowReasoning: false, maxTokens: 65000 },
+      { useTools: true, lowReasoning: true, maxTokens: 32000 },
+      { useTools: false, lowReasoning: true, maxTokens: 32000 },
+    ];
+
+    let aiData: any = null;
+    let toolCall: any = null;
+    let rawContentText = "";
+    let lastFinishReason = "";
+
+    for (let i = 0; i < attempts.length; i++) {
+      const a = attempts[i];
+      const body: Record<string, unknown> = {
         model: selectedModel,
         usage: { include: true },
-        messages: [{ role: "system", content: systemPrompt }, { role: "user", content: fullPrompt }],
+        messages: [
+          { role: "system", content: systemPrompt },
+          {
+            role: "user",
+            content: a.useTools
+              ? fullPrompt
+              : `${fullPrompt}\n\nIMPORTANTE: responda APENAS com um array JSON puro (sem markdown, sem comentários), no formato:\n${getOutputExamples(formats)}`,
+          },
+        ],
         temperature,
-        max_tokens: 65000,
-        tools: [{
+        max_tokens: a.maxTokens,
+      };
+      if (a.lowReasoning) body.reasoning = { effort: "low" };
+      if (a.useTools) {
+        body.tools = [{
           type: "function",
           function: {
             name: "return_flashcards",
             description: "Return the generated flashcards",
             parameters: toolSchema,
           },
-        }],
-        tool_choice: { type: "function", function: { name: "return_flashcards" } },
-      }),
-    });
+        }];
+        body.tool_choice = { type: "function", function: { name: "return_flashcards" } };
+      }
 
-    if (!aiResponse.ok) {
-      const errText = await aiResponse.text();
-      console.error("AI error:", aiResponse.status, errText);
-      if (creditsHeld) await refundCredits(supabase, userId, heldCredits);
-      if (aiResponse.status === 429) return jsonResponse({ error: "Limite de requisições excedido. Tente em alguns segundos." }, 429);
-      if (aiResponse.status === 403) return jsonResponse({ error: "API do Google AI não ativada. Verifique o console." }, 502);
-      if (aiResponse.status === 503) return jsonResponse({ error: "Modelo sobrecarregado. Tente o modelo Flash." }, 503);
-      return jsonResponse({ error: "Serviço de IA indisponível" }, 502);
+      const aiResponse = await fetchWithRetry(AI_URL, {
+        method: "POST",
+        headers: aiHeaders(AI_KEY),
+        body: JSON.stringify(body),
+      });
+
+      if (!aiResponse.ok) {
+        const errText = await aiResponse.text();
+        console.error("AI error:", aiResponse.status, errText);
+        if (creditsHeld) await refundCredits(supabase, userId, heldCredits);
+        if (aiResponse.status === 429) return jsonResponse({ error: "Limite de requisições excedido. Tente em alguns segundos." }, 429);
+        if (aiResponse.status === 403) return jsonResponse({ error: "API do Google AI não ativada. Verifique o console." }, 502);
+        if (aiResponse.status === 503) return jsonResponse({ error: "Modelo sobrecarregado. Tente o modelo Flash." }, 503);
+        return jsonResponse({ error: "Serviço de IA indisponível" }, 502);
+      }
+
+      aiData = await aiResponse.json();
+      const choice = aiData.choices?.[0];
+      lastFinishReason = choice?.finish_reason ?? "";
+      toolCall = choice?.message?.tool_calls?.[0];
+      rawContentText = choice?.message?.content ?? "";
+
+      const empty = !toolCall?.function?.arguments && !rawContentText.trim();
+      console.log(
+        `Attempt ${i + 1}/${attempts.length} — tools:${a.useTools} finish:${lastFinishReason} ` +
+        `toolCall:${!!toolCall} contentLen:${rawContentText.length} ` +
+        `reasoning_tokens:${aiData.usage?.completion_tokens_details?.reasoning_tokens ?? 0}`
+      );
+      if (!empty) break;
+      if (i === attempts.length - 1) {
+        console.error("Empty AI response after all attempts. finish_reason:", lastFinishReason);
+        if (creditsHeld) await refundCredits(supabase, userId, heldCredits);
+        return jsonResponse({ error: "A IA retornou resposta vazia. Tente novamente ou reduza o conteúdo." }, 502);
+      }
     }
 
-    const aiData = await aiResponse.json();
-    
     const rawUsage = aiData.usage || {};
     const reasoningTokens = rawUsage.completion_tokens_details?.reasoning_tokens || 0;
     const cachedTokens = rawUsage.prompt_tokens_details?.cached_tokens || 0;
@@ -427,8 +478,8 @@ ${getOutputExamples(formats)}`;
     // Exact OpenRouter accounting (usage.cost) + generation id for cost lookup.
     const usage = extractUsage(aiData);
 
-    const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
     let cards: { front: string; back: string; type: string; options?: string[]; correctIndex?: number }[];
+
 
     if (toolCall?.function?.arguments) {
       try {
