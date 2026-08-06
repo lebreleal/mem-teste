@@ -178,11 +178,12 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving, externalUse
     }
   }, [shapeColor]);
 
-  useEffect(() => {
-    if (!selectedId) return;
-    const selectedShape = shapes.find(shape => shape.id === selectedId);
-    if (selectedShape?.color) setShapeColor(selectedShape.color);
-  }, [selectedId, shapes]);
+  // NOTE: do NOT sync `shapeColor` from `selectedId` in an effect. Drawing a shape
+  // selects it, and that effect would immediately undo `autoSwitchColor`, making
+  // every new shape reuse the previous color — collapsing all occlusions into a
+  // single card (1 card per DISTINCT color). Every explicit selection path
+  // already sets the color synchronously.
+
 
   const activateSelection = useCallback((shape: OcclusionShape, pointerPos?: { x: number; y: number }) => {
     setTool('select');
