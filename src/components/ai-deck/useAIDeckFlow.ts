@@ -12,6 +12,7 @@ import { useEnergy } from '@/hooks/useEnergy';
 import { useAIModel } from '@/hooks/useAIModel';
 import { useAISources, type AISource } from '@/hooks/useAISources';
 import { extractPDFPages, splitTextIntoPages } from '@/lib/pdfUtils';
+import { deduplicateGeneratedCards } from '@/lib/cardDedup';
 import { CREDITS_PER_PAGE } from '@/types/ai';
 import { usePendingDecks, saveGenerationSnapshot, clearGenerationSnapshot } from '@/stores/usePendingDecks';
 import * as aiService from '@/services/aiService';
@@ -263,56 +264,14 @@ export function useAIDeckFlow({ onOpenChange, folderId, parentDeckId, existingDe
     return targetDeckId;
   }, [user, existingDeckId, folderId, parentDeckId, queryClient]);
 
-  // === Deduplication helper (Bloco 4) ===
+  // === Deduplication (pure logic lives in src/lib/cardDedup.ts) ===
   const deduplicateCards = useCallback((cards: GeneratedCard[]): GeneratedCard[] => {
-    const normalize = (text: string) =>
-      text.replace(/<[^>]*>/g, '').replace(/\{\{c\d+::/g, '').replace(/\}\}/g, '').toLowerCase().replace(/[^\w\sà-ú]/g, '').trim();
-
-    const getWords = (text: string) => {
-      const words = normalize(text).split(/\s+/).filter(w => w.length > 2);
-      return new Set(words);
-    };
-
-    const similarity = (a: Set<string>, b: Set<string>): number => {
-      if (a.size === 0 || b.size === 0) return 0;
-      let intersection = 0;
-      for (const w of a) { if (b.has(w)) intersection++; }
-      return intersection / Math.max(a.size, b.size);
-    };
-
-    const seen: { words: Set<string>; idx: number }[] = [];
-    const keep: boolean[] = new Array(cards.length).fill(true);
-
-    for (let i = 0; i < cards.length; i++) {
-      const words = getWords(cards[i].front);
-      let isDup = false;
-      for (const s of seen) {
-        if (similarity(words, s.words) > 0.9) {
-          // Keep the one with longer back (more complete answer)
-          const existingLen = normalize(cards[s.idx].back).length;
-          const currentLen = normalize(cards[i].back).length;
-          if (currentLen > existingLen) {
-            keep[s.idx] = false;
-            s.idx = i;
-            s.words = words;
-          } else {
-            isDup = true;
-          }
-          break;
-        }
-      }
-      if (!isDup) {
-        seen.push({ words, idx: i });
-      } else {
-        keep[i] = false;
-      }
-    }
-
-    const result = cards.filter((_, i) => keep[i]);
+    const result = deduplicateGeneratedCards(cards);
     const removed = cards.length - result.length;
     if (removed > 0) console.log(`Deduplication: removed ${removed} duplicate cards`);
     return result;
   }, []);
+
 
   // === Generation (semantic batching with overlap — Blocos 2, 4, 5) ===
   const handleGenerate = useCallback(async () => {
