@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import * as studyService from '@/services/studyService';
+import { studyQueueKey } from '@/lib/queryKeys';
 
 /**
  * Warms the exact query `useStudySession` reads (`['study-queue', key]`).
@@ -19,14 +20,15 @@ export function usePrefetchStudy() {
   return useCallback(
     (deckId?: string, folderId?: string) => {
       if (!user) return;
-      const key = folderId ? `folder-${folderId}` : (deckId || 'all');
+      const queryKey = studyQueueKey(user.id, deckId, folderId);
+      const key = JSON.stringify(queryKey);
       if (warmed.current.has(key)) return;
       warmed.current.add(key);
 
       void queryClient.prefetchQuery({
-        queryKey: ['study-queue', key],
+        queryKey,
         queryFn: () => studyService.fetchStudyQueue(user.id, deckId ?? '', folderId),
-        staleTime: Infinity,
+        staleTime: 30_000,
       });
     },
     [queryClient, user],

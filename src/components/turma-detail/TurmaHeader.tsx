@@ -17,6 +17,7 @@ import {
   Flame, Crown, Timer, Moon, Sun, Bell, Menu, BookOpen, UserCircle, Lightbulb, LogOut, FileText, X,
 } from 'lucide-react';
 import CreditsDialog from '@/components/CreditsDialog';
+import { CreditBalance } from '@/components/CreditBalance';
 
 const TurmaHeader = () => {
   const navigate = useNavigate();
@@ -42,7 +43,7 @@ const TurmaHeader = () => {
             </button>
             <button onClick={() => setCreditsOpen(true)} className="flex items-center gap-1.5 rounded-full px-3 py-1.5 transition-colors hover:bg-muted/50">
               <Crown className="h-4 w-4 text-warning" fill="hsl(var(--warning))" />
-              <span className="text-xs font-bold tabular-nums text-foreground">{credits}</span>
+              <span className="text-xs font-bold tabular-nums text-foreground"><CreditBalance /></span>
             </button>
           </div>
           <div className="flex items-center gap-1.5">

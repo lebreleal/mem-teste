@@ -377,8 +377,11 @@ export function useAIDeckFlow({ onOpenChange, folderId, parentDeckId, existingDe
         } else {
           const msg = result.reason?.message || '';
           if (msg) lastErrorMsg = msg;
-          console.error('Batch call failed, will retry once:', result.reason);
-          retryIndexes.push(groupIndexes[gi]);
+          if (result.reason instanceof aiService.AIGenerationError && result.reason.retryable) {
+            retryIndexes.push(groupIndexes[gi]);
+          } else {
+            failedCount++;
+          }
         }
       });
 
@@ -451,7 +454,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, parentDeckId, existingDe
           removePending(pendingIdRef.current);
           toast({ title: '🧠 Baralho criado!', description: `${dedupedCards.length} cartões salvos` });
           queryClient.invalidateQueries({ queryKey: ['decks'] });
-          if (targetDeckId) navigate(`/manage/${targetDeckId}`);
+          if (targetDeckId) navigate(`/decks/${targetDeckId}/manage`);
         } catch {
           // Fallback: store for review
           updatePending(pendingIdRef.current, {

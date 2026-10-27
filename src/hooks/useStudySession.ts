@@ -5,6 +5,9 @@ import { toast } from '@/hooks/use-toast';
 import * as studyService from '@/services/studyService';
 import type { Rating } from '@/lib/fsrs';
 import type { StudyQueueResult, StudyCard, DeckStudyConfig, CardReviewResult } from '@/types/study';
+import { studyQueueKey } from '@/lib/queryKeys';
+import { logError } from '@/lib/errorLogger';
+import { useEffect } from 'react';
 
 export type { StudyQueueResult, StudyCard, DeckStudyConfig } from '@/types/study';
 
@@ -14,15 +17,23 @@ export const useStudySession = (deckId: string, folderId?: string) => {
 
   // "study all" mode: no deckId and no folderId → key = 'all'
   const isStudyAll = !deckId && !folderId;
-  const queryKeySuffix = folderId ? `folder-${folderId}` : (deckId || 'all');
 
   const studyQueue = useQuery<StudyQueueResult>({
-    queryKey: ['study-queue', queryKeySuffix],
-    queryFn: () => studyService.fetchStudyQueue(user!.id, deckId, folderId),
+    queryKey: studyQueueKey(user?.id, deckId, folderId),
+    queryFn: () => {
+      if (!user) throw new Error('Sessão expirada. Entre novamente.');
+      return studyService.fetchStudyQueue(user.id, deckId, folderId);
+    },
     enabled: !!user && !!(deckId || folderId || isStudyAll),
-    staleTime: Infinity,
+    staleTime: 30_000,
     refetchOnWindowFocus: false,
   });
+
+  useEffect(() => {
+    if (!studyQueue.isError) return;
+    void logError({ message: studyQueue.error.message, component: 'StudyQueue',
+      metadata: { deckId, folderId, failureCount: studyQueue.failureCount } });
+  }, [studyQueue.isError, studyQueue.error, deckId, folderId, studyQueue.failureCount]);
 
   const submitReview = useMutation({
     // Lei 1H: the local session queue is the single source of truth while
@@ -56,6 +67,7 @@ export const useStudySession = (deckId: string, folderId?: string) => {
       }
     },
     onError: (error: Error) => {
+      void logError({ message: error.message, component: 'StudyReview', metadata: { deckId, folderId } });
       toast({
         title: 'Falha ao salvar a revisão',
         description: error?.message ?? 'Verifique sua conexão. A sessão continua normalmente.',
@@ -74,6 +86,8 @@ export const useStudySession = (deckId: string, folderId?: string) => {
     isLiveDeck: studyQueue.data?.isLiveDeck ?? false,
     isLoading: studyQueue.isLoading,
     isFetching: studyQueue.isFetching,
+    error: studyQueue.error,
+    retryQueue: studyQueue.refetch,
     submitReview,
   };
 };

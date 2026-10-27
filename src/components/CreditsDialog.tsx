@@ -3,6 +3,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAICredits } from '@/hooks/useAICredits';
 import { useCreditLedger } from '@/hooks/useCreditLedger';
 import { formatCredits } from '@/lib/creditsFormat';
+import { CreditBalance } from '@/components/CreditBalance';
 
 interface CreditsDialogProps {
   open: boolean;
@@ -61,7 +62,7 @@ const CreditsDialog = ({ open, onOpenChange }: CreditsDialogProps) => {
                 <h3 className="text-lg font-bold text-foreground">Créditos IA</h3>
               </div>
               <div className="flex items-baseline gap-2">
-                <span className="text-4xl font-bold text-foreground tabular-nums">{formatCredits(credits)}</span>
+                <span className="text-4xl font-bold text-foreground tabular-nums"><CreditBalance /></span>
                 <span className="text-sm text-muted-foreground">créditos disponíveis</span>
               </div>
             </div>

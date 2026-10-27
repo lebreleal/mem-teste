@@ -6,6 +6,15 @@
 import { supabase } from '@/integrations/supabase/client';
 import { markdownToHtml } from '@/lib/markdownToHtml';
 import type { GeneratedCard, DetailLevel, CardFormat } from '@/types/ai';
+import { logError } from '@/lib/errorLogger';
+
+export class AIGenerationError extends Error {
+  constructor(message: string, public readonly status?: number) {
+    super(message);
+    this.name = 'AIGenerationError';
+  }
+  get retryable() { return this.status === 429 || (this.status !== undefined && this.status >= 500); }
+}
 
 export interface TokenUsage {
   prompt_tokens: number;
@@ -49,11 +58,30 @@ export async function generateDeckCards(params: GenerateDeckParams): Promise<Gen
       aiModel: params.aiModel,
     },
   });
-  if (error) throw error;
-  if (data?.error) throw new Error(data.error);
+  if (error || data?.error) {
+    let message = data?.error || error?.message || 'Falha ao gerar cartões.';
+    const context: unknown = error && 'context' in error ? error.context : undefined;
+    const status = context instanceof Response ? context.status : undefined;
+    if (context instanceof Response) {
+      try {
+        const body: unknown = await context.clone().json();
+        if (body && typeof body === 'object' && 'error' in body && typeof body.error === 'string') message = body.error;
+      } catch { /* Preserve the transport message when no JSON body is available. */ }
+    }
+    void logError({ message, component: 'AIDeckGeneration', metadata: { status, model: params.aiModel, cardCount: params.cardCount } });
+    throw new AIGenerationError(message, status);
+  }
+
+  if (!Array.isArray(data?.cards) || data.cards.length === 0) {
+    const message = 'A IA não retornou cartões válidos.';
+    void logError({ message, component: 'AIDeckGeneration', metadata: { model: params.aiModel } });
+    throw new AIGenerationError(message);
+  }
 
   interface RawCard { front: string; back: string; options?: string[]; type?: string; correctIndex?: number }
-  const cards = (data?.cards ?? []).map((c: RawCard) => ({
+  const validCards = data.cards.filter((c: RawCard) => c && typeof c.front === 'string' && c.front.trim() && typeof c.back === 'string');
+  if (validCards.length !== data.cards.length) throw new AIGenerationError('A IA retornou cartões incompletos. Nada foi salvo.');
+  const cards = validCards.map((c: RawCard) => ({
     ...c,
     front: markdownToHtml(c.front),
     back: markdownToHtml(c.back),
