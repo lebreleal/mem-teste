@@ -7,7 +7,6 @@
  * and asks the server once a day for the free daily allowance.
  */
 
-import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile, profileQueryKey } from '@/hooks/useProfile';
@@ -19,7 +18,7 @@ export const useAICredits = () => {
   const queryClient = useQueryClient();
   const profileQuery = useProfile();
   const userId = user?.id;
-  const dailyClaim = useQuery({
+  useQuery({
     queryKey: ['ai-credits-daily-claim', userId, getToday()],
     queryFn: async () => {
       await claimDailyAICredits();
