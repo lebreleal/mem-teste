@@ -18,6 +18,7 @@ import {
   FileText, X, BarChart3, User,
 } from 'lucide-react';
 import { formatCredits } from '@/lib/creditsFormat';
+import { CreditBalance } from '@/components/CreditBalance';
 
 
 interface DashboardHeaderProps {
@@ -75,7 +76,7 @@ const DashboardHeader = ({ onCreditsOpen }: DashboardHeaderProps) => {
               fill="hsl(var(--warning))"
               style={{ filter: 'drop-shadow(0 0 3px hsl(var(--warning) / 0.4))' }}
             />
-            <span className="text-xs font-bold tabular-nums text-foreground">{formatCredits(credits)}</span>
+            <span className="text-xs font-bold tabular-nums text-foreground"><CreditBalance /></span>
           </button>
           <button onClick={toggleTheme} className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Alternar tema">
             {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -90,7 +91,7 @@ const DashboardHeader = ({ onCreditsOpen }: DashboardHeaderProps) => {
               <div className="px-3 py-2 border-b border-border/50"><p className="text-sm font-medium text-foreground truncate">{user?.email}</p></div>
               <DropdownMenuItem onClick={() => navigate('/profile')}><UserCircle className="mr-2 h-4 w-4" /> Perfil</DropdownMenuItem>
               <DropdownMenuItem onClick={() => navigate('/desempenho')}><BarChart3 className="mr-2 h-4 w-4" /> Desempenho</DropdownMenuItem>
-              <DropdownMenuItem onClick={onCreditsOpen}><Crown className="mr-2 h-4 w-4" /> Créditos IA ({formatCredits(credits)})</DropdownMenuItem>
+              <DropdownMenuItem onClick={onCreditsOpen}><Crown className="mr-2 h-4 w-4" /> Créditos IA (<CreditBalance />)</DropdownMenuItem>
 
               <DropdownMenuSeparator />
               <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={signOut}><LogOut className="mr-2 h-4 w-4" /> Sair</DropdownMenuItem>
