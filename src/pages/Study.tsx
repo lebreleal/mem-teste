@@ -14,7 +14,7 @@ import { useEnergy } from '@/hooks/useEnergy';
 import { useAICredits } from '@/hooks/useAICredits';
 import { getNextReadyIndex, parseStepToMinutes, extractImageUrls } from '@/lib/studyUtils';
 import { useAIModel } from '@/hooks/useAIModel';
-import { invalidateStudyQueries } from '@/lib/queryKeys';
+import { invalidateStudyQueries, studyQueueKey as getStudyQueueKey } from '@/lib/queryKeys';
 import { useTutorStream } from '@/hooks/useTutorStream';
 import { useStudyUndo } from '@/hooks/useStudyUndo';
 import { useAuth } from '@/hooks/useAuth';
@@ -27,6 +27,7 @@ import StudyPausedModal from '@/components/study/StudyPausedModal';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Brain, Crown, Moon, Sun, Timer, RefreshCw, Info } from 'lucide-react';
 import { formatCredits } from '@/lib/creditsFormat';
+import { CreditBalance } from '@/components/CreditBalance';
 
 import { useTheme } from '@/hooks/useTheme';
 import StudyCardActions from '@/components/StudyCardActions';
@@ -52,7 +53,7 @@ const Study = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { queue, isLoading, isFetching, submitReview, algorithmMode, isLiveDeck, deckConfig, deckConfigs } = useStudySession(deckId ?? '', folderId);
+  const { queue, isLoading, isFetching, error: queueError, retryQueue, submitReview, algorithmMode, isLiveDeck, deckConfig, deckConfigs } = useStudySession(deckId ?? '', folderId);
   const { theme, toggleTheme } = useTheme();
   const { credits } = useAICredits();
   const energy = credits;
@@ -177,7 +178,7 @@ const Study = () => {
     }
   }, [queue, queueInitialized, deckConfigs, deckConfig]);
 
-  const studyQueueKey = useMemo(() => ['study-queue', folderId ? `folder-${folderId}` : (deckId || 'all')], [deckId, folderId]);
+  const studyQueueKey = useMemo(() => getStudyQueueKey(user?.id, deckId, folderId), [user?.id, deckId, folderId]);
   useEffect(() => () => { queryClient.removeQueries({ queryKey: studyQueueKey }); invalidateStudyQueries(queryClient); }, [queryClient, studyQueueKey]);
 
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -301,6 +302,17 @@ const Study = () => {
   }, [currentCard, isTransitioning, executeReview]);
 
 
+  if (queueError && !queueInitialized) {
+    return <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background px-4" role="alert">
+      <h1 className="text-xl font-bold text-foreground">Não foi possível carregar o estudo</h1>
+      <p className="text-muted-foreground">{queueError.message}</p>
+      <div className="flex gap-2">
+        <Button variant="outline" onClick={goBack}><ArrowLeft className="mr-2 h-4 w-4" />Voltar</Button>
+        <Button onClick={() => void retryQueue()} disabled={isFetching}><RefreshCw className="mr-2 h-4 w-4" />Tentar novamente</Button>
+      </div>
+    </div>;
+  }
+
   if (isLoading || (!queueInitialized && isFetching)) {
     return <div className="flex min-h-screen items-center justify-center bg-background"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>;
   }
@@ -348,7 +360,7 @@ const Study = () => {
         <div className="flex items-center gap-1.5 sm:gap-2.5">
           <button onClick={toggleTheme} className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Alternar tema">{theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}</button>
           <button onClick={() => window.dispatchEvent(new CustomEvent('open-pomodoro'))} className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Pomodoro"><Timer className="h-3.5 w-3.5" /></button>
-          <div className="flex items-center gap-1 rounded-xl px-2 py-1 bg-warning/10"><Crown className="h-3.5 w-3.5 text-warning" fill="hsl(var(--warning))" /><span className="text-xs font-bold text-foreground tabular-nums">{formatCredits(credits)}</span></div>
+          <div className="flex items-center gap-1 rounded-xl px-2 py-1 bg-warning/10"><Crown className="h-3.5 w-3.5 text-warning" fill="hsl(var(--warning))" /><span className="text-xs font-bold text-foreground tabular-nums"><CreditBalance /></span></div>
           <AIModelSelector model={model} onChange={setModel} baseCost={BASE_TUTOR_COST} compact />
         </div>
       </header>
