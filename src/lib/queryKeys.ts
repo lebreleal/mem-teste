@@ -5,6 +5,10 @@
 
 import type { QueryClient } from '@tanstack/react-query';
 
+/** Study queues are private, short-lived read models, never shared between users. */
+export const studyQueueKey = (userId: string | undefined, deckId?: string, folderId?: string) =>
+  ['study-queue', userId, folderId ? `folder-${folderId}` : (deckId || 'all')] as const;
+
 /** Invalidate all queries related to a deck's data (cards, stats, deck list). */
 export function invalidateDeckRelatedQueries(queryClient: QueryClient, deckId?: string) {
   queryClient.invalidateQueries({ queryKey: ['decks'] });
