@@ -3170,6 +3170,7 @@ export type Database = {
           subscription_price: number
         }[]
       }
+      folder_chain_active: { Args: { p_folder_id: string }; Returns: boolean }
       generate_tag_slug: { Args: { p_name: string }; Returns: string }
       get_activity_daily_breakdown: {
         Args: {
